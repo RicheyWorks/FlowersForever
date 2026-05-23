@@ -1,0 +1,56 @@
+@startuml
+class Item {
+  -name: String
+  -category: String
+  -price: double
+  -unit: String
+  -cost: double
+  -quantity: int
+  -notes: String
+  +Item(...)
+  +getName(): String
+  +getCategory(): String
+  +getPrice(): double
+  +getUnit(): String
+  +getCost(): double
+  +getQuantity(): int
+  +getNotes(): String
+  +toCsv(): String
+  +toString(): String
+  +equals(o: Object): boolean
+  +hashCode(): int
+}
+
+class InventoryManager {
+  -inventory: List<Item>
+  +InventoryManager()
+  +saveInventory()
+  +addItem(item: Item)
+  +editItem(index: int, newItem: Item)
+  +deleteItem(index: int)
+  +searchItems(query: String): List<Item>
+  +getAllItems(): List<Item>
+  +exportToCsv(filename: String)
+}
+
+class FlowerFarmGUI {
+  -manager: InventoryManager
+  +FlowerFarmGUI(manager: InventoryManager)
+}
+
+class FlowerFarmCLI {
+  -manager: InventoryManager
+  +FlowerFarmCLI(manager: InventoryManager)
+  +run()
+}
+
+class FlowerFarmApp {
+  +main(args: String[])
+}
+
+InventoryManager "1" -- "*" Item : manages
+FlowerFarmGUI "1" -- "1" InventoryManager : uses
+FlowerFarmCLI "1" -- "1" InventoryManager : uses
+FlowerFarmApp ..> FlowerFarmGUI : launches
+FlowerFarmApp ..> FlowerFarmCLI : launches
+@enduml
