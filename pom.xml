@@ -51,6 +51,20 @@
             <version>5.2.5</version>
         </dependency>
 
+        <!-- JFreeChart — dashboard charts (pie / bar) -->
+        <dependency>
+            <groupId>org.jfree</groupId>
+            <artifactId>jfreechart</artifactId>
+            <version>1.5.4</version>
+        </dependency>
+
+        <!-- FlatLaf — modern Swing look &amp; feel + dark mode -->
+        <dependency>
+            <groupId>com.formdev</groupId>
+            <artifactId>flatlaf</artifactId>
+            <version>3.4</version>
+        </dependency>
+
         <!-- Spring Boot Test -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -60,6 +74,9 @@
     </dependencies>
 
     <build>
+        <!-- Tests live flat in src/test (package-declared), not the Maven-default src/test/java -->
+        <testSourceDirectory>src/test</testSourceDirectory>
+
         <plugins>
             <!-- Spring Boot executable fat JAR + headless=false for Swing GUI -->
             <plugin>

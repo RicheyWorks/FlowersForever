@@ -36,17 +36,17 @@ class ConnectorRegistryTest {
     void setUp() {
         importConnector = mock(ExternalConnector.class);
         when(importConnector.getName()).thenReturn("MockImporter");
-        when(importConnector.getDescription()).thenReturn("Import-only mock");
+        lenient().when(importConnector.getDescription()).thenReturn("Import-only mock");
         when(importConnector.getSupportedDirection()).thenReturn(SyncDirection.IMPORT_ONLY);
 
         exportConnector = mock(ExternalConnector.class);
         when(exportConnector.getName()).thenReturn("MockExporter");
-        when(exportConnector.getDescription()).thenReturn("Export-only mock");
+        lenient().when(exportConnector.getDescription()).thenReturn("Export-only mock");
         when(exportConnector.getSupportedDirection()).thenReturn(SyncDirection.EXPORT_ONLY);
 
         biConnector = mock(ExternalConnector.class);
         when(biConnector.getName()).thenReturn("MockBidi");
-        when(biConnector.getDescription()).thenReturn("Bidirectional mock");
+        lenient().when(biConnector.getDescription()).thenReturn("Bidirectional mock");
         when(biConnector.getSupportedDirection()).thenReturn(SyncDirection.BIDIRECTIONAL);
 
         registry = new ConnectorRegistry(

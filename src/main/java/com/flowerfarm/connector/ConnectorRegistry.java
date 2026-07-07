@@ -58,14 +58,26 @@ public class ConnectorRegistry {
         for (ExternalConnector<?> c : registry.values()) {
             boolean available = false;
             try { available = c.isAvailable(); } catch (Exception ignored) {}
+            SyncDirection direction = c.getSupportedDirection();
             Map<String, Object> entry = new LinkedHashMap<>();
             entry.put("name",        c.getName());
             entry.put("description", c.getDescription());
-            entry.put("direction",   c.getSupportedDirection().name());
+            entry.put("direction",   direction.name());
+            entry.put("canImport",   direction.canImport());
+            entry.put("canExport",   direction.canExport());
+            entry.put("canSync",     direction.canSync());
             entry.put("available",   available);
             info.add(entry);
         }
         return info;
+    }
+
+    /**
+     * Returns the names of every registered connector, as the lower-cased keys
+     * used for lookup.
+     */
+    public Set<String> getConnectorNames() {
+        return new LinkedHashSet<>(registry.keySet());
     }
 
     // ── Operations ────────────────────────────────────────────────────────────
@@ -82,15 +94,24 @@ public class ConnectorRegistry {
                 .map(c -> {
                     if (!c.getSupportedDirection().canImport()) {
                         return ConnectorResult.<List<Item>>fail(
-                                "Connector '" + name + "' does not support import.",
+                                "Connector '" + name + "' does not support IMPORT.",
                                 "Supported direction: " + c.getSupportedDirection(), name);
                     }
                     ConnectorResult<List<Item>> result =
                             ((ExternalConnector<Object>) c).importItems();
                     if (result.isSuccess() && result.getPayload() != null) {
-                        result.getPayload().forEach(inventoryService::addItem);
-                        log.info("[{}] Import complete — {} items added to inventory.",
-                                name, result.getPayload().size());
+                        int persisted = 0;
+                        for (Item item : result.getPayload()) {
+                            try {
+                                inventoryService.addItem(item);
+                                persisted++;
+                            } catch (RuntimeException ex) {
+                                log.warn("[{}] Failed to persist '{}': {} — continuing with remaining items.",
+                                        name, item.getName(), ex.getMessage());
+                            }
+                        }
+                        log.info("[{}] Import complete — {} of {} items added to inventory.",
+                                name, persisted, result.getPayload().size());
                     }
                     return result;
                 })
@@ -111,7 +132,7 @@ public class ConnectorRegistry {
                 .map(c -> {
                     if (!c.getSupportedDirection().canExport()) {
                         return ConnectorResult.<Integer>fail(
-                                "Connector '" + name + "' does not support export.",
+                                "Connector '" + name + "' does not support EXPORT.",
                                 "Supported direction: " + c.getSupportedDirection(), name);
                     }
                     List<Item> items = inventoryService.getAllItems();
@@ -139,7 +160,7 @@ public class ConnectorRegistry {
                 .map(c -> {
                     if (!c.getSupportedDirection().canSync()) {
                         return ConnectorResult.<SyncSummary>fail(
-                                "Connector '" + name + "' does not support sync.",
+                                "Connector '" + name + "' does not support SYNC.",
                                 "Supported direction: " + c.getSupportedDirection(), name);
                     }
                     List<Item> items = inventoryService.getAllItems();
