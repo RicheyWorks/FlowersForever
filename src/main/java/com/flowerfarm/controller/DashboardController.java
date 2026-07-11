@@ -2,12 +2,14 @@ package com.flowerfarm.controller;
 
 import com.flowerfarm.service.HarvestService;
 import com.flowerfarm.service.InventoryService;
+import com.flowerfarm.service.MarketDayPackingService;
 import com.flowerfarm.service.OrderService;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -23,13 +25,16 @@ public class DashboardController {
     private final InventoryService inventoryService;
     private final HarvestService harvestService;
     private final OrderService orderService;
+    private final MarketDayPackingService marketDayPackingService;
 
     public DashboardController(InventoryService inventoryService,
                                HarvestService harvestService,
-                               OrderService orderService) {
+                               OrderService orderService,
+                               MarketDayPackingService marketDayPackingService) {
         this.inventoryService = inventoryService;
         this.harvestService = harvestService;
         this.orderService = orderService;
+        this.marketDayPackingService = marketDayPackingService;
     }
 
     /**
@@ -76,6 +81,26 @@ public class DashboardController {
         revenue.put("draftOrderCount", rev.draftOrderCount());
         revenue.put("dailyRealized", orderService.dailyRevenueLast7Days());
         body.put("revenue", revenue);
+
+        try {
+            MarketDayPackingService.MarketDayPlan pack =
+                    marketDayPackingService.planForDay(LocalDate.now());
+            Map<String, Object> marketDay = new LinkedHashMap<>();
+            marketDay.put("date", pack.marketDate().toString());
+            marketDay.put("orderCount", pack.orderCount());
+            marketDay.put("pipelineValue", pack.pipelineValue());
+            marketDay.put("shortfallSkuCount", pack.shortfallSkuCount());
+            marketDay.put("scope", pack.scope());
+            body.put("marketDay", marketDay);
+        } catch (Exception ex) {
+            body.put("marketDay", Map.of(
+                    "date", LocalDate.now().toString(),
+                    "orderCount", 0,
+                    "pipelineValue", 0,
+                    "shortfallSkuCount", 0,
+                    "error", ex.getMessage() != null ? ex.getMessage() : "unavailable"
+            ));
+        }
 
         return body;
     }

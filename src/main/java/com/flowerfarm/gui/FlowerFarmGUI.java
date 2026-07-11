@@ -136,7 +136,7 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
 
         // Build tabs (constructor injection of services + this TabHost).
         dashboard = new DashboardTab(inventoryService, harvestService, orderService,
-                irrigationAdvisorService, this);
+                irrigationAdvisorService, marketDayPackingService, this);
         trendTab = new TrendAnalysisTab(trendService);
         tabs.add(dashboard);
         tabs.add(new InventoryTab(inventoryService, this));

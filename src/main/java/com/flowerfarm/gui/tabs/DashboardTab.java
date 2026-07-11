@@ -4,6 +4,7 @@ import com.flowerfarm.model.Item;
 import com.flowerfarm.service.HarvestService;
 import com.flowerfarm.service.InventoryService;
 import com.flowerfarm.service.IrrigationAdvisorService;
+import com.flowerfarm.service.MarketDayPackingService;
 import com.flowerfarm.service.OrderService;
 import org.jfree.chart.ChartFactory;
 import org.jfree.chart.ChartPanel;
@@ -35,6 +36,7 @@ public class DashboardTab implements FlowerFarmTab {
     private final HarvestService harvestService;
     private final OrderService orderService;
     private final IrrigationAdvisorService irrigationAdvisorService;
+    private final MarketDayPackingService marketDayPackingService;
     private final TabHost host;
 
     private JPanel panel;
@@ -62,11 +64,13 @@ public class DashboardTab implements FlowerFarmTab {
                         HarvestService harvestService,
                         OrderService orderService,
                         IrrigationAdvisorService irrigationAdvisorService,
+                        MarketDayPackingService marketDayPackingService,
                         TabHost host) {
         this.inventoryService = inventoryService;
         this.harvestService = harvestService;
         this.orderService = orderService;
         this.irrigationAdvisorService = irrigationAdvisorService;
+        this.marketDayPackingService = marketDayPackingService;
         this.host = host;
     }
 
@@ -255,6 +259,25 @@ public class DashboardTab implements FlowerFarmTab {
             }
         }
 
+        if (marketDayPackingService != null) {
+            try {
+                MarketDayPackingService.MarketDayPlan plan =
+                        marketDayPackingService.planForDay(LocalDate.now());
+                if (plan.orderCount() > 0) {
+                    alerts.append("• PACK ").append(plan.orderCount())
+                            .append(" CONFIRMED order(s) for today — $")
+                            .append(String.format("%,.2f", plan.pipelineValue()))
+                            .append(" pipeline (Market Day)\n");
+                    if (plan.shortfallSkuCount() > 0) {
+                        alerts.append("• PACK SHORT ").append(plan.shortfallSkuCount())
+                                .append(" product(s) under stock for today's load-out\n");
+                    }
+                }
+            } catch (Exception ignored) {
+                // packing plan is best-effort on the dashboard
+            }
+        }
+
         if (alerts.length() == 0) {
             alerts.append("All clear — stock healthy, harvest moving, orders on track. Great job, Kitsap!");
         }
@@ -355,7 +378,8 @@ public class DashboardTab implements FlowerFarmTab {
         JPanel south = new JPanel(new BorderLayout(8, 8));
 
         JPanel alertsPanel = new JPanel(new BorderLayout());
-        alertsPanel.setBorder(BorderFactory.createTitledBorder("Ops alerts (stock · pipeline · harvest)"));
+        alertsPanel.setBorder(BorderFactory.createTitledBorder(
+                "Ops alerts (stock · pipeline · harvest · pack · water)"));
         alertsArea = new JTextArea(5, 40);
         alertsArea.setEditable(false);
         alertsArea.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
@@ -366,6 +390,8 @@ public class DashboardTab implements FlowerFarmTab {
         actions.setBorder(BorderFactory.createTitledBorder("Quick actions"));
         actions.add(actionButton("Log Harvest", "Harvest Log", "Open harvest log to record today's cut."));
         actions.add(actionButton("Create Order", "CRM", "Open CRM to create a wholesale / market order."));
+        actions.add(actionButton("Market packing", "Market Day",
+                "Build today's packing list / pick sheet for the van."));
         actions.add(actionButton("Fulfill pipeline", "CRM", "Open CRM to fulfill confirmed orders."));
         actions.add(actionButton("Weekly PDF Report", "Reports", "Generate harvest + sales PDF report."));
         actions.add(actionButton("Rose Visualizer", "Rose Visualizer", "Grow generative L-System roses."));
