@@ -34,7 +34,7 @@ com.flowerfarm.gui
     ├── TrendAnalysisTab.java   # Weka LinearRegression forecast (SwingWorker); exposes runAnalysis()
     ├── RoseVarietiesTab.java   # PNW rose guide + add-sample action
     ├── PricingInfoTab.java     # Static reference
-    ├── IrrigationInfoTab.java  # Static reference
+    ├── IrrigationInfoTab.java  # Kitsap live/climatology irrigation advisor
     └── RoseVisualizerTab.java  # L-System generative roses (Java2D turtle)
 ```
 

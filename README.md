@@ -22,6 +22,7 @@ Spring Boot **3.5.16** + modular Swing GUI + dual-mode connectors (offline JSON 
 | **Connectors** | CSV, Excel, Airtable, Webhook, Shopify, Square, Sheets, Farmbrite, Floranext — **dual-mode** |
 | **Rose visualizer** | L-Systems: grow, mutate, save/load rulesets, inventory link, PNG |
 | **Auth** | Optional OWNER / HAND / VIEWER barn roles (`auth` profile) |
+| **Irrigation** | Kitsap weather-aware tips (Open-Meteo live or offline climatology) |
 | **CLI** | Inventory + harvest log/export (`--cli`) |
 
 ---
@@ -161,6 +162,7 @@ REST: `GET /api/auth/me` (Basic), `GET /api/auth/accounts` (usernames only).
 | GET | `/api/connectors/history` | Audit filter (`connector`, `operation`, `success`, `q`) |
 | POST | `/api/connectors/history/export` | Server-side audit CSV |
 | GET | `/api/auth/me` | Session / role |
+| GET | `/api/irrigation/advice` | Kitsap watering plan (`live=true\|false`) |
 | GET | `/api/reports/weekly.pdf` | Trailing week PDF |
 | GET | `/actuator/health` | Health |
 
@@ -198,11 +200,11 @@ More: [`docs/GUI_ARCHITECTURE.md`](docs/GUI_ARCHITECTURE.md).
 - Auth UX: login, session badge, switch user, VIEWER write guards  
 - Maintenance: Spring Boot **3.5.16**, release action softprops v3, Dependabot, `SECURITY.md`  
 - VIEWER UX: form fields + write buttons disabled across inventory, harvest, CRM, connectors  
+- Irrigation advisor: Open-Meteo live + Kitsap climatology, harvest-bed targets, dashboard WATER alerts  
 
 ### Later ideas
 
 - Spring Boot **4.x** migration (deliberate; 3.5.16 is final 3.5 OSS)  
-- Weather-aware irrigation tips (Kitsap)  
 - Deeper POS adapters (only with real APIs)
 
 ---

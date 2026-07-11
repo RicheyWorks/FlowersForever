@@ -3,6 +3,7 @@ package com.flowerfarm.gui.tabs;
 import com.flowerfarm.model.Item;
 import com.flowerfarm.service.HarvestService;
 import com.flowerfarm.service.InventoryService;
+import com.flowerfarm.service.IrrigationAdvisorService;
 import com.flowerfarm.service.OrderService;
 import org.jfree.chart.ChartFactory;
 import org.jfree.chart.ChartPanel;
@@ -33,6 +34,7 @@ public class DashboardTab implements FlowerFarmTab {
     private final InventoryService inventoryService;
     private final HarvestService harvestService;
     private final OrderService orderService;
+    private final IrrigationAdvisorService irrigationAdvisorService;
     private final TabHost host;
 
     private JPanel panel;
@@ -59,10 +61,12 @@ public class DashboardTab implements FlowerFarmTab {
     public DashboardTab(InventoryService inventoryService,
                         HarvestService harvestService,
                         OrderService orderService,
+                        IrrigationAdvisorService irrigationAdvisorService,
                         TabHost host) {
         this.inventoryService = inventoryService;
         this.harvestService = harvestService;
         this.orderService = orderService;
+        this.irrigationAdvisorService = irrigationAdvisorService;
         this.host = host;
     }
 
@@ -233,6 +237,22 @@ public class DashboardTab implements FlowerFarmTab {
         }
         if (weekHarvest <= 0) {
             alerts.append("• No harvest logged in the last 7 days — open Harvest Log\n");
+        }
+
+        if (irrigationAdvisorService != null) {
+            try {
+                // Climatology only on dashboard refresh (fast, offline-safe)
+                IrrigationAdvisorService.IrrigationAdvice tip =
+                        irrigationAdvisorService.adviseClimatology();
+                if (tip.priority() == IrrigationAdvisorService.Priority.HIGH
+                        || tip.priority() == IrrigationAdvisorService.Priority.MEDIUM) {
+                    alerts.append("• WATER ").append(tip.priority().name())
+                            .append(" — ").append(tip.headline())
+                            .append(" (Irrigation & Care)\n");
+                }
+            } catch (Exception ignored) {
+                // advisory is best-effort on the dashboard
+            }
         }
 
         if (alerts.length() == 0) {

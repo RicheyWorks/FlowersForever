@@ -75,7 +75,12 @@ Narrate as Kitsap / Port Orchard grower:
    - **Sync Shopify** / **Export Square** with default local mirrors (no API keys).  
    - Same for Sheets / Airtable / Webhook dry-run payload file.
 
-8. **Rose Visualizer**  
+8. **Irrigation & Care**  
+   - **Refresh (try live weather)** → Open-Meteo for Port Orchard (or climatology offline).  
+   - Priority badge + 7-day precip / ET when live; active beds from recent harvests.  
+   - Dashboard may show a **WATER** alert in dry months.
+
+9. **Rose Visualizer**  
    - Grow L-System, mutate, save ruleset, optional PNG — “fun technical depth.”
 
 ---
@@ -117,6 +122,9 @@ Invoke-RestMethod http://localhost:8080/api/connectors | ConvertTo-Json -Depth 4
 
 # Audit (failures)
 Invoke-RestMethod "http://localhost:8080/api/connectors/history?success=false&limit=20"
+
+# Kitsap irrigation advice (climatology = no network)
+Invoke-RestMethod "http://localhost:8080/api/irrigation/advice?live=false" | ConvertTo-Json -Depth 4
 
 # Weekly PDF
 Invoke-WebRequest http://localhost:8080/api/reports/weekly.pdf -OutFile weekly.pdf

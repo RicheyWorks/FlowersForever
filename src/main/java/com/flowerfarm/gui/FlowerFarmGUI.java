@@ -8,6 +8,7 @@ import com.flowerfarm.model.Item;
 import com.flowerfarm.service.CustomerService;
 import com.flowerfarm.service.HarvestService;
 import com.flowerfarm.service.InventoryService;
+import com.flowerfarm.service.IrrigationAdvisorService;
 import com.flowerfarm.service.OrderService;
 import com.flowerfarm.service.ReportService;
 import com.flowerfarm.service.SyncHistoryService;
@@ -56,6 +57,7 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
     private final CustomerService customerService;
     private final OrderService orderService;
     private final ReportService reportService;
+    private final IrrigationAdvisorService irrigationAdvisorService;
     private final GuiLoginGate loginGate;
 
     // Created lazily on the EDT inside initialise() — never touched before run().
@@ -87,6 +89,7 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
                          CustomerService customerService,
                          OrderService orderService,
                          ReportService reportService,
+                         IrrigationAdvisorService irrigationAdvisorService,
                          GuiLoginGate loginGate) {
         // No AWT calls here — Spring safe to construct this bean at any time.
         this.inventoryService = inventoryService;
@@ -97,6 +100,7 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
         this.customerService = customerService;
         this.orderService = orderService;
         this.reportService = reportService;
+        this.irrigationAdvisorService = irrigationAdvisorService;
         this.loginGate = loginGate;
     }
 
@@ -127,7 +131,8 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
         frame.setLayout(new BorderLayout());
 
         // Build tabs (constructor injection of services + this TabHost).
-        dashboard = new DashboardTab(inventoryService, harvestService, orderService, this);
+        dashboard = new DashboardTab(inventoryService, harvestService, orderService,
+                irrigationAdvisorService, this);
         trendTab = new TrendAnalysisTab(trendService);
         tabs.add(dashboard);
         tabs.add(new InventoryTab(inventoryService, this));
@@ -140,7 +145,7 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
         tabs.add(new RoseVarietiesTab(inventoryService, this));
         tabs.add(new RoseVisualizerTab(inventoryService, this));
         tabs.add(new PricingInfoTab());
-        tabs.add(new IrrigationInfoTab());
+        tabs.add(new IrrigationInfoTab(irrigationAdvisorService, this));
 
         tabbedPane = new JTabbedPane(JTabbedPane.TOP);
         tabbedPane.setTabLayoutPolicy(JTabbedPane.SCROLL_TAB_LAYOUT);
