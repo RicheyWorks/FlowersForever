@@ -7,6 +7,8 @@ import com.flowerfarm.model.HarvestEntry;
 import com.flowerfarm.model.Item;
 import com.flowerfarm.service.HarvestService;
 import com.flowerfarm.service.InventoryService;
+import com.flowerfarm.service.IrrigationAdvisorService;
+import com.flowerfarm.service.IrrigationAdvisorService.IrrigationAdvice;
 import com.flowerfarm.service.TrendService;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
@@ -35,15 +37,18 @@ public class FlowerFarmCLI implements ApplicationRunner {
     private final HarvestService    harvestService;
     private final TrendService      trendService;
     private final ConnectorRegistry connectorRegistry;
+    private final IrrigationAdvisorService irrigationAdvisorService;
 
     public FlowerFarmCLI(InventoryService inventoryService,
                          HarvestService harvestService,
                          TrendService trendService,
-                         ConnectorRegistry connectorRegistry) {
+                         ConnectorRegistry connectorRegistry,
+                         IrrigationAdvisorService irrigationAdvisorService) {
         this.inventoryService  = inventoryService;
         this.harvestService    = harvestService;
         this.trendService      = trendService;
         this.connectorRegistry = connectorRegistry;
+        this.irrigationAdvisorService = irrigationAdvisorService;
     }
 
     @Override
@@ -67,7 +72,8 @@ public class FlowerFarmCLI implements ApplicationRunner {
                 case "8" -> runTrendAnalysis();
                 case "9" -> logHarvest(scanner);
                 case "10" -> listAndExportHarvest(scanner);
-                case "11" -> { System.out.println("Goodbye!"); running = false; }
+                case "11" -> irrigationAdvice(scanner);
+                case "12" -> { System.out.println("Goodbye!"); running = false; }
                 default  -> System.out.println("Unknown option. Try again.");
             }
         }
@@ -98,7 +104,8 @@ public class FlowerFarmCLI implements ApplicationRunner {
                  8) Trend analysis (Weka ML)
                  9) Log harvest (single or batch)
                 10) List / export harvest log
-                11) Exit
+                11) Kitsap irrigation advice
+                12) Exit
                 ─────────────────────────────────────────
                 Choice: \
                 """);
@@ -327,6 +334,43 @@ public class FlowerFarmCLI implements ApplicationRunner {
             } catch (Exception e) {
                 System.out.println("✗ Export failed: " + e.getMessage());
             }
+        }
+    }
+
+    private void irrigationAdvice(Scanner sc) {
+        System.out.print("Mode (1=climatology offline, 2=try live Open-Meteo) [1]: ");
+        String mode = sc.nextLine().trim();
+        boolean live = "2".equals(mode);
+        System.out.println(live
+                ? "Fetching Port Orchard forecast (falls back to climatology if offline)…"
+                : "Building Kitsap climatology advice…");
+        try {
+            IrrigationAdvice a = irrigationAdvisorService.advise(live);
+            System.out.println();
+            System.out.println("  Location : " + a.location());
+            System.out.println("  Mode     : " + a.mode());
+            System.out.println("  Date     : " + a.asOfDate());
+            System.out.println("  Season   : " + a.season());
+            System.out.println("  Priority : " + a.priority());
+            System.out.println("  Headline : " + a.headline());
+            if (a.weekPrecipInches() != null) {
+                System.out.printf("  7d precip: %.1f\"  ET₀: %.1f\"  deficit: %.1f\"%n",
+                        a.weekPrecipInches(),
+                        a.weekEtInches() != null ? a.weekEtInches() : 0.0,
+                        a.moistureDeficitInches() != null ? a.moistureDeficitInches() : 0.0);
+            }
+            if (a.activeBeds() != null && !a.activeBeds().isEmpty()) {
+                System.out.println("  Active beds: " + String.join(", ", a.activeBeds()));
+            }
+            System.out.println("  Actions:");
+            for (String action : a.actions()) {
+                System.out.println("    • " + action);
+            }
+            if (a.climateNotes() != null && !a.climateNotes().isBlank()) {
+                System.out.println("  Note: " + a.climateNotes());
+            }
+        } catch (Exception e) {
+            System.out.println("✗ Irrigation advice failed: " + e.getMessage());
         }
     }
 

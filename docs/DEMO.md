@@ -12,9 +12,9 @@ cd FlowersForever
 mvn clean verify
 ```
 
-All tests green → fat JAR under `target/flowerfarm-manager-1.0.3.jar`.  
+All tests green → fat JAR under `target/flowerfarm-manager-1.0.4.jar`.  
 GitHub Actions runs the same command on every push to `main` (see CI badge in the README).  
-Tagged releases (`git tag v1.0.2 && git push origin v1.0.2`) publish the fat JAR on the GitHub Releases page.
+Tagged releases (`git tag v1.0.4 && git push origin v1.0.4`) publish the fat JAR on the GitHub Releases page.
 
 ---
 
@@ -23,11 +23,11 @@ Tagged releases (`git tag v1.0.2 && git push origin v1.0.2`) publish the fat JAR
 | Goal | Command |
 |------|---------|
 | Default GUI + REST + H2 | `mvn spring-boot:run` |
-| Same via JAR | `java -jar target/flowerfarm-manager-1.0.3.jar` |
+| Same via JAR | `java -jar target/flowerfarm-manager-1.0.4.jar` |
 | SQLite file DB | `java -jar … --spring.profiles.active=sqlite` |
 | Barn multi-user | `java -jar … --spring.profiles.active=auth` |
 | Auth + SQLite | `java -jar … --spring.profiles.active=auth,sqlite` |
-| CLI only | `java -jar … --cli` |
+| CLI only | `java -jar … --cli` (menu includes Kitsap irrigation advice) |
 
 App opens Swing GUI and Tomcat on **http://localhost:8080**.
 
@@ -88,7 +88,7 @@ Narrate as Kitsap / Port Orchard grower:
 ## 3. Auth demo (optional, ~2 min)
 
 ```bash
-java -jar target/flowerfarm-manager-1.0.3.jar --spring.profiles.active=auth
+java -jar target/flowerfarm-manager-1.0.4.jar --spring.profiles.active=auth
 ```
 
 | User | Password | Show |
