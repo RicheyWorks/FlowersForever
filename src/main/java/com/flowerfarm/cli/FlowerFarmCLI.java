@@ -374,6 +374,15 @@ public class FlowerFarmCLI implements ApplicationRunner {
                         harvestService.exportBedProductionCsv(report));
                 System.out.println("✓ Wrote " + file);
             }
+            System.out.print("Export PDF? (y/n): ");
+            if ("y".equalsIgnoreCase(sc.nextLine().trim())) {
+                String def = "bed-production-" + report.to() + ".pdf";
+                System.out.print("Filename [" + def + "]: ");
+                String file = orDefault(sc.nextLine(), def);
+                byte[] pdf = harvestService.generateBedProductionPdf(report);
+                java.nio.file.Files.write(java.nio.file.Path.of(file), pdf);
+                System.out.println("✓ Wrote " + file + " (" + pdf.length + " bytes)");
+            }
         } catch (Exception e) {
             System.out.println("✗ Bed production failed: " + e.getMessage());
         }

@@ -657,11 +657,11 @@ public class HarvestLogTab implements FlowerFarmTab {
             JScrollPane scroll = new JScrollPane(area);
             scroll.setPreferredSize(new Dimension(640, 420));
 
-            Object[] options = {"Export CSV…", "Close"};
+            Object[] options = {"Export CSV…", "Export PDF…", "Close"};
             int choice = JOptionPane.showOptionDialog(panel, scroll,
                     "Bed / field production — " + report.from() + " → " + report.to(),
                     JOptionPane.DEFAULT_OPTION, JOptionPane.PLAIN_MESSAGE,
-                    null, options, options[1]);
+                    null, options, options[2]);
             if (choice == 0) {
                 JFileChooser chooser = new JFileChooser();
                 chooser.setSelectedFile(new File("bed-production-" + report.to() + ".csv"));
@@ -671,6 +671,17 @@ public class HarvestLogTab implements FlowerFarmTab {
                             harvestService.exportBedProductionCsv(report));
                     if (host != null) {
                         host.setStatus("Bed production CSV → " + chooser.getSelectedFile().getName());
+                    }
+                }
+            } else if (choice == 1) {
+                JFileChooser chooser = new JFileChooser();
+                chooser.setSelectedFile(new File("bed-production-" + report.to() + ".pdf"));
+                if (chooser.showSaveDialog(panel) == JFileChooser.APPROVE_OPTION) {
+                    byte[] pdf = harvestService.generateBedProductionPdf(report);
+                    java.nio.file.Files.write(chooser.getSelectedFile().toPath(), pdf);
+                    if (host != null) {
+                        host.setStatus("Bed production PDF → " + chooser.getSelectedFile().getName()
+                                + " (" + pdf.length + " bytes)");
                     }
                 }
             } else if (host != null) {

@@ -154,6 +154,7 @@ REST: `GET /api/auth/me` (Basic), `GET /api/auth/accounts` (usernames only).
 | GET | `/api/harvest/week` | 7-day total + daily series |
 | GET | `/api/harvest/beds` | Bed/field production (`week=true` or `from`/`to`) |
 | GET | `/api/harvest/beds/text` | Plain-text bed production report |
+| GET | `/api/harvest/beds/report.pdf` | Printable bed production PDF |
 | GET | `/api/harvest/filter` | crop/bed/notes/dates |
 | GET/POST | `/api/customers` | CRM customers |
 | GET/POST | `/api/orders` | Orders |
@@ -216,6 +217,7 @@ More: [`docs/GUI_ARCHITECTURE.md`](docs/GUI_ARCHITECTURE.md).
 - Weekly PDF includes **bed / field production** table; release **1.0.6**  
 - Market Day **packing PDF** (pick list + customer slips, shortfall highlighting)  
 - Release **1.0.7**  
+- Bed production **PDF** (ranked beds + crop mix)  
 
 ### Later ideas
 

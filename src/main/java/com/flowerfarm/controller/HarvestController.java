@@ -3,7 +3,9 @@ package com.flowerfarm.controller;
 import com.flowerfarm.model.HarvestEntry;
 import com.flowerfarm.service.HarvestService;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -130,6 +132,29 @@ public class HarvestController {
                     ? harvestService.productionByBedLast7Days()
                     : harvestService.productionByBed(from, to);
             return ResponseEntity.ok(report.plainText());
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    /** Printable bed / field production PDF. */
+    @GetMapping(value = "/beds/report.pdf", produces = MediaType.APPLICATION_PDF_VALUE)
+    public ResponseEntity<?> bedProductionPdf(
+            @RequestParam(value = "from", required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(value = "to", required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(value = "week", defaultValue = "false") boolean week) {
+        try {
+            HarvestService.BedProductionReport report = week
+                    ? harvestService.productionByBedLast7Days()
+                    : harvestService.productionByBed(from, to);
+            byte[] pdf = harvestService.generateBedProductionPdf(report);
+            String filename = "bed-production-" + report.to() + ".pdf";
+            return ResponseEntity.ok()
+                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
+                    .contentType(MediaType.APPLICATION_PDF)
+                    .body(pdf);
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }

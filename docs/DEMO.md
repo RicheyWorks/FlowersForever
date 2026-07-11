@@ -53,7 +53,7 @@ Narrate as Kitsap / Port Orchard grower:
      ```  
    - Double-click a row → tweak qty → **Save edit** (`HARVEST_EDIT`).  
    - Filter crop/bed/notes; **This week**; **Export filtered CSV**.  
-   - **Bed production…** → rank beds by qty with crop mix (uses From/To or last 7 days).
+   - **Bed production…** → rank beds by qty with crop mix; export CSV or **PDF**.
 
 3. **Dashboard again**  
    - Week Harvest KPI / sparkline updated.
@@ -139,6 +139,7 @@ Invoke-WebRequest "http://localhost:8080/api/market-day/packing.pdf" -OutFile ma
 
 # Bed / field production (last 7 days)
 Invoke-RestMethod "http://localhost:8080/api/harvest/beds?week=true" | ConvertTo-Json -Depth 5
+Invoke-WebRequest "http://localhost:8080/api/harvest/beds/report.pdf?week=true" -OutFile bed-prod.pdf
 
 # Weekly PDF
 Invoke-WebRequest http://localhost:8080/api/reports/weekly.pdf -OutFile weekly.pdf

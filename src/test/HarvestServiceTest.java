@@ -270,6 +270,12 @@ class HarvestServiceTest {
                 .contains("(unassigned)");
         assertThat(report.plainText()).contains("BED / FIELD PRODUCTION");
         assertThat(service.exportBedProductionCsv(report)).contains("Bed A").contains("Nootka Rose");
+
+        byte[] pdf = service.generateBedProductionPdf(report);
+        assertThat(pdf).isNotNull();
+        assertThat(pdf.length).isGreaterThan(100);
+        assertThat(new String(pdf, 0, 4)).isEqualTo("%PDF");
+        assertThatIllegalArgumentException().isThrownBy(() -> service.generateBedProductionPdf(null));
     }
 
     @Test
