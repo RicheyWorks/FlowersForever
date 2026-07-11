@@ -14,7 +14,7 @@
 
     <groupId>com.flowerfarm</groupId>
     <artifactId>flowerfarm-manager</artifactId>
-    <version>1.0.12</version>
+    <version>1.0.13</version>
     <packaging>jar</packaging>
     <name>Flower Farm Manager</name>
     <description>Spring Boot inventory manager for PNW flower farms (Port Orchard, Kitsap County).</description>
