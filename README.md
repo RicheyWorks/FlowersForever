@@ -1,5 +1,7 @@
 # FlowersForever — Flower Farm Manager
 
+[![CI](https://github.com/RicheyWorks/FlowersForever/actions/workflows/ci.yml/badge.svg)](https://github.com/RicheyWorks/FlowersForever/actions/workflows/ci.yml)
+
 **Practical desktop + REST inventory tool for PNW flower farmers**  
 Port Orchard / Kitsap County · roses, stems, tools, supplies · west of the Cascades.
 
@@ -28,6 +30,8 @@ Spring Boot 3 + modular Swing GUI + dual-mode connectors (offline JSON mirrors *
 
 - **JDK 17+**
 - **Maven 3.9+**
+
+**CI:** every push/PR to `main` runs `mvn clean verify` on Ubuntu + Temurin 17 (see `.github/workflows/ci.yml`).
 
 ---
 

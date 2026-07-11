@@ -12,7 +12,8 @@ cd FlowersForever
 mvn clean verify
 ```
 
-All tests green → fat JAR under `target/flowerfarm-manager-1.0-SNAPSHOT.jar`.
+All tests green → fat JAR under `target/flowerfarm-manager-1.0-SNAPSHOT.jar`.  
+GitHub Actions runs the same command on every push to `main` (see CI badge in the README).
 
 ---
 
