@@ -252,6 +252,30 @@ class InventoryServiceTest {
     }
 
     @Test
+    @DisplayName("buildPriceListReport + PDF; inStockOnly omits zeros")
+    void priceListReportAndPdf() {
+        service.addItem(new Item("Booth Daisy", "Flowers/Plants", 2.5, "stems", 1.0, 20, ""));
+        service.addItem(new Item("Gone Crop", "Flowers/Plants", 3.0, "stems", 1.0, 0, ""));
+
+        InventoryService.PriceListReport all = service.buildPriceListReport(false);
+        assertThat(all.plainText()).contains("PRICE LIST");
+        assertThat(all.lines()).extracting(InventoryService.PriceListLine::name)
+                .contains("Booth Daisy", "Gone Crop");
+
+        InventoryService.PriceListReport stock = service.buildPriceListReport(true);
+        assertThat(stock.lines()).extracting(InventoryService.PriceListLine::name)
+                .contains("Booth Daisy")
+                .doesNotContain("Gone Crop");
+        assertThat(stock.inStockOnly()).isTrue();
+        assertThat(stock.toMap()).containsKeys("lines", "sellValue");
+
+        byte[] pdf = service.generatePriceListPdf(stock);
+        assertThat(pdf.length).isGreaterThan(100);
+        assertThat(new String(pdf, 0, 4)).isEqualTo("%PDF");
+        assertThatIllegalArgumentException().isThrownBy(() -> service.generatePriceListPdf(null));
+    }
+
+    @Test
     @DisplayName("concurrent addItem() calls keep a consistent size")
     void concurrentAddsAreThreadSafe() throws InterruptedException {
         int threads = 10;

@@ -427,6 +427,8 @@ public class DashboardTab implements FlowerFarmTab {
         actions.add(actionButton("Fulfill pipeline", "CRM", "Open CRM to fulfill confirmed orders."));
         actions.add(actionButton("Low-stock reorder", "Inventory",
                 "Open Inventory → Low-stock reorder for cooler restock sheet."));
+        actions.add(actionButton("Price list", "Inventory",
+                "Open Inventory → Price list for market / wholesale sheet."));
         actions.add(actionButton("Weekly PDF Report", "Reports", "Generate harvest + sales PDF report."));
         actions.add(actionButton("Rose Visualizer", "Rose Visualizer", "Grow generative L-System roses."));
         JButton trends = new JButton("Run Trend Analysis");

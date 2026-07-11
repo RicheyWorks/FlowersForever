@@ -107,7 +107,8 @@ public class FlowerFarmCLI implements ApplicationRunner {
                 case "18" -> customerStatement(scanner);
                 case "19" -> harvestLogPdf(scanner);
                 case "20" -> auditHistoryPdf(scanner);
-                case "21" -> { System.out.println("Goodbye!"); running = false; }
+                case "21" -> priceListPdf(scanner);
+                case "22" -> { System.out.println("Goodbye!"); running = false; }
                 default  -> System.out.println("Unknown option. Try again.");
             }
         }
@@ -148,7 +149,8 @@ public class FlowerFarmCLI implements ApplicationRunner {
                 18) Customer statement PDF
                 19) Harvest log PDF
                 20) Audit history PDF
-                21) Exit
+                21) Price list PDF
+                22) Exit
                 ─────────────────────────────────────────
                 Choice: \
                 """);
@@ -550,6 +552,28 @@ public class FlowerFarmCLI implements ApplicationRunner {
             System.out.println("✗ Enter a whole number limit.");
         } catch (Exception e) {
             System.out.println("✗ Audit history PDF failed: " + e.getMessage());
+        }
+    }
+
+    private void priceListPdf(Scanner sc) {
+        try {
+            System.out.print("In-stock only? (y/n) [y]: ");
+            String raw = sc.nextLine().trim();
+            boolean inStockOnly = raw.isEmpty() || "y".equalsIgnoreCase(raw);
+            var report = inventoryService.buildPriceListReport(inStockOnly);
+            System.out.println();
+            System.out.println(report.plainText());
+            System.out.print("Export PDF? (y/n): ");
+            if ("y".equalsIgnoreCase(sc.nextLine().trim())) {
+                String def = "price-list-" + report.date() + ".pdf";
+                System.out.print("Filename [" + def + "]: ");
+                String file = orDefault(sc.nextLine(), def);
+                byte[] pdf = inventoryService.generatePriceListPdf(report);
+                java.nio.file.Files.write(java.nio.file.Path.of(file), pdf);
+                System.out.println("✓ Wrote " + file + " (" + pdf.length + " bytes)");
+            }
+        } catch (Exception e) {
+            System.out.println("✗ Price list PDF failed: " + e.getMessage());
         }
     }
 

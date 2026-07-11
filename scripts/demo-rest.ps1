@@ -42,6 +42,7 @@ Get-Json "/api/connectors/history?limit=10"
 Get-Json "/api/connectors/history/report?limit=20"
 Get-Json "/api/inventory"
 Get-Json "/api/inventory/low-stock?threshold=10"
+Get-Json "/api/inventory/price-list?inStockOnly=true"
 Get-Json "/api/irrigation/advice?live=false"
 Get-Json "/api/market-day"
 Get-Json "/api/orders"
@@ -119,6 +120,15 @@ try {
     Write-Host "Wrote $lowPdf ($((Get-Item $lowPdf).Length) bytes)" -ForegroundColor Green
 } catch {
     Write-Host "Low-stock PDF failed: $_" -ForegroundColor Red
+}
+
+$pricePdf = Join-Path (Get-Location) "price-list-demo.pdf"
+Write-Host "`n=== GET /api/inventory/price-list/report.pdf → $pricePdf ===" -ForegroundColor Yellow
+try {
+    Invoke-WebRequest -Uri "$BaseUrl/api/inventory/price-list/report.pdf?inStockOnly=true" -Headers $headers -OutFile $pricePdf
+    Write-Host "Wrote $pricePdf ($((Get-Item $pricePdf).Length) bytes)" -ForegroundColor Green
+} catch {
+    Write-Host "Price list PDF failed: $_" -ForegroundColor Red
 }
 
 # First order / customer id when present (demo profile seeds CONFIRMED orders)

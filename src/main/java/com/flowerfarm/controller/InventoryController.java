@@ -79,6 +79,34 @@ public class InventoryController {
                 .body(pdf);
     }
 
+    /**
+     * Market / wholesale price list.
+     * {@code inStockOnly=true} omits zero-qty SKUs (default for booth sheet).
+     */
+    @GetMapping("/price-list")
+    public Map<String, Object> priceList(
+            @RequestParam(value = "inStockOnly", defaultValue = "true") boolean inStockOnly) {
+        return inventoryService.buildPriceListReport(inStockOnly).toMap();
+    }
+
+    @GetMapping(value = "/price-list/text", produces = MediaType.TEXT_PLAIN_VALUE)
+    public String priceListText(
+            @RequestParam(value = "inStockOnly", defaultValue = "true") boolean inStockOnly) {
+        return inventoryService.buildPriceListReport(inStockOnly).plainText();
+    }
+
+    @GetMapping(value = "/price-list/report.pdf", produces = MediaType.APPLICATION_PDF_VALUE)
+    public ResponseEntity<byte[]> priceListPdf(
+            @RequestParam(value = "inStockOnly", defaultValue = "true") boolean inStockOnly) {
+        var report = inventoryService.buildPriceListReport(inStockOnly);
+        byte[] pdf = inventoryService.generatePriceListPdf(report);
+        String filename = "price-list-" + report.date() + ".pdf";
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
+                .contentType(MediaType.APPLICATION_PDF)
+                .body(pdf);
+    }
+
     /** Returns items matching the search query (name or category). */
     @GetMapping("/search")
     public List<Item> search(@RequestParam("q") String query) {

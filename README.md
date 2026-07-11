@@ -158,6 +158,9 @@ REST: `GET /api/auth/me` (Basic), `GET /api/auth/accounts` (usernames only).
 | GET | `/api/inventory/low-stock` | Low-stock reorder JSON (`threshold`) |
 | GET | `/api/inventory/low-stock/text` | Low-stock reorder plain text |
 | GET | `/api/inventory/low-stock/report.pdf` | Low-stock reorder PDF |
+| GET | `/api/inventory/price-list` | Price list JSON (`inStockOnly`) |
+| GET | `/api/inventory/price-list/text` | Price list plain text |
+| GET | `/api/inventory/price-list/report.pdf` | Price list PDF |
 | GET/POST | `/api/harvest` | Harvest CRUD |
 | POST | `/api/harvest/batch` | Batch log |
 | GET | `/api/harvest/week` | 7-day total + daily series |
@@ -264,6 +267,7 @@ More: [`docs/GUI_ARCHITECTURE.md`](docs/GUI_ARCHITECTURE.md).
 - Release **1.0.16**  
 - **Audit history PDF** (Sync History + REST + CLI) — printable ops log with FAIL highlight  
 - Release **1.0.17**  
+- **Price list PDF** (Inventory + REST + CLI) — wholesale/market catalog by category  
 
 ### Later ideas
 

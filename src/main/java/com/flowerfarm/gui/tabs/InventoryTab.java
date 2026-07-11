@@ -175,16 +175,20 @@ public class InventoryTab implements FlowerFarmTab {
         deleteBtn = new JButton("Delete Selected");
         JButton reorderBtn = new JButton("Low-stock reorder…");
         reorderBtn.setToolTipText("SKUs at/under threshold with suggested restock qty (PDF). VIEWER OK.");
+        JButton priceListBtn = new JButton("Price list…");
+        priceListBtn.setToolTipText("Wholesale / market price list PDF (in-stock by default). VIEWER OK.");
         JButton exportBtn = new JButton("Export Visible to CSV");
 
         editBtn.addActionListener(this::editSelected);
         deleteBtn.addActionListener(this::deleteSelected);
         reorderBtn.addActionListener(e -> showLowStockReorder());
+        priceListBtn.addActionListener(e -> showPriceList());
         exportBtn.addActionListener(e -> exportVisibleToCsv());
 
         actionPanel.add(editBtn);
         actionPanel.add(deleteBtn);
         actionPanel.add(reorderBtn);
+        actionPanel.add(priceListBtn);
         actionPanel.add(exportBtn);
 
         statusLabel = new JLabel("Loading inventory…");
@@ -334,6 +338,58 @@ public class InventoryTab implements FlowerFarmTab {
         } catch (Exception ex) {
             JOptionPane.showMessageDialog(panel, ex.getMessage(),
                     "Low-stock reorder failed", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private void showPriceList() {
+        try {
+            int mode = JOptionPane.showOptionDialog(panel,
+                    "Include zero-quantity SKUs?",
+                    "Price list",
+                    JOptionPane.DEFAULT_OPTION,
+                    JOptionPane.QUESTION_MESSAGE,
+                    null,
+                    new Object[]{"In-stock only", "All SKUs", "Cancel"},
+                    "In-stock only");
+            if (mode < 0 || mode == 2) {
+                return;
+            }
+            boolean inStockOnly = mode == 0;
+            InventoryService.PriceListReport report =
+                    inventoryService.buildPriceListReport(inStockOnly);
+            JTextArea area = new JTextArea(report.plainText(), 22, 64);
+            area.setEditable(false);
+            area.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
+            area.setCaretPosition(0);
+            JScrollPane scroll = new JScrollPane(area);
+            scroll.setPreferredSize(new Dimension(640, 420));
+
+            Object[] options = {"Export PDF…", "Close"};
+            int choice = JOptionPane.showOptionDialog(panel, scroll,
+                    "Price list — " + (inStockOnly ? "in-stock" : "all SKUs"),
+                    JOptionPane.DEFAULT_OPTION, JOptionPane.PLAIN_MESSAGE,
+                    null, options, options[1]);
+            if (choice == 0) {
+                JFileChooser chooser = new JFileChooser();
+                chooser.setSelectedFile(new File("price-list-" + report.date() + ".pdf"));
+                if (chooser.showSaveDialog(panel) == JFileChooser.APPROVE_OPTION) {
+                    byte[] pdf = inventoryService.generatePriceListPdf(report);
+                    Files.write(chooser.getSelectedFile().toPath(), pdf);
+                    statusLabel.setText("Price list PDF → "
+                            + chooser.getSelectedFile().getName());
+                    if (host != null) {
+                        host.setStatus("Price list PDF → "
+                                + chooser.getSelectedFile().getName()
+                                + " (" + report.skuCount() + " SKUs)");
+                    }
+                }
+            } else if (host != null) {
+                host.setStatus("Price list: " + report.skuCount() + " SKU(s), sell $"
+                        + String.format("%.0f", report.sellValue()));
+            }
+        } catch (Exception ex) {
+            JOptionPane.showMessageDialog(panel, ex.getMessage(),
+                    "Price list failed", JOptionPane.ERROR_MESSAGE);
         }
     }
 

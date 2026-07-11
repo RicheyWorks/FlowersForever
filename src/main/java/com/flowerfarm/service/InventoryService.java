@@ -460,6 +460,238 @@ public class InventoryService {
         }
     }
 
+    /**
+     * One line on the market / wholesale price list.
+     */
+    public record PriceListLine(
+            Long id,
+            String name,
+            String category,
+            double unitPrice,
+            String unit,
+            int quantity,
+            double lineSellValue,
+            double unitCost,
+            double lineCostBasis
+    ) {
+        public Map<String, Object> toMap() {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("id", id);
+            m.put("name", name);
+            m.put("category", category);
+            m.put("unitPrice", unitPrice);
+            m.put("unit", unit);
+            m.put("quantity", quantity);
+            m.put("lineSellValue", lineSellValue);
+            m.put("unitCost", unitCost);
+            m.put("lineCostBasis", lineCostBasis);
+            return m;
+        }
+    }
+
+    public record PriceListReport(
+            LocalDate date,
+            int skuCount,
+            int totalUnits,
+            double sellValue,
+            double costBasis,
+            boolean inStockOnly,
+            List<PriceListLine> lines,
+            String plainText
+    ) {
+        public Map<String, Object> toMap() {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("date", date.toString());
+            m.put("skuCount", skuCount);
+            m.put("totalUnits", totalUnits);
+            m.put("sellValue", sellValue);
+            m.put("costBasis", costBasis);
+            m.put("inStockOnly", inStockOnly);
+            m.put("lines", lines.stream().map(PriceListLine::toMap).toList());
+            m.put("plainText", plainText);
+            return m;
+        }
+    }
+
+    /**
+     * Market / wholesale price list from inventory.
+     * When {@code inStockOnly}, zero-qty SKUs are omitted (booth sheet).
+     */
+    @Transactional(readOnly = true)
+    public PriceListReport buildPriceListReport(boolean inStockOnly) {
+        List<Item> items = getAllItems().stream()
+                .filter(i -> !inStockOnly || i.getQuantity() > 0)
+                .sorted(Comparator
+                        .comparing((Item i) -> i.getCategory() == null ? "" : i.getCategory(),
+                                String.CASE_INSENSITIVE_ORDER)
+                        .thenComparing(Item::getName, String.CASE_INSENSITIVE_ORDER))
+                .toList();
+        List<PriceListLine> lines = new ArrayList<>();
+        double sell = 0;
+        double cost = 0;
+        int units = 0;
+        for (Item i : items) {
+            double lineSell = i.getPrice() * i.getQuantity();
+            double lineCost = i.getCost() * i.getQuantity();
+            sell += lineSell;
+            cost += lineCost;
+            units += i.getQuantity();
+            lines.add(new PriceListLine(
+                    i.getId(),
+                    i.getName(),
+                    i.getCategory() == null ? "" : i.getCategory(),
+                    i.getPrice(),
+                    i.getUnit() == null ? "" : i.getUnit(),
+                    i.getQuantity(),
+                    lineSell,
+                    i.getCost(),
+                    lineCost
+            ));
+        }
+        String text = formatPriceListText(inStockOnly, lines, sell, cost, units);
+        return new PriceListReport(
+                LocalDate.now(),
+                lines.size(),
+                units,
+                sell,
+                cost,
+                inStockOnly,
+                List.copyOf(lines),
+                text
+        );
+    }
+
+    public byte[] generatePriceListPdf(PriceListReport report) {
+        if (report == null) {
+            throw new IllegalArgumentException("report is required.");
+        }
+        try {
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            Document doc = new Document(PageSize.LETTER, 40, 40, 48, 40);
+            PdfWriter.getInstance(doc, baos);
+            doc.open();
+
+            Color brandGreen = new Color(34, 100, 54);
+            Color brandSoft = new Color(232, 245, 233);
+            Font titleFont = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 18, brandGreen);
+            Font h2 = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 12, brandGreen);
+            Font body = FontFactory.getFont(FontFactory.HELVETICA, 10);
+            Font small = FontFactory.getFont(FontFactory.HELVETICA, 9, Color.DARK_GRAY);
+            Font banner = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 11, Color.WHITE);
+
+            PdfPTable bannerTable = new PdfPTable(1);
+            bannerTable.setWidthPercentage(100);
+            PdfPCell bannerCell = new PdfPCell(new Phrase(
+                    "FlowersForever  ·  Port Orchard / Kitsap  ·  Price List",
+                    banner));
+            bannerCell.setBackgroundColor(brandGreen);
+            bannerCell.setPadding(10);
+            bannerCell.setBorder(Rectangle.NO_BORDER);
+            bannerTable.addCell(bannerCell);
+            doc.add(bannerTable);
+            doc.add(Chunk.NEWLINE);
+
+            doc.add(new Paragraph("Wholesale / Market Price List", titleFont));
+            doc.add(new Paragraph(
+                    "Date: " + report.date()
+                            + "     ·     "
+                            + (report.inStockOnly() ? "In-stock only" : "All SKUs")
+                            + "     ·     SKUs: " + report.skuCount(),
+                    small));
+            doc.add(Chunk.NEWLINE);
+
+            PdfPTable summary = new PdfPTable(new float[]{1, 1, 1});
+            summary.setWidthPercentage(100);
+            summary.addCell(summaryCell("SKUs", String.valueOf(report.skuCount()), brandSoft));
+            summary.addCell(summaryCell("Sell value $",
+                    String.format(Locale.US, "%,.0f", report.sellValue()), brandSoft));
+            summary.addCell(summaryCell("Units on hand",
+                    String.valueOf(report.totalUnits()), brandSoft));
+            doc.add(summary);
+            doc.add(Chunk.NEWLINE);
+
+            doc.add(new Paragraph("1. Catalog (by category)", h2));
+            doc.add(Chunk.NEWLINE);
+            if (report.lines().isEmpty()) {
+                doc.add(new Paragraph(
+                        report.inStockOnly()
+                                ? "No in-stock SKUs — harvest or clear in-stock filter."
+                                : "Inventory is empty.",
+                        body));
+            } else {
+                PdfPTable t = new PdfPTable(new float[]{2.6f, 1.6f, 1.1f, 1.0f, 0.9f, 1.2f});
+                t.setWidthPercentage(100);
+                headerCell(t, "SKU");
+                headerCell(t, "Category");
+                headerCell(t, "Unit $");
+                headerCell(t, "Unit");
+                headerCell(t, "Qty");
+                headerCell(t, "Ext. $");
+                for (PriceListLine line : report.lines()) {
+                    Color bg = line.quantity() <= 0 ? new Color(245, 245, 245) : Color.WHITE;
+                    t.addCell(cell(line.name(), body, bg));
+                    t.addCell(cell(line.category(), body, bg));
+                    t.addCell(cell(String.format(Locale.US, "%,.2f", line.unitPrice()), body, bg));
+                    t.addCell(cell(line.unit(), body, bg));
+                    t.addCell(cell(String.valueOf(line.quantity()), body, bg));
+                    t.addCell(cell(String.format(Locale.US, "%,.2f", line.lineSellValue()), body, bg));
+                }
+                doc.add(t);
+                doc.add(Chunk.NEWLINE);
+                doc.add(new Paragraph(String.format(Locale.US,
+                        "Catalog sell value: $%,.2f   ·   Cost basis: $%,.2f",
+                        report.sellValue(), report.costBasis()), body));
+            }
+            doc.add(Chunk.NEWLINE);
+            doc.add(new Paragraph(
+                    "Tip: booth sheet = in-stock only; full list includes zeros for planning. "
+                            + "Low-stock reorder is a separate PDF.",
+                    small));
+            doc.add(new Paragraph(
+                    "FlowersForever · practical tools for PNW flower growers", small));
+
+            doc.close();
+            log.info("Generated price list PDF (skus={}, inStockOnly={})",
+                    report.skuCount(), report.inStockOnly());
+            return baos.toByteArray();
+        } catch (DocumentException e) {
+            throw new IllegalStateException("Failed to build price list PDF: " + e.getMessage(), e);
+        }
+    }
+
+    private static String formatPriceListText(boolean inStockOnly, List<PriceListLine> lines,
+                                              double sell, double cost, int units) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("PRICE LIST — Port Orchard / Kitsap County\n");
+        sb.append("═══════════════════════════════════════\n");
+        sb.append("Date: ").append(LocalDate.now())
+                .append(inStockOnly ? "  ·  In-stock only" : "  ·  All SKUs")
+                .append('\n');
+        sb.append(String.format(Locale.US,
+                "SKUs: %d  ·  Units: %d  ·  Sell $%,.2f  ·  Cost $%,.2f%n",
+                lines.size(), units, sell, cost));
+        sb.append('\n');
+        if (lines.isEmpty()) {
+            sb.append("  (empty)\n");
+        } else {
+            sb.append(String.format(Locale.US, "%-22s %-14s %8s %6s %8s%n",
+                    "SKU", "Category", "Unit $", "Qty", "Ext. $"));
+            sb.append("-".repeat(64)).append('\n');
+            for (PriceListLine l : lines) {
+                sb.append(String.format(Locale.US, "%-22s %-14s %8.2f %6d %8.2f%n",
+                        truncate(l.name(), 22),
+                        truncate(l.category(), 14),
+                        l.unitPrice(),
+                        l.quantity(),
+                        l.lineSellValue()));
+            }
+            sb.append("-".repeat(64)).append('\n');
+            sb.append(String.format(Locale.US, "TOTAL SELL  $%,.2f%n", sell));
+        }
+        sb.append("\nTip: print for the market table; pair with packing PDF on van days.\n");
+        return sb.toString();
+    }
+
     private static String formatLowStockText(int threshold, int skuCount,
                                              List<LowStockLine> lines, double costTotal) {
         StringBuilder sb = new StringBuilder();

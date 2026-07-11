@@ -126,6 +126,46 @@ class InventoryControllerIT {
         }
     }
 
+    // ── GET /api/inventory/price-list ─────────────────────────────────────────
+
+    @Nested
+    @DisplayName("GET /api/inventory/price-list")
+    class PriceList {
+
+        @Test
+        @DisplayName("JSON price list")
+        void json() throws Exception {
+            var report = new InventoryService.PriceListReport(
+                    java.time.LocalDate.of(2026, 7, 12),
+                    1, 20, 50.0, 20.0, true,
+                    List.of(new InventoryService.PriceListLine(
+                            1L, "Nootka Rose", "Flowers/Plants", 2.5, "stems", 20, 50.0, 1.0, 20.0)),
+                    "PRICE LIST"
+            );
+            when(inventoryService.buildPriceListReport(true)).thenReturn(report);
+            mockMvc.perform(get("/api/inventory/price-list"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.skuCount", is(1)))
+                    .andExpect(jsonPath("$.lines[0].name", is("Nootka Rose")));
+        }
+
+        @Test
+        @DisplayName("PDF")
+        void pdf() throws Exception {
+            var report = new InventoryService.PriceListReport(
+                    java.time.LocalDate.of(2026, 7, 12),
+                    0, 0, 0, 0, true, List.of(), "PRICE LIST"
+            );
+            when(inventoryService.buildPriceListReport(anyBoolean())).thenReturn(report);
+            when(inventoryService.generatePriceListPdf(any())).thenReturn("%PDF-1.4".getBytes());
+            mockMvc.perform(get("/api/inventory/price-list/report.pdf").param("inStockOnly", "false"))
+                    .andExpect(status().isOk())
+                    .andExpect(header().string("Content-Disposition",
+                            containsString("price-list-")))
+                    .andExpect(header().string("Content-Type", containsString("application/pdf")));
+        }
+    }
+
     // ── GET /api/inventory/search ─────────────────────────────────────────────
 
     @Nested

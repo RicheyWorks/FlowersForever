@@ -63,7 +63,8 @@ Narrate as Kitsap / Port Orchard grower:
 
 3. **Dashboard again**  
    - Week Harvest KPI / sparkline updated.  
-   - Optional: **Low-stock reorder** (Inventory) → threshold sheet + PDF for the cooler door.
+   - Optional: **Low-stock reorder** (Inventory) → threshold sheet + PDF for the cooler door.  
+   - Optional: **Price list…** → in-stock market/wholesale catalog PDF for the booth table.
 
 4. **CRM**  
    - Add customer `Kitsap Blooms` (type WHOLESALE).  
