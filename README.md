@@ -41,8 +41,8 @@ Spring Boot **3.5.16** + modular Swing GUI + dual-mode connectors (offline JSON 
 
 ```bash
 # Create a release from main (after CI is green)
-git tag v1.0.8
-git push origin v1.0.8
+git tag v1.0.9
+git push origin v1.0.9
 ```
 
 ---
@@ -58,16 +58,16 @@ mvn clean verify
 # GUI + REST (:8080)
 mvn spring-boot:run
 # or
-java -jar target/flowerfarm-manager-1.0.8.jar
+java -jar target/flowerfarm-manager-1.0.9.jar
 
 # CLI
-java -jar target/flowerfarm-manager-1.0.8.jar --cli
+java -jar target/flowerfarm-manager-1.0.9.jar --cli
 
 # SQLite
-java -jar target/flowerfarm-manager-1.0.8.jar --spring.profiles.active=sqlite
+java -jar target/flowerfarm-manager-1.0.9.jar --spring.profiles.active=sqlite
 
 # Shared barn login (GUI + HTTP Basic)
-java -jar target/flowerfarm-manager-1.0.8.jar --spring.profiles.active=auth
+java -jar target/flowerfarm-manager-1.0.9.jar --spring.profiles.active=auth
 # farm/kitsap (OWNER) · hand/harvest (HAND) · viewer/view (VIEWER)
 ```
 
@@ -224,6 +224,7 @@ More: [`docs/GUI_ARCHITECTURE.md`](docs/GUI_ARCHITECTURE.md).
 - Bed production **PDF** (ranked beds + crop mix)  
 - Release **1.0.8**  
 - **Morning briefing** (Dashboard + REST + CLI + PDF)  
+- Release **1.0.9**  
 
 ### Later ideas
 
