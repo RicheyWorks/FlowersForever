@@ -69,6 +69,11 @@ java -jar target/flowerfarm-manager-1.0.10.jar --spring.profiles.active=sqlite
 # Shared barn login (GUI + HTTP Basic)
 java -jar target/flowerfarm-manager-1.0.10.jar --spring.profiles.active=auth
 # farm/kitsap (OWNER) · hand/harvest (HAND) · viewer/view (VIEWER)
+
+# Portfolio demo seed (CRM + harvest + today's CONFIRMED orders when empty)
+java -jar target/flowerfarm-manager-1.0.10.jar --spring.profiles.active=demo
+# demo + barn auth:
+java -jar target/flowerfarm-manager-1.0.10.jar --spring.profiles.active=demo,auth
 ```
 
 ### Persistence
@@ -228,6 +233,7 @@ More: [`docs/GUI_ARCHITECTURE.md`](docs/GUI_ARCHITECTURE.md).
 - Release **1.0.9**  
 - Market Day **batch fulfill** (post-market inventory deduct for all CONFIRMED)  
 - Release **1.0.10**  
+- **`demo` profile** seeds Kitsap CRM + harvest beds + today's CONFIRMED orders  
 
 ### Later ideas
 

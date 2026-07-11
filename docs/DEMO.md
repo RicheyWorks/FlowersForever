@@ -24,11 +24,14 @@ Tagged releases (`git tag v1.0.10 && git push origin v1.0.10`) publish the fat J
 |------|---------|
 | Default GUI + REST + H2 | `mvn spring-boot:run` |
 | Same via JAR | `java -jar target/flowerfarm-manager-1.0.10.jar` |
+| **Demo seed** (empty CRM/harvest) | `java -jar … --spring.profiles.active=demo` |
 | SQLite file DB | `java -jar … --spring.profiles.active=sqlite` |
 | Barn multi-user | `java -jar … --spring.profiles.active=auth` |
+| Demo + auth | `java -jar … --spring.profiles.active=demo,auth` |
 | Auth + SQLite | `java -jar … --spring.profiles.active=auth,sqlite` |
 | CLI only | `java -jar … --cli` (menu includes Kitsap irrigation advice) |
 
+**Demo profile:** if customers/harvests/orders for the week are empty, seeds Kitsap Blooms, Saturday Market Stall, bed harvests (Bed A / Tunnel 1), and **today’s CONFIRMED** orders so Market Day + Morning briefing work immediately. Does not wipe existing data — use a fresh `./data` folder for a clean run.
 App opens Swing GUI and Tomcat on **http://localhost:8080**.
 
 ---
