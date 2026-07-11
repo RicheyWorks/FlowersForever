@@ -5,7 +5,7 @@
 **Practical desktop + REST inventory tool for PNW flower farmers**  
 Port Orchard / Kitsap County · roses, stems, tools, supplies · west of the Cascades.
 
-Spring Boot 3 + modular Swing GUI + dual-mode connectors (offline JSON mirrors **or** live REST).
+Spring Boot **3.5.16** + modular Swing GUI + dual-mode connectors (offline JSON mirrors **or** live REST).
 
 ---
 
@@ -33,12 +33,13 @@ Spring Boot 3 + modular Swing GUI + dual-mode connectors (offline JSON mirrors *
 
 **CI:** every push/PR to `main` runs `mvn clean verify` on Ubuntu + Temurin 17 (see `.github/workflows/ci.yml`).  
 **Dependabot:** weekly PRs for Maven + GitHub Actions.  
-**Releases:** push a tag `v1.0.0` → Actions builds the fat JAR and attaches it to a GitHub Release.
+**Releases:** push a tag `v*` → Actions builds the fat JAR and attaches it to a GitHub Release.  
+**Security:** barn auth model, defaults, and hardening — **[SECURITY.md](SECURITY.md)**.
 
 ```bash
 # Create a release from main (after CI is green)
-git tag v1.0.2
-git push origin v1.0.2
+git tag v1.0.3
+git push origin v1.0.3
 ```
 
 ---
@@ -54,16 +55,16 @@ mvn clean verify
 # GUI + REST (:8080)
 mvn spring-boot:run
 # or
-java -jar target/flowerfarm-manager-1.0.1.jar
+java -jar target/flowerfarm-manager-1.0.3.jar
 
 # CLI
-java -jar target/flowerfarm-manager-1.0.1.jar --cli
+java -jar target/flowerfarm-manager-1.0.3.jar --cli
 
 # SQLite
-java -jar target/flowerfarm-manager-1.0.1.jar --spring.profiles.active=sqlite
+java -jar target/flowerfarm-manager-1.0.3.jar --spring.profiles.active=sqlite
 
 # Shared barn login (GUI + HTTP Basic)
-java -jar target/flowerfarm-manager-1.0.1.jar --spring.profiles.active=auth
+java -jar target/flowerfarm-manager-1.0.3.jar --spring.profiles.active=auth
 # farm/kitsap (OWNER) · hand/harvest (HAND) · viewer/view (VIEWER)
 ```
 
@@ -195,9 +196,11 @@ More: [`docs/GUI_ARCHITECTURE.md`](docs/GUI_ARCHITECTURE.md).
 - CRM: search, filter, confirm/fulfill/cancel, notes, CSV  
 - Audit history: multi-filter + CSV export  
 - Auth UX: login, session badge, switch user, VIEWER write guards  
+- Maintenance: Spring Boot **3.5.16**, release action softprops v3, Dependabot, `SECURITY.md`  
 
 ### Later ideas
 
+- Spring Boot **4.x** migration (deliberate; 3.5.16 is final 3.5 OSS)  
 - Weather-aware irrigation tips (Kitsap)  
 - Deeper POS adapters (only with real APIs)  
 - Deeper form-field disable styling for VIEWER (guards already block writes)
@@ -209,6 +212,7 @@ More: [`docs/GUI_ARCHITECTURE.md`](docs/GUI_ARCHITECTURE.md).
 | File | Role |
 |------|------|
 | [README.md](README.md) | Setup, features, API |
+| [SECURITY.md](SECURITY.md) | Auth model, defaults, vulnerability reporting |
 | [docs/DEMO.md](docs/DEMO.md) | **Portfolio / demo runbook** |
 | [docs/CONNECTORS_SANDBOX.md](docs/CONNECTORS_SANDBOX.md) | Offline mirrors + live keys |
 | [docs/GUI_ARCHITECTURE.md](docs/GUI_ARCHITECTURE.md) | GUI design history |
