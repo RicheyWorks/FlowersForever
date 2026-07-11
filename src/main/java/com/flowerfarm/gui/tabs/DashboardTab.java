@@ -1,7 +1,9 @@
 package com.flowerfarm.gui.tabs;
 
 import com.flowerfarm.model.Item;
+import com.flowerfarm.service.HarvestService;
 import com.flowerfarm.service.InventoryService;
+import com.flowerfarm.service.OrderService;
 import org.jfree.chart.ChartFactory;
 import org.jfree.chart.ChartPanel;
 import org.jfree.chart.JFreeChart;
@@ -10,58 +12,65 @@ import org.jfree.data.general.DefaultPieDataset;
 
 import javax.swing.*;
 import java.awt.*;
+import java.time.LocalDate;
+import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
 /**
- * Executive Dashboard tab — the at-a-glance overview of the GUI.
- *
- * <p>Shows KPI cards (SKU count, inventory value, low-stock count), two live
- * JFreeChart visualizations (inventory value by category as a pie, quantity by
- * item as a bar chart), a low-stock alert list, and a quick action to run the
- * ML trend forecast.
- *
- * <p>Charts use a fixed light palette so they stay readable under either the
- * light or dark application theme; {@link #applyTheme(boolean)} restyles the KPI
- * cards to match the active theme.
+ * Executive Dashboard — inventory KPIs, week harvest/revenue, charts, alerts,
+ * and quick actions into Harvest / CRM / Reports / Trends.
  */
 @SuppressWarnings({"rawtypes", "unchecked"})
 public class DashboardTab implements FlowerFarmTab {
 
-    /** Items at or below this quantity are treated as "low stock". */
     private static final int LOW_STOCK_THRESHOLD = 10;
-    /** Cap on the number of bars in the quantity chart to keep the axis legible. */
     private static final int MAX_BARS = 15;
 
     private final InventoryService inventoryService;
+    private final HarvestService harvestService;
+    private final OrderService orderService;
     private final TabHost host;
 
     private JPanel panel;
     private JLabel totalItemsLabel;
     private JLabel totalValueLabel;
+    private JLabel totalCostLabel;
     private JLabel lowStockLabel;
+    private JLabel weekHarvestLabel;
+    private JLabel weekHarvestDeltaLabel;
+    private JLabel weekRevenueLabel;
+    private JLabel weekRevenuePipelineLabel;
+    private JLabel lastUpdatedLabel;
     private JTextArea alertsArea;
+    private JLabel lowStockSubtitle;
 
-    private final JPanel[] kpiCards = new JPanel[3];
+    private final JPanel[] kpiCards = new JPanel[5];
+    private SparklinePanel weekHarvestSpark;
+    private SparklinePanel weekRevenueSpark;
+    private boolean darkTheme;
 
     private final DefaultPieDataset pieDataset = new DefaultPieDataset();
     private final DefaultCategoryDataset barDataset = new DefaultCategoryDataset();
 
-    public DashboardTab(InventoryService inventoryService, TabHost host) {
+    public DashboardTab(InventoryService inventoryService,
+                        HarvestService harvestService,
+                        OrderService orderService,
+                        TabHost host) {
         this.inventoryService = inventoryService;
+        this.harvestService = harvestService;
+        this.orderService = orderService;
         this.host = host;
     }
 
-    @Override
-    public String getTabTitle() {
-        return "Dashboard";
-    }
+    @Override public String getTabTitle() { return "Dashboard"; }
 
     @Override
     public String getDescription() {
-        return "KPIs, charts, low-stock alerts, and quick actions";
+        return "KPIs, week harvest/revenue, charts, alerts, and quick actions";
     }
 
     @Override
@@ -84,35 +93,152 @@ public class DashboardTab implements FlowerFarmTab {
         }
 
         List<Item> items = inventoryService.getAllItems();
+        InventoryService.InventoryKpiSnapshot inv =
+                inventoryService.inventoryKpis(LOW_STOCK_THRESHOLD);
 
-        long totalItems = items.size();
-        double totalValue = items.stream()
-                .mapToDouble(i -> i.getPrice() * i.getQuantity())
-                .sum();
-        long lowStockCount = items.stream()
-                .filter(i -> i.getQuantity() <= LOW_STOCK_THRESHOLD)
-                .count();
+        double weekHarvest = harvestService.totalQuantityLast7Days();
+        double priorHarvest = harvestService.totalQuantityPrior7Days();
+        OrderService.WeekRevenueSummary rev = orderService.weekRevenueSummary();
+        double priorRev = orderService.realizedRevenuePrior7Days();
 
-        totalItemsLabel.setText(String.valueOf(totalItems));
-        totalValueLabel.setText(String.format("$%,.2f", totalValue));
-        lowStockLabel.setText(String.valueOf(lowStockCount));
+        totalItemsLabel.setText(String.valueOf(inv.skuCount()));
+        totalValueLabel.setText(String.format("$%,.2f", inv.sellValue()));
+        if (totalCostLabel != null) {
+            totalCostLabel.setText(String.format("cost basis $%,.2f · %d units",
+                    inv.costBasis(), inv.totalUnits()));
+        }
+        lowStockLabel.setText(String.valueOf(inv.lowStockCount()));
+        weekHarvestLabel.setText(String.format("%,.0f", weekHarvest));
+        if (weekHarvestDeltaLabel != null) {
+            Double harvestPct = priorHarvest <= 0 ? null
+                    : ((weekHarvest - priorHarvest) / priorHarvest) * 100.0;
+            weekHarvestDeltaLabel.setText(formatWow("vs prior wk",
+                    harvestPct, weekHarvest - priorHarvest, false));
+        }
+        // Primary week revenue = realized (FULFILLED only) — not inflated by unfulfilled pipeline
+        weekRevenueLabel.setText(String.format("$%,.2f", rev.realized()));
+        if (weekRevenuePipelineLabel != null) {
+            Double revPct = priorRev <= 0 ? null
+                    : ((rev.realized() - priorRev) / priorRev) * 100.0;
+            String wow = formatWow("prior", revPct, rev.realized() - priorRev, true);
+            weekRevenuePipelineLabel.setText(String.format(
+                    "<html><center>pipeline $%,.2f · booked $%,.2f<br/>%s</center></html>",
+                    rev.pipeline(), rev.booked(), wow));
+        }
 
-        rebuildAlerts(items);
+        long lowStockCount = inv.lowStockCount();
+
+        if (weekHarvestSpark != null) {
+            double[] harvestDays = harvestService.dailyQuantitiesLast7Days();
+            weekHarvestSpark.setValues(harvestDays);
+            weekHarvestSpark.setToolTipText(formatSparkTip("Harvest qty", harvestDays, false));
+        }
+        if (weekRevenueSpark != null) {
+            double[] revDays = orderService.dailyRevenueLast7Days(); // realized only
+            weekRevenueSpark.setValues(revDays);
+            weekRevenueSpark.setToolTipText(formatSparkTip("Fulfilled $", revDays, true));
+        }
+
+        applyLowStockCardStyle(lowStockCount > 0);
+
+        if (lastUpdatedLabel != null) {
+            lastUpdatedLabel.setText("KPIs updated "
+                    + LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss"))
+                    + "  ·  Week = last 7 days · Revenue = FULFILLED (pipeline shown under)");
+        }
+
+        rebuildAlerts(items, rev, weekHarvest);
         rebuildValueByCategory(items);
         rebuildQuantityByItem(items);
     }
 
-    private void rebuildAlerts(List<Item> items) {
+    private static String formatWow(String prefix, Double pct, double absDelta, boolean money) {
+        String abs = money
+                ? String.format("%s$%,.0f", absDelta >= 0 ? "+" : "−", Math.abs(absDelta))
+                : String.format("%s%,.0f", absDelta >= 0 ? "+" : "−", Math.abs(absDelta));
+        if (pct == null) {
+            return prefix + " · " + abs + " (no prior)";
+        }
+        return String.format("%s · %s (%.0f%%)", prefix, abs, pct);
+    }
+
+    private void applyLowStockCardStyle(boolean warning) {
+        if (kpiCards[2] == null) {
+            return;
+        }
+        Color border = warning
+                ? new Color(200, 80, 60)
+                : (darkTheme ? new Color(90, 93, 95) : new Color(200, 200, 200));
+        Color bg = warning
+                ? (darkTheme ? new Color(90, 50, 45) : new Color(255, 240, 235))
+                : (darkTheme ? new Color(60, 63, 65) : new Color(250, 250, 250));
+        kpiCards[2].setBackground(bg);
+        kpiCards[2].setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(border, warning ? 2 : 1),
+                BorderFactory.createEmptyBorder(12, 12, 12, 12)));
+        if (lowStockLabel != null) {
+            lowStockLabel.setForeground(warning
+                    ? new Color(180, 40, 30)
+                    : (darkTheme ? new Color(120, 220, 120) : new Color(0, 100, 0)));
+        }
+        if (lowStockSubtitle != null) {
+            lowStockSubtitle.setText(warning
+                    ? "items ≤ " + LOW_STOCK_THRESHOLD + " — restock!"
+                    : "items ≤ " + LOW_STOCK_THRESHOLD);
+        }
+    }
+
+    private static String formatSparkTip(String prefix, double[] days, boolean money) {
+        if (days == null || days.length == 0) {
+            return prefix + " (no data)";
+        }
+        LocalDate from = LocalDate.now().minusDays(days.length - 1L);
+        StringBuilder sb = new StringBuilder("<html><b>").append(prefix)
+                .append("</b> (oldest → today)<br/>");
+        for (int i = 0; i < days.length; i++) {
+            sb.append(from.plusDays(i)).append(": ");
+            if (money) {
+                sb.append(String.format("$%.0f", days[i]));
+            } else {
+                sb.append(String.format("%.0f", days[i]));
+            }
+            sb.append("<br/>");
+        }
+        sb.append("</html>");
+        return sb.toString();
+    }
+
+    private void rebuildAlerts(List<Item> items, OrderService.WeekRevenueSummary rev, double weekHarvest) {
         StringBuilder alerts = new StringBuilder();
         items.stream()
                 .filter(i -> i.getQuantity() <= LOW_STOCK_THRESHOLD)
                 .sorted((a, b) -> Integer.compare(a.getQuantity(), b.getQuantity()))
-                .forEach(i -> alerts.append("• ").append(i.getName())
+                .forEach(i -> alerts.append("• LOW  ").append(i.getName())
                         .append(" — only ").append(i.getQuantity()).append(" left\n"));
 
-        alertsArea.setText(alerts.length() == 0
-                ? "All inventory levels look healthy. Great job!"
-                : alerts.toString());
+        if (rev != null) {
+            if (rev.confirmedOrderCount() > 0) {
+                alerts.append("• PIPE ").append(rev.confirmedOrderCount())
+                        .append(" confirmed order(s) awaiting fulfill — $")
+                        .append(String.format("%,.2f", rev.pipeline())).append(" pipeline\n");
+            }
+            if (rev.draftOrderCount() > 0) {
+                alerts.append("• DRAFT ").append(rev.draftOrderCount())
+                        .append(" draft order(s) ($")
+                        .append(String.format("%,.2f", rev.draft())).append(") not in revenue KPI\n");
+            }
+            if (rev.realized() <= 0 && rev.pipeline() <= 0) {
+                alerts.append("• Week revenue quiet — no fulfilled/confirmed orders in 7 days\n");
+            }
+        }
+        if (weekHarvest <= 0) {
+            alerts.append("• No harvest logged in the last 7 days — open Harvest Log\n");
+        }
+
+        if (alerts.length() == 0) {
+            alerts.append("All clear — stock healthy, harvest moving, orders on track. Great job, Kitsap!");
+        }
+        alertsArea.setText(alerts.toString());
         alertsArea.setCaretPosition(0);
     }
 
@@ -139,7 +265,6 @@ public class DashboardTab implements FlowerFarmTab {
             if (count++ >= MAX_BARS) {
                 break;
             }
-            // Ensure a unique column key even if two items share a name.
             String key = item.getName();
             int dup = seen.merge(key, 1, Integer::sum);
             if (dup > 1) {
@@ -153,18 +278,48 @@ public class DashboardTab implements FlowerFarmTab {
         panel = new JPanel(new BorderLayout(12, 12));
         panel.setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
 
-        JLabel header = new JLabel("Flower Farm Dashboard — Kitsap County, WA");
+        JPanel north = new JPanel(new BorderLayout());
+        JLabel header = new JLabel("Flower Farm Dashboard — Port Orchard / Kitsap County, WA");
         header.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 20));
-        panel.add(header, BorderLayout.NORTH);
+        north.add(header, BorderLayout.WEST);
+        JPanel northEast = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
+        lastUpdatedLabel = new JLabel("KPIs not refreshed yet");
+        lastUpdatedLabel.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 11));
+        lastUpdatedLabel.setForeground(new Color(90, 100, 90));
+        JButton refreshKpis = new JButton("Refresh KPIs");
+        refreshKpis.setToolTipText("Reload inventory, harvest, and order metrics.");
+        refreshKpis.addActionListener(e -> {
+            refreshData();
+            if (host != null) {
+                host.setStatus("Dashboard KPIs refreshed.");
+            }
+        });
+        northEast.add(lastUpdatedLabel);
+        northEast.add(refreshKpis);
+        north.add(northEast, BorderLayout.EAST);
+        panel.add(north, BorderLayout.NORTH);
 
-        // Center: KPI cards on top, charts filling the rest.
         JPanel center = new JPanel(new BorderLayout(0, 12));
 
-        JPanel kpiPanel = new JPanel(new GridLayout(1, 3, 15, 10));
-        kpiCards[0] = createKPICard("Total SKUs", totalItemsLabel = new JLabel("—"), "items in inventory");
-        kpiCards[1] = createKPICard("Inventory Value", totalValueLabel = new JLabel("—"), "at current prices");
-        kpiCards[2] = createKPICard("Low Stock Alerts", lowStockLabel = new JLabel("—"),
-                "items ≤ " + LOW_STOCK_THRESHOLD + " units");
+        JPanel kpiPanel = new JPanel(new GridLayout(1, 5, 10, 10));
+        kpiCards[0] = createKPICard("Total SKUs", totalItemsLabel = new JLabel("—"), "items in inventory",
+                null, null, "Open Inventory", "Inventory");
+        totalCostLabel = new JLabel("cost basis —");
+        kpiCards[1] = createKPICard("Inventory Value", totalValueLabel = new JLabel("—"), "at sell prices",
+                totalCostLabel, null, "Open Inventory", "Inventory");
+        lowStockSubtitle = new JLabel("items ≤ " + LOW_STOCK_THRESHOLD);
+        kpiCards[2] = createKPICard("Low Stock", lowStockLabel = new JLabel("—"), null,
+                lowStockSubtitle, null, "Review stock", "Inventory");
+        weekHarvestSpark = new SparklinePanel();
+        weekHarvestSpark.setLineColor(new Color(34, 100, 54));
+        weekHarvestDeltaLabel = new JLabel("vs prior wk —");
+        kpiCards[3] = createKPICard("Week Harvest", weekHarvestLabel = new JLabel("—"), "qty last 7 days",
+                weekHarvestDeltaLabel, weekHarvestSpark, "Log harvest", "Harvest Log");
+        weekRevenueSpark = new SparklinePanel();
+        weekRevenueSpark.setLineColor(new Color(30, 90, 160));
+        weekRevenuePipelineLabel = new JLabel("pipeline —");
+        kpiCards[4] = createKPICard("Week Revenue", weekRevenueLabel = new JLabel("—"), "realized (fulfilled)",
+                weekRevenuePipelineLabel, weekRevenueSpark, "Create order", "CRM");
         for (JPanel card : kpiCards) {
             kpiPanel.add(card);
         }
@@ -177,26 +332,55 @@ public class DashboardTab implements FlowerFarmTab {
 
         panel.add(center, BorderLayout.CENTER);
 
-        // South: alerts + quick action.
-        JPanel alertsPanel = new JPanel(new BorderLayout());
-        alertsPanel.setBorder(BorderFactory.createTitledBorder("Low Stock & Action Items"));
+        JPanel south = new JPanel(new BorderLayout(8, 8));
 
+        JPanel alertsPanel = new JPanel(new BorderLayout());
+        alertsPanel.setBorder(BorderFactory.createTitledBorder("Ops alerts (stock · pipeline · harvest)"));
         alertsArea = new JTextArea(5, 40);
         alertsArea.setEditable(false);
         alertsArea.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
         alertsPanel.add(new JScrollPane(alertsArea), BorderLayout.CENTER);
+        south.add(alertsPanel, BorderLayout.CENTER);
 
-        JButton analyzeTrendsBtn = new JButton("Run Trend Analysis");
-        analyzeTrendsBtn.addActionListener(e -> {
+        JPanel actions = new JPanel(new GridLayout(0, 2, 8, 6));
+        actions.setBorder(BorderFactory.createTitledBorder("Quick actions"));
+        actions.add(actionButton("Log Harvest", "Harvest Log", "Open harvest log to record today's cut."));
+        actions.add(actionButton("Create Order", "CRM", "Open CRM to create a wholesale / market order."));
+        actions.add(actionButton("Fulfill pipeline", "CRM", "Open CRM to fulfill confirmed orders."));
+        actions.add(actionButton("Weekly PDF Report", "Reports", "Generate harvest + sales PDF report."));
+        actions.add(actionButton("Rose Visualizer", "Rose Visualizer", "Grow generative L-System roses."));
+        JButton trends = new JButton("Run Trend Analysis");
+        trends.addActionListener(e -> {
             if (host != null) {
+                host.setStatus("Running trend analysis…");
                 host.runTrendAnalysis();
             }
         });
-        alertsPanel.add(analyzeTrendsBtn, BorderLayout.SOUTH);
+        actions.add(trends);
+        JButton inventory = new JButton("Open Inventory");
+        inventory.addActionListener(e -> go("Inventory", "Opened inventory."));
+        actions.add(inventory);
+        JButton syncHist = new JButton("Sync / Audit");
+        syncHist.addActionListener(e -> go("Sync History", "Opened audit trail."));
+        actions.add(syncHist);
+        south.add(actions, BorderLayout.EAST);
 
-        panel.add(alertsPanel, BorderLayout.SOUTH);
+        panel.add(south, BorderLayout.SOUTH);
 
-        applyTheme(false); // light defaults; orchestrator re-applies the saved theme
+        applyTheme(false);
+    }
+
+    private JButton actionButton(String label, String tabTitle, String statusMsg) {
+        JButton btn = new JButton(label);
+        btn.addActionListener(e -> go(tabTitle, statusMsg));
+        return btn;
+    }
+
+    private void go(String tabTitle, String statusMsg) {
+        if (host != null) {
+            host.selectTab(tabTitle);
+            host.setStatus(statusMsg);
+        }
     }
 
     private ChartPanel buildPieChartPanel() {
@@ -221,59 +405,104 @@ public class DashboardTab implements FlowerFarmTab {
         return chartPanel;
     }
 
-    /**
-     * Restyle the KPI cards so their custom colors stay legible under the given
-     * theme. Called after the look-and-feel changes (the L&amp;F refresh resets
-     * component colors, so this must run afterwards to win).
-     */
     public void applyTheme(boolean dark) {
+        this.darkTheme = dark;
         if (panel == null) {
             return;
         }
         Color cardBg = dark ? new Color(60, 63, 65) : new Color(250, 250, 250);
         Color valueFg = dark ? new Color(120, 220, 120) : new Color(0, 100, 0);
+        Color mutedFg = dark ? new Color(160, 170, 160) : new Color(90, 100, 90);
         Color border = dark ? new Color(90, 93, 95) : new Color(200, 200, 200);
 
-        for (JPanel card : kpiCards) {
-            if (card != null) {
+        for (int i = 0; i < kpiCards.length; i++) {
+            JPanel card = kpiCards[i];
+            if (card != null && i != 2) { // low-stock styled separately
                 card.setBackground(cardBg);
                 card.setBorder(BorderFactory.createCompoundBorder(
                         BorderFactory.createLineBorder(border, 1),
-                        BorderFactory.createEmptyBorder(12, 15, 12, 15)));
+                        BorderFactory.createEmptyBorder(12, 12, 12, 12)));
             }
         }
         if (totalItemsLabel != null) totalItemsLabel.setForeground(valueFg);
         if (totalValueLabel != null) totalValueLabel.setForeground(valueFg);
-        if (lowStockLabel != null) lowStockLabel.setForeground(valueFg);
+        if (totalCostLabel != null) totalCostLabel.setForeground(mutedFg);
+        if (weekHarvestLabel != null) weekHarvestLabel.setForeground(valueFg);
+        if (weekRevenueLabel != null) weekRevenueLabel.setForeground(valueFg);
+        if (weekRevenuePipelineLabel != null) weekRevenuePipelineLabel.setForeground(mutedFg);
+        if (weekHarvestDeltaLabel != null) weekHarvestDeltaLabel.setForeground(mutedFg);
+
+        // Re-apply low stock warning after theme change
+        if (lowStockLabel != null) {
+            try {
+                long low = Long.parseLong(lowStockLabel.getText().replace(",", "").trim());
+                applyLowStockCardStyle(low > 0);
+            } catch (NumberFormatException ignored) {
+                applyLowStockCardStyle(false);
+            }
+        }
 
         panel.revalidate();
         panel.repaint();
     }
 
-    private JPanel createKPICard(String title, JLabel valueLabel, String subtitle) {
+    /**
+     * @param secondary optional second line under the value (e.g. cost basis / pipeline)
+     * @param subtitle  optional fixed subtitle; if null, {@code secondary} is used alone
+     */
+    private JPanel createKPICard(String title, JLabel valueLabel, String subtitle,
+                                 JLabel secondary, SparklinePanel spark,
+                                 String actionLabel, String tabTitle) {
         JPanel card = new JPanel();
         card.setLayout(new BoxLayout(card, BoxLayout.Y_AXIS));
         card.setOpaque(true);
         card.setBorder(BorderFactory.createCompoundBorder(
                 BorderFactory.createLineBorder(new Color(200, 200, 200), 1),
-                BorderFactory.createEmptyBorder(12, 15, 12, 15)));
+                BorderFactory.createEmptyBorder(12, 12, 12, 12)));
 
         JLabel titleLabel = new JLabel(title);
-        titleLabel.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 14));
+        titleLabel.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 12));
         titleLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
 
-        valueLabel.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 28));
+        valueLabel.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 22));
         valueLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
 
-        JLabel subLabel = new JLabel(subtitle);
-        subLabel.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 11));
-        subLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
-
         card.add(titleLabel);
-        card.add(Box.createVerticalStrut(8));
+        card.add(Box.createVerticalStrut(6));
         card.add(valueLabel);
-        card.add(Box.createVerticalStrut(4));
-        card.add(subLabel);
+
+        if (subtitle != null && !subtitle.isBlank()) {
+            JLabel subLabel = new JLabel(subtitle);
+            subLabel.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 10));
+            subLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+            card.add(Box.createVerticalStrut(4));
+            card.add(subLabel);
+        }
+
+        if (secondary != null) {
+            secondary.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 10));
+            secondary.setAlignmentX(Component.CENTER_ALIGNMENT);
+            secondary.setForeground(new Color(90, 100, 90));
+            card.add(Box.createVerticalStrut(2));
+            card.add(secondary);
+        }
+
+        if (spark != null) {
+            spark.setAlignmentX(Component.CENTER_ALIGNMENT);
+            spark.setMaximumSize(new Dimension(100, 30));
+            card.add(Box.createVerticalStrut(6));
+            card.add(spark);
+        }
+
+        if (actionLabel != null && tabTitle != null) {
+            JButton action = new JButton(actionLabel);
+            action.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 10));
+            action.setAlignmentX(Component.CENTER_ALIGNMENT);
+            action.setFocusable(false);
+            action.addActionListener(e -> go(tabTitle, actionLabel + "…"));
+            card.add(Box.createVerticalStrut(6));
+            card.add(action);
+        }
 
         return card;
     }

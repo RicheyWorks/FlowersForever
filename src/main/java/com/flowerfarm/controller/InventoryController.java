@@ -15,9 +15,12 @@ import java.util.Map;
  * <pre>
  * GET    /api/inventory              → list all items
  * GET    /api/inventory/search?q=…   → search by name/category
+ * GET    /api/inventory/by-id/{id}   → get one item by primary key
  * POST   /api/inventory              → add item (JSON body)
- * PUT    /api/inventory/{index}      → edit item at index (JSON body)
- * DELETE /api/inventory/{index}      → delete item at index
+ * PUT    /api/inventory/{index}      → edit by list index (legacy GUI)
+ * PUT    /api/inventory/by-id/{id}   → edit by primary key (preferred)
+ * DELETE /api/inventory/{index}      → delete by list index (legacy GUI)
+ * DELETE /api/inventory/by-id/{id}   → delete by primary key (preferred)
  * POST   /api/inventory/export       → export CSV to server filesystem
  * POST   /api/inventory/sample-rose  → add the canonical Nootka Rose sample
  * </pre>
@@ -32,10 +35,17 @@ public class InventoryController {
         this.inventoryService = inventoryService;
     }
 
-    /** Returns all inventory items as a JSON array. */
+    /** Returns all inventory items as a JSON array (ordered by id). */
     @GetMapping
     public List<Item> getAll() {
         return inventoryService.getAllItems();
+    }
+
+    /** Dashboard-style inventory KPIs (sell value, cost basis, low stock). */
+    @GetMapping("/kpis")
+    public InventoryService.InventoryKpiSnapshot kpis(
+            @RequestParam(value = "lowStockThreshold", defaultValue = "10") int lowStockThreshold) {
+        return inventoryService.inventoryKpis(lowStockThreshold);
     }
 
     /** Returns items matching the search query (name or category). */
@@ -44,12 +54,21 @@ public class InventoryController {
         return inventoryService.searchItems(query);
     }
 
-    /** Adds a new item from the JSON body. Returns 201 Created with the item. */
+    /** Returns a single item by database id. */
+    @GetMapping("/by-id/{id}")
+    public ResponseEntity<?> getById(@PathVariable Long id) {
+        return inventoryService.findById(id)
+                .<ResponseEntity<?>>map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(Map.of("error", "No inventory item with id=" + id)));
+    }
+
+    /** Adds a new item from the JSON body. Returns 201 Created with the persisted item (incl. id). */
     @PostMapping
     public ResponseEntity<?> addItem(@RequestBody Item item) {
         try {
-            inventoryService.addItem(item);
-            return ResponseEntity.status(HttpStatus.CREATED).body(item);
+            Item saved = inventoryService.addItem(item);
+            return ResponseEntity.status(HttpStatus.CREATED).body(saved);
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
@@ -59,8 +78,21 @@ public class InventoryController {
     @PutMapping("/{index}")
     public ResponseEntity<?> editItem(@PathVariable int index, @RequestBody Item item) {
         try {
-            inventoryService.editItem(index, item);
-            return ResponseEntity.ok(item);
+            Item saved = inventoryService.editItem(index, item);
+            return ResponseEntity.ok(saved);
+        } catch (IndexOutOfBoundsException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", e.getMessage()));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    /** Replaces the item with the given database id. Preferred over index-based edit. */
+    @PutMapping("/by-id/{id}")
+    public ResponseEntity<?> updateById(@PathVariable Long id, @RequestBody Item item) {
+        try {
+            Item saved = inventoryService.updateById(id, item);
+            return ResponseEntity.ok(saved);
         } catch (IndexOutOfBoundsException e) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", e.getMessage()));
         } catch (IllegalArgumentException e) {
@@ -79,14 +111,30 @@ public class InventoryController {
         }
     }
 
+    /** Deletes the item with the given database id. Preferred over index-based delete. */
+    @DeleteMapping("/by-id/{id}")
+    public ResponseEntity<?> deleteById(@PathVariable Long id) {
+        try {
+            inventoryService.deleteById(id);
+            return ResponseEntity.noContent().build();
+        } catch (IndexOutOfBoundsException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", e.getMessage()));
+        }
+    }
+
     /**
      * Triggers a server-side CSV export to {@code exported_inventory.csv}.
-     * Returns 200 OK with a confirmation message.
+     * Returns 200 OK with a confirmation message, or 500 if the write fails.
      */
     @PostMapping("/export")
     public ResponseEntity<Map<String, String>> exportCsv() {
-        inventoryService.exportToCsv("exported_inventory.csv");
-        return ResponseEntity.ok(Map.of("message", "Exported to exported_inventory.csv"));
+        try {
+            inventoryService.exportToCsv("exported_inventory.csv");
+            return ResponseEntity.ok(Map.of("message", "Exported to exported_inventory.csv"));
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", e.getMessage()));
+        }
     }
 
     /**
@@ -105,8 +153,8 @@ public class InventoryController {
                     50,
                     "Native PNW rose, pink blooms, hardy in wet soils"
             );
-            inventoryService.addItem(rose);
-            return ResponseEntity.status(HttpStatus.CREATED).body(rose);
+            Item saved = inventoryService.addItem(rose);
+            return ResponseEntity.status(HttpStatus.CREATED).body(saved);
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }

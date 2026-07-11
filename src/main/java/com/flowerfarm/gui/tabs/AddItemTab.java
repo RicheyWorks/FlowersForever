@@ -1,5 +1,6 @@
 package com.flowerfarm.gui.tabs;
 
+import com.flowerfarm.gui.GuiPermissions;
 import com.flowerfarm.model.Item;
 import com.flowerfarm.service.InventoryService;
 
@@ -86,6 +87,9 @@ public class AddItemTab implements FlowerFarmTab {
         addBtn.setFont(addBtn.getFont().deriveFont(Font.BOLD, 14f));
 
         addBtn.addActionListener(e -> {
+            if (!GuiPermissions.requireWrite(host, panel, "add inventory items")) {
+                return;
+            }
             try {
                 String name = nameField.getText().trim();
                 if (name.isEmpty()) {

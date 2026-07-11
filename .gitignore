@@ -1,4 +1,19 @@
-**/target/ 
-*.jar 
-**/*.class 
+**/target/
+*.jar
+**/*.class
 *.xlsx
+farm_inventory.csv
+exported_inventory.csv
+harvest_log.csv
+application-local.properties
+**/application-local.properties
+data/
+*.mv.db
+*.trace.db
+*.sqlite
+*.sqlite-journal
+# keep data/lsystems examples out of git noise unless intentionally committed
+.idea/
+*.iml
+.vscode/
+build-out*.txt

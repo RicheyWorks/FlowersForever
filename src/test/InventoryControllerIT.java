@@ -8,6 +8,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
@@ -27,6 +28,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * all service dependencies are mocked via @MockBean.
  */
 @WebMvcTest(InventoryController.class)
+@AutoConfigureMockMvc(addFilters = false)
 @DisplayName("InventoryController (MockMvc)")
 class InventoryControllerIT {
 
@@ -107,7 +109,7 @@ class InventoryControllerIT {
         @Test
         @DisplayName("returns 201 Created with the added item")
         void returns201OnSuccess() throws Exception {
-            doNothing().when(inventoryService).addItem(any(Item.class));
+            when(inventoryService.addItem(any(Item.class))).thenReturn(SAMPLE_ROSE);
 
             mockMvc.perform(post("/api/inventory")
                             .contentType(MediaType.APPLICATION_JSON)
@@ -121,8 +123,8 @@ class InventoryControllerIT {
         @Test
         @DisplayName("returns 400 Bad Request when service throws IllegalArgumentException")
         void returns400OnValidationFailure() throws Exception {
-            doThrow(new IllegalArgumentException("Name cannot be empty"))
-                    .when(inventoryService).addItem(any(Item.class));
+            when(inventoryService.addItem(any(Item.class)))
+                    .thenThrow(new IllegalArgumentException("Name cannot be empty"));
 
             mockMvc.perform(post("/api/inventory")
                             .contentType(MediaType.APPLICATION_JSON)
@@ -141,7 +143,7 @@ class InventoryControllerIT {
         @Test
         @DisplayName("returns 200 OK with updated item on success")
         void returns200OnSuccess() throws Exception {
-            doNothing().when(inventoryService).editItem(eq(0), any(Item.class));
+            when(inventoryService.editItem(eq(0), any(Item.class))).thenReturn(SAMPLE_ROSE);
 
             mockMvc.perform(put("/api/inventory/0")
                             .contentType(MediaType.APPLICATION_JSON)
@@ -153,8 +155,8 @@ class InventoryControllerIT {
         @Test
         @DisplayName("returns 404 Not Found when index is out of bounds")
         void returns404OnBadIndex() throws Exception {
-            doThrow(new IndexOutOfBoundsException("Invalid index: 999 (size=4)"))
-                    .when(inventoryService).editItem(eq(999), any(Item.class));
+            when(inventoryService.editItem(eq(999), any(Item.class)))
+                    .thenThrow(new IndexOutOfBoundsException("Invalid index: 999 (size=4)"));
 
             mockMvc.perform(put("/api/inventory/999")
                             .contentType(MediaType.APPLICATION_JSON)
@@ -166,8 +168,8 @@ class InventoryControllerIT {
         @Test
         @DisplayName("returns 400 Bad Request when service throws IllegalArgumentException")
         void returns400OnValidationFailure() throws Exception {
-            doThrow(new IllegalArgumentException("Price cannot be negative"))
-                    .when(inventoryService).editItem(anyInt(), any(Item.class));
+            when(inventoryService.editItem(anyInt(), any(Item.class)))
+                    .thenThrow(new IllegalArgumentException("Price cannot be negative"));
 
             mockMvc.perform(put("/api/inventory/0")
                             .contentType(MediaType.APPLICATION_JSON)
@@ -223,6 +225,17 @@ class InventoryControllerIT {
 
             verify(inventoryService).exportToCsv("exported_inventory.csv");
         }
+
+        @Test
+        @DisplayName("returns 500 when export write fails")
+        void returns500OnWriteFailure() throws Exception {
+            doThrow(new IllegalStateException("Export to 'exported_inventory.csv' failed: disk full"))
+                    .when(inventoryService).exportToCsv("exported_inventory.csv");
+
+            mockMvc.perform(post("/api/inventory/export"))
+                    .andExpect(status().isInternalServerError())
+                    .andExpect(jsonPath("$.error", containsString("failed")));
+        }
     }
 
     // ── POST /api/inventory/sample-rose ──────────────────────────────────────
@@ -234,7 +247,7 @@ class InventoryControllerIT {
         @Test
         @DisplayName("returns 201 Created with a Nootka Rose payload")
         void returns201WithNootkaRose() throws Exception {
-            doNothing().when(inventoryService).addItem(any(Item.class));
+            when(inventoryService.addItem(any(Item.class))).thenAnswer(inv -> inv.getArgument(0));
 
             mockMvc.perform(post("/api/inventory/sample-rose"))
                     .andExpect(status().isCreated())

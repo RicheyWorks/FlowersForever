@@ -6,11 +6,14 @@ import com.flowerfarm.connector.SyncSummary;
 import com.flowerfarm.controller.ConnectorController;
 import com.flowerfarm.controller.TrendController;
 import com.flowerfarm.model.Item;
+import com.flowerfarm.model.SyncHistoryEntry;
+import com.flowerfarm.service.SyncHistoryService;
 import com.flowerfarm.service.TrendService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.test.web.servlet.MockMvc;
@@ -28,6 +31,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 // ═══════════════════════════════════════════════════════════════════════════
 
 @WebMvcTest(controllers = {TrendController.class, ConnectorController.class})
+@AutoConfigureMockMvc(addFilters = false)
 @DisplayName("TrendController + ConnectorController (MockMvc)")
 class TrendAndConnectorControllerIT {
 
@@ -35,6 +39,7 @@ class TrendAndConnectorControllerIT {
 
     @MockBean TrendService trendService;
     @MockBean ConnectorRegistry connectorRegistry;
+    @MockBean SyncHistoryService syncHistoryService;
 
     // ── GET /api/trends ──────────────────────────────────────────────────────
 

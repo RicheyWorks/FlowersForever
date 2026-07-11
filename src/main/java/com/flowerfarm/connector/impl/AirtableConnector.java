@@ -1,12 +1,9 @@
 package com.flowerfarm.connector.impl;
 
-import com.flowerfarm.connector.ConnectorConfig;
-import com.flowerfarm.connector.ConnectorResult;
-import com.flowerfarm.connector.ExternalConnector;
-import com.flowerfarm.connector.FieldMapper;
-import com.flowerfarm.connector.SyncDirection;
-import com.flowerfarm.connector.SyncSummary;
+import com.flowerfarm.connector.*;
 import com.flowerfarm.model.Item;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.*;
 import org.springframework.web.client.RestTemplate;
 
@@ -14,8 +11,16 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 
-public class AirtableConnector implements ExternalConnector<Map<String, Object>> {
+/**
+ * Airtable connector — dual mode:
+ * <ul>
+ *   <li><b>Local mirror</b> — JSON field maps for offline demos.</li>
+ *   <li><b>Remote REST</b> — Airtable Web API with personal access token.</li>
+ * </ul>
+ */
+public class AirtableConnector implements ExternalConnector<Map<String, Object>>, DualModeCapable {
 
+    private static final Logger log = LoggerFactory.getLogger(AirtableConnector.class);
     private static final String AIRTABLE_API_BASE = "https://api.airtable.com/v0";
 
     private final ConnectorConfig config;
@@ -23,12 +28,22 @@ public class AirtableConnector implements ExternalConnector<Map<String, Object>>
     private final RestTemplate restTemplate;
 
     public AirtableConnector(String apiToken, String baseId, String tableName) {
-        this.config = new ConnectorConfig("airtable")
-                .set("api-token", apiToken)
-                .set("base-id", baseId)
-                .set("table-name", tableName);
+        this(apiToken, baseId, tableName, "", new RestTemplate());
+    }
 
-        this.restTemplate = new RestTemplate();
+    public AirtableConnector(String apiToken, String baseId, String tableName, String localFile) {
+        this(apiToken, baseId, tableName, localFile, new RestTemplate());
+    }
+
+    AirtableConnector(String apiToken, String baseId, String tableName, String localFile,
+                      RestTemplate restTemplate) {
+        this.config = new ConnectorConfig("airtable")
+                .set("api-token", nullToEmpty(apiToken))
+                .set("base-id", nullToEmpty(baseId))
+                .set("table-name", (tableName == null || tableName.isBlank()) ? "Table 1" : tableName.trim())
+                .set("local-file", nullToEmpty(localFile));
+
+        this.restTemplate = restTemplate;
 
         this.fieldMapper = new FieldMapper()
                 .registerOutbound("Name", Item::getName)
@@ -54,7 +69,9 @@ public class AirtableConnector implements ExternalConnector<Map<String, Object>>
 
     @Override
     public String getDescription() {
-        return "Airtable connector — inventory table import/export using Airtable Web API";
+        return isLocalMode()
+                ? "Airtable (local JSON mirror) — offline table import/export/sync"
+                : "Airtable connector — inventory table import/export using Airtable Web API";
     }
 
     @Override
@@ -64,16 +81,44 @@ public class AirtableConnector implements ExternalConnector<Map<String, Object>>
 
     @Override
     public boolean isAvailable() {
-        return config.hasAll("api-token", "base-id", "table-name");
+        return isLocalMode() || config.hasAll("api-token", "base-id", "table-name");
     }
 
     @Override
-    @SuppressWarnings("unchecked")
+    public boolean isLocalMode() {
+        return config.has("local-file");
+    }
+
+    @Override
     public ConnectorResult<List<Item>> importItems() {
         if (!isAvailable()) {
             return ConnectorResult.unavailable(getName());
         }
+        return isLocalMode() ? importFromLocalFile() : importFromRemote();
+    }
 
+    private ConnectorResult<List<Item>> importFromLocalFile() {
+        try {
+            LocalJsonMirror mirror = new LocalJsonMirror(config.get("local-file"), "airtable");
+            List<Map<String, Object>> rows = mirror.readRows();
+            List<Item> items = new ArrayList<>();
+            for (Map<String, Object> row : rows) {
+                Item item = mapToItem(row);
+                if (item != null) {
+                    items.add(item);
+                }
+            }
+            String msg = "Airtable local import — " + items.size()
+                    + " item(s) from " + mirror.path().getFileName() + ".";
+            log.info("[airtable] {}", msg);
+            return ConnectorResult.ok(items, msg, getName());
+        } catch (Exception e) {
+            return ConnectorResult.fail("Airtable local import failed.", e, getName());
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private ConnectorResult<List<Item>> importFromRemote() {
         List<Item> items = new ArrayList<>();
 
         try {
@@ -127,11 +172,9 @@ public class AirtableConnector implements ExternalConnector<Map<String, Object>>
 
             } while (offset != null && !offset.isBlank());
 
-            return ConnectorResult.ok(
-                    items,
-                    "Airtable import successful. Imported " + items.size() + " items.",
-                    getName()
-            );
+            String msg = "Airtable REST import successful. Imported " + items.size() + " items.";
+            log.info("[airtable] {}", msg);
+            return ConnectorResult.ok(items, msg, getName());
 
         } catch (Exception e) {
             return ConnectorResult.fail("Airtable import failed.", e, getName());
@@ -143,7 +186,30 @@ public class AirtableConnector implements ExternalConnector<Map<String, Object>>
         if (!isAvailable()) {
             return ConnectorResult.unavailable(getName());
         }
+        if (items == null) {
+            items = List.of();
+        }
+        return isLocalMode() ? exportToLocalFile(items) : exportToRemote(items);
+    }
 
+    private ConnectorResult<Integer> exportToLocalFile(List<Item> items) {
+        try {
+            LocalJsonMirror mirror = new LocalJsonMirror(config.get("local-file"), "airtable");
+            List<Map<String, Object>> rows = new ArrayList<>();
+            for (Item item : items) {
+                rows.add(mapFromItem(item));
+            }
+            mirror.writeRows(rows);
+            String msg = "Airtable local export — wrote " + items.size()
+                    + " item(s) to " + mirror.path().getFileName() + ".";
+            log.info("[airtable] {}", msg);
+            return ConnectorResult.ok(items.size(), msg, getName());
+        } catch (Exception e) {
+            return ConnectorResult.fail("Airtable local export failed.", e, getName());
+        }
+    }
+
+    private ConnectorResult<Integer> exportToRemote(List<Item> items) {
         int exported = 0;
 
         try {
@@ -164,11 +230,9 @@ public class AirtableConnector implements ExternalConnector<Map<String, Object>>
                 exported += sendCreateBatch(batch);
             }
 
-            return ConnectorResult.ok(
-                    exported,
-                    "Airtable export successful. Exported " + exported + " items.",
-                    getName()
-            );
+            String msg = "Airtable REST export successful. Exported " + exported + " items.";
+            log.info("[airtable] {}", msg);
+            return ConnectorResult.ok(exported, msg, getName());
 
         } catch (Exception e) {
             return ConnectorResult.fail("Airtable export failed.", e, getName());
@@ -177,6 +241,37 @@ public class AirtableConnector implements ExternalConnector<Map<String, Object>>
 
     @Override
     public ConnectorResult<SyncSummary> syncUpdates(List<Item> localItems) {
+        if (localItems == null) {
+            localItems = List.of();
+        }
+        if (isLocalMode()) {
+            ConnectorResult<List<Item>> remote = importItems();
+            Map<String, Item> byName = new LinkedHashMap<>();
+            if (remote.isSuccess() && remote.getPayload() != null) {
+                remote.getPayload().forEach(i -> byName.put(i.getName().toLowerCase(Locale.ROOT), i));
+            }
+            int created = 0, updated = 0, skipped = 0;
+            for (Item local : localItems) {
+                Item r = byName.get(local.getName().toLowerCase(Locale.ROOT));
+                if (r == null) {
+                    created++;
+                } else if (r.getQuantity() != local.getQuantity()
+                        || Double.compare(r.getPrice(), local.getPrice()) != 0) {
+                    updated++;
+                } else {
+                    skipped++;
+                }
+            }
+            ConnectorResult<Integer> export = exportItems(localItems);
+            if (!export.isSuccess()) {
+                return ConnectorResult.fail("Airtable sync failed.", export.getErrorDetail(), getName());
+            }
+            SyncSummary summary = new SyncSummary(created, updated, 0, skipped, 0);
+            String msg = "Airtable sync complete. " + summary + " (local mirror)";
+            log.info("[airtable] {}", msg);
+            return ConnectorResult.ok(summary, msg, getName());
+        }
+
         ConnectorResult<Integer> exportResult = exportItems(localItems);
 
         if (!exportResult.isSuccess()) {
@@ -199,9 +294,13 @@ public class AirtableConnector implements ExternalConnector<Map<String, Object>>
 
         return ConnectorResult.ok(
                 summary,
-                "Airtable sync complete. Exported " + exported + " items.",
+                "Airtable sync complete. Exported " + exported + " items. (REST)",
                 getName()
         );
+    }
+
+    private static String nullToEmpty(String s) {
+        return s == null ? "" : s.trim();
     }
 
     @Override

@@ -34,8 +34,11 @@ com.flowerfarm.gui
     ├── TrendAnalysisTab.java   # Weka LinearRegression forecast (SwingWorker); exposes runAnalysis()
     ├── RoseVarietiesTab.java   # PNW rose guide + add-sample action
     ├── PricingInfoTab.java     # Static reference
-    └── IrrigationInfoTab.java  # Static reference
+    ├── IrrigationInfoTab.java  # Static reference
+    └── RoseVisualizerTab.java  # L-System generative roses (Java2D turtle)
 ```
+
+L-System engine lives under `com.flowerfarm.lsystem` (`LSystem`, presets, season palettes).
 
 The orchestrator owns only frame-level concerns: the `JTabbedPane`, menu bar,
 connector button bar (14 import/export connectors wired through
@@ -53,20 +56,49 @@ shortcut. Everything else lives in a tab.
 - All extracted tabs in their own files ✓
 - Menu bar, connector bar, status bar, and F5 all wired ✓
 
-### Phase 2 (next, high impact)
-- Integrate **JFreeChart**: inventory value by category (pie), quantity trends (line), low-stock heatmap.
-- Add **FlatLaf** theming + dark-mode toggle (hook already present in `FlowerFarmGUI.initialise()`).
-- Persistent user preferences (window size, last tab, theme).
+### Phase 2 — Charts & theming ✓
+- **JFreeChart** on Dashboard: inventory value by category (pie), quantity by item (bar) ✓
+- **FlatLaf** light/dark mode via **View → Dark Mode** ✓
+- Persistent preferences: window size, last tab, theme (`java.util.prefs`) ✓
 
-### Phase 3 (business features)
-- Harvest logging tab; simple Customer / Order CRM.
-- Financial summary (COGS, revenue estimates); PDF report generation.
-- Weather-aware irrigation recommendations (local Kitsap data).
+### Phase 2b — Connectors (in progress)
+- Full implementations: CSV, Excel, Airtable, Webhook, **Shopify**, **Square**, **Google Sheets** ✓
+- GUI connector bar includes Shopify / Square import-export-sync and Google Sheets import/export ✓
+- Stubs remain for Farmbrite, Floranext, other POS tools (gated by `isAvailable()`)
 
-### Phase 4 (advanced / fun)
-- Generative rose-variety visualizer (L-Systems / p5.js style).
-- Local SQLite/H2 persistence instead of in-memory + CSV.
-- More dynamic connector plugin system.
+### Phase 3 — Business features ✓
+- Harvest logging tab + REST + season totals ✓
+- Sync history / audit log (connector ops + CRM fulfill auto-recorded) ✓
+- Customer / Order CRM tab + REST; **fulfill decrements inventory** ✓
+- PDF weekly harvest + sales reports (branded OpenPDF + `/api/reports`) ✓
+- Dashboard quick actions: Harvest, CRM, Reports, Sync History, Trends ✓
+- GUI connector bar: implemented only (stubs hidden) ✓
+- Optional SQLite profile (`application-sqlite.properties`) ✓
+- Farmbrite + Floranext dual-mode (local JSON mirror + REST); full offline round-trip ✓
+- Harvest log auto-increments inventory (HARVEST_LOG audit) ✓
+- Harvest edit corrects inventory (HARVEST_EDIT audit) ✓
+- Harvest delete reverses inventory (HARVEST_UNDO audit) ✓
+- Harvest filter bar + CSV export ✓
+- Dashboard KPIs: week harvest qty + week revenue ✓
+- Optional barn auth (`auth` profile + GUI login gate) ✓
+- Dual-mode connectors (local JSON mirrors for Shopify/Square/Sheets/Airtable/Webhook + Farmbrite/Floranext) ✓
+- Harvest batch/filter/export; CRM confirm/fulfill; audit filter/export ✓
+- Auth UX: session badge, switch user, VIEWER write guards ✓
+- Demo runbook: `docs/DEMO.md` + `scripts/demo-rest.*` ✓
+- Non-essential POS stubs removed from registry ✓
+
+### Phase 3b — Persistence ✓
+- `InventoryRepository` port + JPA/H2 file store (`./data/flowerfarm`) ✓
+- `Item` is a JPA entity with generated id; index APIs kept for Swing ✓
+- First-run seed from CSV or PNW sample data ✓
+
+### Phase 4 (advanced / fun) — in progress
+- Generative rose visualizer (Java2D L-Systems) ✓
+  - Animate grow, mutate, PNG export, save/load rulesets (`data/lsystems/`)
+  - Inventory rose SKU → growth habit mapping
+- Multi-user barn roles OWNER / HAND / VIEWER ✓
+- Optional SQLite dialect ✓
+- Richer schema (harvest, CRM, sync history) ✓
 
 ---
 

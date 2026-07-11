@@ -3,7 +3,9 @@ package com.flowerfarm.cli;
 import com.flowerfarm.connector.ConnectorRegistry;
 import com.flowerfarm.connector.ConnectorResult;
 import com.flowerfarm.connector.SyncSummary;
+import com.flowerfarm.model.HarvestEntry;
 import com.flowerfarm.model.Item;
+import com.flowerfarm.service.HarvestService;
 import com.flowerfarm.service.InventoryService;
 import com.flowerfarm.service.TrendService;
 import org.springframework.boot.ApplicationArguments;
@@ -11,6 +13,8 @@ import org.springframework.boot.ApplicationRunner;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
+import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Scanner;
 
@@ -28,13 +32,16 @@ import java.util.Scanner;
 public class FlowerFarmCLI implements ApplicationRunner {
 
     private final InventoryService  inventoryService;
+    private final HarvestService    harvestService;
     private final TrendService      trendService;
     private final ConnectorRegistry connectorRegistry;
 
     public FlowerFarmCLI(InventoryService inventoryService,
+                         HarvestService harvestService,
                          TrendService trendService,
                          ConnectorRegistry connectorRegistry) {
         this.inventoryService  = inventoryService;
+        this.harvestService    = harvestService;
         this.trendService      = trendService;
         this.connectorRegistry = connectorRegistry;
     }
@@ -58,7 +65,9 @@ public class FlowerFarmCLI implements ApplicationRunner {
                 case "6" -> exportCsv();
                 case "7" -> runConnector(scanner);
                 case "8" -> runTrendAnalysis();
-                case "9" -> { System.out.println("Goodbye!"); running = false; }
+                case "9" -> logHarvest(scanner);
+                case "10" -> listAndExportHarvest(scanner);
+                case "11" -> { System.out.println("Goodbye!"); running = false; }
                 default  -> System.out.println("Unknown option. Try again.");
             }
         }
@@ -84,10 +93,12 @@ public class FlowerFarmCLI implements ApplicationRunner {
                  3) Add item
                  4) Edit item
                  5) Delete item
-                 6) Export to CSV
+                 6) Export inventory CSV
                  7) Run connector (import/export)
                  8) Trend analysis (Weka ML)
-                 9) Exit
+                 9) Log harvest (single or batch)
+                10) List / export harvest log
+                11) Exit
                 ─────────────────────────────────────────
                 Choice: \
                 """);
@@ -236,6 +247,86 @@ public class FlowerFarmCLI implements ApplicationRunner {
             System.out.println(result.summary());
         } else {
             System.out.println("✗ Trend analysis failed: " + result.error());
+        }
+    }
+
+    private void logHarvest(Scanner sc) {
+        try {
+            System.out.print("Mode (1=single, 2=batch): ");
+            String mode = sc.nextLine().trim();
+            System.out.print("Date [" + LocalDate.now() + "]: ");
+            String dateRaw = sc.nextLine().trim();
+            LocalDate date = dateRaw.isBlank() ? LocalDate.now() : LocalDate.parse(dateRaw);
+
+            if ("2".equals(mode)) {
+                System.out.println("Enter Crop,Qty lines (blank line to finish):");
+                System.out.print("Unit default [stems]: ");
+                String unit = orDefault(sc.nextLine(), "stems");
+                System.out.print("Bed / field: ");
+                String bed = sc.nextLine().trim();
+                List<HarvestEntry> batch = new ArrayList<>();
+                while (true) {
+                    System.out.print("  Crop,Qty> ");
+                    String line = sc.nextLine();
+                    if (line == null || line.isBlank()) {
+                        break;
+                    }
+                    String[] parts = line.split("[,;\\t]", 2);
+                    if (parts.length < 2) {
+                        System.out.println("  need Crop,Qty");
+                        continue;
+                    }
+                    batch.add(new HarvestEntry(date, parts[0].trim(),
+                            Double.parseDouble(parts[1].trim()), unit, bed, "cli-batch"));
+                }
+                List<HarvestEntry> saved = harvestService.addBatch(batch);
+                System.out.println("✓ Batch logged " + saved.size() + " harvest row(s); inventory updated.");
+                return;
+            }
+
+            System.out.print("Crop / variety: ");
+            String crop = sc.nextLine().trim();
+            System.out.print("Quantity: ");
+            double qty = Double.parseDouble(sc.nextLine().trim());
+            System.out.print("Unit [stems]: ");
+            String unit = orDefault(sc.nextLine(), "stems");
+            System.out.print("Bed / field: ");
+            String bed = sc.nextLine().trim();
+            System.out.print("Notes: ");
+            String notes = sc.nextLine().trim();
+            HarvestEntry saved = harvestService.add(new HarvestEntry(date, crop, qty, unit, bed, notes));
+            System.out.println("✓ Harvest logged id=" + saved.getId() + " — inventory increased.");
+        } catch (Exception e) {
+            System.out.println("✗ Harvest error: " + e.getMessage());
+        }
+    }
+
+    private void listAndExportHarvest(Scanner sc) {
+        List<HarvestEntry> entries = harvestService.getAll();
+        if (entries.isEmpty()) {
+            System.out.println("  (no harvests logged yet)");
+        } else {
+            System.out.printf("%-6s %-12s %-22s %8s %-10s %-12s  Notes%n",
+                    "Id", "Date", "Crop", "Qty", "Unit", "Bed");
+            System.out.println("-".repeat(90));
+            for (HarvestEntry e : entries) {
+                System.out.printf("%-6s %-12s %-22s %8.1f %-10s %-12s  %s%n",
+                        e.getId(), e.getHarvestDate(), e.getCropName(), e.getQuantity(),
+                        e.getUnit(), e.getBedOrField(), e.getNotes());
+            }
+            System.out.println("Rows: " + entries.size()
+                    + "  ·  week qty: " + harvestService.totalQuantityLast7Days());
+        }
+        System.out.print("Export to CSV? (y/n): ");
+        if ("y".equalsIgnoreCase(sc.nextLine().trim())) {
+            System.out.print("Filename [harvest_log.csv]: ");
+            String file = orDefault(sc.nextLine(), "harvest_log.csv");
+            try {
+                harvestService.exportToCsv(file);
+                System.out.println("✓ Exported harvest log → " + file);
+            } catch (Exception e) {
+                System.out.println("✗ Export failed: " + e.getMessage());
+            }
         }
     }
 

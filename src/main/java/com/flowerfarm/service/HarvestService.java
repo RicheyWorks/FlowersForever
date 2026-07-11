@@ -1,0 +1,409 @@
+package com.flowerfarm.service;
+
+import com.flowerfarm.model.HarvestEntry;
+import com.flowerfarm.model.Item;
+import com.flowerfarm.repository.HarvestJpaRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+
+/**
+ * Harvest logging for PNW flower production — stems, bunches, beds, market prep.
+ * Logging a harvest <em>increases</em> matching inventory (mirror of order fulfill).
+ */
+@Service
+public class HarvestService {
+
+    private static final Logger log = LoggerFactory.getLogger(HarvestService.class);
+
+    private final HarvestJpaRepository repository;
+    private final InventoryService inventoryService;
+    private final SyncHistoryService syncHistoryService;
+
+    public HarvestService(HarvestJpaRepository repository,
+                          InventoryService inventoryService,
+                          SyncHistoryService syncHistoryService) {
+        this.repository = repository;
+        this.inventoryService = inventoryService;
+        this.syncHistoryService = syncHistoryService;
+    }
+
+    @Transactional(readOnly = true)
+    public List<HarvestEntry> getAll() {
+        return new ArrayList<>(repository.findAllByOrderByHarvestDateDescIdDesc());
+    }
+
+    @Transactional(readOnly = true)
+    public Optional<HarvestEntry> findById(Long id) {
+        return repository.findById(id);
+    }
+
+    @Transactional(readOnly = true)
+    public List<HarvestEntry> findBetween(LocalDate from, LocalDate to) {
+        if (from == null || to == null) {
+            throw new IllegalArgumentException("Both from and to dates are required.");
+        }
+        if (to.isBefore(from)) {
+            throw new IllegalArgumentException("to date must be on or after from date.");
+        }
+        return new ArrayList<>(repository.findByHarvestDateBetweenOrderByHarvestDateDescIdDesc(from, to));
+    }
+
+    @Transactional(readOnly = true)
+    public List<HarvestEntry> searchByCrop(String crop) {
+        if (crop == null || crop.isBlank()) {
+            return List.of();
+        }
+        return new ArrayList<>(
+                repository.findByCropNameContainingIgnoreCaseOrderByHarvestDateDesc(crop.trim()));
+    }
+
+    /**
+     * Batch-log multiple harvest rows in one transaction (shared date/bed/notes optional).
+     * Each line still increments inventory and is individually audited.
+     */
+    @Transactional
+    public List<HarvestEntry> addBatch(List<HarvestEntry> entries) {
+        if (entries == null || entries.isEmpty()) {
+            throw new IllegalArgumentException("Batch must contain at least one harvest row.");
+        }
+        List<HarvestEntry> saved = new ArrayList<>();
+        for (HarvestEntry e : entries) {
+            if (e == null) {
+                continue;
+            }
+            if (e.getCropName() == null || e.getCropName().isBlank()) {
+                continue;
+            }
+            if (e.getQuantity() <= 0) {
+                continue;
+            }
+            saved.add(add(e));
+        }
+        if (saved.isEmpty()) {
+            throw new IllegalArgumentException("No valid harvest rows in batch (need crop + qty > 0).");
+        }
+        syncHistoryService.record(
+                "harvest",
+                "HARVEST_BATCH",
+                true,
+                "Batch harvest logged: " + saved.size() + " row(s)",
+                saved.stream().map(h -> h.getCropName() + "×" + h.getQuantity())
+                        .reduce((a, b) -> a + "; " + b).orElse(""),
+                saved.size()
+        );
+        log.info("[harvest] Batch logged {} row(s).", saved.size());
+        return saved;
+    }
+
+    /**
+     * Saves the harvest entry and increments inventory for the crop name.
+     * Creates a new inventory SKU when none exists. Records {@code HARVEST_LOG} audit.
+     */
+    @Transactional
+    public HarvestEntry add(HarvestEntry entry) {
+        if (entry == null) {
+            throw new IllegalArgumentException("Harvest entry must not be null.");
+        }
+        entry.setId(null);
+        HarvestEntry saved = repository.save(entry);
+
+        int amount = (int) Math.round(saved.getQuantity());
+        Item stock = inventoryService.incrementQuantityByName(
+                saved.getCropName(),
+                amount,
+                saved.getUnit(),
+                "From harvest " + saved.getHarvestDate()
+                        + (saved.getBedOrField().isBlank() ? "" : " @ " + saved.getBedOrField())
+        );
+
+        String msg = "Harvest logged: " + saved.getCropName() + " × " + amount + " " + saved.getUnit()
+                + " → inventory now " + stock.getQuantity();
+        syncHistoryService.record(
+                "harvest",
+                "HARVEST_LOG",
+                true,
+                msg,
+                "harvestId=" + saved.getId() + ", inventoryId=" + stock.getId()
+                        + ", bed=" + saved.getBedOrField(),
+                amount
+        );
+        log.info("[harvest] {}", msg);
+        return saved;
+    }
+
+    /**
+     * Updates a harvest entry and corrects inventory for crop/qty changes.
+     * Same crop → adjust by delta; crop rename → reverse old, apply new.
+     * Records {@code HARVEST_EDIT} in the audit trail.
+     */
+    @Transactional
+    public HarvestEntry update(Long id, HarvestEntry incoming) {
+        if (incoming == null) {
+            throw new IllegalArgumentException("Harvest entry must not be null.");
+        }
+        HarvestEntry existing = repository.findById(id)
+                .orElseThrow(() -> new IndexOutOfBoundsException("No harvest entry with id=" + id));
+
+        String oldCrop = existing.getCropName();
+        int oldQty = (int) Math.round(existing.getQuantity());
+        String newCrop = incoming.getCropName() == null ? "" : incoming.getCropName().trim();
+        int newQty = (int) Math.round(incoming.getQuantity());
+        String newUnit = incoming.getUnit();
+
+        if (newCrop.isBlank()) {
+            throw new IllegalArgumentException("Crop name is required.");
+        }
+        if (incoming.getQuantity() < 0) {
+            throw new IllegalArgumentException("Quantity cannot be negative.");
+        }
+
+        // Apply inventory correction before persisting harvest fields
+        applyInventoryEdit(oldCrop, oldQty, newCrop, newQty, newUnit, existing.getHarvestDate());
+
+        existing.setHarvestDate(incoming.getHarvestDate());
+        existing.setCropName(incoming.getCropName());
+        existing.setQuantity(incoming.getQuantity());
+        existing.setUnit(incoming.getUnit());
+        existing.setBedOrField(incoming.getBedOrField());
+        existing.setNotes(incoming.getNotes());
+        HarvestEntry saved = repository.save(existing);
+
+        String msg = "Harvest edited id=" + id + ": " + oldCrop + "×" + oldQty
+                + " → " + saved.getCropName() + "×" + (int) Math.round(saved.getQuantity());
+        syncHistoryService.record(
+                "harvest",
+                "HARVEST_EDIT",
+                true,
+                msg,
+                "notes=" + saved.getNotes() + ", bed=" + saved.getBedOrField(),
+                Math.abs(newQty - oldQty)
+        );
+        log.info("[harvest] {}", msg);
+        return saved;
+    }
+
+    private void applyInventoryEdit(String oldCrop, int oldQty, String newCrop, int newQty,
+                                    String unit, LocalDate harvestDate) {
+        boolean sameCrop = oldCrop != null && oldCrop.equalsIgnoreCase(newCrop);
+        if (sameCrop) {
+            int delta = newQty - oldQty;
+            if (delta > 0) {
+                inventoryService.incrementQuantityByName(newCrop, delta, unit,
+                        "Harvest edit +" + delta + " on " + harvestDate);
+            } else if (delta < 0) {
+                inventoryService.decrementQuantityByName(oldCrop, -delta);
+            }
+            return;
+        }
+        // Crop changed: reverse old contribution, apply new
+        if (oldQty > 0) {
+            inventoryService.decrementQuantityByName(oldCrop, oldQty);
+        }
+        if (newQty > 0) {
+            inventoryService.incrementQuantityByName(newCrop, newQty, unit,
+                    "Harvest edit reassigned from " + oldCrop);
+        }
+    }
+
+    /**
+     * Deletes a harvest entry and <em>reverses</em> the inventory increase
+     * (floored at zero). Records {@code HARVEST_UNDO} in the audit trail.
+     */
+    @Transactional
+    public void delete(Long id) {
+        HarvestEntry existing = repository.findById(id)
+                .orElseThrow(() -> new IndexOutOfBoundsException("No harvest entry with id=" + id));
+
+        int amount = (int) Math.round(existing.getQuantity());
+        var stock = inventoryService.decrementQuantityByName(existing.getCropName(), amount);
+
+        repository.deleteById(id);
+
+        String msg = "Harvest deleted (undo): " + existing.getCropName() + " × " + amount
+                + (stock.isPresent()
+                ? " → inventory now " + stock.get().getQuantity()
+                : " → no inventory SKU matched for reverse");
+        syncHistoryService.record(
+                "harvest",
+                "HARVEST_UNDO",
+                stock.isPresent(),
+                msg,
+                "harvestId=" + id + ", crop=" + existing.getCropName()
+                        + ", bed=" + existing.getBedOrField(),
+                amount
+        );
+        log.info("[harvest] {}", msg);
+    }
+
+    /**
+     * Totals quantity by crop for a quick season snapshot (all records).
+     */
+    @Transactional(readOnly = true)
+    public Map<String, Double> totalsByCrop() {
+        Map<String, Double> totals = new LinkedHashMap<>();
+        for (HarvestEntry e : repository.findAllByOrderByHarvestDateDescIdDesc()) {
+            totals.merge(e.getCropName(), e.getQuantity(), Double::sum);
+        }
+        return totals;
+    }
+
+    /** Sum of harvest quantities for the trailing 7 days (inclusive of today). */
+    @Transactional(readOnly = true)
+    public double totalQuantityLast7Days() {
+        LocalDate to = LocalDate.now();
+        LocalDate from = to.minusDays(6);
+        return findBetween(from, to).stream().mapToDouble(HarvestEntry::getQuantity).sum();
+    }
+
+    /** Prior 7-day window (days -13 … -7) for week-over-week comparison. */
+    @Transactional(readOnly = true)
+    public double totalQuantityPrior7Days() {
+        LocalDate to = LocalDate.now().minusDays(7);
+        LocalDate from = to.minusDays(6);
+        return findBetween(from, to).stream().mapToDouble(HarvestEntry::getQuantity).sum();
+    }
+
+    /**
+     * Percent change vs prior week. {@code null} when prior week was zero
+     * (undefined %); use UI to show "new" / "n/a".
+     */
+    @Transactional(readOnly = true)
+    public Double weekOverWeekPercentChange() {
+        double current = totalQuantityLast7Days();
+        double prior = totalQuantityPrior7Days();
+        if (prior <= 0) {
+            return null;
+        }
+        return ((current - prior) / prior) * 100.0;
+    }
+
+    /**
+     * Daily harvest totals for the last 7 days (index 0 = 6 days ago, 6 = today).
+     * Used by dashboard sparkline.
+     */
+    @Transactional(readOnly = true)
+    public double[] dailyQuantitiesLast7Days() {
+        LocalDate today = LocalDate.now();
+        LocalDate from = today.minusDays(6);
+        Map<LocalDate, Double> byDay = new LinkedHashMap<>();
+        for (int i = 0; i < 7; i++) {
+            byDay.put(from.plusDays(i), 0.0);
+        }
+        for (HarvestEntry e : findBetween(from, today)) {
+            byDay.merge(e.getHarvestDate(), e.getQuantity(), Double::sum);
+        }
+        double[] out = new double[7];
+        int i = 0;
+        for (double v : byDay.values()) {
+            out[i++] = v;
+        }
+        return out;
+    }
+
+    /**
+     * Filter helper for UI: optional crop substring + optional inclusive date range.
+     * Null/blank crop → all crops; null from/to → unbounded on that side.
+     */
+    @Transactional(readOnly = true)
+    public List<HarvestEntry> filter(String cropQuery, LocalDate from, LocalDate to) {
+        return filter(cropQuery, null, null, from, to);
+    }
+
+    /**
+     * Filter with optional bed/field substring (case-insensitive contains).
+     */
+    @Transactional(readOnly = true)
+    public List<HarvestEntry> filter(String cropQuery, String bedQuery, LocalDate from, LocalDate to) {
+        return filter(cropQuery, bedQuery, null, from, to);
+    }
+
+    /**
+     * Full filter: crop, bed, notes substrings (any blank = ignore) + optional date bounds.
+     */
+    @Transactional(readOnly = true)
+    public List<HarvestEntry> filter(String cropQuery, String bedQuery, String notesQuery,
+                                     LocalDate from, LocalDate to) {
+        List<HarvestEntry> base = getAll();
+        String q = cropQuery == null ? "" : cropQuery.trim().toLowerCase();
+        String bed = bedQuery == null ? "" : bedQuery.trim().toLowerCase();
+        String notes = notesQuery == null ? "" : notesQuery.trim().toLowerCase();
+        return base.stream()
+                .filter(e -> q.isEmpty()
+                        || (e.getCropName() != null && e.getCropName().toLowerCase().contains(q)))
+                .filter(e -> bed.isEmpty()
+                        || (e.getBedOrField() != null && e.getBedOrField().toLowerCase().contains(bed)))
+                .filter(e -> notes.isEmpty()
+                        || (e.getNotes() != null && e.getNotes().toLowerCase().contains(notes)))
+                .filter(e -> from == null || !e.getHarvestDate().isBefore(from))
+                .filter(e -> to == null || !e.getHarvestDate().isAfter(to))
+                .toList();
+    }
+
+    /** Totals by crop for a filtered subset (UI season panel when filter active). */
+    public Map<String, Double> totalsByCrop(List<HarvestEntry> entries) {
+        Map<String, Double> totals = new LinkedHashMap<>();
+        if (entries == null) {
+            return totals;
+        }
+        for (HarvestEntry e : entries) {
+            totals.merge(e.getCropName(), e.getQuantity(), Double::sum);
+        }
+        return totals;
+    }
+
+    /**
+     * Export harvest history to CSV (header + one row per entry, newest first).
+     */
+    @Transactional(readOnly = true)
+    public void exportToCsv(String filename) {
+        exportToCsv(filename, getAll());
+    }
+
+    /** Export a filtered subset (e.g. current UI filter). */
+    @Transactional(readOnly = true)
+    public void exportToCsv(String filename, List<HarvestEntry> entries) {
+        if (filename == null || filename.isBlank()) {
+            throw new IllegalArgumentException("Export filename must not be null or empty.");
+        }
+        if (entries == null) {
+            entries = List.of();
+        }
+        try (java.io.BufferedWriter bw = new java.io.BufferedWriter(new java.io.FileWriter(filename.trim()))) {
+            bw.write("Id,Date,Crop,Quantity,Unit,BedOrField,Notes");
+            bw.newLine();
+            for (HarvestEntry e : entries) {
+                bw.write(String.format("%s,%s,%s,%.2f,%s,%s,\"%s\"",
+                        e.getId() == null ? "" : e.getId(),
+                        e.getHarvestDate(),
+                        csvEscape(e.getCropName()),
+                        e.getQuantity(),
+                        csvEscape(e.getUnit()),
+                        csvEscape(e.getBedOrField()),
+                        e.getNotes() == null ? "" : e.getNotes().replace("\"", "\"\"")));
+                bw.newLine();
+            }
+            log.info("Harvest log exported to '{}' ({} row(s)).", filename, entries.size());
+        } catch (java.io.IOException ex) {
+            throw new IllegalStateException("Harvest export failed: " + ex.getMessage(), ex);
+        }
+    }
+
+    private static String csvEscape(String s) {
+        if (s == null) {
+            return "";
+        }
+        if (s.contains(",") || s.contains("\"")) {
+            return "\"" + s.replace("\"", "\"\"") + "\"";
+        }
+        return s;
+    }
+}

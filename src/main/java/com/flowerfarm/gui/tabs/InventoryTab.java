@@ -1,5 +1,6 @@
 package com.flowerfarm.gui.tabs;
 
+import com.flowerfarm.gui.GuiPermissions;
 import com.flowerfarm.model.Item;
 import com.flowerfarm.service.InventoryService;
 
@@ -205,6 +206,9 @@ public class InventoryTab implements FlowerFarmTab {
     }
 
     private void editSelected(java.awt.event.ActionEvent e) {
+        if (!GuiPermissions.requireWrite(host, panel, "edit inventory")) {
+            return;
+        }
         int viewRow = inventoryTable.getSelectedRow();
         if (viewRow < 0) {
             JOptionPane.showMessageDialog(panel, "Please select a row to edit.",
@@ -234,6 +238,9 @@ public class InventoryTab implements FlowerFarmTab {
     }
 
     private void deleteSelected(java.awt.event.ActionEvent e) {
+        if (!GuiPermissions.requireWrite(host, panel, "delete inventory items")) {
+            return;
+        }
         int viewRow = inventoryTable.getSelectedRow();
         if (viewRow < 0) {
             JOptionPane.showMessageDialog(panel, "Please select a row to delete.",

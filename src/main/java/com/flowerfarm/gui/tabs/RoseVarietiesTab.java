@@ -53,12 +53,26 @@ public class RoseVarietiesTab implements FlowerFarmTab {
         roseText.setCaretPosition(0);
         panel.add(new JScrollPane(roseText), BorderLayout.CENTER);
 
+        JPanel south = new JPanel(new FlowLayout(FlowLayout.LEFT));
         JButton sampleButton = new JButton("Add Sample Nootka Rose to Inventory");
         sampleButton.addActionListener(e -> addSampleRose());
-        panel.add(sampleButton, BorderLayout.SOUTH);
+        JButton visualizer = new JButton("Open Rose Visualizer (L-Systems)");
+        visualizer.setToolTipText("Generative growth habits for Nootka, rugosa, Bourbon, climbers…");
+        visualizer.addActionListener(e -> {
+            if (host != null) {
+                host.selectTab("Rose Visualizer");
+                host.setStatus("Rose Visualizer — grow & mutate PNW rose L-Systems.");
+            }
+        });
+        south.add(sampleButton);
+        south.add(visualizer);
+        panel.add(south, BorderLayout.SOUTH);
     }
 
     private void addSampleRose() {
+        if (!com.flowerfarm.gui.GuiPermissions.requireWrite(host, panel, "add sample inventory items")) {
+            return;
+        }
         try {
             inventoryService.addItem(new Item(
                     "Nootka Rose", "Flowers/Plants", 3.50, "Per Stem", 2.00, 50,

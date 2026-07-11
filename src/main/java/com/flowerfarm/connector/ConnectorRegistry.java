@@ -2,6 +2,7 @@ package com.flowerfarm.connector;
 
 import com.flowerfarm.model.Item;
 import com.flowerfarm.service.InventoryService;
+import com.flowerfarm.service.SyncHistoryService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -19,6 +20,7 @@ import java.util.*;
  * {@link #runSync}) resolve the connector by name, validate the requested
  * direction, and delegate to the connector implementation.  Import results
  * are automatically merged into the local {@link InventoryService}.
+ * Every attempt is recorded in {@link SyncHistoryService}.
  */
 @Component
 public class ConnectorRegistry {
@@ -27,6 +29,7 @@ public class ConnectorRegistry {
 
     private final Map<String, ExternalConnector<?>> registry = new LinkedHashMap<>();
     private final InventoryService inventoryService;
+    private final SyncHistoryService syncHistoryService;
 
     /**
      * Spring injects all {@code ExternalConnector} beans here.
@@ -35,8 +38,10 @@ public class ConnectorRegistry {
      */
     @SuppressWarnings("rawtypes")
     public ConnectorRegistry(List<ExternalConnector> connectors,
-                             InventoryService inventoryService) {
+                             InventoryService inventoryService,
+                             SyncHistoryService syncHistoryService) {
         this.inventoryService = inventoryService;
+        this.syncHistoryService = syncHistoryService;
         for (ExternalConnector<?> c : connectors) {
             registry.put(c.getName().toLowerCase(), c);
             log.info("Registered connector: '{}' ({})", c.getName(), c.getSupportedDirection());
@@ -67,6 +72,13 @@ public class ConnectorRegistry {
             entry.put("canExport",   direction.canExport());
             entry.put("canSync",     direction.canSync());
             entry.put("available",   available);
+            if (c instanceof DualModeCapable dual) {
+                entry.put("mode", dual.operatingMode());
+                entry.put("localMode", dual.isLocalMode());
+            } else {
+                entry.put("mode", available ? "remote" : "unconfigured");
+                entry.put("localMode", false);
+            }
             info.add(entry);
         }
         return info;
@@ -90,18 +102,18 @@ public class ConnectorRegistry {
      */
     @SuppressWarnings("unchecked")
     public ConnectorResult<List<Item>> runImport(String name) {
-        return find(name)
+        ConnectorResult<List<Item>> result = find(name)
                 .map(c -> {
                     if (!c.getSupportedDirection().canImport()) {
                         return ConnectorResult.<List<Item>>fail(
                                 "Connector '" + name + "' does not support IMPORT.",
                                 "Supported direction: " + c.getSupportedDirection(), name);
                     }
-                    ConnectorResult<List<Item>> result =
+                    ConnectorResult<List<Item>> importResult =
                             ((ExternalConnector<Object>) c).importItems();
-                    if (result.isSuccess() && result.getPayload() != null) {
+                    if (importResult.isSuccess() && importResult.getPayload() != null) {
                         int persisted = 0;
-                        for (Item item : result.getPayload()) {
+                        for (Item item : importResult.getPayload()) {
                             try {
                                 inventoryService.addItem(item);
                                 persisted++;
@@ -111,13 +123,16 @@ public class ConnectorRegistry {
                             }
                         }
                         log.info("[{}] Import complete — {} of {} items added to inventory.",
-                                name, persisted, result.getPayload().size());
+                                name, persisted, importResult.getPayload().size());
                     }
-                    return result;
+                    return importResult;
                 })
                 .orElseGet(() -> ConnectorResult.fail(
                         "Connector not found: " + name,
                         "Registered connectors: " + registry.keySet(), name));
+
+        recordHistory(name, "IMPORT", result);
+        return result;
     }
 
     /**
@@ -128,7 +143,7 @@ public class ConnectorRegistry {
      */
     @SuppressWarnings("unchecked")
     public ConnectorResult<Integer> runExport(String name) {
-        return find(name)
+        ConnectorResult<Integer> result = find(name)
                 .map(c -> {
                     if (!c.getSupportedDirection().canExport()) {
                         return ConnectorResult.<Integer>fail(
@@ -136,16 +151,19 @@ public class ConnectorRegistry {
                                 "Supported direction: " + c.getSupportedDirection(), name);
                     }
                     List<Item> items = inventoryService.getAllItems();
-                    ConnectorResult<Integer> result =
+                    ConnectorResult<Integer> exportResult =
                             ((ExternalConnector<Object>) c).exportItems(items);
-                    if (result.isSuccess()) {
-                        log.info("[{}] Export complete — {} items sent.", name, result.getPayload());
+                    if (exportResult.isSuccess()) {
+                        log.info("[{}] Export complete — {} items sent.", name, exportResult.getPayload());
                     }
-                    return result;
+                    return exportResult;
                 })
                 .orElseGet(() -> ConnectorResult.fail(
                         "Connector not found: " + name,
                         "Registered connectors: " + registry.keySet(), name));
+
+        recordHistory(name, "EXPORT", result);
+        return result;
     }
 
     /**
@@ -156,7 +174,7 @@ public class ConnectorRegistry {
      */
     @SuppressWarnings("unchecked")
     public ConnectorResult<SyncSummary> runSync(String name) {
-        return find(name)
+        ConnectorResult<SyncSummary> result = find(name)
                 .map(c -> {
                     if (!c.getSupportedDirection().canSync()) {
                         return ConnectorResult.<SyncSummary>fail(
@@ -164,15 +182,27 @@ public class ConnectorRegistry {
                                 "Supported direction: " + c.getSupportedDirection(), name);
                     }
                     List<Item> items = inventoryService.getAllItems();
-                    ConnectorResult<SyncSummary> result =
+                    ConnectorResult<SyncSummary> syncResult =
                             ((ExternalConnector<Object>) c).syncUpdates(items);
-                    if (result.isSuccess() && result.getPayload() != null) {
-                        log.info("[{}] Sync complete — {}", name, result.getPayload());
+                    if (syncResult.isSuccess() && syncResult.getPayload() != null) {
+                        log.info("[{}] Sync complete — {}", name, syncResult.getPayload());
                     }
-                    return result;
+                    return syncResult;
                 })
                 .orElseGet(() -> ConnectorResult.fail(
                         "Connector not found: " + name,
                         "Registered connectors: " + registry.keySet(), name));
+
+        recordHistory(name, "SYNC", result);
+        return result;
+    }
+
+    private void recordHistory(String name, String operation, ConnectorResult<?> result) {
+        try {
+            syncHistoryService.recordResult(name, operation, result);
+        } catch (Exception e) {
+            // History must never break a connector operation
+            log.warn("Failed to record sync history for {} {}: {}", name, operation, e.getMessage());
+        }
     }
 }

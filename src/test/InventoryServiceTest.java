@@ -1,11 +1,11 @@
 package com.flowerfarm.service;
 
 import com.flowerfarm.model.Item;
+import com.flowerfarm.repository.InMemoryInventoryRepository;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
-import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -14,108 +14,120 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.*;
 
 /**
- * Unit tests for InventoryService.
- *
- * Each test gets a fresh service backed by a temp CSV file so tests
- * are hermetically isolated from each other and from any real
- * farm_inventory.csv in the working directory.
+ * Unit tests for InventoryService using an in-memory repository.
+ * Seed CSV path points at a missing file so init() loads sample data.
  */
 @DisplayName("InventoryService")
 class InventoryServiceTest {
 
-    /** Minimal subclass that lets us point the service at a temp file. */
-    static class TestablInventoryService extends InventoryService {
-        TestablInventoryService(String csvPath) throws Exception {
-            // Use reflection to set the private dataFile field before init()
-            var field = InventoryService.class.getDeclaredField("dataFile");
-            field.setAccessible(true);
-            field.set(this, csvPath);
-        }
-    }
-
+    private InMemoryInventoryRepository repository;
     private InventoryService service;
-    private Path tempCsv;
+    private Path missingSeedCsv;
 
     @BeforeEach
     void setUp() throws Exception {
-        // Create a temp file that doesn't exist yet so the service falls back
-        // to sample data — each test starts from that clean 4-item baseline.
-        tempCsv = Files.createTempFile("farm_test_", ".csv");
-        Files.delete(tempCsv); // delete so service treats it as "not found" → sample data
-
-        service = new TestablInventoryService(tempCsv.toString());
+        repository = new InMemoryInventoryRepository();
+        missingSeedCsv = Files.createTempFile("farm_seed_", ".csv");
+        Files.delete(missingSeedCsv); // not found → sample seed
+        service = new InventoryService(repository, missingSeedCsv.toString());
         service.init();
     }
 
     @AfterEach
-    void tearDown() {
-        // Best-effort cleanup of any CSV file the service wrote during the test
-        new File(tempCsv.toString()).delete();
+    void tearDown() throws IOException {
+        Files.deleteIfExists(missingSeedCsv);
     }
 
-    // ── init / sample data ───────────────────────────────────────────────────
-
     @Test
-    @DisplayName("init() loads sample data when CSV does not exist")
+    @DisplayName("init() loads sample data when DB empty and seed CSV missing")
     void loadsDefaultSampleData() {
         List<Item> items = service.getAllItems();
         assertThat(items).hasSizeGreaterThanOrEqualTo(1);
-        assertThat(items).allSatisfy(i -> assertThat(i.getName()).isNotBlank());
+        assertThat(items).allSatisfy(i -> {
+            assertThat(i.getName()).isNotBlank();
+            assertThat(i.getId()).isNotNull();
+        });
     }
 
-    // ── getAllItems ──────────────────────────────────────────────────────────
+    @Test
+    @DisplayName("init() seeds from CSV when present and DB is empty")
+    void seedsFromCsvWhenEmpty() throws Exception {
+        Path seed = Files.createTempFile("seed_inventory_", ".csv");
+        try {
+            Files.writeString(seed, InventoryService.CSV_HEADER + "\n"
+                    + "Custom Rose,Flowers/Plants,3.00,Per Stem,1.50,12,\"seeded\"\n");
+            InMemoryInventoryRepository repo = new InMemoryInventoryRepository();
+            InventoryService seeded = new InventoryService(repo, seed.toString());
+            seeded.init();
+
+            assertThat(seeded.getAllItems()).hasSize(1);
+            assertThat(seeded.getAllItems().get(0).getName()).isEqualTo("Custom Rose");
+        } finally {
+            Files.deleteIfExists(seed);
+        }
+    }
 
     @Test
-    @DisplayName("getAllItems() returns a defensive copy — mutating it does not affect the service")
+    @DisplayName("init() does not re-seed when data already exists")
+    void doesNotReseedWhenPopulated() {
+        int before = service.getAllItems().size();
+        service.init(); // second call
+        assertThat(service.getAllItems()).hasSize(before);
+    }
+
+    @Test
+    @DisplayName("getAllItems() returns a defensive copy")
     void getAllItemsReturnsDefensiveCopy() {
         List<Item> copy = service.getAllItems();
         int originalSize = copy.size();
         copy.clear();
-
         assertThat(service.getAllItems()).hasSize(originalSize);
     }
 
-    // ── addItem ──────────────────────────────────────────────────────────────
-
     @Test
-    @DisplayName("addItem() appends item and persists to CSV")
-    void addItemAppendsAndPersists() throws IOException {
+    @DisplayName("addItem() persists and assigns an id")
+    void addItemPersistsWithId() {
         int before = service.getAllItems().size();
-        Item rose = new Item("Damask Rose", "Flowers/Plants", 2.50, "Per Stem", 1.00, 30, "Pink");
+        Item saved = service.addItem(
+                new Item("Damask Rose", "Flowers/Plants", 2.50, "Per Stem", 1.00, 30, "Pink"));
 
-        service.addItem(rose);
-
+        assertThat(saved.getId()).isNotNull();
         assertThat(service.getAllItems()).hasSize(before + 1);
-        assertThat(service.getAllItems())
-                .extracting(Item::getName)
-                .contains("Damask Rose");
-
-        // CSV should exist and contain the new item
-        assertThat(Files.readString(tempCsv)).contains("Damask Rose");
+        assertThat(service.findById(saved.getId())).isPresent();
     }
 
     @Test
-    @DisplayName("addItem() throws IllegalArgumentException for null item")
+    @DisplayName("addItem() throws for null")
     void addItemThrowsOnNull() {
         assertThatIllegalArgumentException()
                 .isThrownBy(() -> service.addItem(null))
                 .withMessageContaining("null");
     }
 
-    // ── editItem ─────────────────────────────────────────────────────────────
-
     @Test
-    @DisplayName("editItem() replaces item at index and persists")
-    void editItemReplacesEntry() throws IOException {
+    @DisplayName("editItem() updates by index and keeps id")
+    void editItemReplacesEntry() {
+        Long id = service.getAllItems().get(0).getId();
         Item updated = new Item("Updated Rose", "Flowers/Plants", 5.00, "Per Stem", 3.00, 20, "New notes");
-        service.editItem(0, updated);
 
+        Item saved = service.editItem(0, updated);
+
+        assertThat(saved.getId()).isEqualTo(id);
         assertThat(service.getAllItems().get(0).getName()).isEqualTo("Updated Rose");
-        assertThat(Files.readString(tempCsv)).contains("Updated Rose");
     }
 
     @Test
-    @DisplayName("editItem() throws IllegalArgumentException for null replacement")
+    @DisplayName("updateById() updates by primary key")
+    void updateByIdWorks() {
+        Long id = service.getAllItems().get(0).getId();
+        Item saved = service.updateById(id,
+                new Item("By Id Rose", "Other", 1.0, "Per Unit", 0.5, 3, "x"));
+        assertThat(saved.getName()).isEqualTo("By Id Rose");
+        assertThat(service.findById(id).orElseThrow().getName()).isEqualTo("By Id Rose");
+    }
+
+    @Test
+    @DisplayName("editItem() throws for null replacement")
     void editItemThrowsOnNull() {
         assertThatIllegalArgumentException()
                 .isThrownBy(() -> service.editItem(0, null));
@@ -123,90 +135,71 @@ class InventoryServiceTest {
 
     @ParameterizedTest(name = "index = {0}")
     @ValueSource(ints = {-1, 999})
-    @DisplayName("editItem() throws IndexOutOfBoundsException for invalid index")
+    @DisplayName("editItem() throws for invalid index")
     void editItemThrowsOnBadIndex(int idx) {
         Item item = new Item("X", "Other", 1.0, "Per Unit", 0.5, 1, "");
         assertThatExceptionOfType(IndexOutOfBoundsException.class)
                 .isThrownBy(() -> service.editItem(idx, item));
     }
 
-    // ── deleteItem ────────────────────────────────────────────────────────────
-
     @Test
-    @DisplayName("deleteItem() removes item at index and persists")
+    @DisplayName("deleteItem() removes by index")
     void deleteItemRemovesEntry() {
         String nameToRemove = service.getAllItems().get(0).getName();
         int before = service.getAllItems().size();
-
         service.deleteItem(0);
-
         assertThat(service.getAllItems()).hasSize(before - 1);
-        assertThat(service.getAllItems())
-                .extracting(Item::getName)
-                .doesNotContain(nameToRemove);
+        assertThat(service.getAllItems()).extracting(Item::getName).doesNotContain(nameToRemove);
+    }
+
+    @Test
+    @DisplayName("deleteById() removes by primary key")
+    void deleteByIdWorks() {
+        Long id = service.getAllItems().get(0).getId();
+        service.deleteById(id);
+        assertThat(service.findById(id)).isEmpty();
     }
 
     @ParameterizedTest(name = "index = {0}")
     @ValueSource(ints = {-1, 999})
-    @DisplayName("deleteItem() throws IndexOutOfBoundsException for invalid index")
+    @DisplayName("deleteItem() throws for invalid index")
     void deleteItemThrowsOnBadIndex(int idx) {
         assertThatExceptionOfType(IndexOutOfBoundsException.class)
                 .isThrownBy(() -> service.deleteItem(idx));
     }
 
-    // ── searchItems ──────────────────────────────────────────────────────────
-
     @Test
-    @DisplayName("searchItems() matches on name (case-insensitive)")
+    @DisplayName("searchItems() matches name case-insensitively")
     void searchMatchesName() {
         service.addItem(new Item("Nootka Rose", "Flowers/Plants", 3.50, "Per Stem", 2.00, 50, ""));
-        List<Item> results = service.searchItems("nootka");
-
-        assertThat(results)
+        assertThat(service.searchItems("nootka"))
                 .isNotEmpty()
                 .allSatisfy(i -> assertThat(i.getName().toLowerCase()).contains("nootka"));
     }
 
     @Test
-    @DisplayName("searchItems() matches on category (case-insensitive)")
+    @DisplayName("searchItems() matches category")
     void searchMatchesCategory() {
-        List<Item> results = service.searchItems("fertilizer");
-        // sample data includes "Fertilizers" category
-        assertThat(results).isNotEmpty();
+        assertThat(service.searchItems("fertilizer")).isNotEmpty();
     }
 
     @Test
-    @DisplayName("searchItems() returns empty list for no matches")
-    void searchReturnsEmptyOnNoMatch() {
-        List<Item> results = service.searchItems("zyxwvutsrqponmlkjihgfedcba");
-        assertThat(results).isEmpty();
-    }
-
-    @Test
-    @DisplayName("searchItems() returns empty list for null query")
-    void searchReturnsEmptyOnNull() {
+    @DisplayName("searchItems() empty for no matches / null / blank")
+    void searchEmptyCases() {
+        assertThat(service.searchItems("zyxwvutsrqponmlkjihgfedcba")).isEmpty();
         assertThat(service.searchItems(null)).isEmpty();
-    }
-
-    @Test
-    @DisplayName("searchItems() returns empty list for blank query")
-    void searchReturnsEmptyOnBlank() {
         assertThat(service.searchItems("   ")).isEmpty();
     }
 
-    // ── exportToCsv ──────────────────────────────────────────────────────────
-
     @Test
-    @DisplayName("exportToCsv() writes a header row and one row per item")
+    @DisplayName("exportToCsv() writes header and one row per item")
     void exportCsvWritesHeaderAndRows() throws IOException {
         Path export = Files.createTempFile("export_test_", ".csv");
         try {
             service.exportToCsv(export.toString());
-
             String content = Files.readString(export);
-            assertThat(content).startsWith("Name,Category,Price");
-            // Each item should have a line
-            int dataLines = content.split("\n").length - 1; // minus header
+            assertThat(content).startsWith(InventoryService.CSV_HEADER);
+            int dataLines = content.split("\n").length - 1;
             assertThat(dataLines).isEqualTo(service.getAllItems().size());
         } finally {
             Files.deleteIfExists(export);
@@ -214,23 +207,25 @@ class InventoryServiceTest {
     }
 
     @Test
-    @DisplayName("exportToCsv() throws IllegalArgumentException for null filename")
-    void exportCsvThrowsOnNull() {
-        assertThatIllegalArgumentException()
-                .isThrownBy(() -> service.exportToCsv(null));
+    @DisplayName("exportToCsv() rejects null/blank filename")
+    void exportCsvThrowsOnBadName() {
+        assertThatIllegalArgumentException().isThrownBy(() -> service.exportToCsv(null));
+        assertThatIllegalArgumentException().isThrownBy(() -> service.exportToCsv("   "));
     }
 
     @Test
-    @DisplayName("exportToCsv() throws IllegalArgumentException for blank filename")
-    void exportCsvThrowsOnBlank() {
-        assertThatIllegalArgumentException()
-                .isThrownBy(() -> service.exportToCsv("   "));
+    @DisplayName("inventoryKpis aggregates sell value, cost, low stock")
+    void inventoryKpis() {
+        InventoryService.InventoryKpiSnapshot snap = service.inventoryKpis(10);
+        assertThat(snap.skuCount()).isEqualTo(service.getAllItems().size());
+        assertThat(snap.lowStockThreshold()).isEqualTo(10);
+        assertThat(snap.sellValue()).isGreaterThanOrEqualTo(0);
+        assertThat(snap.costBasis()).isGreaterThanOrEqualTo(0);
+        assertThat(snap.totalUnits()).isGreaterThanOrEqualTo(0);
     }
 
-    // ── Concurrent safety (smoke test) ────────────────────────────────────────
-
     @Test
-    @DisplayName("concurrent addItem() calls don't corrupt the list size")
+    @DisplayName("concurrent addItem() calls keep a consistent size")
     void concurrentAddsAreThreadSafe() throws InterruptedException {
         int threads = 10;
         int addsPerThread = 5;

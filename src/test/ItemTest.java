@@ -179,4 +179,59 @@ class ItemTest {
         assertThat(item.getQuantity()).isEqualTo(100);
         assertThat(item.getNotes()).isEqualTo("Fragrant");
     }
+
+    @Test
+    @DisplayName("setters trim and apply the same defaults as the constructor")
+    void settersNormalizeLikeConstructor() {
+        Item item = new Item("Rose", "Other", 1.00, "Per Unit", 0.50, 5, "");
+
+        item.setName("  Damask  ");
+        item.setCategory("   ");
+        item.setUnit(null);
+        item.setNotes(null);
+
+        assertThat(item.getName()).isEqualTo("Damask");
+        assertThat(item.getCategory()).isEqualTo("Other");
+        assertThat(item.getUnit()).isEqualTo("Per Unit");
+        assertThat(item.getNotes()).isEmpty();
+    }
+
+    @Nested
+    @DisplayName("setters throw")
+    class SetterValidationTests {
+
+        private final Item item = new Item("Rose", "Other", 1.00, "Per Unit", 0.50, 5, "");
+
+        @Test
+        @DisplayName("when setName is blank")
+        void throwsOnBlankName() {
+            assertThatIllegalArgumentException()
+                    .isThrownBy(() -> item.setName("   "))
+                    .withMessageContaining("name");
+        }
+
+        @Test
+        @DisplayName("when setPrice is negative")
+        void throwsOnNegativePrice() {
+            assertThatIllegalArgumentException()
+                    .isThrownBy(() -> item.setPrice(-1.0))
+                    .withMessageContaining("Price");
+        }
+
+        @Test
+        @DisplayName("when setCost is negative")
+        void throwsOnNegativeCost() {
+            assertThatIllegalArgumentException()
+                    .isThrownBy(() -> item.setCost(-0.01))
+                    .withMessageContaining("Cost");
+        }
+
+        @Test
+        @DisplayName("when setQuantity is negative")
+        void throwsOnNegativeQuantity() {
+            assertThatIllegalArgumentException()
+                    .isThrownBy(() -> item.setQuantity(-1))
+                    .withMessageContaining("Quantity");
+        }
+    }
 }

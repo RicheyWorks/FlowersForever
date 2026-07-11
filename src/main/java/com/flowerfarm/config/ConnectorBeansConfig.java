@@ -10,8 +10,10 @@ import org.springframework.context.annotation.Configuration;
  * Registers connectors whose constructors require property injection but are
  * not themselves {@code @Component} classes (AirtableConnector, ExcelConnector).
  *
- * <p>All other connectors ({@code CsvInventoryConnector}, the stub connectors)
- * are {@code @Component} beans and are picked up automatically by Spring.
+ * <p>All other connectors ({@code CsvInventoryConnector}, Shopify, Square,
+ * Farmbrite, Floranext, etc.) are {@code @Component} beans and are picked up
+ * automatically by Spring. Non-essential POS stubs were removed from the tree
+ * so the registry only exposes maintained connectors.
  */
 @Configuration
 public class ConnectorBeansConfig {
@@ -30,7 +32,8 @@ public class ConnectorBeansConfig {
     public AirtableConnector airtableConnector(
             @Value("${connector.airtable.api-key:}")      String apiKey,
             @Value("${connector.airtable.base-id:}")      String baseId,
-            @Value("${connector.airtable.table-name:Table 1}") String tableName) {
-        return new AirtableConnector(apiKey, baseId, tableName);
+            @Value("${connector.airtable.table-name:Table 1}") String tableName,
+            @Value("${connector.airtable.local-file:}") String localFile) {
+        return new AirtableConnector(apiKey, baseId, tableName, localFile);
     }
 }

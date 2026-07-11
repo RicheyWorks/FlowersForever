@@ -24,4 +24,17 @@ public interface TabHost {
 
     /** Switch to the Trend Analysis tab and start a forecast on a background thread. */
     void runTrendAnalysis();
+
+    /**
+     * Whether the signed-in user may mutate data (HAND/OWNER, or auth off).
+     * Default true for hosts that do not implement multi-user auth.
+     */
+    default boolean canMutateData() {
+        return true;
+    }
+
+    /** Whether the user may clear the audit log (OWNER only when auth on). */
+    default boolean canClearHistory() {
+        return true;
+    }
 }

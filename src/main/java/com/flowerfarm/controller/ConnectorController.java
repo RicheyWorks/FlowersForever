@@ -4,6 +4,8 @@ import com.flowerfarm.connector.ConnectorRegistry;
 import com.flowerfarm.connector.ConnectorResult;
 import com.flowerfarm.connector.SyncSummary;
 import com.flowerfarm.model.Item;
+import com.flowerfarm.model.SyncHistoryEntry;
+import com.flowerfarm.service.SyncHistoryService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -16,24 +18,29 @@ import java.util.Map;
  *
  * <pre>
  * GET  /api/connectors                        List all registered connectors + availability
+ * GET  /api/connectors/history                Audit log (filterable)
+ * POST /api/connectors/history/export         Write audit CSV on server
  * GET  /api/connectors/{name}/status          Single connector availability check
  * POST /api/connectors/{name}/import          Pull data from external system → local inventory
  * POST /api/connectors/{name}/export          Push local inventory → external system
  * POST /api/connectors/{name}/sync            Bidirectional reconcile
+ * DELETE /api/connectors/history              Clear audit log
  * </pre>
  *
  * All operations are delegated to {@link ConnectorRegistry}, which handles
  * discovery, direction validation, and {@link com.flowerfarm.service.InventoryService}
- * integration automatically.
+ * integration automatically. Every attempt is stored via {@link SyncHistoryService}.
  */
 @RestController
 @RequestMapping("/api/connectors")
 public class ConnectorController {
 
     private final ConnectorRegistry registry;
+    private final SyncHistoryService syncHistoryService;
 
-    public ConnectorController(ConnectorRegistry registry) {
+    public ConnectorController(ConnectorRegistry registry, SyncHistoryService syncHistoryService) {
         this.registry = registry;
+        this.syncHistoryService = syncHistoryService;
     }
 
     // ── Discovery ─────────────────────────────────────────────────────────────
@@ -45,6 +52,59 @@ public class ConnectorController {
     @GetMapping
     public ResponseEntity<List<Map<String, Object>>> listConnectors() {
         return ResponseEntity.ok(registry.listConnectorInfo());
+    }
+
+    /**
+     * Audit log (newest first). Filters:
+     * {@code connector}, {@code operation}, {@code success} (true/false),
+     * {@code q} message/detail search, {@code limit} (default 100, max 500).
+     */
+    @GetMapping("/history")
+    public List<SyncHistoryEntry> history(
+            @RequestParam(value = "connector", required = false) String connector,
+            @RequestParam(value = "operation", required = false) String operation,
+            @RequestParam(value = "success", required = false) Boolean success,
+            @RequestParam(value = "q", required = false) String query,
+            @RequestParam(value = "limit", defaultValue = "100") int limit) {
+        boolean any = (connector != null && !connector.isBlank())
+                || (operation != null && !operation.isBlank())
+                || success != null
+                || (query != null && !query.isBlank());
+        if (!any) {
+            return syncHistoryService.recentForConnector(connector, limit);
+        }
+        return syncHistoryService.filter(connector, operation, success, query, limit);
+    }
+
+    /** Server-side CSV export of the (optionally filtered) audit log. */
+    @PostMapping("/history/export")
+    public ResponseEntity<Map<String, String>> exportHistory(
+            @RequestParam(value = "filename", defaultValue = "sync_history.csv") String filename,
+            @RequestParam(value = "connector", required = false) String connector,
+            @RequestParam(value = "operation", required = false) String operation,
+            @RequestParam(value = "success", required = false) Boolean success,
+            @RequestParam(value = "q", required = false) String query,
+            @RequestParam(value = "limit", defaultValue = "500") int limit) {
+        try {
+            List<SyncHistoryEntry> rows = syncHistoryService.filter(
+                    connector, operation, success, query, limit);
+            syncHistoryService.exportToCsv(filename, rows);
+            return ResponseEntity.ok(Map.of(
+                    "message", "Exported " + rows.size() + " audit row(s) to " + filename,
+                    "rows", String.valueOf(rows.size())));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    /** Clears the entire sync history audit log. */
+    @DeleteMapping("/history")
+    public ResponseEntity<Map<String, String>> clearHistory() {
+        syncHistoryService.clearAll();
+        return ResponseEntity.ok(Map.of("message", "Sync history cleared."));
     }
 
     /**
@@ -135,14 +195,34 @@ public class ConnectorController {
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private ResponseEntity<Map<String, Object>> errorResponse(String name, ConnectorResult<?> r) {
-        HttpStatus status = r.getMessage() != null && r.getMessage().contains("not found")
-                ? HttpStatus.NOT_FOUND
-                : HttpStatus.BAD_GATEWAY;
+        String message = r.getMessage() != null ? r.getMessage() : "Unknown error";
+        HttpStatus status = resolveErrorStatus(message);
 
         return ResponseEntity.status(status).body(Map.of(
-                "connector",   name,
-                "error",       r.getMessage() != null ? r.getMessage() : "Unknown error",
-                "detail",      r.getErrorDetail() != null ? r.getErrorDetail() : ""
+                "connector", name,
+                "error",     message,
+                "detail",    r.getErrorDetail() != null ? r.getErrorDetail() : ""
         ));
+    }
+
+    /**
+     * Maps connector failure messages to HTTP status codes.
+     * Only unknown-connector messages become 404; operational failures
+     * (missing files, remote API errors, etc.) remain 502 Bad Gateway.
+     * Unconfigured / credential gaps map to 503 Service Unavailable.
+     */
+    static HttpStatus resolveErrorStatus(String message) {
+        if (message == null) {
+            return HttpStatus.BAD_GATEWAY;
+        }
+        String lower = message.toLowerCase();
+        // Registry lookup miss — message is always "Connector not found: …"
+        if (lower.startsWith("connector not found")) {
+            return HttpStatus.NOT_FOUND;
+        }
+        if (lower.contains("is not available")) {
+            return HttpStatus.SERVICE_UNAVAILABLE;
+        }
+        return HttpStatus.BAD_GATEWAY;
     }
 }

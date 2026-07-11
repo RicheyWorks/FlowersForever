@@ -2,6 +2,7 @@ package com.flowerfarm.connector;
 
 import com.flowerfarm.model.Item;
 import com.flowerfarm.service.InventoryService;
+import com.flowerfarm.service.SyncHistoryService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -23,6 +24,7 @@ import static org.mockito.Mockito.*;
 class ConnectorRegistryTest {
 
     @Mock private InventoryService inventoryService;
+    @Mock private SyncHistoryService syncHistoryService;
 
     // Two mock connectors with distinct names and directions
     private ExternalConnector<Object> importConnector;
@@ -51,8 +53,11 @@ class ConnectorRegistryTest {
 
         registry = new ConnectorRegistry(
                 List.of(importConnector, exportConnector, biConnector),
-                inventoryService
+                inventoryService,
+                syncHistoryService
         );
+        // History recording is best-effort; keep stubs quiet unless asserted
+        lenient().doNothing().when(syncHistoryService).recordResult(anyString(), anyString(), any());
     }
 
     // ── Discovery ────────────────────────────────────────────────────────────
@@ -86,7 +91,7 @@ class ConnectorRegistryTest {
         assertThat(info).hasSize(3);
         for (Map<String, Object> entry : info) {
             assertThat(entry).containsKeys("name", "description", "direction",
-                    "canImport", "canExport", "canSync", "available");
+                    "canImport", "canExport", "canSync", "available", "mode", "localMode");
         }
     }
 
@@ -166,9 +171,9 @@ class ConnectorRegistryTest {
             );
             when(importConnector.importItems())
                     .thenReturn(ConnectorResult.ok(incoming, "Imported 2"));
-            doThrow(new IllegalArgumentException("DB error"))
-                    .doNothing()
-                    .when(inventoryService).addItem(any());
+            when(inventoryService.addItem(any()))
+                    .thenThrow(new IllegalArgumentException("DB error"))
+                    .thenAnswer(inv -> inv.getArgument(0));
 
             ConnectorResult<List<Item>> result = registry.runImport("mockimporter");
 

@@ -70,7 +70,8 @@ public class TrendService {
             double predicted = model.classifyInstance(future);
 
             String summary = buildSummary(dataPoints, predicted, model.toString());
-            log.info("Trend analysis complete — predicted quantity for week {}: {:.2f}", nextWeek, predicted);
+            log.info("Trend analysis complete — predicted quantity for week {}: {}",
+                    nextWeek, String.format("%.2f", predicted));
             return new TrendResult(predicted, summary, null);
 
         } catch (Exception e) {
