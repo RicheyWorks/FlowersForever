@@ -1,6 +1,8 @@
 package com.flowerfarm.gui.tabs;
 
+import com.flowerfarm.gui.GuiPermissions;
 import com.flowerfarm.service.MarketDayPackingService;
+import com.flowerfarm.service.MarketDayPackingService.FulfillBatchResult;
 import com.flowerfarm.service.MarketDayPackingService.MarketDayPlan;
 
 import javax.swing.*;
@@ -25,6 +27,7 @@ public class MarketDayTab implements FlowerFarmTab {
     private JCheckBox fulfilledBox;
     private JTextArea planArea;
     private JLabel summaryLabel;
+    private JButton fulfillBtn;
 
     public MarketDayTab(MarketDayPackingService packingService, TabHost host) {
         this.packingService = packingService;
@@ -59,6 +62,11 @@ public class MarketDayTab implements FlowerFarmTab {
         refreshPlan();
     }
 
+    @Override
+    public void applyRolePermissions(boolean canWrite) {
+        GuiPermissions.setWritable(canWrite, fulfillBtn);
+    }
+
     private void buildUI() {
         panel = new JPanel(new BorderLayout(10, 10));
         panel.setBorder(BorderFactory.createEmptyBorder(12, 12, 12, 12));
@@ -88,6 +96,10 @@ public class MarketDayTab implements FlowerFarmTab {
         JButton exportPdf = new JButton("Export PDF…");
         exportPdf.setToolTipText("Printable packing sheet (pick list + customer slips).");
         exportPdf.addActionListener(e -> exportPdf());
+        fulfillBtn = new JButton("Fulfill all CONFIRMED…");
+        fulfillBtn.setToolTipText(
+                "After market: mark every CONFIRMED order FULFILLED and deduct inventory.");
+        fulfillBtn.addActionListener(e -> fulfillAllConfirmed());
         JButton openCrm = new JButton("Open CRM");
         openCrm.addActionListener(e -> {
             if (host != null) {
@@ -107,6 +119,7 @@ public class MarketDayTab implements FlowerFarmTab {
         controls.add(exportTxt);
         controls.add(exportCsv);
         controls.add(exportPdf);
+        controls.add(fulfillBtn);
         controls.add(openCrm);
 
         summaryLabel = new JLabel(" ");
@@ -224,6 +237,71 @@ public class MarketDayTab implements FlowerFarmTab {
                     JOptionPane.ERROR_MESSAGE);
             if (host != null) {
                 host.setStatus("Packing PDF failed: " + ex.getMessage());
+            }
+        }
+    }
+
+    private void fulfillAllConfirmed() {
+        if (!GuiPermissions.requireWrite(host, panel, "fulfill market-day orders")) {
+            return;
+        }
+        try {
+            // Always CONFIRMED-only for safety
+            LocalDate date = LocalDate.parse(dateField.getText().trim());
+            int window = ((Number) windowSpinner.getValue()).intValue();
+            MarketDayPlan plan = packingService.buildPlan(date, window, false, false);
+            long confirmed = plan.customers().stream()
+                    .filter(c -> "CONFIRMED".equalsIgnoreCase(c.status()))
+                    .count();
+            if (confirmed == 0) {
+                JOptionPane.showMessageDialog(panel,
+                        "No CONFIRMED orders in this window to fulfill.",
+                        "Fulfill all", JOptionPane.INFORMATION_MESSAGE);
+                return;
+            }
+            String warn = plan.shortfallSkuCount() > 0
+                    ? "\n\n⚠ " + plan.shortfallSkuCount()
+                    + " SKU shortfall(s) — inventory may not fully match."
+                    : "";
+            int ok = JOptionPane.showConfirmDialog(panel,
+                    "Fulfill " + confirmed + " CONFIRMED order(s) for "
+                            + plan.from() + " → " + plan.to() + "?\n"
+                            + "Pipeline ≈ $" + String.format("%,.2f", plan.pipelineValue()) + "\n"
+                            + "This deducts matching inventory and cannot be undone from here."
+                            + warn,
+                    "Fulfill all CONFIRMED",
+                    JOptionPane.YES_NO_OPTION,
+                    JOptionPane.WARNING_MESSAGE);
+            if (ok != JOptionPane.YES_OPTION) {
+                return;
+            }
+            if (host != null) {
+                host.setStatus("⏳ Fulfilling " + confirmed + " market-day order(s)…");
+            }
+            FulfillBatchResult result = packingService.fulfillConfirmedOrders(plan);
+            StringBuilder msg = new StringBuilder();
+            msg.append("Fulfilled: ").append(result.fulfilled())
+                    .append("  ·  Skipped: ").append(result.skipped())
+                    .append("  ·  Failed: ").append(result.failed()).append("\n\n");
+            for (String line : result.messages()) {
+                msg.append("• ").append(line).append('\n');
+            }
+            JTextArea area = new JTextArea(msg.toString(), 14, 52);
+            area.setEditable(false);
+            area.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
+            JOptionPane.showMessageDialog(panel, new JScrollPane(area),
+                    "Batch fulfill complete", JOptionPane.INFORMATION_MESSAGE);
+            refreshPlan();
+            if (host != null) {
+                host.refreshAll();
+                host.setStatus("Market-day fulfill: " + result.fulfilled()
+                        + " done, " + result.failed() + " failed.");
+            }
+        } catch (Exception ex) {
+            JOptionPane.showMessageDialog(panel, ex.getMessage(),
+                    "Batch fulfill failed", JOptionPane.ERROR_MESSAGE);
+            if (host != null) {
+                host.setStatus("Batch fulfill failed: " + ex.getMessage());
             }
         }
     }

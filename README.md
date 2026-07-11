@@ -172,6 +172,7 @@ REST: `GET /api/auth/me` (Basic), `GET /api/auth/accounts` (usernames only).
 | GET | `/api/market-day/text` | Plain-text pack sheet |
 | GET | `/api/market-day/export.csv` | CSV pick list + order lines |
 | GET | `/api/market-day/packing.pdf` | Printable packing PDF |
+| POST | `/api/market-day/fulfill` | Fulfill all CONFIRMED orders in window |
 | GET | `/api/briefing` | Morning briefing JSON (`live` weather optional) |
 | GET | `/api/briefing/text` | Morning briefing plain text |
 | GET | `/api/briefing/report.pdf` | Morning briefing PDF |
@@ -225,6 +226,7 @@ More: [`docs/GUI_ARCHITECTURE.md`](docs/GUI_ARCHITECTURE.md).
 - Release **1.0.8**  
 - **Morning briefing** (Dashboard + REST + CLI + PDF)  
 - Release **1.0.9**  
+- Market Day **batch fulfill** (post-market inventory deduct for all CONFIRMED)  
 
 ### Later ideas
 

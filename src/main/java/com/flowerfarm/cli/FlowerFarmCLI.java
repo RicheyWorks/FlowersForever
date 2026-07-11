@@ -453,6 +453,21 @@ public class FlowerFarmCLI implements ApplicationRunner {
                 java.nio.file.Files.write(java.nio.file.Path.of(file), pdf);
                 System.out.println("✓ Wrote " + file + " (" + pdf.length + " bytes)");
             }
+            long confirmed = plan.customers().stream()
+                    .filter(c -> "CONFIRMED".equalsIgnoreCase(c.status()))
+                    .count();
+            if (confirmed > 0) {
+                System.out.print("Fulfill all " + confirmed + " CONFIRMED order(s)? (y/n): ");
+                if ("y".equalsIgnoreCase(sc.nextLine().trim())) {
+                    // Re-build CONFIRMED-only plan for safety
+                    var safe = marketDayPackingService.buildPlan(date, window, false, false);
+                    var result = marketDayPackingService.fulfillConfirmedOrders(safe);
+                    System.out.println("Fulfilled=" + result.fulfilled()
+                            + " skipped=" + result.skipped()
+                            + " failed=" + result.failed());
+                    result.messages().forEach(m -> System.out.println("  • " + m));
+                }
+            }
         } catch (Exception e) {
             System.out.println("✗ Market day packing failed: " + e.getMessage());
         }

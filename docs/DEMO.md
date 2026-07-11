@@ -68,7 +68,8 @@ Narrate as Kitsap / Port Orchard grower:
 5. **Market Day**  
    - After confirming CRM orders for today → **Build packing list**.  
    - Pick list shows aggregate stems vs stock (shortfalls flagged).  
-   - Per-customer pack slips; export TXT / CSV / **PDF** for the van.
+   - Per-customer pack slips; export TXT / CSV / **PDF** for the van.  
+   - After market → **Fulfill all CONFIRMED…** (batch inventory deduct + audit).
 
 6. **Sync History**  
    - Show HARVEST_LOG / ORDER_FULFILL / connector rows.  

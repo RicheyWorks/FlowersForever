@@ -19,6 +19,8 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -142,6 +144,41 @@ class MarketDayPackingServiceTest {
         assertThat(plan.orderCount()).isZero();
         assertThat(plan.pickList()).isEmpty();
         assertThat(plan.plainText()).contains("no confirmed orders");
+    }
+
+    @Test
+    @DisplayName("fulfillConfirmedOrders fulfills CONFIRMED and skips others")
+    void batchFulfill() {
+        LocalDate day = LocalDate.of(2026, 7, 12);
+        Customer c = new Customer("Kitsap Blooms", "", "", "", "FLORIST", "");
+        c.setId(1L);
+        CustomerOrder confirmed = new CustomerOrder(c, day, "CONFIRMED", "");
+        confirmed.setId(10L);
+        confirmed.addLine(new OrderLine("Nootka Rose", 5, "stems", 2.0));
+        CustomerOrder draft = new CustomerOrder(c, day, "DRAFT", "");
+        draft.setId(11L);
+        draft.addLine(new OrderLine("Dahlia", 2, "stems", 3.0));
+
+        when(orderService.findBetween(day, day)).thenReturn(List.of(confirmed, draft));
+        when(inventoryService.getAllItems()).thenReturn(List.of(
+                new Item("Nootka Rose", "Flowers/Plants", 2.0, "stems", 1.0, 100, "")
+        ));
+        when(orderService.fulfill(10L)).thenAnswer(inv -> {
+            confirmed.setStatus("FULFILLED");
+            return confirmed;
+        });
+
+        // Plan with drafts included so draft appears as skipped
+        MarketDayPlan plan = service.buildPlan(day, 1, true, false);
+        var result = service.fulfillConfirmedOrders(plan);
+
+        assertThat(result.attempted()).isEqualTo(1);
+        assertThat(result.fulfilled()).isEqualTo(1);
+        assertThat(result.skipped()).isEqualTo(1);
+        assertThat(result.failed()).isZero();
+        verify(orderService).fulfill(eq(10L));
+        assertThat(result.messages().stream().anyMatch(m -> m.contains("FULFILLED") || m.contains("→")))
+                .isTrue();
     }
 
     @Test

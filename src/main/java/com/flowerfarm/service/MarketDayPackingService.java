@@ -233,6 +233,69 @@ public class MarketDayPackingService {
         return buildPlan(marketDate, 1, false, false);
     }
 
+    public record FulfillBatchResult(
+            int attempted,
+            int fulfilled,
+            int skipped,
+            int failed,
+            List<String> messages
+    ) {
+        public Map<String, Object> toMap() {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("attempted", attempted);
+            m.put("fulfilled", fulfilled);
+            m.put("skipped", skipped);
+            m.put("failed", failed);
+            m.put("messages", messages);
+            return m;
+        }
+    }
+
+    /**
+     * Fulfill every CONFIRMED order in the plan (post-market load-out).
+     * Already-fulfilled rows are skipped; DRAFT/CANCELLED are not in a normal plan.
+     */
+    @Transactional
+    public FulfillBatchResult fulfillConfirmedOrders(MarketDayPlan plan) {
+        if (plan == null) {
+            throw new IllegalArgumentException("plan is required.");
+        }
+        List<String> messages = new ArrayList<>();
+        int fulfilled = 0;
+        int skipped = 0;
+        int failed = 0;
+        int attempted = 0;
+
+        for (CustomerPack pack : plan.customers()) {
+            if (pack.orderId() <= 0) {
+                continue;
+            }
+            if (!"CONFIRMED".equalsIgnoreCase(pack.status())) {
+                skipped++;
+                messages.add("#" + pack.orderId() + " " + pack.customerName()
+                        + " skipped (status " + pack.status() + ")");
+                continue;
+            }
+            attempted++;
+            try {
+                var order = orderService.fulfill(pack.orderId());
+                fulfilled++;
+                messages.add("#" + pack.orderId() + " " + pack.customerName()
+                        + " → " + order.getStatus()
+                        + " ($" + String.format(Locale.US, "%.2f", pack.orderTotal()) + ")");
+            } catch (Exception ex) {
+                failed++;
+                messages.add("#" + pack.orderId() + " " + pack.customerName()
+                        + " FAILED: " + ex.getMessage());
+                log.warn("Batch fulfill failed for order #{}: {}", pack.orderId(), ex.getMessage());
+            }
+        }
+
+        log.info("Market-day batch fulfill: attempted={} fulfilled={} skipped={} failed={}",
+                attempted, fulfilled, skipped, failed);
+        return new FulfillBatchResult(attempted, fulfilled, skipped, failed, List.copyOf(messages));
+    }
+
     /**
      * Printable packing PDF: brand banner, pick list with shortfalls, per-customer slips.
      */

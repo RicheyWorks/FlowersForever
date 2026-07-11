@@ -17,6 +17,7 @@ import java.util.List;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @WebMvcTest(controllers = MarketDayController.class)
@@ -103,5 +104,22 @@ class MarketDayControllerIT {
                         org.hamcrest.Matchers.containsString("market-day-packing-")))
                 .andExpect(header().string("Content-Type",
                         org.hamcrest.Matchers.containsString("application/pdf")));
+    }
+
+    @Test
+    @DisplayName("POST fulfill batch")
+    void fulfillBatch() throws Exception {
+        when(packingService.buildPlan(any(), anyInt(), anyBoolean(), anyBoolean()))
+                .thenReturn(samplePlan());
+        when(packingService.fulfillConfirmedOrders(any())).thenReturn(
+                new MarketDayPackingService.FulfillBatchResult(
+                        1, 1, 0, 0, List.of("#5 Kitsap Blooms → FULFILLED")));
+
+        mockMvc.perform(post("/api/market-day/fulfill").param("date", "2026-07-12"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.fulfilled").value(1))
+                .andExpect(jsonPath("$.attempted").value(1))
+                .andExpect(jsonPath("$.messages[0]").value(
+                        org.hamcrest.Matchers.containsString("FULFILLED")));
     }
 }

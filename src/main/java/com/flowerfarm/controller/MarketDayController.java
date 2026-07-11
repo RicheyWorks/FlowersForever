@@ -6,6 +6,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -22,6 +23,7 @@ import java.util.Map;
  *   <li>{@code GET /api/market-day/text} — plain-text pack sheet</li>
  *   <li>{@code GET /api/market-day/export.csv} — CSV pick + order lines</li>
  *   <li>{@code GET /api/market-day/packing.pdf} — printable packing PDF</li>
+ *   <li>{@code POST /api/market-day/fulfill} — fulfill all CONFIRMED orders in the plan</li>
  * </ul>
  */
 @RestController
@@ -80,6 +82,19 @@ public class MarketDayController {
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
                 .contentType(MediaType.APPLICATION_PDF)
                 .body(pdf);
+    }
+
+    /**
+     * Post-market: fulfill every CONFIRMED order in the packing window
+     * (deducts inventory, records ORDER_FULFILL audit).
+     */
+    @PostMapping("/fulfill")
+    public Map<String, Object> fulfillConfirmed(
+            @RequestParam(value = "date", required = false) String date,
+            @RequestParam(value = "windowDays", defaultValue = "1") int windowDays) {
+        // Always CONFIRMED-only plan for safety (ignore draft/fulfilled checkboxes)
+        MarketDayPlan plan = build(date, windowDays, false, false);
+        return packingService.fulfillConfirmedOrders(plan).toMap();
     }
 
     private MarketDayPlan build(String date, int windowDays, boolean includeDraft, boolean includeFulfilled) {
