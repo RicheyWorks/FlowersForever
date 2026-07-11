@@ -2,7 +2,10 @@ package com.flowerfarm.controller;
 
 import com.flowerfarm.model.Item;
 import com.flowerfarm.service.InventoryService;
+import com.flowerfarm.service.InventoryService.LowStockReport;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -46,6 +49,34 @@ public class InventoryController {
     public InventoryService.InventoryKpiSnapshot kpis(
             @RequestParam(value = "lowStockThreshold", defaultValue = "10") int lowStockThreshold) {
         return inventoryService.inventoryKpis(lowStockThreshold);
+    }
+
+    /**
+     * Low-stock reorder sheet (JSON).
+     * {@code threshold} defaults to 10 (same as dashboard low-stock KPI).
+     */
+    @GetMapping("/low-stock")
+    public Map<String, Object> lowStock(
+            @RequestParam(value = "threshold", defaultValue = "10") int threshold) {
+        return inventoryService.buildLowStockReport(threshold).toMap();
+    }
+
+    @GetMapping(value = "/low-stock/text", produces = MediaType.TEXT_PLAIN_VALUE)
+    public String lowStockText(
+            @RequestParam(value = "threshold", defaultValue = "10") int threshold) {
+        return inventoryService.buildLowStockReport(threshold).plainText();
+    }
+
+    @GetMapping(value = "/low-stock/report.pdf", produces = MediaType.APPLICATION_PDF_VALUE)
+    public ResponseEntity<byte[]> lowStockPdf(
+            @RequestParam(value = "threshold", defaultValue = "10") int threshold) {
+        LowStockReport report = inventoryService.buildLowStockReport(threshold);
+        byte[] pdf = inventoryService.generateLowStockPdf(report);
+        String filename = "low-stock-reorder-" + report.date() + ".pdf";
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
+                .contentType(MediaType.APPLICATION_PDF)
+                .body(pdf);
     }
 
     /** Returns items matching the search query (name or category). */

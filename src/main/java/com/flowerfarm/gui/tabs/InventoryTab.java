@@ -13,6 +13,7 @@ import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.nio.file.Files;
 
 /**
  * Modern Inventory management tab with integrated live search, color-coded
@@ -172,14 +173,18 @@ public class InventoryTab implements FlowerFarmTab {
         JPanel actionPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 5));
         editBtn = new JButton("Edit Selected");
         deleteBtn = new JButton("Delete Selected");
+        JButton reorderBtn = new JButton("Low-stock reorder…");
+        reorderBtn.setToolTipText("SKUs at/under threshold with suggested restock qty (PDF). VIEWER OK.");
         JButton exportBtn = new JButton("Export Visible to CSV");
 
         editBtn.addActionListener(this::editSelected);
         deleteBtn.addActionListener(this::deleteSelected);
+        reorderBtn.addActionListener(e -> showLowStockReorder());
         exportBtn.addActionListener(e -> exportVisibleToCsv());
 
         actionPanel.add(editBtn);
         actionPanel.add(deleteBtn);
+        actionPanel.add(reorderBtn);
         actionPanel.add(exportBtn);
 
         statusLabel = new JLabel("Loading inventory…");
@@ -278,6 +283,58 @@ public class InventoryTab implements FlowerFarmTab {
 
     private String ask(String prompt, Object current) {
         return JOptionPane.showInputDialog(panel, prompt, current);
+    }
+
+    private void showLowStockReorder() {
+        try {
+            String raw = JOptionPane.showInputDialog(panel,
+                    "Low-stock threshold (qty ≤ this value):", "10");
+            if (raw == null) {
+                return;
+            }
+            int threshold = Integer.parseInt(raw.trim());
+            if (threshold < 0) {
+                throw new IllegalArgumentException("Threshold must be ≥ 0.");
+            }
+            InventoryService.LowStockReport report =
+                    inventoryService.buildLowStockReport(threshold);
+            JTextArea area = new JTextArea(report.plainText(), 22, 64);
+            area.setEditable(false);
+            area.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
+            area.setCaretPosition(0);
+            JScrollPane scroll = new JScrollPane(area);
+            scroll.setPreferredSize(new Dimension(640, 420));
+
+            Object[] options = {"Export PDF…", "Close"};
+            int choice = JOptionPane.showOptionDialog(panel, scroll,
+                    "Low-stock reorder — ≤ " + threshold,
+                    JOptionPane.DEFAULT_OPTION, JOptionPane.PLAIN_MESSAGE,
+                    null, options, options[1]);
+            if (choice == 0) {
+                JFileChooser chooser = new JFileChooser();
+                chooser.setSelectedFile(new File(
+                        "low-stock-reorder-" + report.date() + ".pdf"));
+                if (chooser.showSaveDialog(panel) == JFileChooser.APPROVE_OPTION) {
+                    byte[] pdf = inventoryService.generateLowStockPdf(report);
+                    Files.write(chooser.getSelectedFile().toPath(), pdf);
+                    statusLabel.setText("Low-stock PDF → "
+                            + chooser.getSelectedFile().getName());
+                    if (host != null) {
+                        host.setStatus("Low-stock reorder PDF → "
+                                + chooser.getSelectedFile().getName());
+                    }
+                }
+            } else if (host != null) {
+                host.setStatus("Low-stock: " + report.lowStockCount()
+                        + " SKU(s) ≤ " + threshold);
+            }
+        } catch (NumberFormatException ex) {
+            JOptionPane.showMessageDialog(panel, "Enter a whole number threshold.",
+                    "Invalid threshold", JOptionPane.ERROR_MESSAGE);
+        } catch (Exception ex) {
+            JOptionPane.showMessageDialog(panel, ex.getMessage(),
+                    "Low-stock reorder failed", JOptionPane.ERROR_MESSAGE);
+        }
     }
 
     /**

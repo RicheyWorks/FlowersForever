@@ -40,6 +40,7 @@ Get-Json "/api/orders/week"
 Get-Json "/api/connectors"
 Get-Json "/api/connectors/history?limit=10"
 Get-Json "/api/inventory"
+Get-Json "/api/inventory/low-stock?threshold=10"
 Get-Json "/api/irrigation/advice?live=false"
 Get-Json "/api/market-day"
 Get-Json "/api/orders"
@@ -88,6 +89,15 @@ try {
     Write-Host "Wrote $closePdf ($((Get-Item $closePdf).Length) bytes)" -ForegroundColor Green
 } catch {
     Write-Host "Closeout PDF failed: $_" -ForegroundColor Red
+}
+
+$lowPdf = Join-Path (Get-Location) "low-stock-reorder-demo.pdf"
+Write-Host "`n=== GET /api/inventory/low-stock/report.pdf → $lowPdf ===" -ForegroundColor Yellow
+try {
+    Invoke-WebRequest -Uri "$BaseUrl/api/inventory/low-stock/report.pdf?threshold=10" -Headers $headers -OutFile $lowPdf
+    Write-Host "Wrote $lowPdf ($((Get-Item $lowPdf).Length) bytes)" -ForegroundColor Green
+} catch {
+    Write-Host "Low-stock PDF failed: $_" -ForegroundColor Red
 }
 
 # First order id when present (demo profile seeds CONFIRMED orders)

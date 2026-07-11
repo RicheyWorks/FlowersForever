@@ -61,7 +61,8 @@ Narrate as Kitsap / Port Orchard grower:
    - **Bed production…** → rank beds by qty with crop mix; export CSV or **PDF**.
 
 3. **Dashboard again**  
-   - Week Harvest KPI / sparkline updated.
+   - Week Harvest KPI / sparkline updated.  
+   - Optional: **Low-stock reorder** (Inventory) → threshold sheet + PDF for the cooler door.
 
 4. **CRM**  
    - Add customer `Kitsap Blooms` (type WHOLESALE).  

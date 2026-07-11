@@ -425,6 +425,8 @@ public class DashboardTab implements FlowerFarmTab {
         closeout.addActionListener(e -> showDayCloseout());
         actions.add(closeout);
         actions.add(actionButton("Fulfill pipeline", "CRM", "Open CRM to fulfill confirmed orders."));
+        actions.add(actionButton("Low-stock reorder", "Inventory",
+                "Open Inventory → Low-stock reorder for cooler restock sheet."));
         actions.add(actionButton("Weekly PDF Report", "Reports", "Generate harvest + sales PDF report."));
         actions.add(actionButton("Rose Visualizer", "Rose Visualizer", "Grow generative L-System roses."));
         JButton trends = new JButton("Run Trend Analysis");

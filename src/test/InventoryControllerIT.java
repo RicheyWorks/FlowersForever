@@ -72,6 +72,60 @@ class InventoryControllerIT {
         }
     }
 
+    // ── GET /api/inventory/low-stock ──────────────────────────────────────────
+
+    @Nested
+    @DisplayName("GET /api/inventory/low-stock")
+    class LowStock {
+
+        @Test
+        @DisplayName("JSON reorder report")
+        void json() throws Exception {
+            var report = new InventoryService.LowStockReport(
+                    java.time.LocalDate.of(2026, 7, 12),
+                    10, 4, 1, 20.0,
+                    List.of(new InventoryService.LowStockLine(
+                            1L, "Low SKU", "Other", 2, "each", 3.0, 1.0, 10, 18, 18.0)),
+                    "LOW-STOCK REORDER"
+            );
+            when(inventoryService.buildLowStockReport(10)).thenReturn(report);
+
+            mockMvc.perform(get("/api/inventory/low-stock"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.lowStockCount", is(1)))
+                    .andExpect(jsonPath("$.lines[0].name", is("Low SKU")));
+        }
+
+        @Test
+        @DisplayName("plain text")
+        void text() throws Exception {
+            var report = new InventoryService.LowStockReport(
+                    java.time.LocalDate.of(2026, 7, 12),
+                    10, 4, 0, 0, List.of(), "LOW-STOCK REORDER"
+            );
+            when(inventoryService.buildLowStockReport(anyInt())).thenReturn(report);
+            mockMvc.perform(get("/api/inventory/low-stock/text").param("threshold", "5"))
+                    .andExpect(status().isOk())
+                    .andExpect(content().string(containsString("LOW-STOCK REORDER")));
+        }
+
+        @Test
+        @DisplayName("PDF")
+        void pdf() throws Exception {
+            var report = new InventoryService.LowStockReport(
+                    java.time.LocalDate.of(2026, 7, 12),
+                    10, 4, 0, 0, List.of(), "LOW-STOCK REORDER"
+            );
+            when(inventoryService.buildLowStockReport(anyInt())).thenReturn(report);
+            when(inventoryService.generateLowStockPdf(any())).thenReturn("%PDF-1.4".getBytes());
+            mockMvc.perform(get("/api/inventory/low-stock/report.pdf"))
+                    .andExpect(status().isOk())
+                    .andExpect(header().string("Content-Disposition",
+                            containsString("low-stock-reorder-")))
+                    .andExpect(header().string("Content-Type", containsString("application/pdf")));
+        }
+    }
+
     // ── GET /api/inventory/search ─────────────────────────────────────────────
 
     @Nested

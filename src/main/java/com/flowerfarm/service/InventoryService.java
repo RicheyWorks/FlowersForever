@@ -2,6 +2,19 @@ package com.flowerfarm.service;
 
 import com.flowerfarm.model.Item;
 import com.flowerfarm.repository.InventoryRepository;
+import com.lowagie.text.Chunk;
+import com.lowagie.text.Document;
+import com.lowagie.text.DocumentException;
+import com.lowagie.text.Element;
+import com.lowagie.text.Font;
+import com.lowagie.text.FontFactory;
+import com.lowagie.text.PageSize;
+import com.lowagie.text.Paragraph;
+import com.lowagie.text.Phrase;
+import com.lowagie.text.Rectangle;
+import com.lowagie.text.pdf.PdfPCell;
+import com.lowagie.text.pdf.PdfPTable;
+import com.lowagie.text.pdf.PdfWriter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -9,9 +22,15 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import jakarta.annotation.PostConstruct;
+import java.awt.Color;
 import java.io.*;
+import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -238,6 +257,276 @@ public class InventoryService {
             int totalUnits,
             int lowStockThreshold
     ) {}
+
+    /**
+     * One SKU on the barn reorder sheet: current qty vs threshold and a
+     * simple restock suggestion (bring back to at least 2× threshold).
+     */
+    public record LowStockLine(
+            Long id,
+            String name,
+            String category,
+            int quantity,
+            String unit,
+            double unitPrice,
+            double unitCost,
+            int threshold,
+            int suggestedOrderQty,
+            double suggestedOrderCost
+    ) {
+        public Map<String, Object> toMap() {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("id", id);
+            m.put("name", name);
+            m.put("category", category);
+            m.put("quantity", quantity);
+            m.put("unit", unit);
+            m.put("unitPrice", unitPrice);
+            m.put("unitCost", unitCost);
+            m.put("threshold", threshold);
+            m.put("suggestedOrderQty", suggestedOrderQty);
+            m.put("suggestedOrderCost", suggestedOrderCost);
+            return m;
+        }
+    }
+
+    public record LowStockReport(
+            LocalDate date,
+            int threshold,
+            int skuCount,
+            int lowStockCount,
+            double suggestedOrderCostTotal,
+            List<LowStockLine> lines,
+            String plainText
+    ) {
+        public Map<String, Object> toMap() {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("date", date.toString());
+            m.put("threshold", threshold);
+            m.put("skuCount", skuCount);
+            m.put("lowStockCount", lowStockCount);
+            m.put("suggestedOrderCostTotal", suggestedOrderCostTotal);
+            m.put("lines", lines.stream().map(LowStockLine::toMap).toList());
+            m.put("plainText", plainText);
+            return m;
+        }
+    }
+
+    /** Items with quantity ≤ threshold, lowest stock first. */
+    @Transactional(readOnly = true)
+    public List<Item> findLowStock(int threshold) {
+        int t = Math.max(0, threshold);
+        return getAllItems().stream()
+                .filter(i -> i.getQuantity() <= t)
+                .sorted(Comparator.comparingInt(Item::getQuantity)
+                        .thenComparing(Item::getName, String.CASE_INSENSITIVE_ORDER))
+                .toList();
+    }
+
+    /**
+     * Barn reorder sheet: SKUs at/under threshold with suggested restock qty
+     * (target = max(threshold × 2, threshold + 1) − on-hand).
+     */
+    @Transactional(readOnly = true)
+    public LowStockReport buildLowStockReport(int threshold) {
+        int t = Math.max(0, threshold);
+        List<Item> all = getAllItems();
+        List<LowStockLine> lines = new ArrayList<>();
+        double costTotal = 0;
+        for (Item i : findLowStock(t)) {
+            int target = Math.max(t * 2, t + 1);
+            int suggest = Math.max(0, target - i.getQuantity());
+            double lineCost = suggest * i.getCost();
+            costTotal += lineCost;
+            lines.add(new LowStockLine(
+                    i.getId(),
+                    i.getName(),
+                    i.getCategory() == null ? "" : i.getCategory(),
+                    i.getQuantity(),
+                    i.getUnit() == null ? "" : i.getUnit(),
+                    i.getPrice(),
+                    i.getCost(),
+                    t,
+                    suggest,
+                    lineCost
+            ));
+        }
+        String text = formatLowStockText(t, all.size(), lines, costTotal);
+        return new LowStockReport(
+                LocalDate.now(),
+                t,
+                all.size(),
+                lines.size(),
+                costTotal,
+                List.copyOf(lines),
+                text
+        );
+    }
+
+    public byte[] generateLowStockPdf(LowStockReport report) {
+        if (report == null) {
+            throw new IllegalArgumentException("report is required.");
+        }
+        try {
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            Document doc = new Document(PageSize.LETTER, 40, 40, 48, 40);
+            PdfWriter.getInstance(doc, baos);
+            doc.open();
+
+            Color brandGreen = new Color(34, 100, 54);
+            Color brandSoft = new Color(232, 245, 233);
+            Color warnSoft = new Color(255, 243, 224);
+            Font titleFont = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 18, brandGreen);
+            Font h2 = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 12, brandGreen);
+            Font body = FontFactory.getFont(FontFactory.HELVETICA, 10);
+            Font small = FontFactory.getFont(FontFactory.HELVETICA, 9, Color.DARK_GRAY);
+            Font banner = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 11, Color.WHITE);
+
+            PdfPTable bannerTable = new PdfPTable(1);
+            bannerTable.setWidthPercentage(100);
+            PdfPCell bannerCell = new PdfPCell(new Phrase(
+                    "FlowersForever  ·  Port Orchard / Kitsap  ·  Low-Stock Reorder",
+                    banner));
+            bannerCell.setBackgroundColor(brandGreen);
+            bannerCell.setPadding(10);
+            bannerCell.setBorder(Rectangle.NO_BORDER);
+            bannerTable.addCell(bannerCell);
+            doc.add(bannerTable);
+            doc.add(Chunk.NEWLINE);
+
+            doc.add(new Paragraph("Low-Stock Reorder List", titleFont));
+            doc.add(new Paragraph(
+                    "Date: " + report.date()
+                            + "     ·     Threshold: ≤ " + report.threshold()
+                            + "     ·     SKUs: " + report.skuCount(),
+                    small));
+            doc.add(Chunk.NEWLINE);
+
+            PdfPTable summary = new PdfPTable(new float[]{1, 1, 1});
+            summary.setWidthPercentage(100);
+            summary.addCell(summaryCell("Low SKUs",
+                    String.valueOf(report.lowStockCount()),
+                    report.lowStockCount() > 0 ? warnSoft : brandSoft));
+            summary.addCell(summaryCell("Suggest cost $",
+                    String.format(Locale.US, "%,.0f", report.suggestedOrderCostTotal()), brandSoft));
+            summary.addCell(summaryCell("Threshold",
+                    "≤ " + report.threshold(), brandSoft));
+            doc.add(summary);
+            doc.add(Chunk.NEWLINE);
+
+            doc.add(new Paragraph("1. Reorder sheet (lowest first)", h2));
+            doc.add(Chunk.NEWLINE);
+            if (report.lines().isEmpty()) {
+                doc.add(new Paragraph(
+                        "All SKUs above threshold — no restock needed today.", body));
+            } else {
+                PdfPTable t = new PdfPTable(new float[]{2.8f, 1.5f, 0.9f, 1.0f, 1.1f, 1.2f});
+                t.setWidthPercentage(100);
+                headerCell(t, "SKU");
+                headerCell(t, "Category");
+                headerCell(t, "On hand");
+                headerCell(t, "Unit");
+                headerCell(t, "Order qty");
+                headerCell(t, "Est. cost");
+                for (LowStockLine line : report.lines()) {
+                    Color rowBg = line.quantity() == 0 ? new Color(255, 235, 230) : Color.WHITE;
+                    t.addCell(cell(line.name(), body, rowBg));
+                    t.addCell(cell(line.category(), body, rowBg));
+                    t.addCell(cell(String.valueOf(line.quantity()), body, rowBg));
+                    t.addCell(cell(line.unit(), body, rowBg));
+                    t.addCell(cell(String.valueOf(line.suggestedOrderQty()), body, rowBg));
+                    t.addCell(cell(String.format(Locale.US, "%,.2f", line.suggestedOrderCost()), body, rowBg));
+                }
+                doc.add(t);
+                doc.add(Chunk.NEWLINE);
+                doc.add(new Paragraph(String.format(Locale.US,
+                        "Suggested restock total (at cost): $%,.2f",
+                        report.suggestedOrderCostTotal()), body));
+            }
+            doc.add(Chunk.NEWLINE);
+            doc.add(new Paragraph(
+                    "Tip: target qty = max(2× threshold, threshold+1). "
+                            + "Zero-qty rows are highlighted for harvest priority.",
+                    small));
+            doc.add(new Paragraph(
+                    "FlowersForever · practical tools for PNW flower growers", small));
+
+            doc.close();
+            log.info("Generated low-stock reorder PDF (threshold={}, lines={})",
+                    report.threshold(), report.lowStockCount());
+            return baos.toByteArray();
+        } catch (DocumentException e) {
+            throw new IllegalStateException("Failed to build low-stock PDF: " + e.getMessage(), e);
+        }
+    }
+
+    private static String formatLowStockText(int threshold, int skuCount,
+                                             List<LowStockLine> lines, double costTotal) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("LOW-STOCK REORDER — Port Orchard / Kitsap County\n");
+        sb.append("═══════════════════════════════════════════════\n");
+        sb.append("Date: ").append(LocalDate.now())
+                .append("  ·  Threshold: ≤ ").append(threshold)
+                .append("  ·  SKUs total: ").append(skuCount).append('\n');
+        sb.append(String.format(Locale.US,
+                "Low SKUs: %d  ·  Suggested restock cost: $%,.2f%n",
+                lines.size(), costTotal));
+        sb.append('\n');
+        if (lines.isEmpty()) {
+            sb.append("  All clear — nothing under threshold.\n");
+        } else {
+            sb.append(String.format(Locale.US, "%-24s %6s %8s %10s %10s%n",
+                    "SKU", "OnHand", "Order", "Unit", "Est.Cost"));
+            sb.append("-".repeat(64)).append('\n');
+            for (LowStockLine l : lines) {
+                sb.append(String.format(Locale.US, "%-24s %6d %8d %10s %10.2f%n",
+                        truncate(l.name(), 24),
+                        l.quantity(),
+                        l.suggestedOrderQty(),
+                        truncate(l.unit(), 10),
+                        l.suggestedOrderCost()));
+            }
+            sb.append("-".repeat(64)).append('\n');
+            sb.append(String.format(Locale.US, "TOTAL SUGGESTED COST  $%,.2f%n", costTotal));
+        }
+        sb.append("\nTip: print PDF for the cooler door; harvest zeros first.\n");
+        return sb.toString();
+    }
+
+    private static String truncate(String s, int max) {
+        if (s == null) {
+            return "";
+        }
+        return s.length() <= max ? s : s.substring(0, max - 1) + "…";
+    }
+
+    private static void headerCell(PdfPTable table, String text) {
+        PdfPCell cell = new PdfPCell(new Phrase(text,
+                FontFactory.getFont(FontFactory.HELVETICA_BOLD, 9, Color.WHITE)));
+        cell.setBackgroundColor(new Color(34, 100, 54));
+        cell.setPadding(5);
+        table.addCell(cell);
+    }
+
+    private static PdfPCell cell(String text, Font font, Color bg) {
+        PdfPCell cell = new PdfPCell(new Phrase(text == null ? "" : text, font));
+        cell.setPadding(4);
+        cell.setBackgroundColor(bg);
+        cell.setBorderColor(new Color(200, 210, 200));
+        return cell;
+    }
+
+    private static PdfPCell summaryCell(String label, String value, Color bg) {
+        Paragraph p = new Paragraph();
+        p.add(new Chunk(label + "\n", FontFactory.getFont(FontFactory.HELVETICA, 9, Color.DARK_GRAY)));
+        p.add(new Chunk(value, FontFactory.getFont(FontFactory.HELVETICA_BOLD, 13)));
+        PdfPCell cell = new PdfPCell(p);
+        cell.setBackgroundColor(bg);
+        cell.setPadding(8);
+        cell.setBorderColor(new Color(180, 200, 180));
+        cell.setHorizontalAlignment(Element.ALIGN_CENTER);
+        return cell;
+    }
 
     @Transactional(readOnly = true)
     public synchronized void exportToCsv(String filename) {

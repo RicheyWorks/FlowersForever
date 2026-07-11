@@ -95,7 +95,8 @@ public class FlowerFarmCLI implements ApplicationRunner {
                 case "14" -> morningBriefing(scanner);
                 case "15" -> dayCloseout(scanner);
                 case "16" -> orderInvoice(scanner);
-                case "17" -> { System.out.println("Goodbye!"); running = false; }
+                case "17" -> lowStockReorder(scanner);
+                case "18" -> { System.out.println("Goodbye!"); running = false; }
                 default  -> System.out.println("Unknown option. Try again.");
             }
         }
@@ -132,7 +133,8 @@ public class FlowerFarmCLI implements ApplicationRunner {
                 14) Morning briefing
                 15) Day closeout
                 16) Order invoice PDF
-                17) Exit
+                17) Low-stock reorder list
+                18) Exit
                 ─────────────────────────────────────────
                 Choice: \
                 """);
@@ -428,6 +430,30 @@ public class FlowerFarmCLI implements ApplicationRunner {
             System.out.println("✗ Enter a numeric order id.");
         } catch (Exception e) {
             System.out.println("✗ Order invoice failed: " + e.getMessage());
+        }
+    }
+
+    private void lowStockReorder(Scanner sc) {
+        try {
+            System.out.print("Threshold (qty ≤ N) [10]: ");
+            String raw = sc.nextLine().trim();
+            int threshold = raw.isEmpty() ? 10 : Integer.parseInt(raw);
+            var report = inventoryService.buildLowStockReport(threshold);
+            System.out.println();
+            System.out.println(report.plainText());
+            System.out.print("Export PDF? (y/n): ");
+            if ("y".equalsIgnoreCase(sc.nextLine().trim())) {
+                String def = "low-stock-reorder-" + report.date() + ".pdf";
+                System.out.print("Filename [" + def + "]: ");
+                String file = orDefault(sc.nextLine(), def);
+                byte[] pdf = inventoryService.generateLowStockPdf(report);
+                java.nio.file.Files.write(java.nio.file.Path.of(file), pdf);
+                System.out.println("✓ Wrote " + file + " (" + pdf.length + " bytes)");
+            }
+        } catch (NumberFormatException e) {
+            System.out.println("✗ Enter a whole number threshold.");
+        } catch (Exception e) {
+            System.out.println("✗ Low-stock reorder failed: " + e.getMessage());
         }
     }
 

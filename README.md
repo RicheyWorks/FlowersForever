@@ -155,6 +155,9 @@ REST: `GET /api/auth/me` (Basic), `GET /api/auth/accounts` (usernames only).
 |--------|------|---------|
 | GET | `/api/dashboard` | Combined inventory + harvest week + revenue KPIs |
 | GET | `/api/inventory` | List / search / kpis |
+| GET | `/api/inventory/low-stock` | Low-stock reorder JSON (`threshold`) |
+| GET | `/api/inventory/low-stock/text` | Low-stock reorder plain text |
+| GET | `/api/inventory/low-stock/report.pdf` | Low-stock reorder PDF |
 | GET/POST | `/api/harvest` | Harvest CRUD |
 | POST | `/api/harvest/batch` | Batch log |
 | GET | `/api/harvest/week` | 7-day total + daily series |
@@ -244,6 +247,7 @@ More: [`docs/GUI_ARCHITECTURE.md`](docs/GUI_ARCHITECTURE.md).
 - Release **1.0.12**  
 - **Order invoice PDF** (CRM + REST + CLI) — wholesale bill-to sheet per order  
 - Release **1.0.13**  
+- **Low-stock reorder list** (Inventory + REST + CLI + PDF) — suggested restock qty at cost  
 
 ### Later ideas
 

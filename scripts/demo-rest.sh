@@ -21,6 +21,7 @@ hit /api/auth/me
 hit /api/dashboard
 hit /api/briefing
 hit /api/closeout
+hit "/api/inventory/low-stock?threshold=10"
 hit /api/harvest/week
 hit /api/orders/week
 hit /api/connectors
@@ -33,6 +34,8 @@ curl -sS "${AUTH[@]}" -o market-pack-demo.pdf "${BASE}/api/market-day/packing.pd
 curl -sS "${AUTH[@]}" -o weekly-demo.pdf "${BASE}/api/reports/weekly.pdf" && echo "Wrote weekly-demo.pdf"
 curl -sS "${AUTH[@]}" -o morning-briefing-demo.pdf "${BASE}/api/briefing/report.pdf" && echo "Wrote morning-briefing-demo.pdf"
 curl -sS "${AUTH[@]}" -o day-closeout-demo.pdf "${BASE}/api/closeout/report.pdf" && echo "Wrote day-closeout-demo.pdf"
+curl -sS "${AUTH[@]}" -o low-stock-reorder-demo.pdf "${BASE}/api/inventory/low-stock/report.pdf?threshold=10" \
+  && echo "Wrote low-stock-reorder-demo.pdf"
 # First order id when present
 OID=$(curl -sS "${AUTH[@]}" "${BASE}/api/orders" | sed -n 's/.*"id"[[:space:]]*:[[:space:]]*\([0-9][0-9]*\).*/\1/p' | head -n1)
 if [[ -n "${OID}" ]]; then

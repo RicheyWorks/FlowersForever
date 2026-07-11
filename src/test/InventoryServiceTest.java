@@ -225,6 +225,33 @@ class InventoryServiceTest {
     }
 
     @Test
+    @DisplayName("buildLowStockReport + PDF for threshold")
+    void lowStockReportAndPdf() {
+        service.addItem(new Item("Zero Stock", "Other", 2.0, "each", 1.0, 0, ""));
+        service.addItem(new Item("Almost Out", "Other", 3.0, "each", 1.5, 5, ""));
+        service.addItem(new Item("Healthy Stock", "Other", 4.0, "each", 2.0, 100, ""));
+
+        InventoryService.LowStockReport report = service.buildLowStockReport(10);
+        assertThat(report.plainText()).contains("LOW-STOCK REORDER");
+        assertThat(report.lines()).extracting(InventoryService.LowStockLine::name)
+                .contains("Zero Stock", "Almost Out")
+                .doesNotContain("Healthy Stock");
+        assertThat(report.lines().get(0).quantity())
+                .isLessThanOrEqualTo(report.lines().get(report.lines().size() - 1).quantity());
+        // Zero → target max(20, 11)=20 → suggest 20; cost 20 * 1.0
+        InventoryService.LowStockLine zero = report.lines().stream()
+                .filter(l -> l.name().equals("Zero Stock")).findFirst().orElseThrow();
+        assertThat(zero.suggestedOrderQty()).isEqualTo(20);
+        assertThat(zero.suggestedOrderCost()).isEqualTo(20.0);
+        assertThat(report.toMap()).containsKeys("lines", "suggestedOrderCostTotal");
+
+        byte[] pdf = service.generateLowStockPdf(report);
+        assertThat(pdf.length).isGreaterThan(100);
+        assertThat(new String(pdf, 0, 4)).isEqualTo("%PDF");
+        assertThatIllegalArgumentException().isThrownBy(() -> service.generateLowStockPdf(null));
+    }
+
+    @Test
     @DisplayName("concurrent addItem() calls keep a consistent size")
     void concurrentAddsAreThreadSafe() throws InterruptedException {
         int threads = 10;
