@@ -100,7 +100,7 @@ try {
     Write-Host "Low-stock PDF failed: $_" -ForegroundColor Red
 }
 
-# First order id when present (demo profile seeds CONFIRMED orders)
+# First order / customer id when present (demo profile seeds CONFIRMED orders)
 try {
     $orders = Invoke-RestMethod -Uri "$BaseUrl/api/orders" -Headers $headers
     if ($orders -and $orders.Count -gt 0) {
@@ -114,6 +114,21 @@ try {
     }
 } catch {
     Write-Host "Invoice PDF failed: $_" -ForegroundColor Red
+}
+
+try {
+    $customers = Invoke-RestMethod -Uri "$BaseUrl/api/customers" -Headers $headers
+    if ($customers -and $customers.Count -gt 0) {
+        $cid = $customers[0].id
+        $stPdf = Join-Path (Get-Location) "statement-customer-$cid-demo.pdf"
+        Write-Host "`n=== GET /api/customers/$cid/statement.pdf → $stPdf ===" -ForegroundColor Yellow
+        Invoke-WebRequest -Uri "$BaseUrl/api/customers/$cid/statement.pdf" -Headers $headers -OutFile $stPdf
+        Write-Host "Wrote $stPdf ($((Get-Item $stPdf).Length) bytes)" -ForegroundColor Green
+    } else {
+        Write-Host "`n(no customers — skip statement PDF; use --spring.profiles.active=demo)" -ForegroundColor DarkYellow
+    }
+} catch {
+    Write-Host "Statement PDF failed: $_" -ForegroundColor Red
 }
 
 Write-Host "`nDone." -ForegroundColor Green

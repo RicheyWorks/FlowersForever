@@ -166,6 +166,9 @@ REST: `GET /api/auth/me` (Basic), `GET /api/auth/accounts` (usernames only).
 | GET | `/api/harvest/beds/report.pdf` | Printable bed production PDF |
 | GET | `/api/harvest/filter` | crop/bed/notes/dates |
 | GET/POST | `/api/customers` | CRM customers |
+| GET | `/api/customers/{id}/statement` | Account statement JSON (`from`/`to`) |
+| GET | `/api/customers/{id}/statement.txt` | Account statement plain text |
+| GET | `/api/customers/{id}/statement.pdf` | Account statement PDF |
 | GET/POST | `/api/orders` | Orders |
 | GET | `/api/orders/week` | Realized + pipeline + sparklines |
 | GET | `/api/orders/filter` | status/customer/dates |
@@ -249,6 +252,7 @@ More: [`docs/GUI_ARCHITECTURE.md`](docs/GUI_ARCHITECTURE.md).
 - Release **1.0.13**  
 - **Low-stock reorder list** (Inventory + REST + CLI + PDF) — suggested restock qty at cost  
 - Release **1.0.14**  
+- **Customer statement PDF** (CRM + REST + CLI) — multi-order account rollup (90-day default)  
 
 ### Later ideas
 

@@ -11,6 +11,7 @@ import com.flowerfarm.service.IrrigationAdvisorService;
 import com.flowerfarm.service.IrrigationAdvisorService.IrrigationAdvice;
 import com.flowerfarm.service.MarketDayPackingService;
 import com.flowerfarm.service.MarketDayPackingService.MarketDayPlan;
+import com.flowerfarm.service.CustomerStatementService;
 import com.flowerfarm.service.DayCloseoutService;
 import com.flowerfarm.service.MorningBriefingService;
 import com.flowerfarm.service.OrderService;
@@ -47,6 +48,7 @@ public class FlowerFarmCLI implements ApplicationRunner {
     private final MorningBriefingService morningBriefingService;
     private final DayCloseoutService dayCloseoutService;
     private final OrderService orderService;
+    private final CustomerStatementService customerStatementService;
 
     public FlowerFarmCLI(InventoryService inventoryService,
                          HarvestService harvestService,
@@ -56,7 +58,8 @@ public class FlowerFarmCLI implements ApplicationRunner {
                          MarketDayPackingService marketDayPackingService,
                          MorningBriefingService morningBriefingService,
                          DayCloseoutService dayCloseoutService,
-                         OrderService orderService) {
+                         OrderService orderService,
+                         CustomerStatementService customerStatementService) {
         this.inventoryService  = inventoryService;
         this.harvestService    = harvestService;
         this.trendService      = trendService;
@@ -66,6 +69,7 @@ public class FlowerFarmCLI implements ApplicationRunner {
         this.morningBriefingService = morningBriefingService;
         this.dayCloseoutService = dayCloseoutService;
         this.orderService = orderService;
+        this.customerStatementService = customerStatementService;
     }
 
     @Override
@@ -96,7 +100,8 @@ public class FlowerFarmCLI implements ApplicationRunner {
                 case "15" -> dayCloseout(scanner);
                 case "16" -> orderInvoice(scanner);
                 case "17" -> lowStockReorder(scanner);
-                case "18" -> { System.out.println("Goodbye!"); running = false; }
+                case "18" -> customerStatement(scanner);
+                case "19" -> { System.out.println("Goodbye!"); running = false; }
                 default  -> System.out.println("Unknown option. Try again.");
             }
         }
@@ -134,7 +139,8 @@ public class FlowerFarmCLI implements ApplicationRunner {
                 15) Day closeout
                 16) Order invoice PDF
                 17) Low-stock reorder list
-                18) Exit
+                18) Customer statement PDF
+                19) Exit
                 ─────────────────────────────────────────
                 Choice: \
                 """);
@@ -454,6 +460,35 @@ public class FlowerFarmCLI implements ApplicationRunner {
             System.out.println("✗ Enter a whole number threshold.");
         } catch (Exception e) {
             System.out.println("✗ Low-stock reorder failed: " + e.getMessage());
+        }
+    }
+
+    private void customerStatement(Scanner sc) {
+        try {
+            System.out.print("Customer id: ");
+            long id = Long.parseLong(sc.nextLine().trim());
+            System.out.print("From YYYY-MM-DD [90 days ago]: ");
+            String fromRaw = sc.nextLine().trim();
+            System.out.print("To YYYY-MM-DD [today]: ");
+            String toRaw = sc.nextLine().trim();
+            LocalDate from = fromRaw.isEmpty() ? null : LocalDate.parse(fromRaw);
+            LocalDate to = toRaw.isEmpty() ? null : LocalDate.parse(toRaw);
+            var statement = customerStatementService.build(id, from, to);
+            System.out.println();
+            System.out.println(statement.plainText());
+            System.out.print("Export PDF? (y/n): ");
+            if ("y".equalsIgnoreCase(sc.nextLine().trim())) {
+                String def = "statement-customer-" + id + ".pdf";
+                System.out.print("Filename [" + def + "]: ");
+                String file = orDefault(sc.nextLine(), def);
+                byte[] pdf = customerStatementService.generatePdf(statement);
+                java.nio.file.Files.write(java.nio.file.Path.of(file), pdf);
+                System.out.println("✓ Wrote " + file + " (" + pdf.length + " bytes)");
+            }
+        } catch (NumberFormatException e) {
+            System.out.println("✗ Enter a numeric customer id.");
+        } catch (Exception e) {
+            System.out.println("✗ Customer statement failed: " + e.getMessage());
         }
     }
 

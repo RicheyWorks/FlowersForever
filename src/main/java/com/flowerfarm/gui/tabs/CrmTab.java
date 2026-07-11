@@ -5,6 +5,7 @@ import com.flowerfarm.model.Customer;
 import com.flowerfarm.model.CustomerOrder;
 import com.flowerfarm.model.OrderLine;
 import com.flowerfarm.service.CustomerService;
+import com.flowerfarm.service.CustomerStatementService;
 import com.flowerfarm.service.OrderService;
 
 import javax.swing.*;
@@ -23,6 +24,7 @@ public class CrmTab implements FlowerFarmTab {
 
     private final CustomerService customerService;
     private final OrderService orderService;
+    private final CustomerStatementService customerStatementService;
     private final TabHost host;
 
     private JPanel panel;
@@ -68,8 +70,14 @@ public class CrmTab implements FlowerFarmTab {
     private JButton deleteOrderBtn;
 
     public CrmTab(CustomerService customerService, OrderService orderService, TabHost host) {
+        this(customerService, orderService, null, host);
+    }
+
+    public CrmTab(CustomerService customerService, OrderService orderService,
+                  CustomerStatementService customerStatementService, TabHost host) {
         this.customerService = customerService;
         this.orderService = orderService;
+        this.customerStatementService = customerStatementService;
         this.host = host;
     }
 
@@ -207,11 +215,15 @@ public class CrmTab implements FlowerFarmTab {
         clearCustomerBtn.addActionListener(e -> clearCustomerForm());
         deleteCustomerBtn = new JButton("Delete selected");
         deleteCustomerBtn.addActionListener(e -> deleteCustomer());
+        JButton statementBtn = new JButton("Statement PDF…");
+        statementBtn.setToolTipText("Account statement for selected customer (default last 90 days). VIEWER OK.");
+        statementBtn.addActionListener(e -> exportCustomerStatement());
         buttons.add(addCustomerBtn);
         buttons.add(loadCustomerBtn);
         buttons.add(saveCustomerBtn);
         buttons.add(clearCustomerBtn);
         buttons.add(deleteCustomerBtn);
+        buttons.add(statementBtn);
 
         JPanel south = new JPanel(new BorderLayout());
         south.add(form, BorderLayout.CENTER);
@@ -494,6 +506,63 @@ public class CrmTab implements FlowerFarmTab {
             status("Customer deleted.");
         } catch (Exception ex) {
             error(ex.getMessage() + " (delete their orders first if constrained)");
+        }
+    }
+
+    private void exportCustomerStatement() {
+        if (customerStatementService == null) {
+            error("Statement service not available.");
+            return;
+        }
+        int row = customerTable.getSelectedRow();
+        if (row < 0) {
+            error("Select a customer for the account statement.");
+            return;
+        }
+        Long id = (Long) customerModel.getValueAt(row, 0);
+        String name = String.valueOf(customerModel.getValueAt(row, 1));
+        try {
+            LocalDate to = LocalDate.now();
+            LocalDate from = to.minusDays(90);
+            // Prefer order filter dates when both filled
+            try {
+                if (filterFrom != null && !filterFrom.getText().isBlank()
+                        && filterTo != null && !filterTo.getText().isBlank()) {
+                    from = LocalDate.parse(filterFrom.getText().trim());
+                    to = LocalDate.parse(filterTo.getText().trim());
+                }
+            } catch (DateTimeParseException ignored) {
+                // keep default 90-day window
+            }
+            CustomerStatementService.CustomerStatement statement =
+                    customerStatementService.build(id, from, to);
+            JTextArea area = new JTextArea(statement.plainText(), 22, 64);
+            area.setEditable(false);
+            area.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
+            area.setCaretPosition(0);
+            JScrollPane scroll = new JScrollPane(area);
+            scroll.setPreferredSize(new Dimension(640, 420));
+
+            Object[] options = {"Export PDF…", "Close"};
+            int choice = JOptionPane.showOptionDialog(panel, scroll,
+                    "Statement — " + name + " (" + from + " → " + to + ")",
+                    JOptionPane.DEFAULT_OPTION, JOptionPane.PLAIN_MESSAGE,
+                    null, options, options[1]);
+            if (choice == 0) {
+                JFileChooser chooser = new JFileChooser();
+                chooser.setSelectedFile(new File("statement-customer-" + id + ".pdf"));
+                if (chooser.showSaveDialog(panel) == JFileChooser.APPROVE_OPTION) {
+                    byte[] pdf = customerStatementService.generatePdf(statement);
+                    Files.write(chooser.getSelectedFile().toPath(), pdf);
+                    status("Statement PDF → " + chooser.getSelectedFile().getName()
+                            + " (" + statement.orderCount() + " orders)");
+                }
+            } else {
+                status("Statement: " + statement.orderCount() + " order(s) · $"
+                        + String.format("%.2f", statement.grandTotal()));
+            }
+        } catch (Exception ex) {
+            error("Statement failed: " + ex.getMessage());
         }
     }
 

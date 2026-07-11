@@ -44,4 +44,11 @@ if [[ -n "${OID}" ]]; then
 else
   echo "(no orders — skip invoice PDF; use --spring.profiles.active=demo)"
 fi
+CID=$(curl -sS "${AUTH[@]}" "${BASE}/api/customers" | sed -n 's/.*"id"[[:space:]]*:[[:space:]]*\([0-9][0-9]*\).*/\1/p' | head -n1)
+if [[ -n "${CID}" ]]; then
+  curl -sS "${AUTH[@]}" -o "statement-customer-${CID}-demo.pdf" "${BASE}/api/customers/${CID}/statement.pdf" \
+    && echo "Wrote statement-customer-${CID}-demo.pdf"
+else
+  echo "(no customers — skip statement PDF; use --spring.profiles.active=demo)"
+fi
 echo "Done."

@@ -10,6 +10,7 @@ import com.flowerfarm.service.HarvestService;
 import com.flowerfarm.service.InventoryService;
 import com.flowerfarm.service.IrrigationAdvisorService;
 import com.flowerfarm.service.MarketDayPackingService;
+import com.flowerfarm.service.CustomerStatementService;
 import com.flowerfarm.service.DayCloseoutService;
 import com.flowerfarm.service.MorningBriefingService;
 import com.flowerfarm.service.OrderService;
@@ -64,6 +65,7 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
     private final MarketDayPackingService marketDayPackingService;
     private final MorningBriefingService morningBriefingService;
     private final DayCloseoutService dayCloseoutService;
+    private final CustomerStatementService customerStatementService;
     private final GuiLoginGate loginGate;
 
     // Created lazily on the EDT inside initialise() — never touched before run().
@@ -99,6 +101,7 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
                          MarketDayPackingService marketDayPackingService,
                          MorningBriefingService morningBriefingService,
                          DayCloseoutService dayCloseoutService,
+                         CustomerStatementService customerStatementService,
                          GuiLoginGate loginGate) {
         // No AWT calls here — Spring safe to construct this bean at any time.
         this.inventoryService = inventoryService;
@@ -113,6 +116,7 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
         this.marketDayPackingService = marketDayPackingService;
         this.morningBriefingService = morningBriefingService;
         this.dayCloseoutService = dayCloseoutService;
+        this.customerStatementService = customerStatementService;
         this.loginGate = loginGate;
     }
 
@@ -151,7 +155,7 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
         tabs.add(new InventoryTab(inventoryService, this));
         tabs.add(new AddItemTab(inventoryService, this));
         tabs.add(new HarvestLogTab(harvestService, this));
-        tabs.add(new CrmTab(customerService, orderService, this));
+        tabs.add(new CrmTab(customerService, orderService, customerStatementService, this));
         tabs.add(new MarketDayTab(marketDayPackingService, this));
         tabs.add(trendTab);
         tabs.add(new SyncHistoryTab(syncHistoryService, this));
