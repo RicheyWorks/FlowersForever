@@ -17,3 +17,6 @@ data/
 *.iml
 .vscode/
 build-out*.txt
+# Accidental bulk/attachment dumps (never commit)
+files-*.zip
+*.zip
