@@ -26,12 +26,15 @@ hit /api/harvest/week
 hit /api/orders/week
 hit /api/connectors
 hit "/api/connectors/history?limit=10"
+hit "/api/connectors/history/report?limit=20"
 hit "/api/irrigation/advice?live=false"
 hit /api/market-day
 hit "/api/harvest/beds?week=true"
 hit "/api/harvest/log?week=true"
 curl -sS "${AUTH[@]}" -o bed-production-demo.pdf "${BASE}/api/harvest/beds/report.pdf?week=true" && echo "Wrote bed-production-demo.pdf"
 curl -sS "${AUTH[@]}" -o harvest-log-demo.pdf "${BASE}/api/harvest/log/report.pdf?week=true" && echo "Wrote harvest-log-demo.pdf"
+curl -sS "${AUTH[@]}" -o audit-history-demo.pdf "${BASE}/api/connectors/history/report.pdf?limit=50" \
+  && echo "Wrote audit-history-demo.pdf"
 curl -sS "${AUTH[@]}" -o market-pack-demo.pdf "${BASE}/api/market-day/packing.pdf" && echo "Wrote market-pack-demo.pdf"
 curl -sS "${AUTH[@]}" -o weekly-demo.pdf "${BASE}/api/reports/weekly.pdf" && echo "Wrote weekly-demo.pdf"
 curl -sS "${AUTH[@]}" -o morning-briefing-demo.pdf "${BASE}/api/briefing/report.pdf" && echo "Wrote morning-briefing-demo.pdf"

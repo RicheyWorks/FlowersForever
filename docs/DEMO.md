@@ -85,7 +85,7 @@ Narrate as Kitsap / Port Orchard grower:
 
 7. **Sync History**  
    - Show HARVEST_LOG / ORDER_FULFILL / connector rows.  
-   - Failures only filter; export audit CSV.
+   - Failures only filter; export audit CSV or **Export PDF…** (FAIL rows highlighted).
 
 8. **Reports**  
    - Weekly PDF (GUI or `curl -o weekly.pdf http://localhost:8080/api/reports/weekly.pdf`).

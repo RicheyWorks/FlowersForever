@@ -6,7 +6,9 @@ import com.flowerfarm.connector.SyncSummary;
 import com.flowerfarm.model.Item;
 import com.flowerfarm.model.SyncHistoryEntry;
 import com.flowerfarm.service.SyncHistoryService;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -98,6 +100,48 @@ public class ConnectorController {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(Map.of("error", e.getMessage()));
         }
+    }
+
+    /** Audit history report JSON (same filters as {@code /history}). */
+    @GetMapping("/history/report")
+    public Map<String, Object> historyReport(
+            @RequestParam(value = "connector", required = false) String connector,
+            @RequestParam(value = "operation", required = false) String operation,
+            @RequestParam(value = "success", required = false) Boolean success,
+            @RequestParam(value = "q", required = false) String query,
+            @RequestParam(value = "limit", defaultValue = "100") int limit) {
+        return syncHistoryService
+                .buildAuditReport(connector, operation, success, query, limit)
+                .toMap();
+    }
+
+    @GetMapping(value = "/history/report.txt", produces = MediaType.TEXT_PLAIN_VALUE)
+    public String historyReportText(
+            @RequestParam(value = "connector", required = false) String connector,
+            @RequestParam(value = "operation", required = false) String operation,
+            @RequestParam(value = "success", required = false) Boolean success,
+            @RequestParam(value = "q", required = false) String query,
+            @RequestParam(value = "limit", defaultValue = "100") int limit) {
+        return syncHistoryService
+                .buildAuditReport(connector, operation, success, query, limit)
+                .plainText();
+    }
+
+    @GetMapping(value = "/history/report.pdf", produces = MediaType.APPLICATION_PDF_VALUE)
+    public ResponseEntity<byte[]> historyReportPdf(
+            @RequestParam(value = "connector", required = false) String connector,
+            @RequestParam(value = "operation", required = false) String operation,
+            @RequestParam(value = "success", required = false) Boolean success,
+            @RequestParam(value = "q", required = false) String query,
+            @RequestParam(value = "limit", defaultValue = "100") int limit) {
+        var report = syncHistoryService.buildAuditReport(
+                connector, operation, success, query, limit);
+        byte[] pdf = syncHistoryService.generateAuditPdf(report);
+        String filename = "audit-history-" + report.generatedOn() + ".pdf";
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
+                .contentType(MediaType.APPLICATION_PDF)
+                .body(pdf);
     }
 
     /** Clears the entire sync history audit log. */

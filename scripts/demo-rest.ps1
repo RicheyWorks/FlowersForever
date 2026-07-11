@@ -39,6 +39,7 @@ Get-Json "/api/harvest/week"
 Get-Json "/api/orders/week"
 Get-Json "/api/connectors"
 Get-Json "/api/connectors/history?limit=10"
+Get-Json "/api/connectors/history/report?limit=20"
 Get-Json "/api/inventory"
 Get-Json "/api/inventory/low-stock?threshold=10"
 Get-Json "/api/irrigation/advice?live=false"
@@ -47,6 +48,15 @@ Get-Json "/api/orders"
 Get-Json "/api/harvest/beds?week=true"
 
 Get-Json "/api/harvest/log?week=true"
+
+$auditPdf = Join-Path (Get-Location) "audit-history-demo.pdf"
+Write-Host "`n=== GET /api/connectors/history/report.pdf → $auditPdf ===" -ForegroundColor Yellow
+try {
+    Invoke-WebRequest -Uri "$BaseUrl/api/connectors/history/report.pdf?limit=50" -Headers $headers -OutFile $auditPdf
+    Write-Host "Wrote $auditPdf ($((Get-Item $auditPdf).Length) bytes)" -ForegroundColor Green
+} catch {
+    Write-Host "Audit PDF failed: $_" -ForegroundColor Red
+}
 
 $logPdf = Join-Path (Get-Location) "harvest-log-demo.pdf"
 Write-Host "`n=== GET /api/harvest/log/report.pdf?week=true → $logPdf ===" -ForegroundColor Yellow

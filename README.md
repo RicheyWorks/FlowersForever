@@ -182,6 +182,9 @@ REST: `GET /api/auth/me` (Basic), `GET /api/auth/accounts` (usernames only).
 | GET | `/api/connectors` | Registry + dual-mode flags |
 | GET | `/api/connectors/history` | Audit filter (`connector`, `operation`, `success`, `q`) |
 | POST | `/api/connectors/history/export` | Server-side audit CSV |
+| GET | `/api/connectors/history/report` | Audit report JSON (same filters) |
+| GET | `/api/connectors/history/report.txt` | Audit report plain text |
+| GET | `/api/connectors/history/report.pdf` | Audit report PDF |
 | GET | `/api/auth/me` | Session / role |
 | GET | `/api/irrigation/advice` | Kitsap watering plan (`live=true\|false`) |
 | GET | `/api/market-day` | Market packing plan JSON (`date`, `windowDays`) |
@@ -259,6 +262,7 @@ More: [`docs/GUI_ARCHITECTURE.md`](docs/GUI_ARCHITECTURE.md).
 - Release **1.0.15**  
 - **Harvest log PDF** (Harvest Log + REST + CLI) — chronological cut list with crop totals  
 - Release **1.0.16**  
+- **Audit history PDF** (Sync History + REST + CLI) — printable ops log with FAIL highlight  
 
 ### Later ideas
 

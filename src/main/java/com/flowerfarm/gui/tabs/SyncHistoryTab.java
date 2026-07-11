@@ -233,6 +233,9 @@ public class SyncHistoryTab implements FlowerFarmTab {
         refresh.addActionListener(e -> refreshData());
         JButton exportBtn = new JButton("Export CSV…");
         exportBtn.addActionListener(e -> exportCsv());
+        JButton exportPdfBtn = new JButton("Export PDF…");
+        exportPdfBtn.setToolTipText("Printable audit sheet for the current filter (VIEWER OK).");
+        exportPdfBtn.addActionListener(e -> exportPdf());
         clearHistBtn = new JButton("Clear history…");
         clearHistBtn.addActionListener(e -> clearHistory());
 
@@ -241,6 +244,7 @@ public class SyncHistoryTab implements FlowerFarmTab {
         filterBar.add(clear);
         filterBar.add(refresh);
         filterBar.add(exportBtn);
+        filterBar.add(exportPdfBtn);
         filterBar.add(clearHistBtn);
         return filterBar;
     }
@@ -264,6 +268,55 @@ public class SyncHistoryTab implements FlowerFarmTab {
                     "Export complete", JOptionPane.INFORMATION_MESSAGE);
         } catch (Exception ex) {
             JOptionPane.showMessageDialog(panel, ex.getMessage(), "Export failed",
+                    JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private void exportPdf() {
+        try {
+            String scope = "GUI filter";
+            Object conn = connectorFilter != null ? connectorFilter.getSelectedItem() : null;
+            Object op = operationFilter != null ? operationFilter.getSelectedItem() : null;
+            Object res = resultFilter != null ? resultFilter.getSelectedItem() : null;
+            if (conn != null && !"ALL".equals(String.valueOf(conn))) {
+                scope += " · " + conn;
+            }
+            if (op != null && !"ALL".equals(String.valueOf(op))) {
+                scope += " · " + op;
+            }
+            if (res != null && !"Any result".equals(String.valueOf(res))) {
+                scope += " · " + res;
+            }
+            var report = syncHistoryService.buildAuditReport(lastView, scope);
+            JTextArea area = new JTextArea(report.plainText(), 20, 70);
+            area.setEditable(false);
+            area.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 11));
+            area.setCaretPosition(0);
+            JScrollPane scroll = new JScrollPane(area);
+            scroll.setPreferredSize(new Dimension(700, 400));
+
+            Object[] options = {"Save PDF…", "Close"};
+            int choice = JOptionPane.showOptionDialog(panel, scroll,
+                    "Audit history — " + report.total() + " row(s)",
+                    JOptionPane.DEFAULT_OPTION, JOptionPane.PLAIN_MESSAGE,
+                    null, options, options[1]);
+            if (choice == 0) {
+                JFileChooser chooser = new JFileChooser();
+                chooser.setSelectedFile(new File(
+                        "audit-history-" + report.generatedOn() + ".pdf"));
+                if (chooser.showSaveDialog(panel) == JFileChooser.APPROVE_OPTION) {
+                    byte[] pdf = syncHistoryService.generateAuditPdf(report);
+                    java.nio.file.Files.write(chooser.getSelectedFile().toPath(), pdf);
+                    if (host != null) {
+                        host.setStatus("Audit PDF → " + chooser.getSelectedFile().getName()
+                                + " (" + report.total() + " rows, " + report.fail() + " fail)");
+                    }
+                }
+            } else if (host != null) {
+                host.setStatus("Audit: " + report.ok() + " OK / " + report.fail() + " FAIL");
+            }
+        } catch (Exception ex) {
+            JOptionPane.showMessageDialog(panel, ex.getMessage(), "Audit PDF failed",
                     JOptionPane.ERROR_MESSAGE);
         }
     }

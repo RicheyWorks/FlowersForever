@@ -132,4 +132,22 @@ class SyncHistoryServiceTest {
             java.nio.file.Files.deleteIfExists(tmp);
         }
     }
+
+    @Test
+    @DisplayName("buildAuditReport + PDF highlights failures")
+    void auditReportPdf() {
+        SyncHistoryEntry ok = new SyncHistoryEntry("crm", "ORDER_FULFILL", true, "fulfilled #3", "", 1);
+        SyncHistoryEntry fail = new SyncHistoryEntry("shopify", "SYNC", false, "token expired", "401", null);
+        var report = service.buildAuditReport(List.of(ok, fail), "test filter");
+        assertThat(report.plainText()).contains("OPS AUDIT HISTORY");
+        assertThat(report.total()).isEqualTo(2);
+        assertThat(report.ok()).isEqualTo(1);
+        assertThat(report.fail()).isEqualTo(1);
+        assertThat(report.toMap()).containsKeys("entries", "fail");
+
+        byte[] pdf = service.generateAuditPdf(report);
+        assertThat(pdf.length).isGreaterThan(100);
+        assertThat(new String(pdf, 0, 4)).isEqualTo("%PDF");
+        assertThatIllegalArgumentException().isThrownBy(() -> service.generateAuditPdf(null));
+    }
 }

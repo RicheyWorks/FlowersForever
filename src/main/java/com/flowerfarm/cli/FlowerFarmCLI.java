@@ -15,6 +15,7 @@ import com.flowerfarm.service.CustomerStatementService;
 import com.flowerfarm.service.DayCloseoutService;
 import com.flowerfarm.service.MorningBriefingService;
 import com.flowerfarm.service.OrderService;
+import com.flowerfarm.service.SyncHistoryService;
 import com.flowerfarm.service.TrendService;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
@@ -49,6 +50,7 @@ public class FlowerFarmCLI implements ApplicationRunner {
     private final DayCloseoutService dayCloseoutService;
     private final OrderService orderService;
     private final CustomerStatementService customerStatementService;
+    private final SyncHistoryService syncHistoryService;
 
     public FlowerFarmCLI(InventoryService inventoryService,
                          HarvestService harvestService,
@@ -59,7 +61,8 @@ public class FlowerFarmCLI implements ApplicationRunner {
                          MorningBriefingService morningBriefingService,
                          DayCloseoutService dayCloseoutService,
                          OrderService orderService,
-                         CustomerStatementService customerStatementService) {
+                         CustomerStatementService customerStatementService,
+                         SyncHistoryService syncHistoryService) {
         this.inventoryService  = inventoryService;
         this.harvestService    = harvestService;
         this.trendService      = trendService;
@@ -70,6 +73,7 @@ public class FlowerFarmCLI implements ApplicationRunner {
         this.dayCloseoutService = dayCloseoutService;
         this.orderService = orderService;
         this.customerStatementService = customerStatementService;
+        this.syncHistoryService = syncHistoryService;
     }
 
     @Override
@@ -102,7 +106,8 @@ public class FlowerFarmCLI implements ApplicationRunner {
                 case "17" -> lowStockReorder(scanner);
                 case "18" -> customerStatement(scanner);
                 case "19" -> harvestLogPdf(scanner);
-                case "20" -> { System.out.println("Goodbye!"); running = false; }
+                case "20" -> auditHistoryPdf(scanner);
+                case "21" -> { System.out.println("Goodbye!"); running = false; }
                 default  -> System.out.println("Unknown option. Try again.");
             }
         }
@@ -142,7 +147,8 @@ public class FlowerFarmCLI implements ApplicationRunner {
                 17) Low-stock reorder list
                 18) Customer statement PDF
                 19) Harvest log PDF
-                20) Exit
+                20) Audit history PDF
+                21) Exit
                 ─────────────────────────────────────────
                 Choice: \
                 """);
@@ -516,6 +522,34 @@ public class FlowerFarmCLI implements ApplicationRunner {
             }
         } catch (Exception e) {
             System.out.println("✗ Harvest log PDF failed: " + e.getMessage());
+        }
+    }
+
+    private void auditHistoryPdf(Scanner sc) {
+        try {
+            System.out.print("FAIL only? (y/n) [n]: ");
+            boolean failOnly = "y".equalsIgnoreCase(sc.nextLine().trim());
+            System.out.print("Limit [100]: ");
+            String limRaw = sc.nextLine().trim();
+            int limit = limRaw.isEmpty() ? 100 : Integer.parseInt(limRaw);
+            Boolean success = failOnly ? Boolean.FALSE : null;
+            var report = syncHistoryService.buildAuditReport(
+                    null, null, success, null, limit);
+            System.out.println();
+            System.out.println(report.plainText());
+            System.out.print("Export PDF? (y/n): ");
+            if ("y".equalsIgnoreCase(sc.nextLine().trim())) {
+                String def = "audit-history-" + report.generatedOn() + ".pdf";
+                System.out.print("Filename [" + def + "]: ");
+                String file = orDefault(sc.nextLine(), def);
+                byte[] pdf = syncHistoryService.generateAuditPdf(report);
+                java.nio.file.Files.write(java.nio.file.Path.of(file), pdf);
+                System.out.println("✓ Wrote " + file + " (" + pdf.length + " bytes)");
+            }
+        } catch (NumberFormatException e) {
+            System.out.println("✗ Enter a whole number limit.");
+        } catch (Exception e) {
+            System.out.println("✗ Audit history PDF failed: " + e.getMessage());
         }
     }
 
