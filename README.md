@@ -54,16 +54,16 @@ mvn clean verify
 # GUI + REST (:8080)
 mvn spring-boot:run
 # or
-java -jar target/flowerfarm-manager-1.0-SNAPSHOT.jar
+java -jar target/flowerfarm-manager-1.0.0.jar
 
 # CLI
-java -jar target/flowerfarm-manager-1.0-SNAPSHOT.jar --cli
+java -jar target/flowerfarm-manager-1.0.0.jar --cli
 
 # SQLite
-java -jar target/flowerfarm-manager-1.0-SNAPSHOT.jar --spring.profiles.active=sqlite
+java -jar target/flowerfarm-manager-1.0.0.jar --spring.profiles.active=sqlite
 
 # Shared barn login (GUI + HTTP Basic)
-java -jar target/flowerfarm-manager-1.0-SNAPSHOT.jar --spring.profiles.active=auth
+java -jar target/flowerfarm-manager-1.0.0.jar --spring.profiles.active=auth
 # farm/kitsap (OWNER) · hand/harvest (HAND) · viewer/view (VIEWER)
 ```
 
