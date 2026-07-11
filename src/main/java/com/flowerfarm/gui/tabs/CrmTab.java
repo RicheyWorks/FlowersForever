@@ -11,6 +11,7 @@ import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
 import java.io.File;
+import java.nio.file.Files;
 import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
 import java.util.List;
@@ -307,6 +308,9 @@ public class CrmTab implements FlowerFarmTab {
         saveNotesBtn.addActionListener(e -> saveOrderNotes());
         deleteOrderBtn = new JButton("Delete order");
         deleteOrderBtn.addActionListener(e -> deleteOrder());
+        JButton invoicePdfBtn = new JButton("Invoice PDF…");
+        invoicePdfBtn.setToolTipText("Printable wholesale invoice for the selected order (VIEWER OK).");
+        invoicePdfBtn.addActionListener(e -> exportInvoicePdf());
         JButton exportOrders = new JButton("Export view CSV…");
         exportOrders.setToolTipText("Export currently filtered order rows.");
         exportOrders.addActionListener(e -> exportOrdersCsv(true));
@@ -318,6 +322,7 @@ public class CrmTab implements FlowerFarmTab {
         buttons.add(cancelOrderBtn);
         buttons.add(saveNotesBtn);
         buttons.add(deleteOrderBtn);
+        buttons.add(invoicePdfBtn);
         buttons.add(exportOrders);
         buttons.add(exportAll);
 
@@ -642,6 +647,28 @@ public class CrmTab implements FlowerFarmTab {
             status("Order deleted.");
         } catch (Exception ex) {
             error(ex.getMessage());
+        }
+    }
+
+    private void exportInvoicePdf() {
+        Long id = selectedOrderId();
+        if (id == null) {
+            error("Select an order to print an invoice.");
+            return;
+        }
+        try {
+            byte[] pdf = orderService.generateInvoicePdf(id);
+            JFileChooser chooser = new JFileChooser();
+            chooser.setSelectedFile(new File("invoice-order-" + id + ".pdf"));
+            if (chooser.showSaveDialog(panel) != JFileChooser.APPROVE_OPTION) {
+                return;
+            }
+            File file = chooser.getSelectedFile();
+            Files.write(file.toPath(), pdf);
+            status("Invoice PDF → " + file.getName() + " (" + pdf.length + " bytes)");
+        } catch (Exception ex) {
+            error("Invoice PDF failed: " + ex.getMessage());
+            status("Invoice PDF failed: " + ex.getMessage());
         }
     }
 

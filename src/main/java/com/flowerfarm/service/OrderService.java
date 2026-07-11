@@ -5,11 +5,26 @@ import com.flowerfarm.model.CustomerOrder;
 import com.flowerfarm.model.OrderLine;
 import com.flowerfarm.repository.CustomerJpaRepository;
 import com.flowerfarm.repository.CustomerOrderJpaRepository;
+import com.lowagie.text.Chunk;
+import com.lowagie.text.Document;
+import com.lowagie.text.DocumentException;
+import com.lowagie.text.Element;
+import com.lowagie.text.Font;
+import com.lowagie.text.FontFactory;
+import com.lowagie.text.PageSize;
+import com.lowagie.text.Paragraph;
+import com.lowagie.text.Phrase;
+import com.lowagie.text.Rectangle;
+import com.lowagie.text.pdf.PdfPCell;
+import com.lowagie.text.pdf.PdfPTable;
+import com.lowagie.text.pdf.PdfWriter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.awt.Color;
+import java.io.ByteArrayOutputStream;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
@@ -422,6 +437,240 @@ public class OrderService {
     @Transactional(readOnly = true)
     public void exportToCsv(String filename) {
         exportToCsv(filename, getAll());
+    }
+
+    /**
+     * Wholesale / florist invoice (or packing slip) PDF for a single order.
+     * Suitable for CONFIRMED, FULFILLED, or DRAFT — status is printed on the sheet.
+     */
+    @Transactional(readOnly = true)
+    public byte[] generateInvoicePdf(Long orderId) {
+        if (orderId == null) {
+            throw new IllegalArgumentException("orderId is required.");
+        }
+        CustomerOrder order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new IndexOutOfBoundsException("No order with id=" + orderId));
+        return generateInvoicePdf(order);
+    }
+
+    public byte[] generateInvoicePdf(CustomerOrder order) {
+        if (order == null) {
+            throw new IllegalArgumentException("order is required.");
+        }
+        try {
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            Document doc = new Document(PageSize.LETTER, 40, 40, 48, 40);
+            PdfWriter.getInstance(doc, baos);
+            doc.open();
+
+            Color brandGreen = new Color(34, 100, 54);
+            Color brandSoft = new Color(232, 245, 233);
+            Font titleFont = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 18, brandGreen);
+            Font h2 = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 12, brandGreen);
+            Font body = FontFactory.getFont(FontFactory.HELVETICA, 10);
+            Font small = FontFactory.getFont(FontFactory.HELVETICA, 9, Color.DARK_GRAY);
+            Font banner = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 11, Color.WHITE);
+
+            PdfPTable bannerTable = new PdfPTable(1);
+            bannerTable.setWidthPercentage(100);
+            PdfPCell bannerCell = new PdfPCell(new Phrase(
+                    "FlowersForever  ·  Port Orchard / Kitsap County  ·  Wholesale Invoice",
+                    banner));
+            bannerCell.setBackgroundColor(brandGreen);
+            bannerCell.setPadding(10);
+            bannerCell.setBorder(Rectangle.NO_BORDER);
+            bannerTable.addCell(bannerCell);
+            doc.add(bannerTable);
+            doc.add(Chunk.NEWLINE);
+
+            String orderNo = order.getId() == null ? "—" : String.valueOf(order.getId());
+            String status = order.getStatus() == null ? "DRAFT" : order.getStatus();
+            doc.add(new Paragraph("Invoice / Order #" + orderNo, titleFont));
+            doc.add(new Paragraph(
+                    "Order date: " + order.getOrderDate()
+                            + "     ·     Status: " + status
+                            + "     ·     Generated: " + LocalDate.now(),
+                    small));
+            doc.add(Chunk.NEWLINE);
+
+            Customer c = order.getCustomer();
+            String custName = c != null && c.getName() != null ? c.getName() : "(no customer)";
+            String contact = c != null && c.getContactName() != null ? c.getContactName() : "";
+            String email = c != null && c.getEmail() != null ? c.getEmail() : "";
+            String phone = c != null && c.getPhone() != null ? c.getPhone() : "";
+            String type = c != null && c.getCustomerType() != null ? c.getCustomerType() : "";
+
+            PdfPTable parties = new PdfPTable(new float[]{1, 1});
+            parties.setWidthPercentage(100);
+            parties.addCell(infoBlock("Bill to / ship to",
+                    custName
+                            + (type.isBlank() ? "" : "  [" + type + "]")
+                            + (contact.isBlank() ? "" : "\nAttn: " + contact)
+                            + (email.isBlank() ? "" : "\n" + email)
+                            + (phone.isBlank() ? "" : "\n" + phone),
+                    brandSoft, body));
+            parties.addCell(infoBlock("From",
+                    "FlowersForever Farm\nPort Orchard / Kitsap County, WA\nPNW West of the Cascades",
+                    brandSoft, body));
+            doc.add(parties);
+            doc.add(Chunk.NEWLINE);
+
+            if (order.getNotes() != null && !order.getNotes().isBlank()) {
+                doc.add(new Paragraph("Notes: " + order.getNotes(), body));
+                doc.add(Chunk.NEWLINE);
+            }
+
+            doc.add(new Paragraph("Line items", h2));
+            doc.add(Chunk.NEWLINE);
+            List<OrderLine> lines = order.getLines() == null ? List.of() : order.getLines();
+            if (lines.isEmpty()) {
+                doc.add(new Paragraph("(no line items)", body));
+            } else {
+                PdfPTable table = new PdfPTable(new float[]{3.2f, 1.1f, 1.1f, 1.2f, 1.3f});
+                table.setWidthPercentage(100);
+                headerCell(table, "Product");
+                headerCell(table, "Qty");
+                headerCell(table, "Unit");
+                headerCell(table, "Unit $");
+                headerCell(table, "Line $");
+                for (OrderLine line : lines) {
+                    table.addCell(cell(line.getProductName(), body));
+                    table.addCell(cell(String.format(Locale.US, "%.1f", line.getQuantity()), body));
+                    table.addCell(cell(line.getUnit() == null ? "" : line.getUnit(), body));
+                    table.addCell(cell(String.format(Locale.US, "%,.2f", line.getUnitPrice()), body));
+                    table.addCell(cell(String.format(Locale.US, "%,.2f", line.lineTotal()), body));
+                }
+                doc.add(table);
+            }
+            doc.add(Chunk.NEWLINE);
+
+            PdfPTable totalBox = new PdfPTable(1);
+            totalBox.setWidthPercentage(40);
+            totalBox.setHorizontalAlignment(Element.ALIGN_RIGHT);
+            PdfPCell totalCell = new PdfPCell(new Phrase(
+                    String.format(Locale.US, "Total  $%,.2f", order.lineTotal()),
+                    FontFactory.getFont(FontFactory.HELVETICA_BOLD, 14, brandGreen)));
+            totalCell.setBackgroundColor(brandSoft);
+            totalCell.setPadding(10);
+            totalCell.setHorizontalAlignment(Element.ALIGN_RIGHT);
+            totalCell.setBorderColor(new Color(180, 200, 180));
+            totalBox.addCell(totalCell);
+            doc.add(totalBox);
+            doc.add(Chunk.NEWLINE);
+
+            doc.add(new Paragraph(
+                    "Thank you for supporting local PNW cut flowers. "
+                            + "Questions: farm@flowersforever.example (demo)",
+                    small));
+            doc.add(new Paragraph(
+                    "FlowersForever · practical tools for PNW flower growers", small));
+
+            doc.close();
+            log.info("Generated order invoice PDF for order #{} (${})",
+                    orderNo, String.format(Locale.US, "%.2f", order.lineTotal()));
+            return baos.toByteArray();
+        } catch (DocumentException e) {
+            throw new IllegalStateException("Failed to build order invoice PDF: " + e.getMessage(), e);
+        }
+    }
+
+    /** Plain-text invoice for CLI / quick view. */
+    @Transactional(readOnly = true)
+    public String formatInvoiceText(Long orderId) {
+        if (orderId == null) {
+            throw new IllegalArgumentException("orderId is required.");
+        }
+        CustomerOrder order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new IndexOutOfBoundsException("No order with id=" + orderId));
+        return formatInvoiceText(order);
+    }
+
+    public String formatInvoiceText(CustomerOrder order) {
+        if (order == null) {
+            throw new IllegalArgumentException("order is required.");
+        }
+        StringBuilder sb = new StringBuilder();
+        String orderNo = order.getId() == null ? "—" : String.valueOf(order.getId());
+        Customer c = order.getCustomer();
+        String cust = c != null && c.getName() != null ? c.getName() : "(no customer)";
+        sb.append("INVOICE / ORDER #").append(orderNo).append('\n');
+        sb.append("═══════════════════════════════════════\n");
+        sb.append("Date: ").append(order.getOrderDate())
+                .append("  ·  Status: ").append(order.getStatus()).append('\n');
+        sb.append("Customer: ").append(cust);
+        if (c != null && c.getCustomerType() != null && !c.getCustomerType().isBlank()) {
+            sb.append(" [").append(c.getCustomerType()).append(']');
+        }
+        sb.append('\n');
+        if (c != null) {
+            if (c.getContactName() != null && !c.getContactName().isBlank()) {
+                sb.append("Attn: ").append(c.getContactName()).append('\n');
+            }
+            if (c.getEmail() != null && !c.getEmail().isBlank()) {
+                sb.append(c.getEmail()).append('\n');
+            }
+            if (c.getPhone() != null && !c.getPhone().isBlank()) {
+                sb.append(c.getPhone()).append('\n');
+            }
+        }
+        if (order.getNotes() != null && !order.getNotes().isBlank()) {
+            sb.append("Notes: ").append(order.getNotes()).append('\n');
+        }
+        sb.append('\n');
+        sb.append(String.format(Locale.US, "%-24s %8s %8s %10s %10s%n",
+                "Product", "Qty", "Unit", "Unit $", "Line $"));
+        sb.append("-".repeat(64)).append('\n');
+        List<OrderLine> lines = order.getLines() == null ? List.of() : order.getLines();
+        if (lines.isEmpty()) {
+            sb.append("  (no lines)\n");
+        } else {
+            for (OrderLine line : lines) {
+                sb.append(String.format(Locale.US, "%-24s %8.1f %8s %10.2f %10.2f%n",
+                        truncate(line.getProductName(), 24),
+                        line.getQuantity(),
+                        truncate(line.getUnit() == null ? "" : line.getUnit(), 8),
+                        line.getUnitPrice(),
+                        line.lineTotal()));
+            }
+        }
+        sb.append("-".repeat(64)).append('\n');
+        sb.append(String.format(Locale.US, "TOTAL  $%,.2f%n", order.lineTotal()));
+        sb.append("\nFlowersForever · Port Orchard / Kitsap County, WA\n");
+        return sb.toString();
+    }
+
+    private static String truncate(String s, int max) {
+        if (s == null) {
+            return "";
+        }
+        return s.length() <= max ? s : s.substring(0, max - 1) + "…";
+    }
+
+    private static void headerCell(PdfPTable table, String text) {
+        PdfPCell cell = new PdfPCell(new Phrase(text,
+                FontFactory.getFont(FontFactory.HELVETICA_BOLD, 9, Color.WHITE)));
+        cell.setBackgroundColor(new Color(34, 100, 54));
+        cell.setPadding(5);
+        table.addCell(cell);
+    }
+
+    private static PdfPCell cell(String text, Font font) {
+        PdfPCell cell = new PdfPCell(new Phrase(text == null ? "" : text, font));
+        cell.setPadding(4);
+        cell.setBorderColor(new Color(200, 210, 200));
+        return cell;
+    }
+
+    private static PdfPCell infoBlock(String title, String bodyText, Color bg, Font body) {
+        Paragraph p = new Paragraph();
+        p.add(new Chunk(title + "\n", FontFactory.getFont(FontFactory.HELVETICA_BOLD, 10,
+                new Color(34, 100, 54))));
+        p.add(new Chunk(bodyText == null ? "" : bodyText, body));
+        PdfPCell cell = new PdfPCell(p);
+        cell.setBackgroundColor(bg);
+        cell.setPadding(10);
+        cell.setBorderColor(new Color(180, 200, 180));
+        return cell;
     }
 
     private static String csvEscape(String s) {

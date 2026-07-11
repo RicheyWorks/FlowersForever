@@ -249,4 +249,32 @@ class OrderServiceTest {
         assertThatIllegalArgumentException().isThrownBy(() -> service.exportToCsv(null));
         java.nio.file.Files.deleteIfExists(tmp);
     }
+
+    @Test
+    @DisplayName("generateInvoicePdf + formatInvoiceText for wholesale order")
+    void invoicePdfAndText() {
+        Customer c = new Customer("Kitsap Blooms", "Sam Rivera", "sam@kitsapblooms.example",
+                "360-555-0100", "FLORIST", "Weekly wholesale");
+        c.setId(1L);
+        CustomerOrder o = new CustomerOrder(c, LocalDate.of(2026, 7, 11), "CONFIRMED", "Saturday van");
+        o.setId(42L);
+        o.addLine(new OrderLine("Nootka Rose", 20, "stems", 2.50));
+        o.addLine(new OrderLine("Dahlia mix", 10, "stems", 3.00));
+        when(orderRepository.findById(42L)).thenReturn(Optional.of(o));
+
+        String text = service.formatInvoiceText(42L);
+        assertThat(text).contains("INVOICE / ORDER #42");
+        assertThat(text).contains("Kitsap Blooms");
+        assertThat(text).contains("Nootka Rose");
+        assertThat(text).contains("80.00"); // 50 + 30
+
+        byte[] pdf = service.generateInvoicePdf(42L);
+        assertThat(pdf.length).isGreaterThan(100);
+        assertThat(new String(pdf, 0, 4)).isEqualTo("%PDF");
+
+        assertThatIllegalArgumentException().isThrownBy(() -> service.generateInvoicePdf((Long) null));
+        assertThatIllegalArgumentException().isThrownBy(() -> service.generateInvoicePdf((CustomerOrder) null));
+        assertThatThrownBy(() -> service.generateInvoicePdf(99L))
+                .isInstanceOf(IndexOutOfBoundsException.class);
+    }
 }

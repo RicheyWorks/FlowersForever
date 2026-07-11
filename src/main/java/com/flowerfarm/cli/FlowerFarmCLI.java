@@ -13,6 +13,7 @@ import com.flowerfarm.service.MarketDayPackingService;
 import com.flowerfarm.service.MarketDayPackingService.MarketDayPlan;
 import com.flowerfarm.service.DayCloseoutService;
 import com.flowerfarm.service.MorningBriefingService;
+import com.flowerfarm.service.OrderService;
 import com.flowerfarm.service.TrendService;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
@@ -45,6 +46,7 @@ public class FlowerFarmCLI implements ApplicationRunner {
     private final MarketDayPackingService marketDayPackingService;
     private final MorningBriefingService morningBriefingService;
     private final DayCloseoutService dayCloseoutService;
+    private final OrderService orderService;
 
     public FlowerFarmCLI(InventoryService inventoryService,
                          HarvestService harvestService,
@@ -53,7 +55,8 @@ public class FlowerFarmCLI implements ApplicationRunner {
                          IrrigationAdvisorService irrigationAdvisorService,
                          MarketDayPackingService marketDayPackingService,
                          MorningBriefingService morningBriefingService,
-                         DayCloseoutService dayCloseoutService) {
+                         DayCloseoutService dayCloseoutService,
+                         OrderService orderService) {
         this.inventoryService  = inventoryService;
         this.harvestService    = harvestService;
         this.trendService      = trendService;
@@ -62,6 +65,7 @@ public class FlowerFarmCLI implements ApplicationRunner {
         this.marketDayPackingService = marketDayPackingService;
         this.morningBriefingService = morningBriefingService;
         this.dayCloseoutService = dayCloseoutService;
+        this.orderService = orderService;
     }
 
     @Override
@@ -90,7 +94,8 @@ public class FlowerFarmCLI implements ApplicationRunner {
                 case "13" -> bedProduction(scanner);
                 case "14" -> morningBriefing(scanner);
                 case "15" -> dayCloseout(scanner);
-                case "16" -> { System.out.println("Goodbye!"); running = false; }
+                case "16" -> orderInvoice(scanner);
+                case "17" -> { System.out.println("Goodbye!"); running = false; }
                 default  -> System.out.println("Unknown option. Try again.");
             }
         }
@@ -126,7 +131,8 @@ public class FlowerFarmCLI implements ApplicationRunner {
                 13) Bed / field production
                 14) Morning briefing
                 15) Day closeout
-                16) Exit
+                16) Order invoice PDF
+                17) Exit
                 ─────────────────────────────────────────
                 Choice: \
                 """);
@@ -399,6 +405,29 @@ public class FlowerFarmCLI implements ApplicationRunner {
             }
         } catch (Exception e) {
             System.out.println("✗ Day closeout failed: " + e.getMessage());
+        }
+    }
+
+    private void orderInvoice(Scanner sc) {
+        try {
+            System.out.print("Order id: ");
+            String raw = sc.nextLine().trim();
+            long id = Long.parseLong(raw);
+            System.out.println();
+            System.out.println(orderService.formatInvoiceText(id));
+            System.out.print("Export PDF? (y/n): ");
+            if ("y".equalsIgnoreCase(sc.nextLine().trim())) {
+                String def = "invoice-order-" + id + ".pdf";
+                System.out.print("Filename [" + def + "]: ");
+                String file = orDefault(sc.nextLine(), def);
+                byte[] pdf = orderService.generateInvoicePdf(id);
+                java.nio.file.Files.write(java.nio.file.Path.of(file), pdf);
+                System.out.println("✓ Wrote " + file + " (" + pdf.length + " bytes)");
+            }
+        } catch (NumberFormatException e) {
+            System.out.println("✗ Enter a numeric order id.");
+        } catch (Exception e) {
+            System.out.println("✗ Order invoice failed: " + e.getMessage());
         }
     }
 

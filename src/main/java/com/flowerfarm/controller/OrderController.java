@@ -4,7 +4,9 @@ import com.flowerfarm.model.CustomerOrder;
 import com.flowerfarm.model.OrderLine;
 import com.flowerfarm.service.OrderService;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -126,6 +128,36 @@ public class OrderController {
                 .<ResponseEntity<?>>map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND)
                         .body(Map.of("error", "No order with id=" + id)));
+    }
+
+    /** Wholesale invoice / packing slip PDF for one order. */
+    @GetMapping(value = "/{id}/invoice.pdf", produces = MediaType.APPLICATION_PDF_VALUE)
+    public ResponseEntity<?> invoicePdf(@PathVariable Long id) {
+        try {
+            byte[] pdf = orderService.generateInvoicePdf(id);
+            String filename = "invoice-order-" + id + ".pdf";
+            return ResponseEntity.ok()
+                    .header(HttpHeaders.CONTENT_DISPOSITION,
+                            "attachment; filename=\"" + filename + "\"")
+                    .contentType(MediaType.APPLICATION_PDF)
+                    .body(pdf);
+        } catch (IndexOutOfBoundsException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(null);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(null);
+        }
+    }
+
+    /** Plain-text invoice for quick CLI / curl. */
+    @GetMapping(value = "/{id}/invoice.txt", produces = MediaType.TEXT_PLAIN_VALUE)
+    public ResponseEntity<String> invoiceText(@PathVariable Long id) {
+        try {
+            return ResponseEntity.ok(orderService.formatInvoiceText(id));
+        } catch (IndexOutOfBoundsException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(e.getMessage());
+        }
     }
 
     /**

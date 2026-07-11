@@ -67,6 +67,7 @@ Narrate as Kitsap / Port Orchard grower:
    - Add customer `Kitsap Blooms` (type WHOLESALE).  
    - Create order: product `Nootka Rose`, qty `10`, price `12`, status CONFIRMED.  
    - **Confirm** if DRAFT; **Fulfill** → inventory drops; audit under CRM.  
+   - Select order → **Invoice PDF…** (bill-to sheet for florist / wholesale).  
    - Filter **Pipeline only**; export orders CSV.
 
 5. **Market Day**  

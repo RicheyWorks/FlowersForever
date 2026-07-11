@@ -166,6 +166,8 @@ REST: `GET /api/auth/me` (Basic), `GET /api/auth/accounts` (usernames only).
 | GET/POST | `/api/orders` | Orders |
 | GET | `/api/orders/week` | Realized + pipeline + sparklines |
 | GET | `/api/orders/filter` | status/customer/dates |
+| GET | `/api/orders/{id}/invoice.pdf` | Wholesale invoice PDF |
+| GET | `/api/orders/{id}/invoice.txt` | Wholesale invoice plain text |
 | POST | `/api/orders/{id}/fulfill` | Deduct inventory |
 | POST | `/api/orders/{id}/confirm` | → CONFIRMED pipeline |
 | GET | `/api/connectors` | Registry + dual-mode flags |
@@ -240,6 +242,7 @@ More: [`docs/GUI_ARCHITECTURE.md`](docs/GUI_ARCHITECTURE.md).
 - Release **1.0.11**  
 - **Day closeout** (Dashboard + REST + CLI + PDF) — evening bookend to morning briefing  
 - Release **1.0.12**  
+- **Order invoice PDF** (CRM + REST + CLI) — wholesale bill-to sheet per order  
 
 ### Later ideas
 
