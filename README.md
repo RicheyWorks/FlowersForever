@@ -1,31 +1,32 @@
 # FlowersForever — Flower Farm Manager
 
 [![CI](https://github.com/RicheyWorks/FlowersForever/actions/workflows/ci.yml/badge.svg)](https://github.com/RicheyWorks/FlowersForever/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/RicheyWorks/FlowersForever?include_prereleases&sort=semver)](https://github.com/RicheyWorks/FlowersForever/releases)
 
-**Practical desktop + REST inventory tool for PNW flower farmers**  
+**Practical desktop + REST inventory for PNW flower growers**  
 Port Orchard / Kitsap County · roses, stems, tools, supplies · west of the Cascades.
 
-Spring Boot **3.5.16** + modular Swing GUI + dual-mode connectors (offline JSON mirrors **or** live REST).
+Spring Boot **3.5.16** · modular Swing GUI · dual-mode connectors (offline JSON mirrors **or** live REST) · fat JAR **1.0.18**.
 
 ---
 
 ## Features
 
-| Area | What you get |
-|------|----------------|
-| **Inventory** | H2/SQLite stock; harvest ↑ / fulfill ↓ / harvest-delete undo |
-| **Harvest log** | Add / edit / batch / filter (crop·bed·notes·dates) / CSV export; inventory + audit |
-| **CRM** | Customers + orders; confirm → pipeline; fulfill deducts stock; filters + CSV |
-| **Dashboard** | 5 KPIs, sparklines, cost basis, **realized** week revenue + pipeline, ops alerts |
-| **Reports** | Branded weekly harvest + sales PDF |
-| **Sync history** | Full audit (connectors · harvest · CRM); filter / failures / CSV |
-| **Connectors** | CSV, Excel, Airtable, Webhook, Shopify, Square, Sheets, Farmbrite, Floranext — **dual-mode** |
-| **Rose visualizer** | L-Systems: grow, mutate, save/load rulesets, inventory link, PNG |
+| Area | Highlights |
+|------|------------|
+| **Inventory** | H2/SQLite stock; harvest ↑ / fulfill ↓; low-stock reorder + **price list** PDFs |
+| **Harvest** | Log / edit / batch / filter; bed production + chronological **harvest log** PDFs |
+| **CRM** | Customers & orders; confirm → pipeline; fulfill deducts stock; **invoice** + **statement** PDFs |
+| **Dashboard** | KPIs, sparklines, realized vs pipeline revenue, PACK / WATER alerts, quick actions |
+| **Market day** | Pack list vs stock, packing PDF, batch fulfill all CONFIRMED |
+| **Day ops** | **Morning briefing** + **day closeout** sheets (pack, beds, water, stock, sales) |
+| **Irrigation** | Kitsap Open-Meteo live or offline climatology |
+| **Audit** | Connector · harvest · CRM history; filter, CSV, **audit PDF** (FAIL highlighted) |
+| **Connectors** | CSV, Excel, Airtable, Webhook, Shopify, Square, Sheets, Farmbrite, Floranext — dual-mode |
 | **Auth** | Optional OWNER / HAND / VIEWER barn roles (`auth` profile) |
-| **Irrigation** | Kitsap weather-aware tips (Open-Meteo live or offline climatology) |
-| **Market Day** | Packing list + pick sheet from CONFIRMED CRM orders vs stock |
-| **Morning briefing** | Pack + beds + water + low stock start-of-day sheet (PDF) |
-| **CLI** | Inventory, harvest, irrigation, packing, beds, briefing (`--cli`) |
+| **Demo** | `demo` profile seeds Kitsap CRM + harvest + today’s CONFIRMED orders when empty |
+| **Reports / CLI** | Weekly harvest + sales PDF; full ops menu via `--cli` |
+| **Rose visualizer** | L-Systems: grow, mutate, save rulesets, inventory link, PNG |
 
 ---
 
@@ -34,13 +35,14 @@ Spring Boot **3.5.16** + modular Swing GUI + dual-mode connectors (offline JSON 
 - **JDK 17+**
 - **Maven 3.9+**
 
-**CI:** every push/PR to `main` runs `mvn clean verify` on Ubuntu + Temurin 17 (see `.github/workflows/ci.yml`).  
-**Dependabot:** weekly PRs for Maven + GitHub Actions.  
-**Releases:** push a tag `v*` → Actions builds the fat JAR and attaches it to a GitHub Release.  
-**Security:** barn auth model, defaults, and hardening — **[SECURITY.md](SECURITY.md)**.
+| Automation | Behavior |
+|------------|----------|
+| **CI** | Every push/PR to `main` → `mvn clean verify` (Ubuntu + Temurin 17) |
+| **Dependabot** | Weekly Maven + GitHub Actions PRs |
+| **Releases** | Tag `v*` → fat JAR on GitHub Releases |
+| **Security** | Auth model & hardening — **[SECURITY.md](SECURITY.md)** |
 
 ```bash
-# Create a release from main (after CI is green)
 git tag v1.0.18
 git push origin v1.0.18
 ```
@@ -52,10 +54,9 @@ git push origin v1.0.18
 ```bash
 git clone https://github.com/RicheyWorks/FlowersForever.git
 cd FlowersForever
-
 mvn clean verify
 
-# GUI + REST (:8080)
+# GUI + REST on :8080
 mvn spring-boot:run
 # or
 java -jar target/flowerfarm-manager-1.0.18.jar
@@ -63,62 +64,55 @@ java -jar target/flowerfarm-manager-1.0.18.jar
 # CLI
 java -jar target/flowerfarm-manager-1.0.18.jar --cli
 
-# SQLite
+# Profiles (combine with commas)
 java -jar target/flowerfarm-manager-1.0.18.jar --spring.profiles.active=sqlite
-
-# Shared barn login (GUI + HTTP Basic)
 java -jar target/flowerfarm-manager-1.0.18.jar --spring.profiles.active=auth
-# farm/kitsap (OWNER) · hand/harvest (HAND) · viewer/view (VIEWER)
-
-# Portfolio demo seed (CRM + harvest + today's CONFIRMED orders when empty)
 java -jar target/flowerfarm-manager-1.0.18.jar --spring.profiles.active=demo
-# demo + barn auth:
 java -jar target/flowerfarm-manager-1.0.18.jar --spring.profiles.active=demo,auth
 ```
 
-### Persistence
+| Profile | Purpose |
+|---------|---------|
+| *(default)* | H2 file DB + GUI + REST |
+| `sqlite` | SQLite under `./data/flowerfarm.sqlite` |
+| `auth` | HTTP Basic + GUI login — `farm/kitsap` · `hand/harvest` · `viewer/view` |
+| `demo` | Non-destructive seed of CRM / harvest / today’s CONFIRMED orders when empty |
+| `cli` | Interactive CLI only (no Tomcat) |
 
-| Mode | Flag | File |
-|------|------|------|
-| **H2 (default)** | — | `./data/flowerfarm.mv.db` |
-| **SQLite** | `sqlite` profile | `./data/flowerfarm.sqlite` |
+Empty DB seeds from `farm_inventory.csv` if present, else sample PNW SKUs. Default store: `./data/flowerfarm.mv.db`.
 
-Empty DB seeds from `farm_inventory.csv` if present, else PNW sample SKUs.
+### Portfolio demo
 
-### Demo (5–12 minutes)
-
-Full portfolio runbook: **[docs/DEMO.md](docs/DEMO.md)**  
-REST smoke (app running):
+Full runbook: **[docs/DEMO.md](docs/DEMO.md)**
 
 ```powershell
+# App must already be running on :8080
 powershell -File scripts/demo-rest.ps1
-# with barn auth:
-powershell -File scripts/demo-rest.ps1 -User farm -Pass kitsap
+powershell -File scripts/demo-rest.ps1 -User farm -Pass kitsap   # with auth
 ```
 
-**Happy path:**
+**Happy path (~5 min)**
 
-```text
-1. Dashboard — sparklines, week harvest / realized revenue
-2. Harvest Log — Nootka Rose 120 stems (or batch lines) → stock ↑
-3. CRM — customer + CONFIRMED order → Fulfill → stock ↓
-4. Sync History — HARVEST_LOG / ORDER_FULFILL rows; export audit CSV
-5. Connectors — Export Farmbrite/Shopify (local mirrors, no keys)
-6. Reports — weekly PDF
-7. Optional auth profile — switch farm → viewer (read-only connectors)
-```
+1. **Dashboard** — KPIs, sparklines, morning briefing / day closeout  
+2. **Harvest Log** — log Nootka Rose stems → stock ↑; bed production + harvest log PDFs  
+3. **CRM** — CONFIRMED order → invoice PDF; fulfill → stock ↓; customer statement PDF  
+4. **Market Day** — packing list / PDF → fulfill all CONFIRMED  
+5. **Inventory** — low-stock reorder + price list PDFs  
+6. **Sync History** — HARVEST_LOG / ORDER_FULFILL; audit PDF  
+7. **Connectors** — Export Farmbrite/Shopify (local mirrors, no API keys)  
+8. Optional **auth** — switch to `viewer` (writes blocked)
 
 ---
 
 ## Connectors (dual-mode)
 
-**Default:** local JSON mirrors under `data/` (offline demos / CI).  
+**Default:** local JSON under `data/` (offline demos / CI).  
 **Live:** clear `local-file` and set credentials in `application-local.properties` (gitignored).
 
-| Name | Directions | Offline | Live keys |
-|------|------------|---------|-----------|
+| Name | Directions | Offline mirror | Live keys |
+|------|------------|----------------|-----------|
 | **csv** | I/E/S | file paths | — |
-| **excel** | I/E | `.xlsx` file | — |
+| **excel** | I/E | `.xlsx` | — |
 | **farmbrite** | I/E/S | `data/farmbrite-mirror.json` | api-key + account-id |
 | **floranext** | I/E/S | `data/floranext-mirror.json` | api-key + store-url |
 | **shopify** | I/E/S | `data/shopify-mirror.json` | shop-name + api-token |
@@ -127,15 +121,14 @@ powershell -File scripts/demo-rest.ps1 -User farm -Pass kitsap
 | **airtable** | I/E/S | `data/airtable-mirror.json` | api-key + base-id |
 | **webhook** | E | `data/webhook-last-payload.json` | url (+ secret HMAC) |
 
-Discovery includes `mode` / `localMode`: `GET /api/connectors`  
-Sandbox details: [`docs/CONNECTORS_SANDBOX.md`](docs/CONNECTORS_SANDBOX.md).
+`GET /api/connectors` includes `mode` / `localMode`. Details: **[docs/CONNECTORS_SANDBOX.md](docs/CONNECTORS_SANDBOX.md)**.
 
 ---
 
 ## Auth (optional)
 
-| Role | Write ops | Clear audit | Typical use |
-|------|-----------|-------------|-------------|
+| Role | Write | Clear audit | Typical use |
+|------|-------|-------------|-------------|
 | **OWNER** | yes | yes | Farm manager |
 | **HAND** | yes | no | Harvest crew |
 | **VIEWER** | no | no | Office / guest |
@@ -151,129 +144,82 @@ REST: `GET /api/auth/me` (Basic), `GET /api/auth/accounts` (usernames only).
 
 ## REST API (selected)
 
+### Core
+
 | Method | Path | Purpose |
 |--------|------|---------|
-| GET | `/api/dashboard` | Combined inventory + harvest week + revenue KPIs |
+| GET | `/api/dashboard` | Inventory + harvest week + revenue KPIs |
 | GET | `/api/inventory` | List / search / kpis |
-| GET | `/api/inventory/low-stock` | Low-stock reorder JSON (`threshold`) |
-| GET | `/api/inventory/low-stock/text` | Low-stock reorder plain text |
-| GET | `/api/inventory/low-stock/report.pdf` | Low-stock reorder PDF |
-| GET | `/api/inventory/price-list` | Price list JSON (`inStockOnly`) |
-| GET | `/api/inventory/price-list/text` | Price list plain text |
-| GET | `/api/inventory/price-list/report.pdf` | Price list PDF |
 | GET/POST | `/api/harvest` | Harvest CRUD |
 | POST | `/api/harvest/batch` | Batch log |
 | GET | `/api/harvest/week` | 7-day total + daily series |
-| GET | `/api/harvest/beds` | Bed/field production (`week=true` or `from`/`to`) |
-| GET | `/api/harvest/beds/text` | Plain-text bed production report |
-| GET | `/api/harvest/beds/report.pdf` | Printable bed production PDF |
-| GET | `/api/harvest/log` | Chronological harvest log (`week` or `from`/`to`) |
-| GET | `/api/harvest/log/text` | Harvest log plain text |
-| GET | `/api/harvest/log/report.pdf` | Printable harvest log PDF |
-| GET | `/api/harvest/filter` | crop/bed/notes/dates |
+| GET | `/api/harvest/filter` | crop / bed / notes / dates |
 | GET/POST | `/api/customers` | CRM customers |
-| GET | `/api/customers/{id}/statement` | Account statement JSON (`from`/`to`) |
-| GET | `/api/customers/{id}/statement.txt` | Account statement plain text |
-| GET | `/api/customers/{id}/statement.pdf` | Account statement PDF |
 | GET/POST | `/api/orders` | Orders |
 | GET | `/api/orders/week` | Realized + pipeline + sparklines |
-| GET | `/api/orders/filter` | status/customer/dates |
-| GET | `/api/orders/{id}/invoice.pdf` | Wholesale invoice PDF |
-| GET | `/api/orders/{id}/invoice.txt` | Wholesale invoice plain text |
-| POST | `/api/orders/{id}/fulfill` | Deduct inventory |
 | POST | `/api/orders/{id}/confirm` | → CONFIRMED pipeline |
-| GET | `/api/connectors` | Registry + dual-mode flags |
-| GET | `/api/connectors/history` | Audit filter (`connector`, `operation`, `success`, `q`) |
-| POST | `/api/connectors/history/export` | Server-side audit CSV |
-| GET | `/api/connectors/history/report` | Audit report JSON (same filters) |
-| GET | `/api/connectors/history/report.txt` | Audit report plain text |
-| GET | `/api/connectors/history/report.pdf` | Audit report PDF |
+| POST | `/api/orders/{id}/fulfill` | Deduct inventory |
 | GET | `/api/auth/me` | Session / role |
-| GET | `/api/irrigation/advice` | Kitsap watering plan (`live=true\|false`) |
-| GET | `/api/market-day` | Market packing plan JSON (`date`, `windowDays`) |
-| GET | `/api/market-day/text` | Plain-text pack sheet |
-| GET | `/api/market-day/export.csv` | CSV pick list + order lines |
-| GET | `/api/market-day/packing.pdf` | Printable packing PDF |
-| POST | `/api/market-day/fulfill` | Fulfill all CONFIRMED orders in window |
-| GET | `/api/briefing` | Morning briefing JSON (`live` weather optional) |
-| GET | `/api/briefing/text` | Morning briefing plain text |
-| GET | `/api/briefing/report.pdf` | Morning briefing PDF |
-| GET | `/api/closeout` | Day closeout JSON (fulfilled, harvest, pipeline) |
-| GET | `/api/closeout/text` | Day closeout plain text |
-| GET | `/api/closeout/report.pdf` | Day closeout PDF |
-| GET | `/api/reports/weekly.pdf` | Trailing week PDF |
 | GET | `/actuator/health` | Health |
+
+### Printables & ops sheets
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| GET | `/api/inventory/low-stock/report.pdf` | Low-stock reorder (`threshold`) |
+| GET | `/api/inventory/price-list/report.pdf` | Price list (`inStockOnly`) |
+| GET | `/api/harvest/beds/report.pdf` | Bed / field production |
+| GET | `/api/harvest/log/report.pdf` | Chronological harvest log |
+| GET | `/api/orders/{id}/invoice.pdf` | Wholesale invoice |
+| GET | `/api/customers/{id}/statement.pdf` | Account statement (`from` / `to`) |
+| GET | `/api/market-day/packing.pdf` | Market packing list |
+| POST | `/api/market-day/fulfill` | Fulfill all CONFIRMED in window |
+| GET | `/api/briefing/report.pdf` | Morning briefing |
+| GET | `/api/closeout/report.pdf` | Day closeout |
+| GET | `/api/reports/weekly.pdf` | Trailing week report |
+| GET | `/api/connectors/history/report.pdf` | Audit history |
+| GET | `/api/irrigation/advice` | Kitsap water plan (`live=true\|false`) |
+
+Most printable routes also expose JSON and plain-text siblings (`/text` or bare path without `.pdf`).  
+Full market-day, filter, and connector endpoints: see controllers under `com.flowerfarm.controller`.
 
 ---
 
-## Architecture (short)
+## Architecture
 
 ```
 com.flowerfarm
 ├── FlowerFarmApp
-├── auth/                  # FarmSession, roles, directory
-├── model/                 # Item, Harvest, Customer, Order, SyncHistory
-├── service/               # Inventory, Harvest, Order, Report, Trend, SyncHistory
-├── connector/             # DualModeCapable, LocalJsonMirror, registry, impl.*
-├── controller/            # REST
-├── gui/                   # FlowerFarmGUI (TabHost) + tabs
-└── lsystem/               # Rose generative rules
+├── auth/           # FarmSession, roles, directory
+├── model/          # Item, Harvest, Customer, Order, SyncHistory
+├── service/        # Inventory, Harvest, Order, Market Day, Briefing, Closeout, …
+├── connector/      # DualModeCapable, LocalJsonMirror, registry, impl.*
+├── controller/     # REST
+├── gui/            # FlowerFarmGUI (TabHost) + tabs
+└── lsystem/        # Rose generative rules
 ```
 
-**Add a dual-mode connector:** implement `ExternalConnector` + `DualModeCapable`, use `LocalJsonMirror` for offline, `@Value` for credentials, register `@Component` or `@Bean`.
-
-More: [`docs/GUI_ARCHITECTURE.md`](docs/GUI_ARCHITECTURE.md).
+**Add a dual-mode connector:** implement `ExternalConnector` + `DualModeCapable`, use `LocalJsonMirror` for offline, `@Value` for credentials, register `@Component` or `@Bean`.  
+GUI design notes: **[docs/GUI_ARCHITECTURE.md](docs/GUI_ARCHITECTURE.md)**.
 
 ---
 
-## Project status
+## Status
 
-### Done (recent)
+**Current release: [v1.0.18](https://github.com/RicheyWorks/FlowersForever/releases/tag/v1.0.18)** — Spring Boot 3.5.16, offline-first dual-mode, full market-day ops loop with printable PDFs.
 
-- Harvest production path (edit, batch, filter, export, CLI, API)  
-- Dashboard: sparklines, realized vs pipeline revenue, WoW, alerts  
-- Dual-mode: Farmbrite, Floranext, Shopify, Square, Sheets, Airtable, Webhook  
-- CRM: search, filter, confirm/fulfill/cancel, notes, CSV  
-- Audit history: multi-filter + CSV export  
-- Auth UX: login, session badge, switch user, VIEWER write guards  
-- Maintenance: Spring Boot **3.5.16**, release action softprops v3, Dependabot, `SECURITY.md`  
-- VIEWER UX: form fields + write buttons disabled across inventory, harvest, CRM, connectors  
-- Irrigation advisor: Open-Meteo live + Kitsap climatology, harvest-bed targets, dashboard WATER alerts  
-- Release **1.0.4**: CLI irrigation menu, demo REST scripts include `/api/irrigation/advice`  
-- **Market Day** packing list (GUI + REST + CLI) with inventory shortfall flags  
-- Dashboard **PACK** alerts + quick action; `/api/dashboard` includes `marketDay` snapshot  
-- Release **1.0.5**  
-- Bed / field production rollup (Harvest Log, REST, CLI, dashboard top-bed tip)  
-- Weekly PDF includes **bed / field production** table; release **1.0.6**  
-- Market Day **packing PDF** (pick list + customer slips, shortfall highlighting)  
-- Release **1.0.7**  
-- Bed production **PDF** (ranked beds + crop mix)  
-- Release **1.0.8**  
-- **Morning briefing** (Dashboard + REST + CLI + PDF)  
-- Release **1.0.9**  
-- Market Day **batch fulfill** (post-market inventory deduct for all CONFIRMED)  
-- Release **1.0.10**  
-- **`demo` profile** seeds Kitsap CRM + harvest beds + today's CONFIRMED orders  
-- Release **1.0.11**  
-- **Day closeout** (Dashboard + REST + CLI + PDF) — evening bookend to morning briefing  
-- Release **1.0.12**  
-- **Order invoice PDF** (CRM + REST + CLI) — wholesale bill-to sheet per order  
-- Release **1.0.13**  
-- **Low-stock reorder list** (Inventory + REST + CLI + PDF) — suggested restock qty at cost  
-- Release **1.0.14**  
-- **Customer statement PDF** (CRM + REST + CLI) — multi-order account rollup (90-day default)  
-- Release **1.0.15**  
-- **Harvest log PDF** (Harvest Log + REST + CLI) — chronological cut list with crop totals  
-- Release **1.0.16**  
-- **Audit history PDF** (Sync History + REST + CLI) — printable ops log with FAIL highlight  
-- Release **1.0.17**  
-- **Price list PDF** (Inventory + REST + CLI) — wholesale/market catalog by category  
-- Release **1.0.18**  
+| Theme | Shipped (highlights) |
+|-------|----------------------|
+| **Core farm ops** | Harvest path, CRM pipeline/fulfill, dashboard KPIs, weekly PDF |
+| **Market day** | Pack list, packing PDF, batch fulfill (1.0.5–1.0.10) |
+| **Day bookends** | Morning briefing, day closeout (1.0.9, 1.0.12) |
+| **Printables** | Beds, harvest log, invoices, statements, low-stock, price list, audit (1.0.6–1.0.18) |
+| **Platform** | Dual-mode connectors, VIEWER locks, `demo` profile, Dependabot, SECURITY.md |
 
 ### Later ideas
 
 - Spring Boot **4.x** migration (deliberate; 3.5.16 is final 3.5 OSS)  
-- Deeper POS adapters (only with real APIs)
+- Deeper POS adapters (only with real merchant APIs)
 
 ---
 
@@ -283,7 +229,7 @@ More: [`docs/GUI_ARCHITECTURE.md`](docs/GUI_ARCHITECTURE.md).
 |------|------|
 | [README.md](README.md) | Setup, features, API |
 | [SECURITY.md](SECURITY.md) | Auth model, defaults, vulnerability reporting |
-| [docs/DEMO.md](docs/DEMO.md) | **Portfolio / demo runbook** |
+| [docs/DEMO.md](docs/DEMO.md) | Portfolio / demo runbook |
 | [docs/CONNECTORS_SANDBOX.md](docs/CONNECTORS_SANDBOX.md) | Offline mirrors + live keys |
 | [docs/GUI_ARCHITECTURE.md](docs/GUI_ARCHITECTURE.md) | GUI design history |
 | [scripts/demo-rest.ps1](scripts/demo-rest.ps1) | REST smoke (Windows) |
