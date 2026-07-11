@@ -287,6 +287,36 @@ class HarvestServiceTest {
     }
 
     @Test
+    @DisplayName("buildHarvestLogReport chronological + by-crop PDF")
+    void harvestLogReportAndPdf() {
+        when(repository.findByHarvestDateBetweenOrderByHarvestDateDescIdDesc(any(), any()))
+                .thenReturn(List.of(
+                        new HarvestEntry(LocalDate.of(2026, 7, 12), "Dahlia", 15, "stems", "Bed C", ""),
+                        new HarvestEntry(LocalDate.of(2026, 7, 10), "Nootka Rose", 40, "stems", "Bed A", "am cut"),
+                        new HarvestEntry(LocalDate.of(2026, 7, 11), "Nootka Rose", 20, "stems", "Bed A", "")
+                ));
+
+        HarvestService.HarvestLogReport report = service.buildHarvestLogReport(
+                LocalDate.of(2026, 7, 10), LocalDate.of(2026, 7, 12));
+        assertThat(report.plainText()).contains("HARVEST LOG");
+        assertThat(report.entryCount()).isEqualTo(3);
+        assertThat(report.totalQuantity()).isEqualTo(75.0);
+        assertThat(report.byCrop()).containsEntry("Nootka Rose", 60.0);
+        // Chronological oldest → newest
+        assertThat(report.entries().get(0).getHarvestDate()).isEqualTo(LocalDate.of(2026, 7, 10));
+        assertThat(report.entries().get(2).getHarvestDate()).isEqualTo(LocalDate.of(2026, 7, 12));
+        assertThat(report.toMap()).containsKeys("entries", "byCrop");
+
+        byte[] pdf = service.generateHarvestLogPdf(report);
+        assertThat(pdf.length).isGreaterThan(100);
+        assertThat(new String(pdf, 0, 4)).isEqualTo("%PDF");
+        assertThatIllegalArgumentException().isThrownBy(() -> service.generateHarvestLogPdf(null));
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> service.buildHarvestLogReport(
+                        LocalDate.of(2026, 7, 12), LocalDate.of(2026, 7, 10)));
+    }
+
+    @Test
     @DisplayName("dailyQuantitiesLast7Days buckets by day oldest→today")
     void dailyQuantities() {
         LocalDate today = LocalDate.now();

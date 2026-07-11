@@ -101,7 +101,8 @@ public class FlowerFarmCLI implements ApplicationRunner {
                 case "16" -> orderInvoice(scanner);
                 case "17" -> lowStockReorder(scanner);
                 case "18" -> customerStatement(scanner);
-                case "19" -> { System.out.println("Goodbye!"); running = false; }
+                case "19" -> harvestLogPdf(scanner);
+                case "20" -> { System.out.println("Goodbye!"); running = false; }
                 default  -> System.out.println("Unknown option. Try again.");
             }
         }
@@ -140,7 +141,8 @@ public class FlowerFarmCLI implements ApplicationRunner {
                 16) Order invoice PDF
                 17) Low-stock reorder list
                 18) Customer statement PDF
-                19) Exit
+                19) Harvest log PDF
+                20) Exit
                 ─────────────────────────────────────────
                 Choice: \
                 """);
@@ -489,6 +491,31 @@ public class FlowerFarmCLI implements ApplicationRunner {
             System.out.println("✗ Enter a numeric customer id.");
         } catch (Exception e) {
             System.out.println("✗ Customer statement failed: " + e.getMessage());
+        }
+    }
+
+    private void harvestLogPdf(Scanner sc) {
+        try {
+            System.out.print("From YYYY-MM-DD [7 days ago]: ");
+            String fromRaw = sc.nextLine().trim();
+            System.out.print("To YYYY-MM-DD [today]: ");
+            String toRaw = sc.nextLine().trim();
+            LocalDate from = fromRaw.isEmpty() ? null : LocalDate.parse(fromRaw);
+            LocalDate to = toRaw.isEmpty() ? null : LocalDate.parse(toRaw);
+            var report = harvestService.buildHarvestLogReport(from, to);
+            System.out.println();
+            System.out.println(report.plainText());
+            System.out.print("Export PDF? (y/n): ");
+            if ("y".equalsIgnoreCase(sc.nextLine().trim())) {
+                String def = "harvest-log-" + report.to() + ".pdf";
+                System.out.print("Filename [" + def + "]: ");
+                String file = orDefault(sc.nextLine(), def);
+                byte[] pdf = harvestService.generateHarvestLogPdf(report);
+                java.nio.file.Files.write(java.nio.file.Path.of(file), pdf);
+                System.out.println("✓ Wrote " + file + " (" + pdf.length + " bytes)");
+            }
+        } catch (Exception e) {
+            System.out.println("✗ Harvest log PDF failed: " + e.getMessage());
         }
     }
 

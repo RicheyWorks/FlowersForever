@@ -164,6 +164,9 @@ REST: `GET /api/auth/me` (Basic), `GET /api/auth/accounts` (usernames only).
 | GET | `/api/harvest/beds` | Bed/field production (`week=true` or `from`/`to`) |
 | GET | `/api/harvest/beds/text` | Plain-text bed production report |
 | GET | `/api/harvest/beds/report.pdf` | Printable bed production PDF |
+| GET | `/api/harvest/log` | Chronological harvest log (`week` or `from`/`to`) |
+| GET | `/api/harvest/log/text` | Harvest log plain text |
+| GET | `/api/harvest/log/report.pdf` | Printable harvest log PDF |
 | GET | `/api/harvest/filter` | crop/bed/notes/dates |
 | GET/POST | `/api/customers` | CRM customers |
 | GET | `/api/customers/{id}/statement` | Account statement JSON (`from`/`to`) |
@@ -254,6 +257,7 @@ More: [`docs/GUI_ARCHITECTURE.md`](docs/GUI_ARCHITECTURE.md).
 - Release **1.0.14**  
 - **Customer statement PDF** (CRM + REST + CLI) — multi-order account rollup (90-day default)  
 - Release **1.0.15**  
+- **Harvest log PDF** (Harvest Log + REST + CLI) — chronological cut list with crop totals  
 
 ### Later ideas
 

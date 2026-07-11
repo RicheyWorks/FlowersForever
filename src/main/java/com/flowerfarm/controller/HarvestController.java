@@ -160,6 +160,66 @@ public class HarvestController {
         }
     }
 
+    /**
+     * Chronological harvest log report.
+     * Default: trailing 7 days when dates omitted; {@code week=true} forces last 7 days.
+     */
+    @GetMapping("/log")
+    public ResponseEntity<?> harvestLog(
+            @RequestParam(value = "from", required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(value = "to", required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(value = "week", defaultValue = "false") boolean week) {
+        try {
+            HarvestService.HarvestLogReport report = week
+                    ? harvestService.buildHarvestLogReportLast7Days()
+                    : harvestService.buildHarvestLogReport(from, to);
+            return ResponseEntity.ok(report.toMap());
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @GetMapping(value = "/log/text", produces = MediaType.TEXT_PLAIN_VALUE)
+    public ResponseEntity<?> harvestLogText(
+            @RequestParam(value = "from", required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(value = "to", required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(value = "week", defaultValue = "false") boolean week) {
+        try {
+            HarvestService.HarvestLogReport report = week
+                    ? harvestService.buildHarvestLogReportLast7Days()
+                    : harvestService.buildHarvestLogReport(from, to);
+            return ResponseEntity.ok(report.plainText());
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(e.getMessage());
+        }
+    }
+
+    @GetMapping(value = "/log/report.pdf", produces = MediaType.APPLICATION_PDF_VALUE)
+    public ResponseEntity<?> harvestLogPdf(
+            @RequestParam(value = "from", required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(value = "to", required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(value = "week", defaultValue = "false") boolean week) {
+        try {
+            HarvestService.HarvestLogReport report = week
+                    ? harvestService.buildHarvestLogReportLast7Days()
+                    : harvestService.buildHarvestLogReport(from, to);
+            byte[] pdf = harvestService.generateHarvestLogPdf(report);
+            String filename = "harvest-log-" + report.to() + ".pdf";
+            return ResponseEntity.ok()
+                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
+                    .contentType(MediaType.APPLICATION_PDF)
+                    .body(pdf);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(null);
+        }
+    }
+
     @GetMapping("/{id}")
     public ResponseEntity<?> get(@PathVariable Long id) {
         return harvestService.findById(id)

@@ -271,12 +271,16 @@ public class HarvestLogTab implements FlowerFarmTab {
         JButton bedProd = new JButton("Bed production…");
         bedProd.setToolTipText("Roll up harvest qty by bed/field (uses From/To filter dates when set).");
         bedProd.addActionListener(e -> showBedProduction());
+        JButton logPdf = new JButton("Harvest log PDF…");
+        logPdf.setToolTipText("Printable chronological cut list (uses From/To filter; default last 7 days). VIEWER OK.");
+        logPdf.addActionListener(e -> showHarvestLogPdf());
         bar.add(apply);
         bar.add(clear);
         bar.add(thisWeek);
         bar.add(exportBtn);
         bar.add(exportViewBtn);
         bar.add(bedProd);
+        bar.add(logPdf);
         bar.add(filterTotalsOnly);
         bar.add(filterStatusLabel);
         return bar;
@@ -687,6 +691,50 @@ public class HarvestLogTab implements FlowerFarmTab {
             } else if (host != null) {
                 host.setStatus("Bed production: " + report.bedCount() + " bed(s), qty "
                         + report.grandTotal() + ".");
+            }
+        } catch (Exception ex) {
+            showError(ex.getMessage());
+        }
+    }
+
+    private void showHarvestLogPdf() {
+        try {
+            LocalDate from = parseOptionalDate(filterFromField != null ? filterFromField.getText() : null);
+            LocalDate to = parseOptionalDate(filterToField != null ? filterToField.getText() : null);
+            HarvestService.HarvestLogReport report;
+            if (from == null && to == null) {
+                report = harvestService.buildHarvestLogReportLast7Days();
+            } else {
+                report = harvestService.buildHarvestLogReport(from, to);
+            }
+
+            JTextArea area = new JTextArea(report.plainText(), 22, 64);
+            area.setEditable(false);
+            area.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
+            area.setCaretPosition(0);
+            JScrollPane scroll = new JScrollPane(area);
+            scroll.setPreferredSize(new Dimension(640, 420));
+
+            Object[] options = {"Export PDF…", "Close"};
+            int choice = JOptionPane.showOptionDialog(panel, scroll,
+                    "Harvest log — " + report.from() + " → " + report.to(),
+                    JOptionPane.DEFAULT_OPTION, JOptionPane.PLAIN_MESSAGE,
+                    null, options, options[1]);
+            if (choice == 0) {
+                JFileChooser chooser = new JFileChooser();
+                chooser.setSelectedFile(new File("harvest-log-" + report.to() + ".pdf"));
+                if (chooser.showSaveDialog(panel) == JFileChooser.APPROVE_OPTION) {
+                    byte[] pdf = harvestService.generateHarvestLogPdf(report);
+                    java.nio.file.Files.write(chooser.getSelectedFile().toPath(), pdf);
+                    if (host != null) {
+                        host.setStatus("Harvest log PDF → " + chooser.getSelectedFile().getName()
+                                + " (" + report.entryCount() + " rows)");
+                    }
+                }
+            } else if (host != null) {
+                host.setStatus("Harvest log: " + report.entryCount() + " entr"
+                        + (report.entryCount() == 1 ? "y" : "ies")
+                        + ", qty " + report.totalQuantity() + ".");
             }
         } catch (Exception ex) {
             showError(ex.getMessage());

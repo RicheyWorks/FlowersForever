@@ -643,6 +643,238 @@ public class HarvestService {
         }
     }
 
+    /**
+     * Chronological harvest log for a date range (barn clipboard sheet).
+     * Null {@code from}/{@code to} = trailing 7 days through today.
+     */
+    public record HarvestLogReport(
+            String from,
+            String to,
+            int entryCount,
+            double totalQuantity,
+            Map<String, Double> byCrop,
+            List<HarvestEntry> entries,
+            String plainText
+    ) {
+        public Map<String, Object> toMap() {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("from", from);
+            m.put("to", to);
+            m.put("entryCount", entryCount);
+            m.put("totalQuantity", totalQuantity);
+            m.put("byCrop", byCrop);
+            m.put("entries", entries.stream().map(e -> {
+                Map<String, Object> row = new LinkedHashMap<>();
+                row.put("id", e.getId());
+                row.put("harvestDate", e.getHarvestDate() == null ? "" : e.getHarvestDate().toString());
+                row.put("cropName", e.getCropName());
+                row.put("quantity", e.getQuantity());
+                row.put("unit", e.getUnit());
+                row.put("bedOrField", e.getBedOrField() == null ? "" : e.getBedOrField());
+                row.put("notes", e.getNotes() == null ? "" : e.getNotes());
+                return row;
+            }).toList());
+            m.put("plainText", plainText);
+            return m;
+        }
+    }
+
+    @Transactional(readOnly = true)
+    public HarvestLogReport buildHarvestLogReport(LocalDate from, LocalDate to) {
+        LocalDate end = to != null ? to : LocalDate.now();
+        LocalDate start = from != null ? from : end.minusDays(6);
+        if (end.isBefore(start)) {
+            throw new IllegalArgumentException("to must be on or after from.");
+        }
+        List<HarvestEntry> entries = findBetween(start, end).stream()
+                .sorted(Comparator.comparing(HarvestEntry::getHarvestDate)
+                        .thenComparing(e -> e.getId() == null ? 0L : e.getId()))
+                .toList();
+        Map<String, Double> byCrop = new LinkedHashMap<>();
+        double total = 0;
+        for (HarvestEntry e : entries) {
+            total += e.getQuantity();
+            String crop = e.getCropName() == null || e.getCropName().isBlank()
+                    ? "(unnamed)" : e.getCropName().trim();
+            byCrop.merge(crop, e.getQuantity(), Double::sum);
+        }
+        // Sort crops by qty desc for summary
+        List<Map.Entry<String, Double>> cropSorted = new ArrayList<>(byCrop.entrySet());
+        cropSorted.sort(Map.Entry.<String, Double>comparingByValue().reversed()
+                .thenComparing(Map.Entry.comparingByKey(String.CASE_INSENSITIVE_ORDER)));
+        Map<String, Double> orderedCrops = new LinkedHashMap<>();
+        for (Map.Entry<String, Double> c : cropSorted) {
+            orderedCrops.put(c.getKey(), round1(c.getValue()));
+        }
+        String text = formatHarvestLogText(start.toString(), end.toString(), entries, total, orderedCrops);
+        return new HarvestLogReport(
+                start.toString(),
+                end.toString(),
+                entries.size(),
+                round1(total),
+                orderedCrops,
+                List.copyOf(entries),
+                text
+        );
+    }
+
+    /** Trailing 7 days harvest log (clipboard default). */
+    @Transactional(readOnly = true)
+    public HarvestLogReport buildHarvestLogReportLast7Days() {
+        LocalDate to = LocalDate.now();
+        return buildHarvestLogReport(to.minusDays(6), to);
+    }
+
+    public byte[] generateHarvestLogPdf(HarvestLogReport report) {
+        if (report == null) {
+            throw new IllegalArgumentException("report is required.");
+        }
+        try {
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            Document doc = new Document(PageSize.LETTER, 40, 40, 48, 40);
+            PdfWriter.getInstance(doc, baos);
+            doc.open();
+
+            Color brandGreen = new Color(34, 100, 54);
+            Color brandSoft = new Color(232, 245, 233);
+            Font titleFont = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 18, brandGreen);
+            Font h2 = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 12, brandGreen);
+            Font body = FontFactory.getFont(FontFactory.HELVETICA, 10);
+            Font small = FontFactory.getFont(FontFactory.HELVETICA, 9, Color.DARK_GRAY);
+            Font banner = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 11, Color.WHITE);
+
+            PdfPTable bannerTable = new PdfPTable(1);
+            bannerTable.setWidthPercentage(100);
+            PdfPCell bannerCell = new PdfPCell(new Phrase(
+                    "FlowersForever  ·  Port Orchard / Kitsap  ·  Harvest Log",
+                    banner));
+            bannerCell.setBackgroundColor(brandGreen);
+            bannerCell.setPadding(10);
+            bannerCell.setBorder(Rectangle.NO_BORDER);
+            bannerTable.addCell(bannerCell);
+            doc.add(bannerTable);
+            doc.add(Chunk.NEWLINE);
+
+            doc.add(new Paragraph("Harvest Log", titleFont));
+            doc.add(new Paragraph(
+                    "Period: " + report.from() + "  →  " + report.to()
+                            + "     ·     Generated: " + LocalDate.now(),
+                    small));
+            doc.add(Chunk.NEWLINE);
+
+            PdfPTable summary = new PdfPTable(new float[]{1, 1, 1});
+            summary.setWidthPercentage(100);
+            summary.addCell(summaryCell("Entries", String.valueOf(report.entryCount()), brandSoft));
+            summary.addCell(summaryCell("Total qty",
+                    String.format(Locale.US, "%,.1f", report.totalQuantity()), brandSoft));
+            summary.addCell(summaryCell("Crops",
+                    String.valueOf(report.byCrop().size()), brandSoft));
+            doc.add(summary);
+            doc.add(Chunk.NEWLINE);
+
+            doc.add(new Paragraph("1. By crop", h2));
+            doc.add(Chunk.NEWLINE);
+            if (report.byCrop().isEmpty()) {
+                doc.add(new Paragraph("No harvests in this period.", body));
+            } else {
+                PdfPTable crops = new PdfPTable(new float[]{3, 1.5f});
+                crops.setWidthPercentage(55);
+                headerCell(crops, "Crop");
+                headerCell(crops, "Qty");
+                for (Map.Entry<String, Double> c : report.byCrop().entrySet()) {
+                    crops.addCell(cell(c.getKey(), body));
+                    crops.addCell(cell(String.format(Locale.US, "%,.1f", c.getValue()), body));
+                }
+                doc.add(crops);
+            }
+            doc.add(Chunk.NEWLINE);
+
+            doc.add(new Paragraph("2. Detail log (chronological)", h2));
+            doc.add(Chunk.NEWLINE);
+            if (report.entries().isEmpty()) {
+                doc.add(new Paragraph("No rows — log cuts after morning harvest.", body));
+            } else {
+                PdfPTable t = new PdfPTable(new float[]{1.3f, 2.2f, 1.0f, 1.0f, 1.4f, 2.0f});
+                t.setWidthPercentage(100);
+                headerCell(t, "Date");
+                headerCell(t, "Crop");
+                headerCell(t, "Qty");
+                headerCell(t, "Unit");
+                headerCell(t, "Bed");
+                headerCell(t, "Notes");
+                for (HarvestEntry e : report.entries()) {
+                    t.addCell(cell(e.getHarvestDate() == null ? "" : e.getHarvestDate().toString(), body));
+                    t.addCell(cell(e.getCropName(), body));
+                    t.addCell(cell(String.format(Locale.US, "%,.1f", e.getQuantity()), body));
+                    t.addCell(cell(e.getUnit() == null ? "" : e.getUnit(), body));
+                    t.addCell(cell(e.getBedOrField() == null || e.getBedOrField().isBlank()
+                            ? "—" : e.getBedOrField(), body));
+                    t.addCell(cell(e.getNotes() == null ? "" : e.getNotes(), body));
+                }
+                doc.add(t);
+            }
+            doc.add(Chunk.NEWLINE);
+            doc.add(new Paragraph(
+                    "Tip: bed production PDF ranks fields; this sheet is the raw cut list for the cooler.",
+                    small));
+            doc.add(new Paragraph(
+                    "FlowersForever · practical tools for PNW flower growers", small));
+
+            doc.close();
+            log.info("Generated harvest log PDF {} → {} ({} entries, qty {})",
+                    report.from(), report.to(), report.entryCount(), report.totalQuantity());
+            return baos.toByteArray();
+        } catch (DocumentException e) {
+            throw new IllegalStateException("Failed to build harvest log PDF: " + e.getMessage(), e);
+        }
+    }
+
+    private static String formatHarvestLogText(String from, String to,
+                                               List<HarvestEntry> entries,
+                                               double total,
+                                               Map<String, Double> byCrop) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("HARVEST LOG — Port Orchard / Kitsap County\n");
+        sb.append("═════════════════════════════════════════\n");
+        sb.append("Period: ").append(from).append(" → ").append(to).append('\n');
+        sb.append(String.format(Locale.US, "Entries: %d  ·  Total qty: %,.1f  ·  Crops: %d%n",
+                entries.size(), total, byCrop.size()));
+        sb.append('\n');
+        sb.append("BY CROP\n");
+        sb.append("───────\n");
+        if (byCrop.isEmpty()) {
+            sb.append("  (none)\n");
+        } else {
+            for (Map.Entry<String, Double> c : byCrop.entrySet()) {
+                sb.append(String.format(Locale.US, "  %-24s %8.1f%n",
+                        truncate(c.getKey(), 24), c.getValue()));
+            }
+        }
+        sb.append('\n');
+        sb.append("DETAIL\n");
+        sb.append("──────\n");
+        if (entries.isEmpty()) {
+            sb.append("  (no harvests in period)\n");
+        } else {
+            sb.append(String.format(Locale.US, "%-12s %-18s %8s %-8s %-12s%n",
+                    "Date", "Crop", "Qty", "Unit", "Bed"));
+            sb.append("-".repeat(62)).append('\n');
+            for (HarvestEntry e : entries) {
+                sb.append(String.format(Locale.US, "%-12s %-18s %8.1f %-8s %-12s%n",
+                        e.getHarvestDate() == null ? "" : e.getHarvestDate().toString(),
+                        truncate(e.getCropName(), 18),
+                        e.getQuantity(),
+                        truncate(e.getUnit() == null ? "" : e.getUnit(), 8),
+                        truncate(e.getBedOrField() == null || e.getBedOrField().isBlank()
+                                ? "—" : e.getBedOrField(), 12)));
+            }
+            sb.append("-".repeat(62)).append('\n');
+            sb.append(String.format(Locale.US, "TOTAL QTY  %,.1f%n", total));
+        }
+        sb.append("\nTip: export bed production PDF for ranked fields; this is the cut list.\n");
+        return sb.toString();
+    }
+
     private static void headerCell(PdfPTable table, String text) {
         PdfPCell cell = new PdfPCell(new Phrase(text,
                 FontFactory.getFont(FontFactory.HELVETICA_BOLD, 9, Color.WHITE)));

@@ -58,7 +58,8 @@ Narrate as Kitsap / Port Orchard grower:
      ```  
    - Double-click a row → tweak qty → **Save edit** (`HARVEST_EDIT`).  
    - Filter crop/bed/notes; **This week**; **Export filtered CSV**.  
-   - **Bed production…** → rank beds by qty with crop mix; export CSV or **PDF**.
+   - **Bed production…** → rank beds by qty with crop mix; export CSV or **PDF**.  
+   - **Harvest log PDF…** → chronological cut list for the cooler (filter dates or last 7 days).
 
 3. **Dashboard again**  
    - Week Harvest KPI / sparkline updated.  
