@@ -13,7 +13,8 @@ mvn clean verify
 ```
 
 All tests green → fat JAR under `target/flowerfarm-manager-1.0-SNAPSHOT.jar`.  
-GitHub Actions runs the same command on every push to `main` (see CI badge in the README).
+GitHub Actions runs the same command on every push to `main` (see CI badge in the README).  
+Tagged releases (`git tag v1.0.0 && git push origin v1.0.0`) publish the fat JAR on the GitHub Releases page.
 
 ---
 

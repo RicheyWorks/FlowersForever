@@ -31,7 +31,15 @@ Spring Boot 3 + modular Swing GUI + dual-mode connectors (offline JSON mirrors *
 - **JDK 17+**
 - **Maven 3.9+**
 
-**CI:** every push/PR to `main` runs `mvn clean verify` on Ubuntu + Temurin 17 (see `.github/workflows/ci.yml`).
+**CI:** every push/PR to `main` runs `mvn clean verify` on Ubuntu + Temurin 17 (see `.github/workflows/ci.yml`).  
+**Dependabot:** weekly PRs for Maven + GitHub Actions.  
+**Releases:** push a tag `v1.0.0` → Actions builds the fat JAR and attaches it to a GitHub Release.
+
+```bash
+# Create a release from main (after CI is green)
+git tag v1.0.0
+git push origin v1.0.0
+```
 
 ---
 
