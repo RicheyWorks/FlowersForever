@@ -11,6 +11,7 @@ import com.flowerfarm.service.IrrigationAdvisorService;
 import com.flowerfarm.service.IrrigationAdvisorService.IrrigationAdvice;
 import com.flowerfarm.service.MarketDayPackingService;
 import com.flowerfarm.service.MarketDayPackingService.MarketDayPlan;
+import com.flowerfarm.service.MorningBriefingService;
 import com.flowerfarm.service.TrendService;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
@@ -41,19 +42,22 @@ public class FlowerFarmCLI implements ApplicationRunner {
     private final ConnectorRegistry connectorRegistry;
     private final IrrigationAdvisorService irrigationAdvisorService;
     private final MarketDayPackingService marketDayPackingService;
+    private final MorningBriefingService morningBriefingService;
 
     public FlowerFarmCLI(InventoryService inventoryService,
                          HarvestService harvestService,
                          TrendService trendService,
                          ConnectorRegistry connectorRegistry,
                          IrrigationAdvisorService irrigationAdvisorService,
-                         MarketDayPackingService marketDayPackingService) {
+                         MarketDayPackingService marketDayPackingService,
+                         MorningBriefingService morningBriefingService) {
         this.inventoryService  = inventoryService;
         this.harvestService    = harvestService;
         this.trendService      = trendService;
         this.connectorRegistry = connectorRegistry;
         this.irrigationAdvisorService = irrigationAdvisorService;
         this.marketDayPackingService = marketDayPackingService;
+        this.morningBriefingService = morningBriefingService;
     }
 
     @Override
@@ -80,7 +84,8 @@ public class FlowerFarmCLI implements ApplicationRunner {
                 case "11" -> irrigationAdvice(scanner);
                 case "12" -> marketDayPacking(scanner);
                 case "13" -> bedProduction(scanner);
-                case "14" -> { System.out.println("Goodbye!"); running = false; }
+                case "14" -> morningBriefing(scanner);
+                case "15" -> { System.out.println("Goodbye!"); running = false; }
                 default  -> System.out.println("Unknown option. Try again.");
             }
         }
@@ -114,7 +119,8 @@ public class FlowerFarmCLI implements ApplicationRunner {
                 11) Kitsap irrigation advice
                 12) Market day packing list
                 13) Bed / field production
-                14) Exit
+                14) Morning briefing
+                15) Exit
                 ─────────────────────────────────────────
                 Choice: \
                 """);
@@ -343,6 +349,30 @@ public class FlowerFarmCLI implements ApplicationRunner {
             } catch (Exception e) {
                 System.out.println("✗ Export failed: " + e.getMessage());
             }
+        }
+    }
+
+    private void morningBriefing(Scanner sc) {
+        try {
+            System.out.print("Try live weather for irrigation? (y/n) [n]: ");
+            boolean live = "y".equalsIgnoreCase(sc.nextLine().trim());
+            System.out.println(live
+                    ? "Building briefing (live weather if available)…"
+                    : "Building offline morning briefing…");
+            var briefing = morningBriefingService.build(live);
+            System.out.println();
+            System.out.println(briefing.plainText());
+            System.out.print("Export PDF? (y/n): ");
+            if ("y".equalsIgnoreCase(sc.nextLine().trim())) {
+                String def = "morning-briefing-" + briefing.date() + ".pdf";
+                System.out.print("Filename [" + def + "]: ");
+                String file = orDefault(sc.nextLine(), def);
+                byte[] pdf = morningBriefingService.generatePdf(briefing);
+                java.nio.file.Files.write(java.nio.file.Path.of(file), pdf);
+                System.out.println("✓ Wrote " + file + " (" + pdf.length + " bytes)");
+            }
+        } catch (Exception e) {
+            System.out.println("✗ Morning briefing failed: " + e.getMessage());
         }
     }
 

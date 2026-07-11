@@ -40,7 +40,8 @@ Narrate as Kitsap / Port Orchard grower:
 1. **Dashboard**  
    - Point at 5 KPIs: SKUs, inventory value (+ cost basis), low stock, **Week Harvest**, **Week Revenue**.  
    - Hover sparklines → day-by-day tooltip.  
-   - Note **realized revenue** = FULFILLED only; pipeline under the card.
+   - Note **realized revenue** = FULFILLED only; pipeline under the card.  
+   - **Morning briefing** → priority actions + export PDF (pack / beds / water / stock).
 
 2. **Harvest Log**  
    - Date today, crop `Nootka Rose`, qty `120`, unit `stems`, bed `Bed A`.  
@@ -140,6 +141,10 @@ Invoke-WebRequest "http://localhost:8080/api/market-day/packing.pdf" -OutFile ma
 # Bed / field production (last 7 days)
 Invoke-RestMethod "http://localhost:8080/api/harvest/beds?week=true" | ConvertTo-Json -Depth 5
 Invoke-WebRequest "http://localhost:8080/api/harvest/beds/report.pdf?week=true" -OutFile bed-prod.pdf
+
+# Morning briefing (offline-safe by default)
+Invoke-RestMethod "http://localhost:8080/api/briefing" | ConvertTo-Json -Depth 4
+Invoke-WebRequest "http://localhost:8080/api/briefing/report.pdf" -OutFile morning-briefing.pdf
 
 # Weekly PDF
 Invoke-WebRequest http://localhost:8080/api/reports/weekly.pdf -OutFile weekly.pdf

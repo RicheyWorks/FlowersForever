@@ -24,7 +24,8 @@ Spring Boot **3.5.16** + modular Swing GUI + dual-mode connectors (offline JSON 
 | **Auth** | Optional OWNER / HAND / VIEWER barn roles (`auth` profile) |
 | **Irrigation** | Kitsap weather-aware tips (Open-Meteo live or offline climatology) |
 | **Market Day** | Packing list + pick sheet from CONFIRMED CRM orders vs stock |
-| **CLI** | Inventory + harvest + irrigation + market packing (`--cli`) |
+| **Morning briefing** | Pack + beds + water + low stock start-of-day sheet (PDF) |
+| **CLI** | Inventory, harvest, irrigation, packing, beds, briefing (`--cli`) |
 
 ---
 
@@ -171,6 +172,9 @@ REST: `GET /api/auth/me` (Basic), `GET /api/auth/accounts` (usernames only).
 | GET | `/api/market-day/text` | Plain-text pack sheet |
 | GET | `/api/market-day/export.csv` | CSV pick list + order lines |
 | GET | `/api/market-day/packing.pdf` | Printable packing PDF |
+| GET | `/api/briefing` | Morning briefing JSON (`live` weather optional) |
+| GET | `/api/briefing/text` | Morning briefing plain text |
+| GET | `/api/briefing/report.pdf` | Morning briefing PDF |
 | GET | `/api/reports/weekly.pdf` | Trailing week PDF |
 | GET | `/actuator/health` | Health |
 
@@ -219,6 +223,7 @@ More: [`docs/GUI_ARCHITECTURE.md`](docs/GUI_ARCHITECTURE.md).
 - Release **1.0.7**  
 - Bed production **PDF** (ranked beds + crop mix)  
 - Release **1.0.8**  
+- **Morning briefing** (Dashboard + REST + CLI + PDF)  
 
 ### Later ideas
 

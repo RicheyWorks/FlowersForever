@@ -5,6 +5,7 @@ import com.flowerfarm.service.HarvestService;
 import com.flowerfarm.service.InventoryService;
 import com.flowerfarm.service.IrrigationAdvisorService;
 import com.flowerfarm.service.MarketDayPackingService;
+import com.flowerfarm.service.MorningBriefingService;
 import com.flowerfarm.service.OrderService;
 import org.jfree.chart.ChartFactory;
 import org.jfree.chart.ChartPanel;
@@ -14,6 +15,8 @@ import org.jfree.data.general.DefaultPieDataset;
 
 import javax.swing.*;
 import java.awt.*;
+import java.io.File;
+import java.nio.file.Files;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
@@ -37,6 +40,7 @@ public class DashboardTab implements FlowerFarmTab {
     private final OrderService orderService;
     private final IrrigationAdvisorService irrigationAdvisorService;
     private final MarketDayPackingService marketDayPackingService;
+    private final MorningBriefingService morningBriefingService;
     private final TabHost host;
 
     private JPanel panel;
@@ -65,12 +69,14 @@ public class DashboardTab implements FlowerFarmTab {
                         OrderService orderService,
                         IrrigationAdvisorService irrigationAdvisorService,
                         MarketDayPackingService marketDayPackingService,
+                        MorningBriefingService morningBriefingService,
                         TabHost host) {
         this.inventoryService = inventoryService;
         this.harvestService = harvestService;
         this.orderService = orderService;
         this.irrigationAdvisorService = irrigationAdvisorService;
         this.marketDayPackingService = marketDayPackingService;
+        this.morningBriefingService = morningBriefingService;
         this.host = host;
     }
 
@@ -406,6 +412,10 @@ public class DashboardTab implements FlowerFarmTab {
         actions.add(actionButton("Create Order", "CRM", "Open CRM to create a wholesale / market order."));
         actions.add(actionButton("Market packing", "Market Day",
                 "Build today's packing list / pick sheet for the van."));
+        JButton briefing = new JButton("Morning briefing");
+        briefing.setToolTipText("Pack + beds + water + low stock — start-of-day sheet (PDF).");
+        briefing.addActionListener(e -> showMorningBriefing());
+        actions.add(briefing);
         actions.add(actionButton("Fulfill pipeline", "CRM", "Open CRM to fulfill confirmed orders."));
         actions.add(actionButton("Weekly PDF Report", "Reports", "Generate harvest + sales PDF report."));
         actions.add(actionButton("Rose Visualizer", "Rose Visualizer", "Grow generative L-System roses."));
@@ -440,6 +450,51 @@ public class DashboardTab implements FlowerFarmTab {
         if (host != null) {
             host.selectTab(tabTitle);
             host.setStatus(statusMsg);
+        }
+    }
+
+    private void showMorningBriefing() {
+        if (morningBriefingService == null) {
+            return;
+        }
+        try {
+            if (host != null) {
+                host.setStatus("⏳ Building morning briefing…");
+            }
+            MorningBriefingService.MorningBriefing briefing =
+                    morningBriefingService.buildOffline();
+            JTextArea area = new JTextArea(briefing.plainText(), 24, 68);
+            area.setEditable(false);
+            area.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
+            area.setCaretPosition(0);
+            JScrollPane scroll = new JScrollPane(area);
+            scroll.setPreferredSize(new Dimension(680, 460));
+
+            Object[] options = {"Export PDF…", "Close"};
+            int choice = JOptionPane.showOptionDialog(panel, scroll,
+                    "Morning briefing — " + briefing.date(),
+                    JOptionPane.DEFAULT_OPTION, JOptionPane.PLAIN_MESSAGE,
+                    null, options, options[1]);
+            if (choice == 0) {
+                JFileChooser chooser = new JFileChooser();
+                chooser.setSelectedFile(new File("morning-briefing-" + briefing.date() + ".pdf"));
+                if (chooser.showSaveDialog(panel) == JFileChooser.APPROVE_OPTION) {
+                    byte[] pdf = morningBriefingService.generatePdf(briefing);
+                    Files.write(chooser.getSelectedFile().toPath(), pdf);
+                    if (host != null) {
+                        host.setStatus("Morning briefing PDF → "
+                                + chooser.getSelectedFile().getName());
+                    }
+                }
+            } else if (host != null) {
+                host.setStatus("Briefing: " + briefing.actionItems().size() + " action(s).");
+            }
+        } catch (Exception ex) {
+            JOptionPane.showMessageDialog(panel, ex.getMessage(),
+                    "Morning briefing failed", JOptionPane.ERROR_MESSAGE);
+            if (host != null) {
+                host.setStatus("Briefing failed: " + ex.getMessage());
+            }
         }
     }
 
