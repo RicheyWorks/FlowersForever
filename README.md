@@ -41,8 +41,8 @@ Spring Boot **3.5.16** + modular Swing GUI + dual-mode connectors (offline JSON 
 
 ```bash
 # Create a release from main (after CI is green)
-git tag v1.0.10
-git push origin v1.0.10
+git tag v1.0.11
+git push origin v1.0.11
 ```
 
 ---
@@ -58,22 +58,22 @@ mvn clean verify
 # GUI + REST (:8080)
 mvn spring-boot:run
 # or
-java -jar target/flowerfarm-manager-1.0.10.jar
+java -jar target/flowerfarm-manager-1.0.11.jar
 
 # CLI
-java -jar target/flowerfarm-manager-1.0.10.jar --cli
+java -jar target/flowerfarm-manager-1.0.11.jar --cli
 
 # SQLite
-java -jar target/flowerfarm-manager-1.0.10.jar --spring.profiles.active=sqlite
+java -jar target/flowerfarm-manager-1.0.11.jar --spring.profiles.active=sqlite
 
 # Shared barn login (GUI + HTTP Basic)
-java -jar target/flowerfarm-manager-1.0.10.jar --spring.profiles.active=auth
+java -jar target/flowerfarm-manager-1.0.11.jar --spring.profiles.active=auth
 # farm/kitsap (OWNER) · hand/harvest (HAND) · viewer/view (VIEWER)
 
 # Portfolio demo seed (CRM + harvest + today's CONFIRMED orders when empty)
-java -jar target/flowerfarm-manager-1.0.10.jar --spring.profiles.active=demo
+java -jar target/flowerfarm-manager-1.0.11.jar --spring.profiles.active=demo
 # demo + barn auth:
-java -jar target/flowerfarm-manager-1.0.10.jar --spring.profiles.active=demo,auth
+java -jar target/flowerfarm-manager-1.0.11.jar --spring.profiles.active=demo,auth
 ```
 
 ### Persistence
@@ -234,6 +234,7 @@ More: [`docs/GUI_ARCHITECTURE.md`](docs/GUI_ARCHITECTURE.md).
 - Market Day **batch fulfill** (post-market inventory deduct for all CONFIRMED)  
 - Release **1.0.10**  
 - **`demo` profile** seeds Kitsap CRM + harvest beds + today's CONFIRMED orders  
+- Release **1.0.11**  
 
 ### Later ideas
 
