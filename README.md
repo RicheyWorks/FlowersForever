@@ -181,6 +181,9 @@ REST: `GET /api/auth/me` (Basic), `GET /api/auth/accounts` (usernames only).
 | GET | `/api/briefing` | Morning briefing JSON (`live` weather optional) |
 | GET | `/api/briefing/text` | Morning briefing plain text |
 | GET | `/api/briefing/report.pdf` | Morning briefing PDF |
+| GET | `/api/closeout` | Day closeout JSON (fulfilled, harvest, pipeline) |
+| GET | `/api/closeout/text` | Day closeout plain text |
+| GET | `/api/closeout/report.pdf` | Day closeout PDF |
 | GET | `/api/reports/weekly.pdf` | Trailing week PDF |
 | GET | `/actuator/health` | Health |
 
@@ -235,6 +238,7 @@ More: [`docs/GUI_ARCHITECTURE.md`](docs/GUI_ARCHITECTURE.md).
 - Release **1.0.10**  
 - **`demo` profile** seeds Kitsap CRM + harvest beds + today's CONFIRMED orders  
 - Release **1.0.11**  
+- **Day closeout** (Dashboard + REST + CLI + PDF) — evening bookend to morning briefing  
 
 ### Later ideas
 

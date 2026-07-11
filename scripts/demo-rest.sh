@@ -20,6 +20,7 @@ hit /actuator/health
 hit /api/auth/me
 hit /api/dashboard
 hit /api/briefing
+hit /api/closeout
 hit /api/harvest/week
 hit /api/orders/week
 hit /api/connectors
@@ -31,4 +32,5 @@ curl -sS "${AUTH[@]}" -o bed-production-demo.pdf "${BASE}/api/harvest/beds/repor
 curl -sS "${AUTH[@]}" -o market-pack-demo.pdf "${BASE}/api/market-day/packing.pdf" && echo "Wrote market-pack-demo.pdf"
 curl -sS "${AUTH[@]}" -o weekly-demo.pdf "${BASE}/api/reports/weekly.pdf" && echo "Wrote weekly-demo.pdf"
 curl -sS "${AUTH[@]}" -o morning-briefing-demo.pdf "${BASE}/api/briefing/report.pdf" && echo "Wrote morning-briefing-demo.pdf"
+curl -sS "${AUTH[@]}" -o day-closeout-demo.pdf "${BASE}/api/closeout/report.pdf" && echo "Wrote day-closeout-demo.pdf"
 echo "Done."

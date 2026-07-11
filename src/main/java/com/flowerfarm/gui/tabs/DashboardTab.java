@@ -4,6 +4,7 @@ import com.flowerfarm.model.Item;
 import com.flowerfarm.service.HarvestService;
 import com.flowerfarm.service.InventoryService;
 import com.flowerfarm.service.IrrigationAdvisorService;
+import com.flowerfarm.service.DayCloseoutService;
 import com.flowerfarm.service.MarketDayPackingService;
 import com.flowerfarm.service.MorningBriefingService;
 import com.flowerfarm.service.OrderService;
@@ -41,6 +42,7 @@ public class DashboardTab implements FlowerFarmTab {
     private final IrrigationAdvisorService irrigationAdvisorService;
     private final MarketDayPackingService marketDayPackingService;
     private final MorningBriefingService morningBriefingService;
+    private final DayCloseoutService dayCloseoutService;
     private final TabHost host;
 
     private JPanel panel;
@@ -70,6 +72,7 @@ public class DashboardTab implements FlowerFarmTab {
                         IrrigationAdvisorService irrigationAdvisorService,
                         MarketDayPackingService marketDayPackingService,
                         MorningBriefingService morningBriefingService,
+                        DayCloseoutService dayCloseoutService,
                         TabHost host) {
         this.inventoryService = inventoryService;
         this.harvestService = harvestService;
@@ -77,6 +80,7 @@ public class DashboardTab implements FlowerFarmTab {
         this.irrigationAdvisorService = irrigationAdvisorService;
         this.marketDayPackingService = marketDayPackingService;
         this.morningBriefingService = morningBriefingService;
+        this.dayCloseoutService = dayCloseoutService;
         this.host = host;
     }
 
@@ -416,6 +420,10 @@ public class DashboardTab implements FlowerFarmTab {
         briefing.setToolTipText("Pack + beds + water + low stock — start-of-day sheet (PDF).");
         briefing.addActionListener(e -> showMorningBriefing());
         actions.add(briefing);
+        JButton closeout = new JButton("Day closeout");
+        closeout.setToolTipText("Fulfilled sales + harvest + leftover pipeline — end-of-day sheet (PDF).");
+        closeout.addActionListener(e -> showDayCloseout());
+        actions.add(closeout);
         actions.add(actionButton("Fulfill pipeline", "CRM", "Open CRM to fulfill confirmed orders."));
         actions.add(actionButton("Weekly PDF Report", "Reports", "Generate harvest + sales PDF report."));
         actions.add(actionButton("Rose Visualizer", "Rose Visualizer", "Grow generative L-System roses."));
@@ -494,6 +502,51 @@ public class DashboardTab implements FlowerFarmTab {
                     "Morning briefing failed", JOptionPane.ERROR_MESSAGE);
             if (host != null) {
                 host.setStatus("Briefing failed: " + ex.getMessage());
+            }
+        }
+    }
+
+    private void showDayCloseout() {
+        if (dayCloseoutService == null) {
+            return;
+        }
+        try {
+            if (host != null) {
+                host.setStatus("⏳ Building day closeout…");
+            }
+            DayCloseoutService.DayCloseout closeout = dayCloseoutService.build();
+            JTextArea area = new JTextArea(closeout.plainText(), 24, 68);
+            area.setEditable(false);
+            area.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
+            area.setCaretPosition(0);
+            JScrollPane scroll = new JScrollPane(area);
+            scroll.setPreferredSize(new Dimension(680, 460));
+
+            Object[] options = {"Export PDF…", "Close"};
+            int choice = JOptionPane.showOptionDialog(panel, scroll,
+                    "Day closeout — " + closeout.date(),
+                    JOptionPane.DEFAULT_OPTION, JOptionPane.PLAIN_MESSAGE,
+                    null, options, options[1]);
+            if (choice == 0) {
+                JFileChooser chooser = new JFileChooser();
+                chooser.setSelectedFile(new File("day-closeout-" + closeout.date() + ".pdf"));
+                if (chooser.showSaveDialog(panel) == JFileChooser.APPROVE_OPTION) {
+                    byte[] pdf = dayCloseoutService.generatePdf(closeout);
+                    Files.write(chooser.getSelectedFile().toPath(), pdf);
+                    if (host != null) {
+                        host.setStatus("Day closeout PDF → "
+                                + chooser.getSelectedFile().getName());
+                    }
+                }
+            } else if (host != null) {
+                host.setStatus("Closeout: " + closeout.fulfilledCount() + " fulfilled · "
+                        + closeout.nextSteps().size() + " next step(s).");
+            }
+        } catch (Exception ex) {
+            JOptionPane.showMessageDialog(panel, ex.getMessage(),
+                    "Day closeout failed", JOptionPane.ERROR_MESSAGE);
+            if (host != null) {
+                host.setStatus("Closeout failed: " + ex.getMessage());
             }
         }
     }

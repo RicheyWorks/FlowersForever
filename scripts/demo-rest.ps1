@@ -34,6 +34,7 @@ Get-Json "/api/auth/me"
 Get-Json "/api/auth/accounts"
 Get-Json "/api/dashboard"
 Get-Json "/api/briefing"
+Get-Json "/api/closeout"
 Get-Json "/api/harvest/week"
 Get-Json "/api/orders/week"
 Get-Json "/api/connectors"
@@ -77,6 +78,15 @@ try {
     Write-Host "Wrote $briefPdf ($((Get-Item $briefPdf).Length) bytes)" -ForegroundColor Green
 } catch {
     Write-Host "Briefing PDF failed: $_" -ForegroundColor Red
+}
+
+$closePdf = Join-Path (Get-Location) "day-closeout-demo.pdf"
+Write-Host "`n=== GET /api/closeout/report.pdf → $closePdf ===" -ForegroundColor Yellow
+try {
+    Invoke-WebRequest -Uri "$BaseUrl/api/closeout/report.pdf" -Headers $headers -OutFile $closePdf
+    Write-Host "Wrote $closePdf ($((Get-Item $closePdf).Length) bytes)" -ForegroundColor Green
+} catch {
+    Write-Host "Closeout PDF failed: $_" -ForegroundColor Red
 }
 
 Write-Host "`nDone." -ForegroundColor Green

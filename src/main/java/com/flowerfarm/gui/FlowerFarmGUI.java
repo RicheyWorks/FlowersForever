@@ -10,6 +10,7 @@ import com.flowerfarm.service.HarvestService;
 import com.flowerfarm.service.InventoryService;
 import com.flowerfarm.service.IrrigationAdvisorService;
 import com.flowerfarm.service.MarketDayPackingService;
+import com.flowerfarm.service.DayCloseoutService;
 import com.flowerfarm.service.MorningBriefingService;
 import com.flowerfarm.service.OrderService;
 import com.flowerfarm.service.ReportService;
@@ -62,6 +63,7 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
     private final IrrigationAdvisorService irrigationAdvisorService;
     private final MarketDayPackingService marketDayPackingService;
     private final MorningBriefingService morningBriefingService;
+    private final DayCloseoutService dayCloseoutService;
     private final GuiLoginGate loginGate;
 
     // Created lazily on the EDT inside initialise() — never touched before run().
@@ -96,6 +98,7 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
                          IrrigationAdvisorService irrigationAdvisorService,
                          MarketDayPackingService marketDayPackingService,
                          MorningBriefingService morningBriefingService,
+                         DayCloseoutService dayCloseoutService,
                          GuiLoginGate loginGate) {
         // No AWT calls here — Spring safe to construct this bean at any time.
         this.inventoryService = inventoryService;
@@ -109,6 +112,7 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
         this.irrigationAdvisorService = irrigationAdvisorService;
         this.marketDayPackingService = marketDayPackingService;
         this.morningBriefingService = morningBriefingService;
+        this.dayCloseoutService = dayCloseoutService;
         this.loginGate = loginGate;
     }
 
@@ -140,7 +144,8 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
 
         // Build tabs (constructor injection of services + this TabHost).
         dashboard = new DashboardTab(inventoryService, harvestService, orderService,
-                irrigationAdvisorService, marketDayPackingService, morningBriefingService, this);
+                irrigationAdvisorService, marketDayPackingService, morningBriefingService,
+                dayCloseoutService, this);
         trendTab = new TrendAnalysisTab(trendService);
         tabs.add(dashboard);
         tabs.add(new InventoryTab(inventoryService, this));

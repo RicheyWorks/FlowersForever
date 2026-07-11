@@ -44,7 +44,8 @@ Narrate as Kitsap / Port Orchard grower:
    - Point at 5 KPIs: SKUs, inventory value (+ cost basis), low stock, **Week Harvest**, **Week Revenue**.  
    - Hover sparklines → day-by-day tooltip.  
    - Note **realized revenue** = FULFILLED only; pipeline under the card.  
-   - **Morning briefing** → priority actions + export PDF (pack / beds / water / stock).
+   - **Morning briefing** → priority actions + export PDF (pack / beds / water / stock).  
+   - After market → **Day closeout** → fulfilled sales, leftover pipeline, low stock, next-day steps (PDF).
 
 2. **Harvest Log**  
    - Date today, crop `Nootka Rose`, qty `120`, unit `stems`, bed `Bed A`.  
@@ -74,24 +75,28 @@ Narrate as Kitsap / Port Orchard grower:
    - Per-customer pack slips; export TXT / CSV / **PDF** for the van.  
    - After market → **Fulfill all CONFIRMED…** (batch inventory deduct + audit).
 
-6. **Sync History**  
+6. **Day closeout** (Dashboard quick action)  
+   - End-of-day sheet: fulfilled orders + revenue, harvest today, open CONFIRMED leftover, low stock.  
+   - Export PDF for the barn board; REST: `/api/closeout` and `/api/closeout/report.pdf`.
+
+7. **Sync History**  
    - Show HARVEST_LOG / ORDER_FULFILL / connector rows.  
    - Failures only filter; export audit CSV.
 
-7. **Reports**  
+8. **Reports**  
    - Weekly PDF (GUI or `curl -o weekly.pdf http://localhost:8080/api/reports/weekly.pdf`).
 
-8. **Connectors (offline dual-mode)**  
+9. **Connectors (offline dual-mode)**  
    - **Export Farmbrite** → `data/farmbrite-mirror.json`.  
    - **Sync Shopify** / **Export Square** with default local mirrors (no API keys).  
    - Same for Sheets / Airtable / Webhook dry-run payload file.
 
-9. **Irrigation & Care**  
+10. **Irrigation & Care**  
    - **Refresh (try live weather)** → Open-Meteo for Port Orchard (or climatology offline).  
    - Priority badge + 7-day precip / ET when live; active beds from recent harvests.  
    - Dashboard may show a **WATER** alert in dry months.
 
-10. **Rose Visualizer**  
+11. **Rose Visualizer**  
    - Grow L-System, mutate, save ruleset, optional PNG — “fun technical depth.”
 
 ---
