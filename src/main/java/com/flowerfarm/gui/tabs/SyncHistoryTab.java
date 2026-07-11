@@ -1,5 +1,7 @@
 package com.flowerfarm.gui.tabs;
 
+import com.flowerfarm.auth.FarmSession;
+import com.flowerfarm.gui.GuiPermissions;
 import com.flowerfarm.model.SyncHistoryEntry;
 import com.flowerfarm.service.SyncHistoryService;
 
@@ -32,6 +34,7 @@ public class SyncHistoryTab implements FlowerFarmTab {
     private JComboBox<String> resultFilter;
     private JTextField messageSearch;
     private JLabel statsLabel;
+    private JButton clearHistBtn;
     private List<SyncHistoryEntry> lastView = List.of();
 
     public SyncHistoryTab(SyncHistoryService syncHistoryService, TabHost host) {
@@ -44,6 +47,13 @@ public class SyncHistoryTab implements FlowerFarmTab {
     @Override
     public String getDescription() {
         return "Audit log of connectors, harvest, and CRM operations";
+    }
+
+    @Override
+    public void applyRolePermissions(boolean canWrite) {
+        // Clear history is OWNER-only when auth is on; HAND can write elsewhere but not clear
+        boolean canClear = host != null ? host.canClearHistory() : FarmSession.canClearHistory();
+        GuiPermissions.setWritable(canClear, GuiPermissions.OWNER_CLEAR_TIP, clearHistBtn);
     }
 
     @Override
@@ -223,15 +233,15 @@ public class SyncHistoryTab implements FlowerFarmTab {
         refresh.addActionListener(e -> refreshData());
         JButton exportBtn = new JButton("Export CSV…");
         exportBtn.addActionListener(e -> exportCsv());
-        JButton clearHist = new JButton("Clear history…");
-        clearHist.addActionListener(e -> clearHistory());
+        clearHistBtn = new JButton("Clear history…");
+        clearHistBtn.addActionListener(e -> clearHistory());
 
         filterBar.add(applyBtn);
         filterBar.add(failures);
         filterBar.add(clear);
         filterBar.add(refresh);
         filterBar.add(exportBtn);
-        filterBar.add(clearHist);
+        filterBar.add(clearHistBtn);
         return filterBar;
     }
 

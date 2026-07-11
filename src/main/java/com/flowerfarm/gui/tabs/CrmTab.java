@@ -54,6 +54,18 @@ public class CrmTab implements FlowerFarmTab {
     private JLabel orderStatusLabel;
     private List<CustomerOrder> lastOrderView = List.of();
 
+    private JButton addCustomerBtn;
+    private JButton loadCustomerBtn;
+    private JButton saveCustomerBtn;
+    private JButton clearCustomerBtn;
+    private JButton deleteCustomerBtn;
+    private JButton createOrderBtn;
+    private JButton confirmOrderBtn;
+    private JButton fulfillOrderBtn;
+    private JButton cancelOrderBtn;
+    private JButton saveNotesBtn;
+    private JButton deleteOrderBtn;
+
     public CrmTab(CustomerService customerService, OrderService orderService, TabHost host) {
         this.customerService = customerService;
         this.orderService = orderService;
@@ -101,6 +113,16 @@ public class CrmTab implements FlowerFarmTab {
                 }
             }
         }
+    }
+
+    @Override
+    public void applyRolePermissions(boolean canWrite) {
+        // Search / filter / export stay enabled for VIEWER
+        GuiPermissions.setWritable(canWrite,
+                custName, custContact, custEmail, custPhone, custType, custNotes,
+                addCustomerBtn, loadCustomerBtn, saveCustomerBtn, clearCustomerBtn, deleteCustomerBtn,
+                orderCustomer, orderProduct, orderQty, orderUnit, orderPrice, orderStatus, orderNotes,
+                createOrderBtn, confirmOrderBtn, fulfillOrderBtn, cancelOrderBtn, saveNotesBtn, deleteOrderBtn);
     }
 
     private void buildUI() {
@@ -173,22 +195,22 @@ public class CrmTab implements FlowerFarmTab {
         form.add(custNotes);
 
         JPanel buttons = new JPanel(new FlowLayout(FlowLayout.LEFT));
-        JButton add = new JButton("Add customer");
-        add.addActionListener(e -> addCustomer());
-        JButton load = new JButton("Load selected");
-        load.addActionListener(e -> loadCustomerIntoForm());
-        JButton save = new JButton("Save edit");
-        save.setToolTipText("Update loaded customer (double-click row to load).");
-        save.addActionListener(e -> saveCustomerEdit());
-        JButton clear = new JButton("Clear form");
-        clear.addActionListener(e -> clearCustomerForm());
-        JButton del = new JButton("Delete selected");
-        del.addActionListener(e -> deleteCustomer());
-        buttons.add(add);
-        buttons.add(load);
-        buttons.add(save);
-        buttons.add(clear);
-        buttons.add(del);
+        addCustomerBtn = new JButton("Add customer");
+        addCustomerBtn.addActionListener(e -> addCustomer());
+        loadCustomerBtn = new JButton("Load selected");
+        loadCustomerBtn.addActionListener(e -> loadCustomerIntoForm());
+        saveCustomerBtn = new JButton("Save edit");
+        saveCustomerBtn.setToolTipText("Update loaded customer (double-click row to load).");
+        saveCustomerBtn.addActionListener(e -> saveCustomerEdit());
+        clearCustomerBtn = new JButton("Clear form");
+        clearCustomerBtn.addActionListener(e -> clearCustomerForm());
+        deleteCustomerBtn = new JButton("Delete selected");
+        deleteCustomerBtn.addActionListener(e -> deleteCustomer());
+        buttons.add(addCustomerBtn);
+        buttons.add(loadCustomerBtn);
+        buttons.add(saveCustomerBtn);
+        buttons.add(clearCustomerBtn);
+        buttons.add(deleteCustomerBtn);
 
         JPanel south = new JPanel(new BorderLayout());
         south.add(form, BorderLayout.CENTER);
@@ -271,31 +293,31 @@ public class CrmTab implements FlowerFarmTab {
         form.add(orderNotes);
 
         JPanel buttons = new JPanel(new FlowLayout(FlowLayout.LEFT));
-        JButton create = new JButton("Create order + line");
-        create.addActionListener(e -> createOrder());
-        JButton confirm = new JButton("Confirm");
-        confirm.setToolTipText("DRAFT → CONFIRMED (adds to revenue pipeline; no inventory change).");
-        confirm.addActionListener(e -> confirmOrder());
-        JButton fulfill = new JButton("Fulfill (deduct inventory)");
-        fulfill.setToolTipText("Marks FULFILLED and decrements matching inventory SKUs by product name.");
-        fulfill.addActionListener(e -> markFulfilled());
-        JButton cancel = new JButton("Cancel order");
-        cancel.addActionListener(e -> cancelOrder());
-        JButton saveNotes = new JButton("Save notes");
-        saveNotes.addActionListener(e -> saveOrderNotes());
-        JButton del = new JButton("Delete order");
-        del.addActionListener(e -> deleteOrder());
+        createOrderBtn = new JButton("Create order + line");
+        createOrderBtn.addActionListener(e -> createOrder());
+        confirmOrderBtn = new JButton("Confirm");
+        confirmOrderBtn.setToolTipText("DRAFT → CONFIRMED (adds to revenue pipeline; no inventory change).");
+        confirmOrderBtn.addActionListener(e -> confirmOrder());
+        fulfillOrderBtn = new JButton("Fulfill (deduct inventory)");
+        fulfillOrderBtn.setToolTipText("Marks FULFILLED and decrements matching inventory SKUs by product name.");
+        fulfillOrderBtn.addActionListener(e -> markFulfilled());
+        cancelOrderBtn = new JButton("Cancel order");
+        cancelOrderBtn.addActionListener(e -> cancelOrder());
+        saveNotesBtn = new JButton("Save notes");
+        saveNotesBtn.addActionListener(e -> saveOrderNotes());
+        deleteOrderBtn = new JButton("Delete order");
+        deleteOrderBtn.addActionListener(e -> deleteOrder());
         JButton exportOrders = new JButton("Export view CSV…");
         exportOrders.setToolTipText("Export currently filtered order rows.");
         exportOrders.addActionListener(e -> exportOrdersCsv(true));
         JButton exportAll = new JButton("Export all CSV…");
         exportAll.addActionListener(e -> exportOrdersCsv(false));
-        buttons.add(create);
-        buttons.add(confirm);
-        buttons.add(fulfill);
-        buttons.add(cancel);
-        buttons.add(saveNotes);
-        buttons.add(del);
+        buttons.add(createOrderBtn);
+        buttons.add(confirmOrderBtn);
+        buttons.add(fulfillOrderBtn);
+        buttons.add(cancelOrderBtn);
+        buttons.add(saveNotesBtn);
+        buttons.add(deleteOrderBtn);
         buttons.add(exportOrders);
         buttons.add(exportAll);
 

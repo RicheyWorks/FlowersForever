@@ -20,6 +20,15 @@ public class AddItemTab implements FlowerFarmTab {
     private final TabHost host;
 
     private JPanel panel;
+    private JTextField nameField;
+    private JTextField priceField;
+    private JTextField costField;
+    private JTextField qtyField;
+    private JTextField notesField;
+    private JComboBox<String> categoryCombo;
+    private JComboBox<String> unitCombo;
+    private JComboBox<String> roseCombo;
+    private JButton addBtn;
 
     public AddItemTab(InventoryService inventoryService, TabHost host) {
         this.inventoryService = inventoryService;
@@ -44,35 +53,58 @@ public class AddItemTab implements FlowerFarmTab {
         return panel;
     }
 
+    @Override
+    public void applyRolePermissions(boolean canWrite) {
+        GuiPermissions.setWritable(canWrite,
+                nameField, priceField, costField, qtyField, notesField,
+                categoryCombo, unitCombo, addBtn);
+        if (roseCombo != null) {
+            if (!canWrite) {
+                GuiPermissions.setWritable(false, roseCombo);
+            } else {
+                roseCombo.setEnabled("Flowers/Plants".equals(categoryCombo.getSelectedItem()));
+                if (roseCombo.getToolTipText() != null
+                        && roseCombo.getToolTipText().equals(GuiPermissions.VIEWER_READONLY_TIP)) {
+                    roseCombo.setToolTipText(null);
+                }
+            }
+        }
+    }
+
     private void buildForm() {
         panel = new JPanel(new GridLayout(0, 2, 8, 8));
         panel.setBorder(BorderFactory.createEmptyBorder(20, 30, 20, 30));
 
-        JTextField nameField = new JTextField();
-        JTextField priceField = new JTextField();
-        JTextField costField = new JTextField();
-        JTextField qtyField = new JTextField();
-        JTextField notesField = new JTextField();
+        nameField = new JTextField();
+        priceField = new JTextField();
+        costField = new JTextField();
+        qtyField = new JTextField();
+        notesField = new JTextField();
 
         String[] categories = {
                 "Flowers/Plants", "Fertilizers", "Pest Control",
                 "Tools/Equipment", "Rentals", "Gas/Fuel", "Other"
         };
-        JComboBox<String> categoryCombo = new JComboBox<>(categories);
+        categoryCombo = new JComboBox<>(categories);
 
         String[] units = {"Per Stem", "Per Weight (lb)", "Per Unit", "Per Gallon", "Per Hour"};
-        JComboBox<String> unitCombo = new JComboBox<>(units);
+        unitCombo = new JComboBox<>(units);
 
         String[] roseTypes = {
                 "Alba", "Damask", "Gallicas", "Centifolia", "Moss",
                 "Bourbon", "Hybrid Perpetual", "Portland",
                 "Nootka", "Rosa rugosa", "New Dawn", "Queen Elizabeth"
         };
-        JComboBox<String> roseCombo = new JComboBox<>(roseTypes);
+        roseCombo = new JComboBox<>(roseTypes);
         roseCombo.setEnabled(false);
 
-        categoryCombo.addActionListener(e ->
-                roseCombo.setEnabled("Flowers/Plants".equals(categoryCombo.getSelectedItem())));
+        categoryCombo.addActionListener(e -> {
+            if (host != null && !host.canMutateData()) {
+                roseCombo.setEnabled(false);
+                return;
+            }
+            roseCombo.setEnabled("Flowers/Plants".equals(categoryCombo.getSelectedItem()));
+        });
 
         panel.add(new JLabel("Item Name *"));               panel.add(nameField);
         panel.add(new JLabel("Category"));                  panel.add(categoryCombo);
@@ -83,7 +115,7 @@ public class AddItemTab implements FlowerFarmTab {
         panel.add(new JLabel("Initial Quantity *"));        panel.add(qtyField);
         panel.add(new JLabel("Notes / PNW Details"));       panel.add(notesField);
 
-        JButton addBtn = new JButton("Add to Inventory");
+        addBtn = new JButton("Add to Inventory");
         addBtn.setFont(addBtn.getFont().deriveFont(Font.BOLD, 14f));
 
         addBtn.addActionListener(e -> {

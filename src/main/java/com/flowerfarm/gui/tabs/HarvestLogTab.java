@@ -45,6 +45,15 @@ public class HarvestLogTab implements FlowerFarmTab {
 
     private JTextArea totalsArea;
     private JTextArea batchArea;
+    private JComboBox<String> unitSuggest;
+    private JButton batchBtn;
+    private JButton fillSampleBtn;
+    private JButton addBtn;
+    private JButton loadBtn;
+    private JButton saveBtn;
+    private JButton clearFormBtn;
+    private JButton deleteBtn;
+    private JButton dupBtn;
     private Long editingId; // null = add mode
     private List<HarvestEntry> lastView = List.of();
 
@@ -76,6 +85,15 @@ public class HarvestLogTab implements FlowerFarmTab {
     @Override
     public void refreshData() {
         applyFilter();
+    }
+
+    @Override
+    public void applyRolePermissions(boolean canWrite) {
+        // Filter / export / refresh stay enabled for VIEWER
+        GuiPermissions.setWritable(canWrite,
+                dateField, cropField, cropSuggest, qtyField, unitField, unitSuggest,
+                bedField, notesField, batchArea,
+                batchBtn, fillSampleBtn, addBtn, loadBtn, saveBtn, clearFormBtn, deleteBtn, dupBtn);
     }
 
     private void buildUI() {
@@ -135,14 +153,14 @@ public class HarvestLogTab implements FlowerFarmTab {
                 + "Nootka Rose,40\nDamask Rose,25,bunches\nDahlia mix,15,stems,Bed C\n");
         p.add(new JScrollPane(batchArea), BorderLayout.CENTER);
         JPanel south = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
-        JButton batchBtn = new JButton("Log batch harvest");
+        batchBtn = new JButton("Log batch harvest");
         batchBtn.setToolTipText("Creates one harvest entry per non-empty line and updates inventory.");
         batchBtn.addActionListener(e -> logBatch());
-        JButton fillSample = new JButton("Sample lines");
-        fillSample.addActionListener(e -> batchArea.setText(
+        fillSampleBtn = new JButton("Sample lines");
+        fillSampleBtn.addActionListener(e -> batchArea.setText(
                 "# Crop,Qty[,Unit][,Bed]\nNootka Rose,40\nDamask Rose,25,bunches\nDahlia mix,15,stems,Bed C\n"));
         south.add(batchBtn);
-        south.add(fillSample);
+        south.add(fillSampleBtn);
         p.add(south, BorderLayout.SOUTH);
         return p;
     }
@@ -281,7 +299,7 @@ public class HarvestLogTab implements FlowerFarmTab {
         });
         qtyField = new JTextField("0", 6);
         unitField = new JTextField("stems", 8);
-        JComboBox<String> unitSuggest = new JComboBox<>(new String[]{
+        unitSuggest = new JComboBox<>(new String[]{
                 "stems", "bunches", "buckets", "lbs", "oz", "each"
         });
         unitSuggest.setSelectedItem("stems");
@@ -305,18 +323,18 @@ public class HarvestLogTab implements FlowerFarmTab {
         addField(form, c, row++, "Notes", notesField);
 
         JPanel buttons = new JPanel(new FlowLayout(FlowLayout.LEFT));
-        JButton addBtn = new JButton("Add harvest");
+        addBtn = new JButton("Add harvest");
         addBtn.addActionListener(e -> addHarvest());
-        JButton loadBtn = new JButton("Load selected");
+        loadBtn = new JButton("Load selected");
         loadBtn.addActionListener(e -> loadSelectedIntoForm());
-        JButton saveBtn = new JButton("Save edit");
+        saveBtn = new JButton("Save edit");
         saveBtn.setToolTipText("Updates inventory for qty/crop changes (HARVEST_EDIT).");
         saveBtn.addActionListener(e -> saveEdit());
-        JButton clearForm = new JButton("Clear form");
-        clearForm.addActionListener(e -> clearForm());
-        JButton deleteBtn = new JButton("Delete selected");
+        clearFormBtn = new JButton("Clear form");
+        clearFormBtn.addActionListener(e -> clearForm());
+        deleteBtn = new JButton("Delete selected");
         deleteBtn.addActionListener(e -> deleteSelected());
-        JButton dupBtn = new JButton("Duplicate as today");
+        dupBtn = new JButton("Duplicate as today");
         dupBtn.setToolTipText("Copy selected crop/qty/unit/bed into the form with today's date, then Add harvest.");
         dupBtn.addActionListener(e -> duplicateSelectedAsToday());
         JButton refreshBtn = new JButton("Refresh");
@@ -324,7 +342,7 @@ public class HarvestLogTab implements FlowerFarmTab {
         buttons.add(addBtn);
         buttons.add(loadBtn);
         buttons.add(saveBtn);
-        buttons.add(clearForm);
+        buttons.add(clearFormBtn);
         buttons.add(deleteBtn);
         buttons.add(dupBtn);
         buttons.add(refreshBtn);

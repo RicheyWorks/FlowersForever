@@ -60,4 +60,15 @@ public interface FlowerFarmTab {
     default String getDescription() {
         return "";
     }
+
+    /**
+     * Enable or disable write controls for the current barn role.
+     * Called after login and on Account → Switch user. Read-only actions
+     * (search, filter, export, refresh) should stay enabled.
+     *
+     * @param canWrite true for HAND/OWNER or when auth is off
+     */
+    default void applyRolePermissions(boolean canWrite) {
+        // no-op by default
+    }
 }

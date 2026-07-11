@@ -197,13 +197,13 @@ More: [`docs/GUI_ARCHITECTURE.md`](docs/GUI_ARCHITECTURE.md).
 - Audit history: multi-filter + CSV export  
 - Auth UX: login, session badge, switch user, VIEWER write guards  
 - Maintenance: Spring Boot **3.5.16**, release action softprops v3, Dependabot, `SECURITY.md`  
+- VIEWER UX: form fields + write buttons disabled across inventory, harvest, CRM, connectors  
 
 ### Later ideas
 
 - Spring Boot **4.x** migration (deliberate; 3.5.16 is final 3.5 OSS)  
 - Weather-aware irrigation tips (Kitsap)  
-- Deeper POS adapters (only with real APIs)  
-- Deeper form-field disable styling for VIEWER (guards already block writes)
+- Deeper POS adapters (only with real APIs)
 
 ---
 

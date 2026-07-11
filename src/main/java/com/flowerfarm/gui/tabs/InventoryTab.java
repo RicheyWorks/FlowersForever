@@ -39,6 +39,8 @@ public class InventoryTab implements FlowerFarmTab {
     private TableRowSorter<DefaultTableModel> sorter;
     private JTextField searchField;
     private JLabel statusLabel;
+    private JButton editBtn;
+    private JButton deleteBtn;
 
     public InventoryTab(InventoryService inventoryService, TabHost host) {
         this.inventoryService = inventoryService;
@@ -86,6 +88,12 @@ public class InventoryTab implements FlowerFarmTab {
             });
         }
         updateStatus();
+    }
+
+    @Override
+    public void applyRolePermissions(boolean canWrite) {
+        // Search / refresh / export stay enabled for VIEWER
+        GuiPermissions.setWritable(canWrite, editBtn, deleteBtn);
     }
 
     private void buildUI() {
@@ -162,8 +170,8 @@ public class InventoryTab implements FlowerFarmTab {
 
         // ── Bottom action bar ────────────────────────────────────────────────
         JPanel actionPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 5));
-        JButton editBtn = new JButton("Edit Selected");
-        JButton deleteBtn = new JButton("Delete Selected");
+        editBtn = new JButton("Edit Selected");
+        deleteBtn = new JButton("Delete Selected");
         JButton exportBtn = new JButton("Export Visible to CSV");
 
         editBtn.addActionListener(this::editSelected);

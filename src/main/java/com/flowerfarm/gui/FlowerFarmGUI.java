@@ -214,10 +214,10 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
     private void applyRoleToUi() {
         boolean canWrite = canMutateData();
         for (JButton b : mutateButtons) {
-            b.setEnabled(canWrite);
-            if (!canWrite) {
-                b.setToolTipText("VIEWER role is read-only — sign in as HAND or OWNER to write.");
-            }
+            GuiPermissions.setWritable(canWrite, b);
+        }
+        for (FlowerFarmTab tab : tabs) {
+            tab.applyRolePermissions(canWrite);
         }
         if (sessionLabel != null) {
             sessionLabel.setText(sessionBadgeText());

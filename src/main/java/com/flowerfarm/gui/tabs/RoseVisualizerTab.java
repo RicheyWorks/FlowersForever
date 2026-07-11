@@ -1,6 +1,7 @@
 package com.flowerfarm.gui.tabs;
 
 import com.flowerfarm.auth.FarmSession;
+import com.flowerfarm.gui.GuiPermissions;
 import com.flowerfarm.lsystem.LSystem;
 import com.flowerfarm.lsystem.LSystemDefinition;
 import com.flowerfarm.lsystem.LSystemLibrary;
@@ -49,6 +50,8 @@ public class RoseVisualizerTab implements FlowerFarmTab {
     private JLabel branchLabel;
     private JTextArea rulesArea;
     private JLabel infoLabel;
+    private JButton mutateBtn;
+    private JButton saveRulesetBtn;
 
     private LSystem currentSystem;
     private String lastInstructions = "";
@@ -91,6 +94,12 @@ public class RoseVisualizerTab implements FlowerFarmTab {
     @Override
     public void refreshData() {
         refreshInventorySkus();
+    }
+
+    @Override
+    public void applyRolePermissions(boolean canWrite) {
+        // Grow / animate / load / export PNG stay available for VIEWER
+        GuiPermissions.setWritable(canWrite, mutateBtn, saveRulesetBtn);
     }
 
     private void buildUI() {
@@ -182,8 +191,10 @@ public class RoseVisualizerTab implements FlowerFarmTab {
         buttons.add(btn("Grow / redraw", e -> growImmediate()));
         buttons.add(btn("Animate grow", e -> animateGrow()));
         buttons.add(btn("Stop animation", e -> stopAnimation()));
-        buttons.add(btn("Evolve / Mutate", e -> mutate()));
-        buttons.add(btn("Save ruleset…", e -> saveRuleset()));
+        mutateBtn = btn("Evolve / Mutate", e -> mutate());
+        saveRulesetBtn = btn("Save ruleset…", e -> saveRuleset());
+        buttons.add(mutateBtn);
+        buttons.add(saveRulesetBtn);
         buttons.add(btn("Load ruleset…", e -> loadRuleset()));
         buttons.add(btn("Export PNG…", e -> exportPng()));
         buttons.add(btn("Open Rose Varieties guide", e -> {

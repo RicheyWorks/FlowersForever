@@ -1,5 +1,6 @@
 package com.flowerfarm.gui.tabs;
 
+import com.flowerfarm.gui.GuiPermissions;
 import com.flowerfarm.model.Item;
 import com.flowerfarm.service.InventoryService;
 
@@ -18,6 +19,7 @@ public class RoseVarietiesTab implements FlowerFarmTab {
     private final TabHost host;
 
     private JPanel panel;
+    private JButton sampleButton;
 
     public RoseVarietiesTab(InventoryService inventoryService, TabHost host) {
         this.inventoryService = inventoryService;
@@ -42,6 +44,11 @@ public class RoseVarietiesTab implements FlowerFarmTab {
         return panel;
     }
 
+    @Override
+    public void applyRolePermissions(boolean canWrite) {
+        GuiPermissions.setWritable(canWrite, sampleButton);
+    }
+
     private void buildUI() {
         panel = new JPanel(new BorderLayout());
 
@@ -54,7 +61,7 @@ public class RoseVarietiesTab implements FlowerFarmTab {
         panel.add(new JScrollPane(roseText), BorderLayout.CENTER);
 
         JPanel south = new JPanel(new FlowLayout(FlowLayout.LEFT));
-        JButton sampleButton = new JButton("Add Sample Nootka Rose to Inventory");
+        sampleButton = new JButton("Add Sample Nootka Rose to Inventory");
         sampleButton.addActionListener(e -> addSampleRose());
         JButton visualizer = new JButton("Open Rose Visualizer (L-Systems)");
         visualizer.setToolTipText("Generative growth habits for Nootka, rugosa, Bourbon, climbers…");
@@ -70,7 +77,7 @@ public class RoseVarietiesTab implements FlowerFarmTab {
     }
 
     private void addSampleRose() {
-        if (!com.flowerfarm.gui.GuiPermissions.requireWrite(host, panel, "add sample inventory items")) {
+        if (!GuiPermissions.requireWrite(host, panel, "add sample inventory items")) {
             return;
         }
         try {
