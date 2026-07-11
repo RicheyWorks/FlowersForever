@@ -80,10 +80,12 @@ public class ReportsTab implements FlowerFarmTab {
                 "Reports combine:\n"
                         + "  • Harvest log entries in the period\n"
                         + "  • Season-to-date harvest totals\n"
+                        + "  • Bed / field production rollup for the period\n"
                         + "  • Customer orders + line revenue (CONFIRMED / FULFILLED)\n\n"
                         + "Also available via REST:\n"
                         + "  GET /api/reports/weekly.pdf\n"
-                        + "  GET /api/reports/range.pdf?from=YYYY-MM-DD&to=YYYY-MM-DD"
+                        + "  GET /api/reports/range.pdf?from=YYYY-MM-DD&to=YYYY-MM-DD\n"
+                        + "  GET /api/harvest/beds?week=true"
         );
         JScrollPane scroll = new JScrollPane(statusArea);
         scroll.setAlignmentX(Component.LEFT_ALIGNMENT);

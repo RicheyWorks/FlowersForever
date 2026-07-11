@@ -154,8 +154,44 @@ public class ReportService {
 
             doc.add(Chunk.NEWLINE);
 
+            // ── Bed / field production (period) ──────────────────────────────
+            HarvestService.BedProductionReport bedReport =
+                    harvestService.productionByBed(from, to);
+            doc.add(new Paragraph("2. Bed / field production (this period)", h2));
+            doc.add(new Paragraph(
+                    bedReport.bedCount() == 0
+                            ? "No bed-tagged harvests in this period (set Bed / field when logging cuts)."
+                            : bedReport.bedCount() + " bed(s) · " + bedReport.entryCount()
+                            + " log(s) · total qty " + String.format("%,.1f", bedReport.grandTotal()),
+                    body));
+            doc.add(Chunk.NEWLINE);
+            if (!bedReport.beds().isEmpty()) {
+                PdfPTable bedTable = new PdfPTable(new float[]{2.5f, 1.5f, 1.2f, 2.5f, 2.5f});
+                bedTable.setWidthPercentage(100);
+                headerCell(bedTable, "Bed / Field");
+                headerCell(bedTable, "Qty");
+                headerCell(bedTable, "Logs");
+                headerCell(bedTable, "Top crop");
+                headerCell(bedTable, "Dates");
+                for (HarvestService.BedProduction b : bedReport.beds()) {
+                    String topCrop = "—";
+                    if (!b.byCrop().isEmpty()) {
+                        Map.Entry<String, Double> first = b.byCrop().entrySet().iterator().next();
+                        topCrop = first.getKey() + " (" + String.format("%.0f", first.getValue()) + ")";
+                    }
+                    bedTable.addCell(cell(b.bed(), body));
+                    bedTable.addCell(cell(String.format("%.1f", b.totalQuantity()), body));
+                    bedTable.addCell(cell(String.valueOf(b.entryCount()), body));
+                    bedTable.addCell(cell(topCrop, body));
+                    bedTable.addCell(cell(b.firstDate() + " → " + b.lastDate(), body));
+                }
+                doc.add(bedTable);
+            }
+
+            doc.add(Chunk.NEWLINE);
+
             // ── Sales section ────────────────────────────────────────────────
-            doc.add(new Paragraph("2. Sales / wholesale orders", h2));
+            doc.add(new Paragraph("3. Sales / wholesale orders", h2));
             doc.add(new Paragraph(
                     orders.isEmpty()
                             ? "No orders in this period."

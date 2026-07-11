@@ -39,6 +39,20 @@ class ReportServiceTest {
                 new HarvestEntry(LocalDate.now(), "Nootka Rose", 100, "stems", "A", "")
         ));
         when(harvestService.totalsByCrop()).thenReturn(Map.of("Nootka Rose", 100.0));
+        when(harvestService.productionByBed(any(), any())).thenReturn(
+                new HarvestService.BedProductionReport(
+                        LocalDate.now().minusDays(6).toString(),
+                        LocalDate.now().toString(),
+                        1,
+                        1,
+                        100.0,
+                        List.of(new HarvestService.BedProduction(
+                                "Bed A", 100.0, 1,
+                                Map.of("Nootka Rose", 100.0),
+                                LocalDate.now().toString(),
+                                LocalDate.now().toString())),
+                        "BED / FIELD PRODUCTION"
+                ));
 
         Customer c = new Customer("Florist Co", "", "", "", "FLORIST", "");
         c.setId(1L);
