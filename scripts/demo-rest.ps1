@@ -40,6 +40,7 @@ Get-Json "/api/connectors/history?limit=10"
 Get-Json "/api/inventory"
 Get-Json "/api/irrigation/advice?live=false"
 Get-Json "/api/market-day"
+Get-Json "/api/harvest/beds?week=true"
 
 $pdf = Join-Path (Get-Location) "weekly-demo.pdf"
 Write-Host "`n=== GET /api/reports/weekly.pdf → $pdf ===" -ForegroundColor Yellow

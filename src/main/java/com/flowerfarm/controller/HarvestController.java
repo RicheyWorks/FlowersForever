@@ -97,6 +97,44 @@ public class HarvestController {
         );
     }
 
+    /**
+     * Bed / field production rollup (quantity + crop mix).
+     * Optional {@code from}/{@code to}; omit both for all-time; {@code week=true} = last 7 days.
+     */
+    @GetMapping("/beds")
+    public ResponseEntity<?> bedProduction(
+            @RequestParam(value = "from", required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(value = "to", required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(value = "week", defaultValue = "false") boolean week) {
+        try {
+            HarvestService.BedProductionReport report = week
+                    ? harvestService.productionByBedLast7Days()
+                    : harvestService.productionByBed(from, to);
+            return ResponseEntity.ok(report.toMap());
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @GetMapping(value = "/beds/text", produces = "text/plain")
+    public ResponseEntity<?> bedProductionText(
+            @RequestParam(value = "from", required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(value = "to", required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(value = "week", defaultValue = "false") boolean week) {
+        try {
+            HarvestService.BedProductionReport report = week
+                    ? harvestService.productionByBedLast7Days()
+                    : harvestService.productionByBed(from, to);
+            return ResponseEntity.ok(report.plainText());
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
     @GetMapping("/{id}")
     public ResponseEntity<?> get(@PathVariable Long id) {
         return harvestService.findById(id)

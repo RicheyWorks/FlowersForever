@@ -241,6 +241,20 @@ public class DashboardTab implements FlowerFarmTab {
         }
         if (weekHarvest <= 0) {
             alerts.append("• No harvest logged in the last 7 days — open Harvest Log\n");
+        } else {
+            try {
+                HarvestService.BedProductionReport beds =
+                        harvestService.productionByBedLast7Days();
+                if (!beds.beds().isEmpty()) {
+                    HarvestService.BedProduction top = beds.beds().get(0);
+                    alerts.append("• BEDS top this week: ").append(top.bed())
+                            .append(" (").append(String.format("%.0f", top.totalQuantity()))
+                            .append(" qty) across ").append(beds.bedCount())
+                            .append(" bed(s) — Harvest Log → Bed production\n");
+                }
+            } catch (Exception ignored) {
+                // bed rollup is best-effort
+            }
         }
 
         if (irrigationAdvisorService != null) {

@@ -268,11 +268,15 @@ public class HarvestLogTab implements FlowerFarmTab {
         exportBtn.addActionListener(e -> exportCsv(false));
         JButton exportViewBtn = new JButton("Export filtered CSV…");
         exportViewBtn.addActionListener(e -> exportCsv(true));
+        JButton bedProd = new JButton("Bed production…");
+        bedProd.setToolTipText("Roll up harvest qty by bed/field (uses From/To filter dates when set).");
+        bedProd.addActionListener(e -> showBedProduction());
         bar.add(apply);
         bar.add(clear);
         bar.add(thisWeek);
         bar.add(exportBtn);
         bar.add(exportViewBtn);
+        bar.add(bedProd);
         bar.add(filterTotalsOnly);
         bar.add(filterStatusLabel);
         return bar;
@@ -632,6 +636,50 @@ public class HarvestLogTab implements FlowerFarmTab {
         }
         sb.append(String.format("%n%-20s %8.1f%n", "TOTAL", sum));
         totalsArea.setText(sb.toString());
+    }
+
+    private void showBedProduction() {
+        try {
+            LocalDate from = parseOptionalDate(filterFromField != null ? filterFromField.getText() : null);
+            LocalDate to = parseOptionalDate(filterToField != null ? filterToField.getText() : null);
+            // If both blank, default to trailing week for a useful morning view
+            HarvestService.BedProductionReport report;
+            if (from == null && to == null) {
+                report = harvestService.productionByBedLast7Days();
+            } else {
+                report = harvestService.productionByBed(from, to);
+            }
+
+            JTextArea area = new JTextArea(report.plainText(), 22, 64);
+            area.setEditable(false);
+            area.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
+            area.setCaretPosition(0);
+            JScrollPane scroll = new JScrollPane(area);
+            scroll.setPreferredSize(new Dimension(640, 420));
+
+            Object[] options = {"Export CSV…", "Close"};
+            int choice = JOptionPane.showOptionDialog(panel, scroll,
+                    "Bed / field production — " + report.from() + " → " + report.to(),
+                    JOptionPane.DEFAULT_OPTION, JOptionPane.PLAIN_MESSAGE,
+                    null, options, options[1]);
+            if (choice == 0) {
+                JFileChooser chooser = new JFileChooser();
+                chooser.setSelectedFile(new File("bed-production-" + report.to() + ".csv"));
+                if (chooser.showSaveDialog(panel) == JFileChooser.APPROVE_OPTION) {
+                    java.nio.file.Files.writeString(
+                            chooser.getSelectedFile().toPath(),
+                            harvestService.exportBedProductionCsv(report));
+                    if (host != null) {
+                        host.setStatus("Bed production CSV → " + chooser.getSelectedFile().getName());
+                    }
+                }
+            } else if (host != null) {
+                host.setStatus("Bed production: " + report.bedCount() + " bed(s), qty "
+                        + report.grandTotal() + ".");
+            }
+        } catch (Exception ex) {
+            showError(ex.getMessage());
+        }
     }
 
     private static String nullToEmpty(Object o) {

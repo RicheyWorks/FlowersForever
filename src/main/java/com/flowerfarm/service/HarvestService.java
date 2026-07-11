@@ -10,8 +10,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 
@@ -358,6 +360,203 @@ public class HarvestService {
             totals.merge(e.getCropName(), e.getQuantity(), Double::sum);
         }
         return totals;
+    }
+
+    /** One bed/field production row with crop breakdown. */
+    public record BedProduction(
+            String bed,
+            double totalQuantity,
+            int entryCount,
+            Map<String, Double> byCrop,
+            String firstDate,
+            String lastDate
+    ) {}
+
+    /** Farm-wide bed production report for a date window. */
+    public record BedProductionReport(
+            String from,
+            String to,
+            int bedCount,
+            int entryCount,
+            double grandTotal,
+            List<BedProduction> beds,
+            String plainText
+    ) {
+        public Map<String, Object> toMap() {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("from", from);
+            m.put("to", to);
+            m.put("bedCount", bedCount);
+            m.put("entryCount", entryCount);
+            m.put("grandTotal", grandTotal);
+            m.put("beds", beds.stream().map(b -> {
+                Map<String, Object> row = new LinkedHashMap<>();
+                row.put("bed", b.bed());
+                row.put("totalQuantity", b.totalQuantity());
+                row.put("entryCount", b.entryCount());
+                row.put("byCrop", b.byCrop());
+                row.put("firstDate", b.firstDate());
+                row.put("lastDate", b.lastDate());
+                return row;
+            }).toList());
+            m.put("plainText", plainText);
+            return m;
+        }
+    }
+
+    /**
+     * Aggregate harvest quantity by bed/field (blank bed → {@code (unassigned)}).
+     *
+     * @param from inclusive start (null = unbounded)
+     * @param to   inclusive end (null = unbounded)
+     */
+    @Transactional(readOnly = true)
+    public BedProductionReport productionByBed(LocalDate from, LocalDate to) {
+        if (from != null && to != null && to.isBefore(from)) {
+            throw new IllegalArgumentException("to must be on or after from.");
+        }
+        List<HarvestEntry> entries = filter(null, null, null, from, to);
+        Map<String, List<HarvestEntry>> byBed = new LinkedHashMap<>();
+        for (HarvestEntry e : entries) {
+            String bed = (e.getBedOrField() == null || e.getBedOrField().isBlank())
+                    ? "(unassigned)"
+                    : e.getBedOrField().trim();
+            byBed.computeIfAbsent(bed, k -> new ArrayList<>()).add(e);
+        }
+
+        List<BedProduction> beds = new ArrayList<>();
+        double grand = 0;
+        for (Map.Entry<String, List<HarvestEntry>> en : byBed.entrySet()) {
+            List<HarvestEntry> rows = en.getValue();
+            Map<String, Double> crops = new LinkedHashMap<>();
+            double total = 0;
+            LocalDate first = null;
+            LocalDate last = null;
+            for (HarvestEntry r : rows) {
+                total += r.getQuantity();
+                crops.merge(r.getCropName() == null ? "(unknown)" : r.getCropName(),
+                        r.getQuantity(), Double::sum);
+                if (r.getHarvestDate() != null) {
+                    if (first == null || r.getHarvestDate().isBefore(first)) {
+                        first = r.getHarvestDate();
+                    }
+                    if (last == null || r.getHarvestDate().isAfter(last)) {
+                        last = r.getHarvestDate();
+                    }
+                }
+            }
+            // sort crops by qty desc for readability
+            Map<String, Double> sortedCrops = crops.entrySet().stream()
+                    .sorted(Map.Entry.<String, Double>comparingByValue().reversed())
+                    .collect(LinkedHashMap::new,
+                            (m, e) -> m.put(e.getKey(), round1(e.getValue())),
+                            LinkedHashMap::putAll);
+            grand += total;
+            beds.add(new BedProduction(
+                    en.getKey(),
+                    round1(total),
+                    rows.size(),
+                    sortedCrops,
+                    first != null ? first.toString() : "",
+                    last != null ? last.toString() : ""
+            ));
+        }
+        beds.sort(Comparator.comparing(BedProduction::totalQuantity).reversed()
+                .thenComparing(BedProduction::bed, String.CASE_INSENSITIVE_ORDER));
+
+        String fromStr = from != null ? from.toString() : "all";
+        String toStr = to != null ? to.toString() : "all";
+        String text = formatBedProductionText(fromStr, toStr, beds, grand, entries.size());
+        return new BedProductionReport(
+                fromStr, toStr, beds.size(), entries.size(), round1(grand),
+                List.copyOf(beds), text);
+    }
+
+    /** Trailing 7 days bed production (inclusive of today). */
+    @Transactional(readOnly = true)
+    public BedProductionReport productionByBedLast7Days() {
+        LocalDate to = LocalDate.now();
+        return productionByBed(to.minusDays(6), to);
+    }
+
+    public String exportBedProductionCsv(BedProductionReport report) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("bed,totalQuantity,entryCount,firstDate,lastDate,crop,cropQuantity\n");
+        for (BedProduction b : report.beds()) {
+            if (b.byCrop().isEmpty()) {
+                sb.append(csv(b.bed())).append(',')
+                        .append(b.totalQuantity()).append(',')
+                        .append(b.entryCount()).append(',')
+                        .append(b.firstDate()).append(',')
+                        .append(b.lastDate()).append(",,\n");
+                continue;
+            }
+            for (Map.Entry<String, Double> crop : b.byCrop().entrySet()) {
+                sb.append(csv(b.bed())).append(',')
+                        .append(b.totalQuantity()).append(',')
+                        .append(b.entryCount()).append(',')
+                        .append(b.firstDate()).append(',')
+                        .append(b.lastDate()).append(',')
+                        .append(csv(crop.getKey())).append(',')
+                        .append(crop.getValue()).append('\n');
+            }
+        }
+        return sb.toString();
+    }
+
+    private static String formatBedProductionText(String from, String to,
+                                                  List<BedProduction> beds,
+                                                  double grand, int entryCount) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("BED / FIELD PRODUCTION — Port Orchard / Kitsap County\n");
+        sb.append("════════════════════════════════════════════════════\n");
+        sb.append("Period     : ").append(from).append(" → ").append(to).append('\n');
+        sb.append("Beds       : ").append(beds.size())
+                .append("   Entries: ").append(entryCount)
+                .append("   Total qty: ").append(String.format(Locale.US, "%,.1f", grand))
+                .append('\n');
+        sb.append('\n');
+        if (beds.isEmpty()) {
+            sb.append("(no harvest rows in range — log cuts with a Bed / field value)\n");
+            return sb.toString();
+        }
+        int rank = 1;
+        for (BedProduction b : beds) {
+            sb.append(String.format(Locale.US, "%2d. %-18s  qty %8.1f  (%d log%s)  %s → %s%n",
+                    rank++, truncate(b.bed(), 18), b.totalQuantity(), b.entryCount(),
+                    b.entryCount() == 1 ? "" : "s",
+                    b.firstDate().isEmpty() ? "?" : b.firstDate(),
+                    b.lastDate().isEmpty() ? "?" : b.lastDate()));
+            for (Map.Entry<String, Double> c : b.byCrop().entrySet()) {
+                sb.append(String.format(Locale.US, "      • %-20s %8.1f%n",
+                        truncate(c.getKey(), 20), c.getValue()));
+            }
+            sb.append('\n');
+        }
+        sb.append(String.format(Locale.US, "GRAND TOTAL %,.1f%n", grand));
+        sb.append("Tip: consistent bed names (Bed A, Tunnel 1) make this report sharper.\n");
+        return sb.toString();
+    }
+
+    private static String truncate(String s, int max) {
+        if (s == null) {
+            return "";
+        }
+        return s.length() <= max ? s : s.substring(0, max - 1) + "…";
+    }
+
+    private static String csv(String s) {
+        if (s == null) {
+            return "";
+        }
+        if (s.contains(",") || s.contains("\"") || s.contains("\n")) {
+            return "\"" + s.replace("\"", "\"\"") + "\"";
+        }
+        return s;
+    }
+
+    private static double round1(double v) {
+        return Math.round(v * 10.0) / 10.0;
     }
 
     /**

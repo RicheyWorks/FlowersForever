@@ -52,7 +52,8 @@ Narrate as Kitsap / Port Orchard grower:
      Dahlia mix,15,stems,Bed C
      ```  
    - Double-click a row → tweak qty → **Save edit** (`HARVEST_EDIT`).  
-   - Filter crop/bed/notes; **This week**; **Export filtered CSV**.
+   - Filter crop/bed/notes; **This week**; **Export filtered CSV**.  
+   - **Bed production…** → rank beds by qty with crop mix (uses From/To or last 7 days).
 
 3. **Dashboard again**  
    - Week Harvest KPI / sparkline updated.
@@ -133,6 +134,9 @@ Invoke-RestMethod "http://localhost:8080/api/irrigation/advice?live=false" | Con
 
 # Market day packing list (CONFIRMED orders for today)
 Invoke-RestMethod "http://localhost:8080/api/market-day" | ConvertTo-Json -Depth 5
+
+# Bed / field production (last 7 days)
+Invoke-RestMethod "http://localhost:8080/api/harvest/beds?week=true" | ConvertTo-Json -Depth 5
 
 # Weekly PDF
 Invoke-WebRequest http://localhost:8080/api/reports/weekly.pdf -OutFile weekly.pdf

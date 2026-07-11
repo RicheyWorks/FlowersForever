@@ -79,7 +79,8 @@ public class FlowerFarmCLI implements ApplicationRunner {
                 case "10" -> listAndExportHarvest(scanner);
                 case "11" -> irrigationAdvice(scanner);
                 case "12" -> marketDayPacking(scanner);
-                case "13" -> { System.out.println("Goodbye!"); running = false; }
+                case "13" -> bedProduction(scanner);
+                case "14" -> { System.out.println("Goodbye!"); running = false; }
                 default  -> System.out.println("Unknown option. Try again.");
             }
         }
@@ -112,7 +113,8 @@ public class FlowerFarmCLI implements ApplicationRunner {
                 10) List / export harvest log
                 11) Kitsap irrigation advice
                 12) Market day packing list
-                13) Exit
+                13) Bed / field production
+                14) Exit
                 ─────────────────────────────────────────
                 Choice: \
                 """);
@@ -341,6 +343,39 @@ public class FlowerFarmCLI implements ApplicationRunner {
             } catch (Exception e) {
                 System.out.println("✗ Export failed: " + e.getMessage());
             }
+        }
+    }
+
+    private void bedProduction(Scanner sc) {
+        try {
+            System.out.print("Period (1=last 7 days, 2=custom dates, 3=all-time) [1]: ");
+            String mode = sc.nextLine().trim();
+            HarvestService.BedProductionReport report;
+            if ("3".equals(mode)) {
+                report = harvestService.productionByBed(null, null);
+            } else if ("2".equals(mode)) {
+                System.out.print("From (YYYY-MM-DD): ");
+                LocalDate from = LocalDate.parse(sc.nextLine().trim());
+                System.out.print("To (YYYY-MM-DD): ");
+                LocalDate to = LocalDate.parse(sc.nextLine().trim());
+                report = harvestService.productionByBed(from, to);
+            } else {
+                report = harvestService.productionByBedLast7Days();
+            }
+            System.out.println();
+            System.out.println(report.plainText());
+            System.out.print("Export CSV? (y/n): ");
+            if ("y".equalsIgnoreCase(sc.nextLine().trim())) {
+                String def = "bed-production-" + report.to() + ".csv";
+                System.out.print("Filename [" + def + "]: ");
+                String file = orDefault(sc.nextLine(), def);
+                java.nio.file.Files.writeString(
+                        java.nio.file.Path.of(file),
+                        harvestService.exportBedProductionCsv(report));
+                System.out.println("✓ Wrote " + file);
+            }
+        } catch (Exception e) {
+            System.out.println("✗ Bed production failed: " + e.getMessage());
         }
     }
 

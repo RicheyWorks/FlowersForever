@@ -248,6 +248,39 @@ class HarvestServiceTest {
     }
 
     @Test
+    @DisplayName("productionByBed aggregates qty and crops; blank bed is unassigned")
+    void productionByBed() {
+        when(repository.findAllByOrderByHarvestDateDescIdDesc()).thenReturn(List.of(
+                new HarvestEntry(LocalDate.of(2026, 7, 10), "Nootka Rose", 40, "stems", "Bed A", ""),
+                new HarvestEntry(LocalDate.of(2026, 7, 11), "Nootka Rose", 20, "stems", "Bed A", ""),
+                new HarvestEntry(LocalDate.of(2026, 7, 11), "Dahlia", 15, "stems", "Bed C", ""),
+                new HarvestEntry(LocalDate.of(2026, 7, 12), "Tulip", 10, "stems", "", "")
+        ));
+
+        HarvestService.BedProductionReport report = service.productionByBed(
+                LocalDate.of(2026, 7, 10), LocalDate.of(2026, 7, 12));
+
+        assertThat(report.bedCount()).isEqualTo(3);
+        assertThat(report.entryCount()).isEqualTo(4);
+        assertThat(report.grandTotal()).isEqualTo(85.0);
+        assertThat(report.beds().get(0).bed()).isEqualTo("Bed A");
+        assertThat(report.beds().get(0).totalQuantity()).isEqualTo(60.0);
+        assertThat(report.beds().get(0).byCrop()).containsEntry("Nootka Rose", 60.0);
+        assertThat(report.beds().stream().map(HarvestService.BedProduction::bed))
+                .contains("(unassigned)");
+        assertThat(report.plainText()).contains("BED / FIELD PRODUCTION");
+        assertThat(service.exportBedProductionCsv(report)).contains("Bed A").contains("Nootka Rose");
+    }
+
+    @Test
+    @DisplayName("productionByBed rejects inverted range")
+    void productionByBedValidates() {
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> service.productionByBed(
+                        LocalDate.of(2026, 7, 12), LocalDate.of(2026, 7, 10)));
+    }
+
+    @Test
     @DisplayName("dailyQuantitiesLast7Days buckets by day oldest→today")
     void dailyQuantities() {
         LocalDate today = LocalDate.now();

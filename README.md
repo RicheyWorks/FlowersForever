@@ -152,6 +152,8 @@ REST: `GET /api/auth/me` (Basic), `GET /api/auth/accounts` (usernames only).
 | GET/POST | `/api/harvest` | Harvest CRUD |
 | POST | `/api/harvest/batch` | Batch log |
 | GET | `/api/harvest/week` | 7-day total + daily series |
+| GET | `/api/harvest/beds` | Bed/field production (`week=true` or `from`/`to`) |
+| GET | `/api/harvest/beds/text` | Plain-text bed production report |
 | GET | `/api/harvest/filter` | crop/bed/notes/dates |
 | GET/POST | `/api/customers` | CRM customers |
 | GET/POST | `/api/orders` | Orders |
@@ -209,6 +211,7 @@ More: [`docs/GUI_ARCHITECTURE.md`](docs/GUI_ARCHITECTURE.md).
 - **Market Day** packing list (GUI + REST + CLI) with inventory shortfall flags  
 - Dashboard **PACK** alerts + quick action; `/api/dashboard` includes `marketDay` snapshot  
 - Release **1.0.5**  
+- Bed / field production rollup (Harvest Log, REST, CLI, dashboard top-bed tip)  
 
 ### Later ideas
 
