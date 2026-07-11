@@ -9,6 +9,7 @@ import com.flowerfarm.service.CustomerService;
 import com.flowerfarm.service.HarvestService;
 import com.flowerfarm.service.InventoryService;
 import com.flowerfarm.service.IrrigationAdvisorService;
+import com.flowerfarm.service.MarketDayPackingService;
 import com.flowerfarm.service.OrderService;
 import com.flowerfarm.service.ReportService;
 import com.flowerfarm.service.SyncHistoryService;
@@ -58,6 +59,7 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
     private final OrderService orderService;
     private final ReportService reportService;
     private final IrrigationAdvisorService irrigationAdvisorService;
+    private final MarketDayPackingService marketDayPackingService;
     private final GuiLoginGate loginGate;
 
     // Created lazily on the EDT inside initialise() — never touched before run().
@@ -90,6 +92,7 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
                          OrderService orderService,
                          ReportService reportService,
                          IrrigationAdvisorService irrigationAdvisorService,
+                         MarketDayPackingService marketDayPackingService,
                          GuiLoginGate loginGate) {
         // No AWT calls here — Spring safe to construct this bean at any time.
         this.inventoryService = inventoryService;
@@ -101,6 +104,7 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
         this.orderService = orderService;
         this.reportService = reportService;
         this.irrigationAdvisorService = irrigationAdvisorService;
+        this.marketDayPackingService = marketDayPackingService;
         this.loginGate = loginGate;
     }
 
@@ -139,6 +143,7 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
         tabs.add(new AddItemTab(inventoryService, this));
         tabs.add(new HarvestLogTab(harvestService, this));
         tabs.add(new CrmTab(customerService, orderService, this));
+        tabs.add(new MarketDayTab(marketDayPackingService, this));
         tabs.add(trendTab);
         tabs.add(new SyncHistoryTab(syncHistoryService, this));
         tabs.add(new ReportsTab(reportService, this));

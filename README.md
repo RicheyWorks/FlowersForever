@@ -23,7 +23,8 @@ Spring Boot **3.5.16** + modular Swing GUI + dual-mode connectors (offline JSON 
 | **Rose visualizer** | L-Systems: grow, mutate, save/load rulesets, inventory link, PNG |
 | **Auth** | Optional OWNER / HAND / VIEWER barn roles (`auth` profile) |
 | **Irrigation** | Kitsap weather-aware tips (Open-Meteo live or offline climatology) |
-| **CLI** | Inventory + harvest log/export (`--cli`) |
+| **Market Day** | Packing list + pick sheet from CONFIRMED CRM orders vs stock |
+| **CLI** | Inventory + harvest + irrigation + market packing (`--cli`) |
 
 ---
 
@@ -163,6 +164,9 @@ REST: `GET /api/auth/me` (Basic), `GET /api/auth/accounts` (usernames only).
 | POST | `/api/connectors/history/export` | Server-side audit CSV |
 | GET | `/api/auth/me` | Session / role |
 | GET | `/api/irrigation/advice` | Kitsap watering plan (`live=true\|false`) |
+| GET | `/api/market-day` | Market packing plan JSON (`date`, `windowDays`) |
+| GET | `/api/market-day/text` | Plain-text pack sheet |
+| GET | `/api/market-day/export.csv` | CSV pick list + order lines |
 | GET | `/api/reports/weekly.pdf` | Trailing week PDF |
 | GET | `/actuator/health` | Health |
 
@@ -202,6 +206,7 @@ More: [`docs/GUI_ARCHITECTURE.md`](docs/GUI_ARCHITECTURE.md).
 - VIEWER UX: form fields + write buttons disabled across inventory, harvest, CRM, connectors  
 - Irrigation advisor: Open-Meteo live + Kitsap climatology, harvest-bed targets, dashboard WATER alerts  
 - Release **1.0.4**: CLI irrigation menu, demo REST scripts include `/api/irrigation/advice`  
+- **Market Day** packing list (GUI + REST + CLI) with inventory shortfall flags  
 
 ### Later ideas
 

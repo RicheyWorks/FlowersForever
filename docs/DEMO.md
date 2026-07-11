@@ -63,24 +63,29 @@ Narrate as Kitsap / Port Orchard grower:
    - **Confirm** if DRAFT; **Fulfill** → inventory drops; audit under CRM.  
    - Filter **Pipeline only**; export orders CSV.
 
-5. **Sync History**  
+5. **Market Day**  
+   - After confirming CRM orders for today → **Build packing list**.  
+   - Pick list shows aggregate stems vs stock (shortfalls flagged).  
+   - Per-customer pack slips; export TXT/CSV for the van.
+
+6. **Sync History**  
    - Show HARVEST_LOG / ORDER_FULFILL / connector rows.  
    - Failures only filter; export audit CSV.
 
-6. **Reports**  
+7. **Reports**  
    - Weekly PDF (GUI or `curl -o weekly.pdf http://localhost:8080/api/reports/weekly.pdf`).
 
-7. **Connectors (offline dual-mode)**  
+8. **Connectors (offline dual-mode)**  
    - **Export Farmbrite** → `data/farmbrite-mirror.json`.  
    - **Sync Shopify** / **Export Square** with default local mirrors (no API keys).  
    - Same for Sheets / Airtable / Webhook dry-run payload file.
 
-8. **Irrigation & Care**  
+9. **Irrigation & Care**  
    - **Refresh (try live weather)** → Open-Meteo for Port Orchard (or climatology offline).  
    - Priority badge + 7-day precip / ET when live; active beds from recent harvests.  
    - Dashboard may show a **WATER** alert in dry months.
 
-9. **Rose Visualizer**  
+10. **Rose Visualizer**  
    - Grow L-System, mutate, save ruleset, optional PNG — “fun technical depth.”
 
 ---
@@ -125,6 +130,9 @@ Invoke-RestMethod "http://localhost:8080/api/connectors/history?success=false&li
 
 # Kitsap irrigation advice (climatology = no network)
 Invoke-RestMethod "http://localhost:8080/api/irrigation/advice?live=false" | ConvertTo-Json -Depth 4
+
+# Market day packing list (CONFIRMED orders for today)
+Invoke-RestMethod "http://localhost:8080/api/market-day" | ConvertTo-Json -Depth 5
 
 # Weekly PDF
 Invoke-WebRequest http://localhost:8080/api/reports/weekly.pdf -OutFile weekly.pdf

@@ -9,6 +9,8 @@ import com.flowerfarm.service.HarvestService;
 import com.flowerfarm.service.InventoryService;
 import com.flowerfarm.service.IrrigationAdvisorService;
 import com.flowerfarm.service.IrrigationAdvisorService.IrrigationAdvice;
+import com.flowerfarm.service.MarketDayPackingService;
+import com.flowerfarm.service.MarketDayPackingService.MarketDayPlan;
 import com.flowerfarm.service.TrendService;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
@@ -38,17 +40,20 @@ public class FlowerFarmCLI implements ApplicationRunner {
     private final TrendService      trendService;
     private final ConnectorRegistry connectorRegistry;
     private final IrrigationAdvisorService irrigationAdvisorService;
+    private final MarketDayPackingService marketDayPackingService;
 
     public FlowerFarmCLI(InventoryService inventoryService,
                          HarvestService harvestService,
                          TrendService trendService,
                          ConnectorRegistry connectorRegistry,
-                         IrrigationAdvisorService irrigationAdvisorService) {
+                         IrrigationAdvisorService irrigationAdvisorService,
+                         MarketDayPackingService marketDayPackingService) {
         this.inventoryService  = inventoryService;
         this.harvestService    = harvestService;
         this.trendService      = trendService;
         this.connectorRegistry = connectorRegistry;
         this.irrigationAdvisorService = irrigationAdvisorService;
+        this.marketDayPackingService = marketDayPackingService;
     }
 
     @Override
@@ -73,7 +78,8 @@ public class FlowerFarmCLI implements ApplicationRunner {
                 case "9" -> logHarvest(scanner);
                 case "10" -> listAndExportHarvest(scanner);
                 case "11" -> irrigationAdvice(scanner);
-                case "12" -> { System.out.println("Goodbye!"); running = false; }
+                case "12" -> marketDayPacking(scanner);
+                case "13" -> { System.out.println("Goodbye!"); running = false; }
                 default  -> System.out.println("Unknown option. Try again.");
             }
         }
@@ -105,7 +111,8 @@ public class FlowerFarmCLI implements ApplicationRunner {
                  9) Log harvest (single or batch)
                 10) List / export harvest log
                 11) Kitsap irrigation advice
-                12) Exit
+                12) Market day packing list
+                13) Exit
                 ─────────────────────────────────────────
                 Choice: \
                 """);
@@ -334,6 +341,37 @@ public class FlowerFarmCLI implements ApplicationRunner {
             } catch (Exception e) {
                 System.out.println("✗ Export failed: " + e.getMessage());
             }
+        }
+    }
+
+    private void marketDayPacking(Scanner sc) {
+        try {
+            System.out.print("Market date [" + LocalDate.now() + "]: ");
+            String dateRaw = sc.nextLine().trim();
+            LocalDate date = dateRaw.isBlank() ? LocalDate.now() : LocalDate.parse(dateRaw);
+            System.out.print("Window days [1]: ");
+            String winRaw = sc.nextLine().trim();
+            int window = winRaw.isBlank() ? 1 : Integer.parseInt(winRaw);
+            System.out.print("Include DRAFT? (y/n) [n]: ");
+            boolean draft = "y".equalsIgnoreCase(sc.nextLine().trim());
+            System.out.print("Include FULFILLED? (y/n) [n]: ");
+            boolean fulfilled = "y".equalsIgnoreCase(sc.nextLine().trim());
+
+            MarketDayPlan plan = marketDayPackingService.buildPlan(date, window, draft, fulfilled);
+            System.out.println();
+            System.out.println(plan.plainText());
+
+            System.out.print("Export CSV? (y/n): ");
+            if ("y".equalsIgnoreCase(sc.nextLine().trim())) {
+                System.out.print("Filename [market-day-" + plan.marketDate() + ".csv]: ");
+                String file = orDefault(sc.nextLine(), "market-day-" + plan.marketDate() + ".csv");
+                java.nio.file.Files.writeString(
+                        java.nio.file.Path.of(file),
+                        marketDayPackingService.exportCsv(plan));
+                System.out.println("✓ Wrote " + file);
+            }
+        } catch (Exception e) {
+            System.out.println("✗ Market day packing failed: " + e.getMessage());
         }
     }
 
