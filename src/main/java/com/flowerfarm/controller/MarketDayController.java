@@ -21,6 +21,7 @@ import java.util.Map;
  *   <li>{@code GET /api/market-day} — JSON plan</li>
  *   <li>{@code GET /api/market-day/text} — plain-text pack sheet</li>
  *   <li>{@code GET /api/market-day/export.csv} — CSV pick + order lines</li>
+ *   <li>{@code GET /api/market-day/packing.pdf} — printable packing PDF</li>
  * </ul>
  */
 @RestController
@@ -64,6 +65,21 @@ public class MarketDayController {
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
                 .contentType(new MediaType("text", "csv", StandardCharsets.UTF_8))
                 .body(body);
+    }
+
+    @GetMapping(value = "/packing.pdf", produces = MediaType.APPLICATION_PDF_VALUE)
+    public ResponseEntity<byte[]> packingPdf(
+            @RequestParam(value = "date", required = false) String date,
+            @RequestParam(value = "windowDays", defaultValue = "1") int windowDays,
+            @RequestParam(value = "includeDraft", defaultValue = "false") boolean includeDraft,
+            @RequestParam(value = "includeFulfilled", defaultValue = "false") boolean includeFulfilled) {
+        MarketDayPlan plan = build(date, windowDays, includeDraft, includeFulfilled);
+        byte[] pdf = packingService.generatePackingPdf(plan);
+        String filename = "market-day-packing-" + plan.marketDate() + ".pdf";
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
+                .contentType(MediaType.APPLICATION_PDF)
+                .body(pdf);
     }
 
     private MarketDayPlan build(String date, int windowDays, boolean includeDraft, boolean includeFulfilled) {

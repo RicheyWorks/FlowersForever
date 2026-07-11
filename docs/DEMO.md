@@ -67,7 +67,7 @@ Narrate as Kitsap / Port Orchard grower:
 5. **Market Day**  
    - After confirming CRM orders for today → **Build packing list**.  
    - Pick list shows aggregate stems vs stock (shortfalls flagged).  
-   - Per-customer pack slips; export TXT/CSV for the van.
+   - Per-customer pack slips; export TXT / CSV / **PDF** for the van.
 
 6. **Sync History**  
    - Show HARVEST_LOG / ORDER_FULFILL / connector rows.  
@@ -134,6 +134,8 @@ Invoke-RestMethod "http://localhost:8080/api/irrigation/advice?live=false" | Con
 
 # Market day packing list (CONFIRMED orders for today)
 Invoke-RestMethod "http://localhost:8080/api/market-day" | ConvertTo-Json -Depth 5
+# Printable packing PDF
+Invoke-WebRequest "http://localhost:8080/api/market-day/packing.pdf" -OutFile market-pack.pdf
 
 # Bed / field production (last 7 days)
 Invoke-RestMethod "http://localhost:8080/api/harvest/beds?week=true" | ConvertTo-Json -Depth 5

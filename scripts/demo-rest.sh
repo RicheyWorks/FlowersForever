@@ -26,5 +26,6 @@ hit "/api/connectors/history?limit=10"
 hit "/api/irrigation/advice?live=false"
 hit /api/market-day
 hit "/api/harvest/beds?week=true"
+curl -sS "${AUTH[@]}" -o market-pack-demo.pdf "${BASE}/api/market-day/packing.pdf" && echo "Wrote market-pack-demo.pdf"
 curl -sS "${AUTH[@]}" -o weekly-demo.pdf "${BASE}/api/reports/weekly.pdf" && echo "Wrote weekly-demo.pdf"
 echo "Done."

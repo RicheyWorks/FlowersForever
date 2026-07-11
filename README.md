@@ -169,6 +169,7 @@ REST: `GET /api/auth/me` (Basic), `GET /api/auth/accounts` (usernames only).
 | GET | `/api/market-day` | Market packing plan JSON (`date`, `windowDays`) |
 | GET | `/api/market-day/text` | Plain-text pack sheet |
 | GET | `/api/market-day/export.csv` | CSV pick list + order lines |
+| GET | `/api/market-day/packing.pdf` | Printable packing PDF |
 | GET | `/api/reports/weekly.pdf` | Trailing week PDF |
 | GET | `/actuator/health` | Health |
 
@@ -213,6 +214,7 @@ More: [`docs/GUI_ARCHITECTURE.md`](docs/GUI_ARCHITECTURE.md).
 - Release **1.0.5**  
 - Bed / field production rollup (Harvest Log, REST, CLI, dashboard top-bed tip)  
 - Weekly PDF includes **bed / field production** table; release **1.0.6**  
+- Market Day **packing PDF** (pick list + customer slips, shortfall highlighting)  
 
 ### Later ideas
 

@@ -85,6 +85,9 @@ public class MarketDayTab implements FlowerFarmTab {
         exportTxt.addActionListener(e -> exportText());
         JButton exportCsv = new JButton("Export CSV…");
         exportCsv.addActionListener(e -> exportCsv());
+        JButton exportPdf = new JButton("Export PDF…");
+        exportPdf.setToolTipText("Printable packing sheet (pick list + customer slips).");
+        exportPdf.addActionListener(e -> exportPdf());
         JButton openCrm = new JButton("Open CRM");
         openCrm.addActionListener(e -> {
             if (host != null) {
@@ -103,6 +106,7 @@ public class MarketDayTab implements FlowerFarmTab {
         controls.add(today);
         controls.add(exportTxt);
         controls.add(exportCsv);
+        controls.add(exportPdf);
         controls.add(openCrm);
 
         summaryLabel = new JLabel(" ");
@@ -192,6 +196,35 @@ public class MarketDayTab implements FlowerFarmTab {
         } catch (Exception ex) {
             JOptionPane.showMessageDialog(panel, ex.getMessage(), "Export failed",
                     JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private void exportPdf() {
+        try {
+            if (host != null) {
+                host.setStatus("⏳ Building market-day packing PDF…");
+            }
+            MarketDayPlan plan = currentPlan();
+            byte[] pdf = packingService.generatePackingPdf(plan);
+            JFileChooser chooser = new JFileChooser();
+            chooser.setSelectedFile(new File("market-day-packing-" + plan.marketDate() + ".pdf"));
+            if (chooser.showSaveDialog(panel) != JFileChooser.APPROVE_OPTION) {
+                return;
+            }
+            Files.write(chooser.getSelectedFile().toPath(), pdf);
+            if (host != null) {
+                host.setStatus("Wrote packing PDF → " + chooser.getSelectedFile().getName()
+                        + " (" + pdf.length + " bytes)");
+            }
+            JOptionPane.showMessageDialog(panel,
+                    "Saved packing PDF:\n" + chooser.getSelectedFile().getAbsolutePath(),
+                    "Export", JOptionPane.INFORMATION_MESSAGE);
+        } catch (Exception ex) {
+            JOptionPane.showMessageDialog(panel, ex.getMessage(), "PDF export failed",
+                    JOptionPane.ERROR_MESSAGE);
+            if (host != null) {
+                host.setStatus("Packing PDF failed: " + ex.getMessage());
+            }
         }
     }
 }

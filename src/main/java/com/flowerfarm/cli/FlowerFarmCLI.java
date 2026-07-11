@@ -405,6 +405,15 @@ public class FlowerFarmCLI implements ApplicationRunner {
                         marketDayPackingService.exportCsv(plan));
                 System.out.println("✓ Wrote " + file);
             }
+            System.out.print("Export packing PDF? (y/n): ");
+            if ("y".equalsIgnoreCase(sc.nextLine().trim())) {
+                String def = "market-day-packing-" + plan.marketDate() + ".pdf";
+                System.out.print("Filename [" + def + "]: ");
+                String file = orDefault(sc.nextLine(), def);
+                byte[] pdf = marketDayPackingService.generatePackingPdf(plan);
+                java.nio.file.Files.write(java.nio.file.Path.of(file), pdf);
+                System.out.println("✓ Wrote " + file + " (" + pdf.length + " bytes)");
+            }
         } catch (Exception e) {
             System.out.println("✗ Market day packing failed: " + e.getMessage());
         }

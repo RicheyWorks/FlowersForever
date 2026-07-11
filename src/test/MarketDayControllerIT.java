@@ -88,4 +88,20 @@ class MarketDayControllerIT {
                         org.hamcrest.Matchers.containsString("market-day-")))
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("section")));
     }
+
+    @Test
+    @DisplayName("packing PDF")
+    void packingPdf() throws Exception {
+        when(packingService.buildPlan(any(), anyInt(), anyBoolean(), anyBoolean()))
+                .thenReturn(samplePlan());
+        when(packingService.generatePackingPdf(any()))
+                .thenReturn("%PDF-1.4 mock".getBytes());
+
+        mockMvc.perform(get("/api/market-day/packing.pdf"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Content-Disposition",
+                        org.hamcrest.Matchers.containsString("market-day-packing-")))
+                .andExpect(header().string("Content-Type",
+                        org.hamcrest.Matchers.containsString("application/pdf")));
+    }
 }

@@ -42,6 +42,15 @@ Get-Json "/api/irrigation/advice?live=false"
 Get-Json "/api/market-day"
 Get-Json "/api/harvest/beds?week=true"
 
+$packPdf = Join-Path (Get-Location) "market-pack-demo.pdf"
+Write-Host "`n=== GET /api/market-day/packing.pdf → $packPdf ===" -ForegroundColor Yellow
+try {
+    Invoke-WebRequest -Uri "$BaseUrl/api/market-day/packing.pdf" -Headers $headers -OutFile $packPdf
+    Write-Host "Wrote $packPdf ($((Get-Item $packPdf).Length) bytes)" -ForegroundColor Green
+} catch {
+    Write-Host "Packing PDF failed: $_" -ForegroundColor Red
+}
+
 $pdf = Join-Path (Get-Location) "weekly-demo.pdf"
 Write-Host "`n=== GET /api/reports/weekly.pdf → $pdf ===" -ForegroundColor Yellow
 try {

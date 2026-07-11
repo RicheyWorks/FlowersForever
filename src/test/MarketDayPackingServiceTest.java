@@ -17,6 +17,7 @@ import java.time.LocalDate;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
@@ -141,5 +142,27 @@ class MarketDayPackingServiceTest {
         assertThat(plan.orderCount()).isZero();
         assertThat(plan.pickList()).isEmpty();
         assertThat(plan.plainText()).contains("no confirmed orders");
+    }
+
+    @Test
+    @DisplayName("generatePackingPdf returns PDF with magic header")
+    void packingPdf() {
+        LocalDate day = LocalDate.of(2026, 7, 12);
+        Customer c = new Customer("Kitsap Blooms", "", "", "", "FLORIST", "");
+        c.setId(1L);
+        CustomerOrder o = new CustomerOrder(c, day, "CONFIRMED", "AM");
+        o.setId(3L);
+        o.addLine(new OrderLine("Nootka Rose", 40, "stems", 2.5));
+        when(orderService.findBetween(any(), any())).thenReturn(List.of(o));
+        when(inventoryService.getAllItems()).thenReturn(List.of(
+                new Item("Nootka Rose", "Flowers/Plants", 2.5, "stems", 1.0, 20, "")
+        ));
+
+        MarketDayPlan plan = service.planForDay(day);
+        byte[] pdf = service.generatePackingPdf(plan);
+        assertThat(pdf).isNotNull();
+        assertThat(pdf.length).isGreaterThan(100);
+        assertThat(new String(pdf, 0, 4)).isEqualTo("%PDF");
+        assertThatIllegalArgumentException().isThrownBy(() -> service.generatePackingPdf(null));
     }
 }
