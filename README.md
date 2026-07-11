@@ -41,8 +41,8 @@ Spring Boot **3.5.16** + modular Swing GUI + dual-mode connectors (offline JSON 
 
 ```bash
 # Create a release from main (after CI is green)
-git tag v1.0.13
-git push origin v1.0.13
+git tag v1.0.14
+git push origin v1.0.14
 ```
 
 ---
@@ -58,22 +58,22 @@ mvn clean verify
 # GUI + REST (:8080)
 mvn spring-boot:run
 # or
-java -jar target/flowerfarm-manager-1.0.13.jar
+java -jar target/flowerfarm-manager-1.0.14.jar
 
 # CLI
-java -jar target/flowerfarm-manager-1.0.13.jar --cli
+java -jar target/flowerfarm-manager-1.0.14.jar --cli
 
 # SQLite
-java -jar target/flowerfarm-manager-1.0.13.jar --spring.profiles.active=sqlite
+java -jar target/flowerfarm-manager-1.0.14.jar --spring.profiles.active=sqlite
 
 # Shared barn login (GUI + HTTP Basic)
-java -jar target/flowerfarm-manager-1.0.13.jar --spring.profiles.active=auth
+java -jar target/flowerfarm-manager-1.0.14.jar --spring.profiles.active=auth
 # farm/kitsap (OWNER) · hand/harvest (HAND) · viewer/view (VIEWER)
 
 # Portfolio demo seed (CRM + harvest + today's CONFIRMED orders when empty)
-java -jar target/flowerfarm-manager-1.0.13.jar --spring.profiles.active=demo
+java -jar target/flowerfarm-manager-1.0.14.jar --spring.profiles.active=demo
 # demo + barn auth:
-java -jar target/flowerfarm-manager-1.0.13.jar --spring.profiles.active=demo,auth
+java -jar target/flowerfarm-manager-1.0.14.jar --spring.profiles.active=demo,auth
 ```
 
 ### Persistence
@@ -248,6 +248,7 @@ More: [`docs/GUI_ARCHITECTURE.md`](docs/GUI_ARCHITECTURE.md).
 - **Order invoice PDF** (CRM + REST + CLI) — wholesale bill-to sheet per order  
 - Release **1.0.13**  
 - **Low-stock reorder list** (Inventory + REST + CLI + PDF) — suggested restock qty at cost  
+- Release **1.0.14**  
 
 ### Later ideas
 
