@@ -77,7 +77,7 @@ Rejected outright: no deployment target exists that would justify k8s/IaC, and a
 5. [x] `codeql.yml` + `dependency-review.yml` workflows
 6. [x] `installers.yml`: jpackage MSI + DMG attached to releases
 7. [x] Baseline recorded and ratchet set (2026-07-16, see below)
-8. [ ] Follow-up: evaluate code signing before any public distribution push
+8. [x] Code signing evaluated — deferred with defined trigger, see [ADR-002](ADR-002-code-signing.md)
 
 ## Baseline & ratchet (recorded 2026-07-16)
 
