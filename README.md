@@ -6,7 +6,7 @@
 **Practical desktop + REST inventory for PNW flower growers**  
 Port Orchard / Kitsap County · roses, stems, tools, supplies · west of the Cascades.
 
-Spring Boot **3.5.16** · modular Swing GUI · dual-mode connectors (offline JSON mirrors **or** live REST) · fat JAR **1.0.18**.
+Spring Boot **3.5.16** · modular Swing GUI · dual-mode connectors (offline JSON mirrors **or** live REST) · fat JAR **1.0.19**.
 
 ---
 
@@ -56,8 +56,8 @@ docker run -p 8080:8080 ghcr.io/richeyworks/flowersforever:latest
 ```
 
 ```bash
-git tag v1.0.18
-git push origin v1.0.18
+git tag v1.0.19
+git push origin v1.0.19
 ```
 
 ---
@@ -72,16 +72,16 @@ mvn clean verify
 # GUI + REST on :8080
 mvn spring-boot:run
 # or
-java -jar target/flowerfarm-manager-1.0.18.jar
+java -jar target/flowerfarm-manager-1.0.19.jar
 
 # CLI
-java -jar target/flowerfarm-manager-1.0.18.jar --cli
+java -jar target/flowerfarm-manager-1.0.19.jar --cli
 
 # Profiles (combine with commas)
-java -jar target/flowerfarm-manager-1.0.18.jar --spring.profiles.active=sqlite
-java -jar target/flowerfarm-manager-1.0.18.jar --spring.profiles.active=auth
-java -jar target/flowerfarm-manager-1.0.18.jar --spring.profiles.active=demo
-java -jar target/flowerfarm-manager-1.0.18.jar --spring.profiles.active=demo,auth
+java -jar target/flowerfarm-manager-1.0.19.jar --spring.profiles.active=sqlite
+java -jar target/flowerfarm-manager-1.0.19.jar --spring.profiles.active=auth
+java -jar target/flowerfarm-manager-1.0.19.jar --spring.profiles.active=demo
+java -jar target/flowerfarm-manager-1.0.19.jar --spring.profiles.active=demo,auth
 ```
 
 | Profile | Purpose |
@@ -219,7 +219,7 @@ GUI design notes: **[docs/GUI_ARCHITECTURE.md](docs/GUI_ARCHITECTURE.md)**.
 
 ## Status
 
-**Current release: [v1.0.18](https://github.com/RicheyWorks/FlowersForever/releases/tag/v1.0.18)** — Spring Boot 3.5.16, offline-first dual-mode, full market-day ops loop with printable PDFs.
+**Current release: [v1.0.19](https://github.com/RicheyWorks/FlowersForever/releases/tag/v1.0.19)** — Spring Boot 3.5.16, offline-first dual-mode, full market-day ops loop with printable PDFs, hardened build pipeline (coverage, SBOM, CodeQL, Docker/GHCR, native installers — [ADR-001](docs/adr/ADR-001-infrastructure-and-build-expansion.md)).
 
 | Theme | Shipped (highlights) |
 |-------|----------------------|
