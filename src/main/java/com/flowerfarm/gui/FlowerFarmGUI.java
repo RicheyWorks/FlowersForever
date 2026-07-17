@@ -124,6 +124,11 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
 
     @Override
     public void run(ApplicationArguments args) {
+        // Headless environments (Docker, CI, ssh) get REST-only mode — no Swing (ADR-001).
+        if (java.awt.GraphicsEnvironment.isHeadless()) {
+            System.out.println("Headless environment detected — skipping GUI, REST API only.");
+            return;
+        }
         SwingUtilities.invokeLater(() -> {
             if (!loginGate.promptUntilAuthenticatedOrCancel()) {
                 System.err.println("Login cancelled or failed — GUI not started.");

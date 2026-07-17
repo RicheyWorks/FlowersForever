@@ -413,7 +413,7 @@ public class InventoryTab implements FlowerFarmTab {
         }
         File file = chooser.getSelectedFile();
 
-        try (BufferedWriter bw = new BufferedWriter(new FileWriter(file))) {
+        try (BufferedWriter bw = new BufferedWriter(new FileWriter(file, java.nio.charset.StandardCharsets.UTF_8))) {
             bw.write(String.join(",", COLUMNS));
             bw.newLine();
             for (int viewRow = 0; viewRow < rows; viewRow++) {

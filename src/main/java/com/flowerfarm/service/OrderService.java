@@ -201,7 +201,7 @@ public class OrderService {
         if (orders == null) {
             orders = List.of();
         }
-        try (java.io.BufferedWriter bw = new java.io.BufferedWriter(new java.io.FileWriter(filename.trim()))) {
+        try (java.io.BufferedWriter bw = new java.io.BufferedWriter(new java.io.FileWriter(filename.trim(), java.nio.charset.StandardCharsets.UTF_8))) {
             bw.write("OrderId,Date,Customer,Status,LineCount,Total,Notes");
             bw.newLine();
             for (CustomerOrder o : orders) {

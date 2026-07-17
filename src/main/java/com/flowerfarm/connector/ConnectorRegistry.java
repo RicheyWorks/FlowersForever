@@ -62,7 +62,7 @@ public class ConnectorRegistry {
         List<Map<String, Object>> info = new ArrayList<>();
         for (ExternalConnector<?> c : registry.values()) {
             boolean available = false;
-            try { available = c.isAvailable(); } catch (Exception ignored) {}
+            try { available = c.isAvailable(); } catch (Exception e) { available = false; /* connector offline — expected in local mode */ }
             SyncDirection direction = c.getSupportedDirection();
             Map<String, Object> entry = new LinkedHashMap<>();
             entry.put("name",        c.getName());

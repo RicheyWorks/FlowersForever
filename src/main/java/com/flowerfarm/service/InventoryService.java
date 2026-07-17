@@ -767,7 +767,7 @@ public class InventoryService {
         }
 
         List<Item> inventory = repository.findAllOrdered();
-        try (BufferedWriter bw = new BufferedWriter(new FileWriter(filename.trim()))) {
+        try (BufferedWriter bw = new BufferedWriter(new FileWriter(filename.trim(), java.nio.charset.StandardCharsets.UTF_8))) {
             bw.write(CSV_HEADER);
             bw.newLine();
             for (Item item : inventory) {
@@ -799,7 +799,7 @@ public class InventoryService {
         }
 
         List<Item> items = new ArrayList<>();
-        try (BufferedReader br = new BufferedReader(new FileReader(file))) {
+        try (BufferedReader br = new BufferedReader(new FileReader(file, java.nio.charset.StandardCharsets.UTF_8))) {
             String line;
             boolean firstDataLine = true;
             while ((line = br.readLine()) != null) {

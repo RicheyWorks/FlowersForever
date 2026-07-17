@@ -974,7 +974,7 @@ public class HarvestService {
         if (entries == null) {
             entries = List.of();
         }
-        try (java.io.BufferedWriter bw = new java.io.BufferedWriter(new java.io.FileWriter(filename.trim()))) {
+        try (java.io.BufferedWriter bw = new java.io.BufferedWriter(new java.io.FileWriter(filename.trim(), java.nio.charset.StandardCharsets.UTF_8))) {
             bw.write("Id,Date,Crop,Quantity,Unit,BedOrField,Notes");
             bw.newLine();
             for (HarvestEntry e : entries) {

@@ -1,4 +1,4 @@
-# FlowersForever — continuous verification on every push / PR
+# FlowersForever — continuous verification on every push / PR (ADR-001)
 name: CI
 
 on:
@@ -13,9 +13,58 @@ concurrency:
 
 jobs:
   verify:
-    name: mvn clean verify (JDK 17)
+    name: mvn clean verify (JDK ${{ matrix.java }})
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        java: ["17", "21"]
+    # JDK 17 is the supported baseline; 21 is advisory forward-compat (Boot 4.x prep)
+    continue-on-error: ${{ matrix.java == '21' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up JDK ${{ matrix.java }}
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: ${{ matrix.java }}
+          cache: maven
+
+      - name: Build and test
+        run: mvn -B clean verify
+
+      - name: Upload coverage report (JDK 17 only)
+        if: matrix.java == '17'
+        uses: actions/upload-artifact@v7
+        with:
+          name: jacoco-report
+          path: target/site/jacoco/
+          if-no-files-found: ignore
+
+      - name: Upload SBOM (JDK 17 only)
+        if: matrix.java == '17'
+        uses: actions/upload-artifact@v7
+        with:
+          name: sbom
+          path: target/bom.*
+          if-no-files-found: ignore
+
+      - name: Upload Surefire reports on failure
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: surefire-reports-jdk${{ matrix.java }}
+          path: target/surefire-reports/
+          if-no-files-found: ignore
+
+  quality:
+    name: Static analysis (report-only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
 
     steps:
       - name: Checkout
@@ -28,13 +77,26 @@ jobs:
           java-version: "17"
           cache: maven
 
-      - name: Build and test
-        run: mvn -B clean verify
+      - name: SpotBugs + Checkstyle
+        run: mvn -B clean verify -Pquality -DskipTests
 
-      - name: Upload Surefire reports on failure
-        if: failure()
+      - name: Upload analysis reports
         uses: actions/upload-artifact@v7
         with:
-          name: surefire-reports
-          path: target/surefire-reports/
+          name: static-analysis-reports
+          path: |
+            target/spotbugsXml.xml
+            target/checkstyle-result.xml
           if-no-files-found: ignore
+
+  docker:
+    name: Docker image builds
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Build image (no push)
+        run: docker build -t flowersforever:ci .

@@ -160,7 +160,7 @@ public class ConnectorController {
         return registry.find(name)
                 .map(c -> {
                     boolean available = false;
-                    try { available = c.isAvailable(); } catch (Exception ignored) {}
+                    try { available = c.isAvailable(); } catch (Exception e) { available = false; /* connector offline — expected in local mode */ }
                     Map<String, Object> body = Map.of(
                             "connector", name,
                             "available", available,

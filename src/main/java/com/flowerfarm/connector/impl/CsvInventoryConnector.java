@@ -115,7 +115,7 @@ public class CsvInventoryConnector implements ExternalConnector<String[]> {
         List<Item>   items    = new ArrayList<>();
         List<String> warnings = new ArrayList<>();
 
-        try (BufferedReader br = new BufferedReader(new FileReader(file))) {
+        try (BufferedReader br = new BufferedReader(new FileReader(file, java.nio.charset.StandardCharsets.UTF_8))) {
             String headerLine = br.readLine();
             if (headerLine == null) {
                 return ConnectorResult.fail("CSV file is empty.", filePath, getName());
@@ -157,7 +157,7 @@ public class CsvInventoryConnector implements ExternalConnector<String[]> {
         String filePath = config.get("export-file");
         String delim    = config.get("delimiter", ",");
 
-        try (BufferedWriter bw = new BufferedWriter(new FileWriter(filePath))) {
+        try (BufferedWriter bw = new BufferedWriter(new FileWriter(filePath, java.nio.charset.StandardCharsets.UTF_8))) {
             // Header row — use configured column names
             bw.write(String.join(delim, fieldMapper.outboundFields()));
             bw.newLine();

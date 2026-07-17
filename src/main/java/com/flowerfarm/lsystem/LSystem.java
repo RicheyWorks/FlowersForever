@@ -83,7 +83,7 @@ public final class LSystem {
      * Produce a mutated copy: slight angle tweak and optional random rule tweak.
      */
     public LSystem mutate(Random rng) {
-        Random r = rng == null ? new Random() : rng;
+        Random r = rng == null ? java.util.concurrent.ThreadLocalRandom.current() : rng;
         double angleDelta = (r.nextDouble() - 0.5) * 12.0; // ±6°
         double stepDelta = (r.nextDouble() - 0.5) * 2.0;
         Map<Character, String> newRules = new LinkedHashMap<>(rules);

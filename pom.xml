@@ -134,7 +134,97 @@
                     </includes>
                 </configuration>
             </plugin>
+
+            <!-- JaCoCo — coverage report on every verify (report-only, no threshold yet; see ADR-001) -->
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <version>0.8.13</version>
+                <executions>
+                    <execution>
+                        <id>prepare-agent</id>
+                        <goals><goal>prepare-agent</goal></goals>
+                    </execution>
+                    <execution>
+                        <id>report</id>
+                        <phase>verify</phase>
+                        <goals><goal>report</goal></goals>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!-- CycloneDX — SBOM (target/bom.json / bom.xml) for supply-chain visibility -->
+            <plugin>
+                <groupId>org.cyclonedx</groupId>
+                <artifactId>cyclonedx-maven-plugin</artifactId>
+                <version>2.9.1</version>
+                <executions>
+                    <execution>
+                        <phase>package</phase>
+                        <goals><goal>makeAggregateBom</goal></goals>
+                    </execution>
+                </executions>
+            </plugin>
         </plugins>
     </build>
+
+    <profiles>
+        <!-- Static analysis, report-first (non-blocking). CI runs: mvn verify -Pquality (ADR-001) -->
+        <profile>
+            <id>quality</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>com.github.spotbugs</groupId>
+                        <artifactId>spotbugs-maven-plugin</artifactId>
+                        <version>4.8.6.6</version>
+                        <configuration>
+                            <failOnError>false</failOnError>
+                            <effort>Max</effort>
+                            <excludeFilterFile>config/spotbugs-exclude.xml</excludeFilterFile>
+                            <xmlOutput>true</xmlOutput>
+                        </configuration>
+                        <executions>
+                            <!-- Report everything Medium+ (visibility, non-blocking) -->
+                            <execution>
+                                <id>spotbugs-report</id>
+                                <phase>verify</phase>
+                                <goals><goal>spotbugs</goal></goals>
+                                <configuration>
+                                    <threshold>Medium</threshold>
+                                </configuration>
+                            </execution>
+                            <!-- Ratchet: fail on any High-priority finding (baseline fixed at 0, ADR-001) -->
+                            <execution>
+                                <id>spotbugs-gate</id>
+                                <phase>verify</phase>
+                                <goals><goal>check</goal></goals>
+                                <configuration>
+                                    <threshold>High</threshold>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-checkstyle-plugin</artifactId>
+                        <version>3.6.0</version>
+                        <configuration>
+                            <configLocation>google_checks.xml</configLocation>
+                            <failsOnError>false</failsOnError>
+                            <failOnViolation>false</failOnViolation>
+                            <outputFileFormat>xml</outputFileFormat>
+                        </configuration>
+                        <executions>
+                            <execution>
+                                <phase>verify</phase>
+                                <goals><goal>checkstyle</goal></goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 
 </project>

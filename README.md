@@ -37,10 +37,23 @@ Spring Boot **3.5.16** · modular Swing GUI · dual-mode connectors (offline JSO
 
 | Automation | Behavior |
 |------------|----------|
-| **CI** | Every push/PR to `main` → `mvn clean verify` (Ubuntu + Temurin 17) |
+| **CI** | Every push/PR to `main` → `mvn clean verify` on JDK 17 + 21 (advisory), Docker build, static-analysis job |
+| **Quality** | JaCoCo coverage report every build; SpotBugs + Checkstyle via `-Pquality` (report-only) |
 | **Dependabot** | Weekly Maven + GitHub Actions PRs |
-| **Releases** | Tag `v*` → fat JAR on GitHub Releases |
+| **Supply chain** | CodeQL scanning, PR dependency review, CycloneDX SBOM on every build |
+| **Releases** | Tag `v*` → fat JAR + SBOM on GitHub Releases, image to GHCR, MSI/DMG installers via jpackage |
 | **Security** | Auth model & hardening — **[SECURITY.md](SECURITY.md)** |
+
+Decisions and trade-offs: **[docs/adr/ADR-001](docs/adr/ADR-001-infrastructure-and-build-expansion.md)**.
+
+### Docker (headless REST-only)
+
+```bash
+docker build -t flowersforever .
+docker run -p 8080:8080 -v flowerfarm-data:/app/data flowersforever
+# or from GHCR after a release:
+docker run -p 8080:8080 ghcr.io/richeyworks/flowersforever:latest
+```
 
 ```bash
 git tag v1.0.18

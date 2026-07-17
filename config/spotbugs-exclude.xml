@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SpotBugs exclusions — baseline decisions recorded in docs/adr/ADR-001 (2026-07-16).
+
+     EI_EXPOSE_REP / EI_EXPOSE_REP2 flag every constructor-injected Spring bean stored in a
+     field and every getter returning a JPA entity/collection (122 of the 172 baseline
+     findings). That is the intended architecture, not a defect, so the patterns are
+     excluded wholesale rather than annotated at ~120 sites. -->
+<FindBugsFilter>
+    <Match>
+        <Bug pattern="EI_EXPOSE_REP"/>
+    </Match>
+    <Match>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+    </Match>
+</FindBugsFilter>

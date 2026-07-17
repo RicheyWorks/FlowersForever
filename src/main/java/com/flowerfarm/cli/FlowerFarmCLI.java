@@ -78,7 +78,7 @@ public class FlowerFarmCLI implements ApplicationRunner {
 
     @Override
     public void run(ApplicationArguments args) {
-        Scanner scanner = new Scanner(System.in);
+        Scanner scanner = new Scanner(System.in, java.nio.charset.StandardCharsets.UTF_8);
         printBanner();
 
         boolean running = true;

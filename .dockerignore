@@ -1,0 +1,14 @@
+target/
+data/
+docs/
+scripts/
+.git/
+.github/
+.idea/
+.vscode/
+*.md
+*.xlsx
+*.csv
+*.mv.db
+*.sqlite
+application-local.properties
