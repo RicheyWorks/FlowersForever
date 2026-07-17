@@ -12,4 +12,17 @@
     <Match>
         <Bug pattern="EI_EXPOSE_REP2"/>
     </Match>
+
+    <!-- CT_CONSTRUCTOR_THROW guards against finalizer attacks — a JVM-security concern
+         irrelevant to a desktop farm app; validating constructors that throw are the
+         codebase's intended design (e.g. Item invariants). -->
+    <Match>
+        <Bug pattern="CT_CONSTRUCTOR_THROW"/>
+    </Match>
+
+    <!-- DM_EXIT: System.exit is intentional in a Swing desktop app (login cancelled,
+         CLI quit) — there is no container to hand control back to. -->
+    <Match>
+        <Bug pattern="DM_EXIT"/>
+    </Match>
 </FindBugsFilter>

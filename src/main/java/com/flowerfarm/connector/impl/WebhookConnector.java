@@ -127,8 +127,9 @@ public class WebhookConnector implements ExternalConnector<Map<String, Object>>,
 
     private ConnectorResult<Integer> writeLocalPayload(String body, int count) throws Exception {
         Path path = Path.of(config.get("local-file"));
-        if (path.getParent() != null) {
-            Files.createDirectories(path.getParent());
+        Path parent = path.getParent();
+        if (parent != null) {
+            Files.createDirectories(parent);
         }
         Files.writeString(path, body, StandardCharsets.UTF_8);
         String msg = "Webhook local dry-run — wrote " + count + " item(s) to " + path.getFileName() + ".";

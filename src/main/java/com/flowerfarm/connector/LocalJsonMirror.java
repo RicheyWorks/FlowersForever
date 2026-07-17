@@ -56,8 +56,9 @@ public final class LocalJsonMirror {
 
     /** Write rows with pretty-print; creates parent directories. */
     public void writeRows(List<Map<String, Object>> rows) throws IOException {
-        if (path.getParent() != null) {
-            Files.createDirectories(path.getParent());
+        java.nio.file.Path parent = path.getParent();
+        if (parent != null) {
+            Files.createDirectories(parent);
         }
         List<Map<String, Object>> safe = rows == null ? List.of() : rows;
         MAPPER.writerWithDefaultPrettyPrinter().writeValue(path.toFile(), safe);

@@ -130,14 +130,15 @@ public class ShopifyConnector implements ExternalConnector<Map<String, Object>>,
                 ResponseEntity<Map> response = restTemplate.exchange(
                         url, HttpMethod.GET, new HttpEntity<>(authHeaders()), Map.class);
 
-                if (!response.getStatusCode().is2xxSuccessful() || response.getBody() == null) {
+                Map<?, ?> body = response.getBody();
+                if (!response.getStatusCode().is2xxSuccessful() || body == null) {
                     return ConnectorResult.fail(
                             "Shopify import failed.",
                             "HTTP " + response.getStatusCode() + " on page " + pages,
                             getName());
                 }
 
-                Object productsObj = response.getBody().get("products");
+                Object productsObj = body.get("products");
                 if (productsObj instanceof List<?> products) {
                     for (Object p : products) {
                         if (p instanceof Map<?, ?> productMap) {
@@ -440,13 +441,14 @@ public class ShopifyConnector implements ExternalConnector<Map<String, Object>>,
             while (url != null && !url.isBlank()) {
                 ResponseEntity<Map> response = restTemplate.exchange(
                         url, HttpMethod.GET, new HttpEntity<>(authHeaders()), Map.class);
-                if (!response.getStatusCode().is2xxSuccessful() || response.getBody() == null) {
+                Map<?, ?> body = response.getBody();
+                if (!response.getStatusCode().is2xxSuccessful() || body == null) {
                     return ConnectorResult.fail(
                             "Failed to list Shopify products.",
                             "HTTP " + response.getStatusCode(),
                             getName());
                 }
-                Object productsObj = response.getBody().get("products");
+                Object productsObj = body.get("products");
                 if (productsObj instanceof List<?> list) {
                     for (Object p : list) {
                         if (p instanceof Map<?, ?> m) {

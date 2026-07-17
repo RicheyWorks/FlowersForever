@@ -165,8 +165,9 @@ public class FarmbriteConnector implements ExternalConnector<Map<String, Object>
     private ConnectorResult<Integer> exportToLocalFile(List<Item> items) {
         Path path = Path.of(config.get("local-file"));
         try {
-            if (path.getParent() != null) {
-                Files.createDirectories(path.getParent());
+            Path parent = path.getParent();
+            if (parent != null) {
+                Files.createDirectories(parent);
             }
             List<Map<String, Object>> rows = new ArrayList<>();
             for (Item item : items) {

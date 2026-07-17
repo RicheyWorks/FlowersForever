@@ -178,14 +178,15 @@ public class GoogleSheetsConnector implements ExternalConnector<List<Object>>, D
             ResponseEntity<Map> response = restTemplate.exchange(
                     url, HttpMethod.GET, new HttpEntity<>(authHeaders(false)), Map.class);
 
-            if (!response.getStatusCode().is2xxSuccessful() || response.getBody() == null) {
+            Map<?, ?> body = response.getBody();
+            if (!response.getStatusCode().is2xxSuccessful() || body == null) {
                 return ConnectorResult.fail(
                         "Google Sheets import failed.",
                         "HTTP " + response.getStatusCode(),
                         getName());
             }
 
-            Object valuesObj = response.getBody().get("values");
+            Object valuesObj = body.get("values");
             if (!(valuesObj instanceof List<?> rows) || rows.isEmpty()) {
                 return ConnectorResult.ok(List.of(), "Google Sheet is empty.", getName());
             }

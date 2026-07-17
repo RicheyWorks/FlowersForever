@@ -467,11 +467,12 @@ public class SquareConnector implements ExternalConnector<Map<String, Object>>, 
             ResponseEntity<Map> response = restTemplate.exchange(
                     url, HttpMethod.GET, new HttpEntity<>(authHeaders()), Map.class);
 
-            if (!response.getStatusCode().is2xxSuccessful() || response.getBody() == null) {
+            Map<?, ?> respBody = response.getBody();
+            if (!response.getStatusCode().is2xxSuccessful() || respBody == null) {
                 throw new IllegalStateException("ListCatalog HTTP " + response.getStatusCode());
             }
 
-            Object objects = response.getBody().get("objects");
+            Object objects = respBody.get("objects");
             if (objects instanceof List<?> list) {
                 for (Object o : list) {
                     if (o instanceof Map<?, ?> m) {
@@ -483,7 +484,7 @@ public class SquareConnector implements ExternalConnector<Map<String, Object>>, 
                 }
             }
 
-            Object next = response.getBody().get("cursor");
+            Object next = respBody.get("cursor");
             cursor = next == null ? null : next.toString();
         } while (cursor != null && !cursor.isBlank());
 
@@ -529,11 +530,12 @@ public class SquareConnector implements ExternalConnector<Map<String, Object>>, 
                 new HttpEntity<>(body, authHeaders()),
                 Map.class);
 
-        if (!response.getStatusCode().is2xxSuccessful() || response.getBody() == null) {
+        Map<?, ?> respBody = response.getBody();
+        if (!response.getStatusCode().is2xxSuccessful() || respBody == null) {
             throw new IllegalStateException("UpsertCatalogObject HTTP " + response.getStatusCode());
         }
 
-        Object catalogObj = response.getBody().get("catalog_object");
+        Object catalogObj = respBody.get("catalog_object");
         if (catalogObj instanceof Map<?, ?> m) {
             return castMap(m);
         }
@@ -563,12 +565,13 @@ public class SquareConnector implements ExternalConnector<Map<String, Object>>, 
                     new HttpEntity<>(body, authHeaders()),
                     Map.class);
 
-            if (!response.getStatusCode().is2xxSuccessful() || response.getBody() == null) {
+            Map<?, ?> respBody = response.getBody();
+            if (!response.getStatusCode().is2xxSuccessful() || respBody == null) {
                 log.warn("[square] Inventory batch-retrieve HTTP {}", response.getStatusCode());
                 continue;
             }
 
-            Object countsObj = response.getBody().get("counts");
+            Object countsObj = respBody.get("counts");
             if (countsObj instanceof List<?> list) {
                 for (Object c : list) {
                     if (c instanceof Map<?, ?> m) {

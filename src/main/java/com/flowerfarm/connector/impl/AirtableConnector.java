@@ -138,7 +138,8 @@ public class AirtableConnector implements ExternalConnector<Map<String, Object>>
                         Map.class
                 );
 
-                if (!response.getStatusCode().is2xxSuccessful() || response.getBody() == null) {
+                Map<String, Object> body = response.getBody();
+                if (!response.getStatusCode().is2xxSuccessful() || body == null) {
                     return ConnectorResult.fail(
                             "Airtable import failed.",
                             "HTTP status: " + response.getStatusCode(),
@@ -146,7 +147,6 @@ public class AirtableConnector implements ExternalConnector<Map<String, Object>>
                     );
                 }
 
-                Map<String, Object> body = response.getBody();
                 List<Map<String, Object>> records =
                         (List<Map<String, Object>>) body.getOrDefault("records", List.of());
 
@@ -325,11 +325,12 @@ public class AirtableConnector implements ExternalConnector<Map<String, Object>>
                 Map.class
         );
 
-        if (!response.getStatusCode().is2xxSuccessful() || response.getBody() == null) {
+        Map<?, ?> respBody = response.getBody();
+        if (!response.getStatusCode().is2xxSuccessful() || respBody == null) {
             return 0;
         }
 
-        Object created = response.getBody().get("records");
+        Object created = respBody.get("records");
 
         if (created instanceof List<?> list) {
             return list.size();

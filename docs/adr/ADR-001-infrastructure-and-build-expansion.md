@@ -83,6 +83,8 @@ Rejected outright: no deployment target exists that would justify k8s/IaC, and a
 
 SpotBugs baseline was 172 findings: 122 were `EI_EXPOSE_REP`/`EI_EXPOSE_REP2` — mutable-reference noise inherent to Spring constructor injection and JPA entities — now excluded via `config/spotbugs-exclude.xml`. The 12 priority-1 findings (10 platform-default-charset I/O calls, 2 silently swallowed exceptions, 1 per-call `Random`) were fixed in code, bringing the High-priority count to 0.
 
-Ratchet as implemented: the `quality` profile reports everything Medium+ (non-blocking) and **fails on any High-priority finding** (`spotbugs:check`, threshold High) — green at adoption, blocks regressions. Remaining Medium backlog: ~38 findings, dominated by `NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE` (13) and `CT_CONSTRUCTOR_THROW` (8) — burn down opportunistically.
+Ratchet as implemented: the `quality` profile reports everything Medium+ (non-blocking) and **fails on any High-priority finding** (`spotbugs:check`, threshold High) — green at adoption, blocks regressions.
+
+Medium burn-down (2026-07-17): all 13 `NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE` fixed in connector code (captured `response.getBody()` / `path.getParent()` once instead of re-calling across the null check). `CT_CONSTRUCTOR_THROW` (8) and `DM_EXIT` (3) excluded with rationale in the filter file. Remaining backlog ≈14, mostly `REC_CATCH_EXCEPTION` — deliberate defensive catches, burn down opportunistically.
 
 Checkstyle baseline was 14,439 violations, 89% `IndentationCheck` (google_checks wants 2-space, codebase uses 4-space) — structural style mismatch, not code health. Stays report-only; revisit with a project-tailored ruleset only if it ever earns its keep.
