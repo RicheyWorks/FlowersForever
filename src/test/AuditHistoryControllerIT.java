@@ -2,6 +2,7 @@ package com.flowerfarm.integration;
 
 import com.flowerfarm.controller.ConnectorController;
 import com.flowerfarm.connector.ConnectorRegistry;
+import com.flowerfarm.service.ExportPathResolver;
 import com.flowerfarm.service.SyncHistoryService;
 import com.flowerfarm.service.SyncHistoryService.AuditReport;
 import org.junit.jupiter.api.DisplayName;
@@ -9,7 +10,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.LocalDate;
@@ -27,8 +28,9 @@ class AuditHistoryControllerIT {
 
     @Autowired MockMvc mockMvc;
 
-    @MockBean ConnectorRegistry connectorRegistry;
-    @MockBean SyncHistoryService syncHistoryService;
+    @MockitoBean ConnectorRegistry connectorRegistry;
+    @MockitoBean SyncHistoryService syncHistoryService;
+    @MockitoBean ExportPathResolver exportPathResolver;
 
     private AuditReport sample() {
         return new AuditReport(

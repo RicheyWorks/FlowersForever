@@ -85,25 +85,36 @@ public class HarvestEntry {
         if (cropName == null || cropName.isBlank()) {
             throw new IllegalArgumentException("Crop name is required.");
         }
-        this.cropName = cropName.trim();
+        this.cropName = requireMaxLength(cropName.trim(), 255, "Crop name");
     }
 
     public void setQuantity(double quantity) {
-        if (quantity < 0) {
-            throw new IllegalArgumentException("Quantity cannot be negative.");
+        if (!Double.isFinite(quantity) || quantity <= 0 || quantity > Integer.MAX_VALUE) {
+            throw new IllegalArgumentException(
+                    "Quantity must be a finite number greater than 0 and no more than "
+                            + Integer.MAX_VALUE + ".");
         }
         this.quantity = quantity;
     }
 
     public void setUnit(String unit) {
-        this.unit = (unit == null || unit.isBlank()) ? "stems" : unit.trim();
+        String normalized = (unit == null || unit.isBlank()) ? "stems" : unit.trim();
+        this.unit = requireMaxLength(normalized, 64, "Unit");
     }
 
     public void setBedOrField(String bedOrField) {
-        this.bedOrField = bedOrField == null ? "" : bedOrField.trim();
+        this.bedOrField = requireMaxLength(
+                bedOrField == null ? "" : bedOrField.trim(), 128, "Bed or field");
     }
 
     public void setNotes(String notes) {
-        this.notes = notes == null ? "" : notes.trim();
+        this.notes = requireMaxLength(notes == null ? "" : notes.trim(), 2000, "Notes");
+    }
+
+    private static String requireMaxLength(String value, int max, String field) {
+        if (value.length() > max) {
+            throw new IllegalArgumentException(field + " cannot exceed " + max + " characters.");
+        }
+        return value;
     }
 }

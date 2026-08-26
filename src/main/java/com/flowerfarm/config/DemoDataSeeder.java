@@ -120,6 +120,7 @@ public class DemoDataSeeder implements ApplicationRunner {
                 today,
                 "CONFIRMED",
                 "demo — AM pickup",
+                "PICKUP",
                 List.of(
                         new OrderLine("Nootka Rose", 40, "stems", 2.50),
                         new OrderLine("Damask Rose", 12, "stems", 3.00)
@@ -129,6 +130,7 @@ public class DemoDataSeeder implements ApplicationRunner {
                 today,
                 "CONFIRMED",
                 "demo — Saturday stall",
+                "MARKET",
                 List.of(
                         new OrderLine("Nootka Rose", 30, "stems", 2.50),
                         new OrderLine("Dahlia mix", 8, "bunches", 12.00)
@@ -138,6 +140,7 @@ public class DemoDataSeeder implements ApplicationRunner {
                 today,
                 "DRAFT",
                 "demo — hold for confirm",
+                "DELIVERY",
                 List.of(new OrderLine("Nootka Rose", 20, "stems", 2.20)));
         return 3;
     }

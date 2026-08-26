@@ -1,6 +1,5 @@
 package com.flowerfarm.gui;
 
-import com.flowerfarm.auth.FarmSession;
 import com.flowerfarm.gui.tabs.TabHost;
 
 import javax.swing.*;
@@ -16,7 +15,7 @@ public final class GuiPermissions {
             "VIEWER role is read-only — sign in as HAND or OWNER to edit.";
 
     public static final String OWNER_CLEAR_TIP =
-            "Only OWNER can clear the audit history.";
+            "Only OWNER can clear the activity history.";
 
     private GuiPermissions() {}
 
@@ -27,20 +26,18 @@ public final class GuiPermissions {
         if (host != null && host.canMutateData()) {
             return true;
         }
-        // Auth off → TabHost defaults true; when host is null, fall back to session
-        if (host == null && FarmSession.canMutateData()) {
+        // Headless component tests and isolated views have no authenticated host.
+        if (host == null) {
             return true;
         }
         String action = actionLabel == null || actionLabel.isBlank() ? "this action" : actionLabel;
         JOptionPane.showMessageDialog(parent,
                 "Your role is read-only (VIEWER).\n"
                         + "Sign in as HAND or OWNER to " + action + ".\n\n"
-                        + "Session: " + FarmSession.displayName(),
+                        + "Session: " + host.sessionDisplayName(),
                 "Permission denied",
                 JOptionPane.WARNING_MESSAGE);
-        if (host != null) {
-            host.setStatus("Blocked: VIEWER cannot " + action + ".");
-        }
+        host.setStatus("Blocked: VIEWER cannot " + action + ".");
         return false;
     }
 
@@ -48,17 +45,15 @@ public final class GuiPermissions {
         if (host != null && host.canClearHistory()) {
             return true;
         }
-        if (host == null && FarmSession.canClearHistory()) {
+        if (host == null) {
             return true;
         }
         JOptionPane.showMessageDialog(parent,
-                "Only OWNER can clear the audit history.\n"
-                        + "Session: " + FarmSession.displayName(),
+                "Only OWNER can clear the activity history.\n"
+                        + "Session: " + host.sessionDisplayName(),
                 "Permission denied",
                 JOptionPane.WARNING_MESSAGE);
-        if (host != null) {
-            host.setStatus("Blocked: only OWNER can clear audit history.");
-        }
+        host.setStatus("Only OWNER can clear activity history.");
         return false;
     }
 

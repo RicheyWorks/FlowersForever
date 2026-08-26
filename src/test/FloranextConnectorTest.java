@@ -106,5 +106,28 @@ class FloranextConnectorTest {
             assertThat(result.isSuccess()).isTrue();
             assertThat(result.getPayload()).isEqualTo(1);
         }
+
+        @Test
+        @DisplayName("sync POSTs only new and changed products")
+        void syncWritesOnlyChanges() {
+            when(restTemplate.exchange(contains("/api/products"), eq(HttpMethod.GET), any(HttpEntity.class), eq(Object.class)))
+                    .thenReturn(new ResponseEntity<>(Map.of("products", List.of(
+                            Map.of("name", "Same", "stock", 2, "price", 3.0, "unit", "each"),
+                            Map.of("name", "Changed", "stock", 2, "price", 3.0, "unit", "each")
+                    )), HttpStatus.OK));
+            when(restTemplate.exchange(contains("/api/products"), eq(HttpMethod.POST), any(HttpEntity.class), eq(Map.class)))
+                    .thenReturn(new ResponseEntity<>(Map.of(), HttpStatus.CREATED));
+
+            ConnectorResult<SyncSummary> result = connector.syncUpdates(List.of(
+                    new Item("Same", "Other", 3.0, "each", 0, 2, ""),
+                    new Item("Changed", "Other", 4.0, "each", 0, 2, ""),
+                    new Item("New", "Other", 5.0, "each", 0, 1, "")
+            ));
+
+            assertThat(result.isSuccess()).isTrue();
+            assertThat(result.getPayload().skipped()).isEqualTo(1);
+            verify(restTemplate, times(2)).exchange(
+                    contains("/api/products"), eq(HttpMethod.POST), any(HttpEntity.class), eq(Map.class));
+        }
     }
 }

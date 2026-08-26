@@ -7,6 +7,7 @@ import com.flowerfarm.controller.ConnectorController;
 import com.flowerfarm.controller.TrendController;
 import com.flowerfarm.model.Item;
 import com.flowerfarm.model.SyncHistoryEntry;
+import com.flowerfarm.service.ExportPathResolver;
 import com.flowerfarm.service.SyncHistoryService;
 import com.flowerfarm.service.TrendService;
 import org.junit.jupiter.api.DisplayName;
@@ -15,11 +16,12 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.List;
 import java.util.Map;
+import java.time.LocalDate;
 
 import static org.hamcrest.Matchers.*;
 import static org.mockito.Mockito.*;
@@ -37,9 +39,10 @@ class TrendAndConnectorControllerIT {
 
     @Autowired MockMvc mockMvc;
 
-    @MockBean TrendService trendService;
-    @MockBean ConnectorRegistry connectorRegistry;
-    @MockBean SyncHistoryService syncHistoryService;
+    @MockitoBean TrendService trendService;
+    @MockitoBean ConnectorRegistry connectorRegistry;
+    @MockitoBean SyncHistoryService syncHistoryService;
+    @MockitoBean ExportPathResolver exportPathResolver;
 
     // ── GET /api/trends ──────────────────────────────────────────────────────
 
@@ -51,13 +54,37 @@ class TrendAndConnectorControllerIT {
         @DisplayName("returns 200 with predictedQuantity and summary on success")
         void returns200OnSuccess() throws Exception {
             TrendService.TrendResult result =
-                    new TrendService.TrendResult(125.5, "Trend summary text here", null);
+                    new TrendService.TrendResult(125.5, "Trend summary text here", null,
+                            "Nootka Rose", "stems", 5, 110,
+                            LocalDate.of(2026, 8, 24), LocalDate.of(2026, 8, 31));
             when(trendService.analyzeQuantityTrend()).thenReturn(result);
 
             mockMvc.perform(get("/api/trends"))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.predictedQuantity", is(125.5)))
-                    .andExpect(jsonPath("$.summary", is("Trend summary text here")));
+                    .andExpect(jsonPath("$.summary", is("Trend summary text here")))
+                    .andExpect(jsonPath("$.cropName", is("Nootka Rose")))
+                    .andExpect(jsonPath("$.unit", is("stems")))
+                    .andExpect(jsonPath("$.observedWeeks", is(5)))
+                    .andExpect(jsonPath("$.latestQuantity", is(110.0)))
+                    .andExpect(jsonPath("$.latestWeekStart", is("2026-08-24")))
+                    .andExpect(jsonPath("$.forecastWeekStart", is("2026-08-31")));
+        }
+
+        @Test
+        @DisplayName("returns 422 with actionable detail when real history is insufficient")
+        void returns422WhenHistoryIsInsufficient() throws Exception {
+            TrendService.TrendResult result = new TrendService.TrendResult(
+                    0, null,
+                    "Record at least 3 separate weeks for the same crop and unit before forecasting. "
+                            + "Best available series has 2 weeks.",
+                    "Nootka Rose", "stems", 2, Double.NaN);
+            when(trendService.analyzeQuantityTrend()).thenReturn(result);
+
+            mockMvc.perform(get("/api/trends"))
+                    .andExpect(status().isUnprocessableEntity())
+                    .andExpect(jsonPath("$.observedWeeks", is(2)))
+                    .andExpect(jsonPath("$.error", containsString("at least 3 separate weeks")));
         }
 
         @Test

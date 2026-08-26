@@ -29,7 +29,7 @@ class InventoryServiceTest {
         repository = new InMemoryInventoryRepository();
         missingSeedCsv = Files.createTempFile("farm_seed_", ".csv");
         Files.delete(missingSeedCsv); // not found → sample seed
-        service = new InventoryService(repository, missingSeedCsv.toString());
+        service = service(repository, missingSeedCsv.toString());
         service.init();
     }
 
@@ -57,7 +57,7 @@ class InventoryServiceTest {
             Files.writeString(seed, InventoryService.CSV_HEADER + "\n"
                     + "Custom Rose,Flowers/Plants,3.00,Per Stem,1.50,12,\"seeded\"\n");
             InMemoryInventoryRepository repo = new InMemoryInventoryRepository();
-            InventoryService seeded = new InventoryService(repo, seed.toString());
+            InventoryService seeded = service(repo, seed.toString());
             seeded.init();
 
             assertThat(seeded.getAllItems()).hasSize(1);
@@ -65,6 +65,12 @@ class InventoryServiceTest {
         } finally {
             Files.deleteIfExists(seed);
         }
+    }
+
+    private static InventoryService service(
+            InMemoryInventoryRepository repository, String seedCsv) {
+        return new InventoryService(repository, seedCsv,
+                new InventoryReportGenerator(), new InventoryCsvExporter());
     }
 
     @Test
@@ -97,11 +103,90 @@ class InventoryServiceTest {
     }
 
     @Test
+    @DisplayName("addItem() rejects a case-insensitive duplicate name without mutation")
+    void addItemRejectsDuplicateName() {
+        repository.deleteAll();
+        Item existing = service.addItem(new Item(
+                "Dahlia Mix", "Flowers/Plants", 3.5, "stems", 1.25, 20, "Cooler"));
+
+        assertThatThrownBy(() -> service.addItem(new Item(
+                "  dahlia mix  ", "Flowers/Plants", 4.0, "bunches", 2.0, 8, "Duplicate")))
+                .isInstanceOfSatisfying(InventoryService.DuplicateItemNameException.class,
+                        duplicate -> {
+                            assertThat(duplicate.existingId()).isEqualTo(existing.getId());
+                            assertThat(duplicate.itemName()).isEqualTo("Dahlia Mix");
+                            assertThat(duplicate).hasMessageContaining("already contains");
+                            assertThat(duplicate).hasMessageContaining(
+                                    "count, replenish, or edit");
+                        });
+        assertThat(service.getAllItems()).singleElement().satisfies(item -> {
+            assertThat(item.getId()).isEqualTo(existing.getId());
+            assertThat(item.getQuantity()).isEqualTo(20);
+            assertThat(item.getUnit()).isEqualTo("stems");
+        });
+    }
+
+    @Test
+    @DisplayName("upsertByName makes repeated connector imports idempotent")
+    void upsertByNameIsIdempotent() {
+        repository.deleteAll();
+        Item first = service.upsertByName(new Item(
+                "Import Rose", "Flowers", 2, "stems", 1, 5, "first"));
+        Item second = service.upsertByName(new Item(
+                "import rose", "Wholesale", 3, "bunches", 1.5, 8, "updated"));
+
+        assertThat(second.getId()).isEqualTo(first.getId());
+        assertThat(service.getAllItems()).singleElement().satisfies(item -> {
+            assertThat(item.getName()).isEqualTo("import rose");
+            assertThat(item.getQuantity()).isEqualTo(8);
+            assertThat(item.getNotes()).isEqualTo("updated");
+        });
+    }
+
+    @Test
     @DisplayName("addItem() throws for null")
     void addItemThrowsOnNull() {
         assertThatIllegalArgumentException()
                 .isThrownBy(() -> service.addItem(null))
                 .withMessageContaining("null");
+    }
+
+    @Test
+    @DisplayName("strict decrement protects stock and accepts equivalent unit labels")
+    void strictDecrementProtectsFulfillmentStock() {
+        repository.deleteAll();
+        service.addItem(new Item("Nootka Rose", "Flowers/Plants", 2.5,
+                "stems", 1, 4, ""));
+
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> service.decrementQuantityByNameStrict("Missing Rose", 1))
+                .withMessageContaining("no inventory SKU");
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> service.decrementQuantityByNameStrict("Nootka Rose", 5))
+                .withMessageContaining("only 4 available");
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> service.decrementQuantityByNameStrict(
+                        "Nootka Rose", 1, "bunches"))
+                .withMessageContaining("order unit bunches")
+                .withMessageContaining("inventory unit stems");
+        assertThat(service.findByNameIgnoreCase("Nootka Rose").orElseThrow().getQuantity())
+                .isEqualTo(4);
+
+        Item updated = service.decrementQuantityByNameStrict("Nootka Rose", 3, "Per Stem");
+        assertThat(updated.getQuantity()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("increment rejects integer overflow")
+    void incrementRejectsOverflow() {
+        repository.deleteAll();
+        service.addItem(new Item("Maximum Rose", "Flowers/Plants", 0,
+                "stems", 0, Integer.MAX_VALUE, ""));
+
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> service.incrementQuantityByName(
+                        "Maximum Rose", 1, "stems", "overflow"))
+                .withMessageContaining("maximum");
     }
 
     @Test
@@ -124,6 +209,30 @@ class InventoryServiceTest {
                 new Item("By Id Rose", "Other", 1.0, "Per Unit", 0.5, 3, "x"));
         assertThat(saved.getName()).isEqualTo("By Id Rose");
         assertThat(service.findById(id).orElseThrow().getName()).isEqualTo("By Id Rose");
+    }
+
+    @Test
+    @DisplayName("edit paths reject renaming a product to another SKU name")
+    void inventoryEditsRejectDuplicateName() {
+        repository.deleteAll();
+        Item dahlia = service.addItem(new Item(
+                "Dahlia Mix", "Flowers/Plants", 3.5, "stems", 1.25, 20, ""));
+        Item tulip = service.addItem(new Item(
+                "Tulip Mix", "Flowers/Plants", 2.5, "stems", 0.9, 15, ""));
+        Item conflictingEdit = new Item(
+                "dahlia mix", "Flowers/Plants", 4.0, "bunches", 1.8, 99, "Rename");
+
+        assertThatThrownBy(() -> service.updateById(tulip.getId(), conflictingEdit))
+                .isInstanceOfSatisfying(InventoryService.DuplicateItemNameException.class,
+                        duplicate -> assertThat(duplicate.existingId()).isEqualTo(dahlia.getId()));
+        assertThatThrownBy(() -> service.editItem(1, conflictingEdit))
+                .isInstanceOf(InventoryService.DuplicateItemNameException.class);
+
+        assertThat(service.findById(tulip.getId())).get().satisfies(item -> {
+            assertThat(item.getName()).isEqualTo("Tulip Mix");
+            assertThat(item.getQuantity()).isEqualTo(15);
+            assertThat(item.getUnit()).isEqualTo("stems");
+        });
     }
 
     @Test
@@ -171,7 +280,6 @@ class InventoryServiceTest {
     @Test
     @DisplayName("searchItems() matches name case-insensitively")
     void searchMatchesName() {
-        service.addItem(new Item("Nootka Rose", "Flowers/Plants", 3.50, "Per Stem", 2.00, 50, ""));
         assertThat(service.searchItems("nootka"))
                 .isNotEmpty()
                 .allSatisfy(i -> assertThat(i.getName().toLowerCase()).contains("nootka"));

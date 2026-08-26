@@ -7,18 +7,22 @@ import com.flowerfarm.connector.SyncSummary;
 import com.flowerfarm.model.Item;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Component;
 
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
+@Component
 public class ExcelConnector implements ExternalConnector<Row> {
 
     private final String filePath;
 
-    public ExcelConnector(String filePath) {
+    public ExcelConnector(@Value("${connector.excel.file:flower_inventory.xlsx}") String filePath) {
         this.filePath = filePath;
     }
 
@@ -119,7 +123,7 @@ public class ExcelConnector implements ExternalConnector<Row> {
                     "Excel export successful: " + filePath,
                     getName());
 
-        } catch (Exception e) {
+        } catch (IOException | RuntimeException e) {
             return ConnectorResult.fail("Excel export failed", e, getName());
         }
     }

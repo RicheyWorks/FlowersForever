@@ -2,7 +2,6 @@ package com.flowerfarm.controller;
 
 import com.flowerfarm.service.MarketDayPackingService;
 import com.flowerfarm.service.MarketDayPackingService.MarketDayPlan;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -63,10 +62,7 @@ public class MarketDayController {
         MarketDayPlan plan = build(date, windowDays, includeDraft, includeFulfilled);
         byte[] body = packingService.exportCsv(plan).getBytes(StandardCharsets.UTF_8);
         String filename = "market-day-" + plan.marketDate() + ".csv";
-        return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
-                .contentType(new MediaType("text", "csv", StandardCharsets.UTF_8))
-                .body(body);
+        return DownloadResponse.csv(body, filename);
     }
 
     @GetMapping(value = "/packing.pdf", produces = MediaType.APPLICATION_PDF_VALUE)
@@ -78,10 +74,7 @@ public class MarketDayController {
         MarketDayPlan plan = build(date, windowDays, includeDraft, includeFulfilled);
         byte[] pdf = packingService.generatePackingPdf(plan);
         String filename = "market-day-packing-" + plan.marketDate() + ".pdf";
-        return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
-                .contentType(MediaType.APPLICATION_PDF)
-                .body(pdf);
+        return DownloadResponse.pdf(pdf, filename);
     }
 
     /**

@@ -1,11 +1,11 @@
 package com.flowerfarm.connector.impl;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.flowerfarm.connector.ConnectorHttpClient;
 import com.flowerfarm.connector.*;
 import com.flowerfarm.model.Item;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.stereotype.Component;
@@ -13,8 +13,6 @@ import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.client.RestTemplate;
 
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.*;
 
 /**
@@ -39,17 +37,16 @@ import java.util.*;
 public class FarmbriteConnector implements ExternalConnector<Map<String, Object>>, DualModeCapable {
 
     private static final Logger log = LoggerFactory.getLogger(FarmbriteConnector.class);
-    private static final ObjectMapper MAPPER = new ObjectMapper();
-
     private final ConnectorConfig config;
     private final RestTemplate restTemplate;
 
+    @Autowired
     public FarmbriteConnector(
             @Value("${connector.farmbrite.api-key:}") String apiKey,
             @Value("${connector.farmbrite.account-id:}") String accountId,
             @Value("${connector.farmbrite.base-url:https://www.farmbrite.com/api/v1}") String baseUrl,
             @Value("${connector.farmbrite.local-file:}") String localFile) {
-        this(apiKey, accountId, baseUrl, localFile, new RestTemplate());
+        this(apiKey, accountId, baseUrl, localFile, ConnectorHttpClient.create());
     }
 
     FarmbriteConnector(String apiKey, String accountId, String baseUrl, String localFile,
@@ -95,15 +92,14 @@ public class FarmbriteConnector implements ExternalConnector<Map<String, Object>
     }
 
     private ConnectorResult<List<Item>> importFromLocalFile() {
-        Path path = Path.of(config.get("local-file"));
-        if (!Files.exists(path)) {
-            log.info("[farmbrite] Local mirror '{}' not found — returning empty inventory.", path);
+        LocalJsonMirror mirror = new LocalJsonMirror(config.get("local-file"), "farmbrite");
+        if (!mirror.exists()) {
+            log.info("[farmbrite] Local mirror '{}' not found — returning empty inventory.", mirror.path());
             return ConnectorResult.ok(List.of(),
                     "Farmbrite local mirror empty (file not found yet). Export to create it.", getName());
         }
         try {
-            List<Map<String, Object>> rows = MAPPER.readValue(
-                    path.toFile(), new TypeReference<List<Map<String, Object>>>() {});
+            List<Map<String, Object>> rows = mirror.readRows();
             List<Item> items = new ArrayList<>();
             for (Map<String, Object> row : rows) {
                 Item item = mapToItem(row);
@@ -111,7 +107,8 @@ public class FarmbriteConnector implements ExternalConnector<Map<String, Object>
                     items.add(item);
                 }
             }
-            String msg = "Farmbrite local import — " + items.size() + " item(s) from " + path.getFileName() + ".";
+            String msg = "Farmbrite local import — " + items.size()
+                    + " item(s) from " + mirror.path().getFileName() + ".";
             log.info("[farmbrite] {}", msg);
             return ConnectorResult.ok(items, msg, getName());
         } catch (IOException e) {
@@ -163,19 +160,15 @@ public class FarmbriteConnector implements ExternalConnector<Map<String, Object>
     }
 
     private ConnectorResult<Integer> exportToLocalFile(List<Item> items) {
-        Path path = Path.of(config.get("local-file"));
+        LocalJsonMirror mirror = new LocalJsonMirror(config.get("local-file"), "farmbrite");
         try {
-            Path parent = path.getParent();
-            if (parent != null) {
-                Files.createDirectories(parent);
-            }
             List<Map<String, Object>> rows = new ArrayList<>();
             for (Item item : items) {
                 rows.add(mapFromItem(item));
             }
-            MAPPER.writerWithDefaultPrettyPrinter().writeValue(path.toFile(), rows);
+            mirror.writeRows(rows);
             String msg = "Farmbrite local export — wrote " + items.size()
-                    + " item(s) to " + path.getFileName() + ".";
+                    + " item(s) to " + mirror.path().getFileName() + ".";
             log.info("[farmbrite] {}", msg);
             return ConnectorResult.ok(items.size(), msg, getName());
         } catch (IOException e) {
@@ -241,20 +234,21 @@ public class FarmbriteConnector implements ExternalConnector<Map<String, Object>
 
         int created = 0, updated = 0, skipped = 0;
         // Local is source of truth for export payload; count vs remote
-        List<Item> merged = new ArrayList<>(localItems);
+        List<Item> changed = new ArrayList<>();
         for (Item local : localItems) {
             Item r = remoteByName.get(local.getName().toLowerCase(Locale.ROOT));
             if (r == null) {
                 created++;
-            } else if (r.getQuantity() != local.getQuantity()
-                    || Double.compare(r.getPrice(), local.getPrice()) != 0) {
+                changed.add(local);
+            } else if (!sameItem(r, local)) {
                 updated++;
+                changed.add(local);
             } else {
                 skipped++;
             }
         }
 
-        ConnectorResult<Integer> export = exportItems(merged);
+        ConnectorResult<Integer> export = exportItems(isLocalMode() ? localItems : changed);
         if (!export.isSuccess()) {
             return ConnectorResult.fail(
                     "Farmbrite sync export step failed: " + export.getMessage(),
@@ -307,6 +301,17 @@ public class FarmbriteConnector implements ExternalConnector<Map<String, Object>
         m.put("notes", item.getNotes() == null ? "" : item.getNotes());
         m.put("source", "FlowersForever");
         return m;
+    }
+
+    private boolean sameItem(Item left, Item right) {
+        return left != null && right != null
+                && left.getName().equalsIgnoreCase(right.getName())
+                && Objects.equals(left.getCategory(), right.getCategory())
+                && Double.compare(left.getPrice(), right.getPrice()) == 0
+                && Objects.equals(left.getUnit(), right.getUnit())
+                && Double.compare(left.getCost(), right.getCost()) == 0
+                && left.getQuantity() == right.getQuantity()
+                && Objects.equals(left.getNotes(), right.getNotes());
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────

@@ -3,58 +3,187 @@ package com.flowerfarm.service;
 import com.flowerfarm.model.Customer;
 import com.flowerfarm.model.CustomerOrder;
 import com.flowerfarm.model.OrderLine;
-import com.flowerfarm.repository.CustomerJpaRepository;
-import com.flowerfarm.repository.CustomerOrderJpaRepository;
-import com.lowagie.text.Chunk;
-import com.lowagie.text.Document;
-import com.lowagie.text.DocumentException;
-import com.lowagie.text.Element;
-import com.lowagie.text.Font;
-import com.lowagie.text.FontFactory;
-import com.lowagie.text.PageSize;
-import com.lowagie.text.Paragraph;
-import com.lowagie.text.Phrase;
-import com.lowagie.text.Rectangle;
-import com.lowagie.text.pdf.PdfPCell;
-import com.lowagie.text.pdf.PdfPTable;
-import com.lowagie.text.pdf.PdfWriter;
+import com.flowerfarm.repository.CustomerOrderRepository;
+import com.flowerfarm.repository.CustomerRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.awt.Color;
-import java.io.ByteArrayOutputStream;
 import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Stream;
 
 @Service
 public class OrderService {
 
     private static final Logger log = LoggerFactory.getLogger(OrderService.class);
+    private static final int MAX_ORDER_LINES = 500;
+    private static final long MAX_QUERY_DAYS = 3_660;
 
-    private final CustomerOrderJpaRepository orderRepository;
-    private final CustomerJpaRepository customerRepository;
+    private final CustomerOrderRepository orderRepository;
+    private final CustomerRepository customerRepository;
     private final InventoryService inventoryService;
     private final SyncHistoryService syncHistoryService;
+    private final OrderReportGenerator reportGenerator;
 
-    public OrderService(CustomerOrderJpaRepository orderRepository,
-                        CustomerJpaRepository customerRepository,
+    public OrderService(CustomerOrderRepository orderRepository,
+                        CustomerRepository customerRepository,
                         InventoryService inventoryService,
-                        SyncHistoryService syncHistoryService) {
+                        SyncHistoryService syncHistoryService,
+                        OrderReportGenerator reportGenerator) {
         this.orderRepository = orderRepository;
         this.customerRepository = customerRepository;
         this.inventoryService = inventoryService;
         this.syncHistoryService = syncHistoryService;
+        this.reportGenerator = reportGenerator;
+    }
+
+    public record OrderReviewLine(
+            Long lineId, String productName, double quantity, String unit, double unitPrice) {
+    }
+
+    public static final class StaleOrderLineException extends IllegalArgumentException {
+        private final OrderReviewLine currentLine;
+
+        public StaleOrderLineException(long orderId, String action,
+                                       OrderReviewLine currentLine) {
+            super("Product line " + currentLine.lineId() + " on order #" + orderId
+                    + " changed after you started " + action + ". The saved line is now “"
+                    + currentLine.productName() + " · " + currentLine.quantity() + " "
+                    + currentLine.unit() + " · $"
+                    + String.format(Locale.ROOT, "%.2f", currentLine.unitPrice())
+                    + "”. No order or inventory value was changed. Review the current saved "
+                    + "product, then try again only if your change is still intended.");
+            this.currentLine = currentLine;
+        }
+
+        public OrderReviewLine currentLine() {
+            return currentLine;
+        }
+    }
+
+    public static final class StaleOrderReviewException extends IllegalArgumentException {
+        private final long orderId;
+        private final boolean orderMissing;
+
+        public StaleOrderReviewException(long orderId, String reviewName,
+                                         String unchangedConsequence, String retryAction) {
+            this(orderId, reviewName, unchangedConsequence, retryAction, false);
+        }
+
+        public StaleOrderReviewException(long orderId, String reviewName,
+                                         String unchangedConsequence, String retryAction,
+                                         boolean orderMissing) {
+            super("Order #" + orderId + " changed after " + reviewName + " review. "
+                    + unchangedConsequence + ". Refresh Customers and Orders, review the "
+                    + "current customer load, then " + retryAction + ".");
+            this.orderId = orderId;
+            this.orderMissing = orderMissing;
+        }
+
+        public long orderId() {
+            return orderId;
+        }
+
+        public boolean orderMissing() {
+            return orderMissing;
+        }
+    }
+
+    public record OrderReviewSnapshot(
+            long orderId, Long customerId, String customerName, String contactName,
+            String phone, String email, String status, LocalDate orderDate, String notes,
+            List<OrderReviewLine> lines, String handoffType, String customerNotes) {
+        public OrderReviewSnapshot {
+            lines = List.copyOf(lines);
+            handoffType = CustomerOrder.normalizeHandoffType(handoffType);
+            customerNotes = confirmationText(customerNotes);
+        }
+
+        public OrderReviewSnapshot(
+                long orderId, Long customerId, String customerName, String contactName,
+                String phone, String email, String status, LocalDate orderDate, String notes,
+                List<OrderReviewLine> lines, String handoffType) {
+            this(orderId, customerId, customerName, contactName, phone, email, status,
+                    orderDate, notes, lines, handoffType, "");
+        }
+
+        public OrderReviewSnapshot(
+                long orderId, Long customerId, String customerName, String contactName,
+                String phone, String email, String status, LocalDate orderDate, String notes,
+                List<OrderReviewLine> lines) {
+            this(orderId, customerId, customerName, contactName, phone, email, status,
+                    orderDate, notes, lines, "UNSPECIFIED", "");
+        }
+    }
+
+    /** Captures exactly what a worker reviewed before a lifecycle change. */
+    public static OrderReviewSnapshot reviewSnapshot(CustomerOrder order) {
+        if (order == null || order.getId() == null) {
+            throw new IllegalArgumentException("A saved order is required for lifecycle review.");
+        }
+        Customer customer = order.getCustomer();
+        List<OrderReviewLine> lines = order.getLines().stream()
+                .map(OrderService::reviewLine)
+                .sorted(Comparator
+                        .comparing(OrderReviewLine::lineId,
+                                Comparator.nullsFirst(Long::compareTo))
+                        .thenComparing(OrderReviewLine::productName)
+                        .thenComparingDouble(OrderReviewLine::quantity)
+                        .thenComparing(OrderReviewLine::unit)
+                        .thenComparingDouble(OrderReviewLine::unitPrice))
+                .toList();
+        return new OrderReviewSnapshot(
+                order.getId(), customer == null ? null : customer.getId(),
+                customer == null ? "" : confirmationText(customer.getName()),
+                customer == null ? "" : confirmationText(customer.getContactName()),
+                customer == null ? "" : confirmationText(customer.getPhone()),
+                customer == null ? "" : confirmationText(customer.getEmail()),
+                confirmationText(order.getStatus()), order.getOrderDate(),
+                confirmationText(order.getNotes()), lines, order.getHandoffType(),
+                customer == null ? "" : confirmationText(customer.getNotes()));
+    }
+
+    /** Captures exactly one saved product as displayed for edit or removal. */
+    public static OrderReviewLine reviewLine(OrderLine line) {
+        if (line == null) {
+            throw new IllegalArgumentException("A saved order product is required for review.");
+        }
+        return new OrderReviewLine(
+                line.getId(), confirmationText(line.getProductName()), line.getQuantity(),
+                confirmationText(line.getUnit()), line.getUnitPrice());
+    }
+
+    private static String confirmationText(String value) {
+        return value == null ? "" : value;
     }
 
     @Transactional(readOnly = true)
     public List<CustomerOrder> getAll() {
-        return new ArrayList<>(orderRepository.findAllByOrderByOrderDateDescIdDesc());
+        return new ArrayList<>(orderRepository.findAllNewestFirst());
+    }
+
+    /** Complete confirmed queue used for deterministic stock reservation guidance. */
+    @Transactional(readOnly = true)
+    public List<CustomerOrder> confirmedCompletionQueue() {
+        return getAll().stream()
+                .filter(order -> "CONFIRMED".equalsIgnoreCase(order.getStatus()))
+                .sorted(Comparator
+                        .comparing(CustomerOrder::getOrderDate,
+                                Comparator.nullsLast(Comparator.naturalOrder()))
+                        .thenComparing(CustomerOrder::getId,
+                                Comparator.nullsLast(Comparator.naturalOrder())))
+                .toList();
     }
 
     @Transactional(readOnly = true)
@@ -70,28 +199,64 @@ public class OrderService {
         if (to.isBefore(from)) {
             throw new IllegalArgumentException("to must be on or after from.");
         }
-        return new ArrayList<>(orderRepository.findByOrderDateBetweenOrderByOrderDateDescIdDesc(from, to));
+        if (ChronoUnit.DAYS.between(from, to) > MAX_QUERY_DAYS) {
+            throw new IllegalArgumentException("Date range cannot exceed 10 years.");
+        }
+        return new ArrayList<>(orderRepository.findBetween(from, to));
     }
 
     @Transactional(readOnly = true)
     public List<CustomerOrder> findByCustomer(Long customerId) {
-        return new ArrayList<>(orderRepository.findByCustomerIdOrderByOrderDateDescIdDesc(customerId));
+        return new ArrayList<>(orderRepository.findByCustomer(customerId));
     }
 
     /**
-     * Create an order for an existing customer with zero or more lines.
+     * Create an order for an existing customer. Drafts may begin empty; confirmed orders must
+     * contain at least one product.
      */
     @Transactional
     public CustomerOrder create(Long customerId, LocalDate orderDate, String status, String notes,
                                 List<OrderLine> lines) {
+        return create(customerId, orderDate, status, notes, "UNSPECIFIED", lines);
+    }
+
+    @Transactional
+    public CustomerOrder create(Long customerId, LocalDate orderDate, String status, String notes,
+                                 String handoffType, List<OrderLine> lines) {
+        if (lines != null && lines.size() > MAX_ORDER_LINES) {
+            throw new IllegalArgumentException(
+                    "Order cannot contain more than " + MAX_ORDER_LINES + " lines.");
+        }
+        if (lines != null && lines.stream().anyMatch(java.util.Objects::isNull)) {
+            throw new IllegalArgumentException("Order lines must not be null.");
+        }
+        String initialStatus = CustomerOrder.normalizeStatus(status);
+        String normalizedHandoff = CustomerOrder.normalizeHandoffType(handoffType);
+        if (!"DRAFT".equals(initialStatus) && !"CONFIRMED".equals(initialStatus)) {
+            throw new IllegalArgumentException(
+                    "New orders must start as DRAFT or CONFIRMED; use the order actions for "
+                            + initialStatus + ".");
+        }
+        if ("CONFIRMED".equals(initialStatus) && (lines == null || lines.isEmpty())) {
+            throw new IllegalArgumentException(
+                    "A confirmed order must contain at least one product.");
+        }
+        if ("CONFIRMED".equals(initialStatus) && "UNSPECIFIED".equals(normalizedHandoff)) {
+            throw new IllegalArgumentException(
+                    "Choose PICKUP, DELIVERY, or MARKET before creating a confirmed order.");
+        }
         Customer customer = customerRepository.findById(customerId)
                 .orElseThrow(() -> new IndexOutOfBoundsException("No customer with id=" + customerId));
-        CustomerOrder order = new CustomerOrder(customer, orderDate, status, notes);
+        CustomerOrder order = new CustomerOrder(
+                customer, orderDate, initialStatus, notes, normalizedHandoff);
         if (lines != null) {
             for (OrderLine line : lines) {
                 order.addLine(new OrderLine(
                         line.getProductName(), line.getQuantity(), line.getUnit(), line.getUnitPrice()));
             }
+        }
+        if ("CONFIRMED".equals(initialStatus)) {
+            requireDeliveryContext(order, "creating it as CONFIRMED");
         }
         CustomerOrder saved = orderRepository.save(order);
         syncHistoryService.record(
@@ -106,14 +271,114 @@ public class OrderService {
         return saved;
     }
 
+    /**
+     * Creates a desktop-reviewed order while serializing the same-customer/date decision.
+     * A concurrent worker changing that active-order set invalidates the review before any save.
+     */
+    @Transactional
+    public CustomerOrder createReviewed(
+            Long customerId, LocalDate orderDate, String status, String notes,
+            String handoffType, List<OrderLine> lines, Set<Long> reviewedActiveOrderIds,
+            boolean separateOrderApproved) {
+        customerRepository.findByIdForUpdate(customerId)
+                .orElseThrow(() -> new IndexOutOfBoundsException(
+                        "No customer with id=" + customerId));
+        Set<Long> reviewed = reviewedActiveOrderIds == null
+                ? Set.of() : Set.copyOf(reviewedActiveOrderIds);
+        Set<Long> current = orderRepository.findByCustomer(customerId).stream()
+                .filter(order -> orderDate != null && orderDate.equals(order.getOrderDate()))
+                .filter(order -> "DRAFT".equalsIgnoreCase(order.getStatus())
+                        || "CONFIRMED".equalsIgnoreCase(order.getStatus()))
+                .map(CustomerOrder::getId)
+                .filter(java.util.Objects::nonNull)
+                .collect(java.util.stream.Collectors.toUnmodifiableSet());
+        if (!current.equals(reviewed) || (!current.isEmpty() && !separateOrderApproved)) {
+            throw new DuplicateOrderReviewChangedException(customerId, orderDate, reviewed, current);
+        }
+        return create(customerId, orderDate, status, notes, handoffType, lines);
+    }
+
+    /** Final split-order write bound to every exact active order the worker reviewed. */
+    @Transactional
+    public CustomerOrder createReviewed(
+            Long customerId, LocalDate orderDate, String status, String notes,
+            String handoffType, List<OrderLine> lines,
+            Map<Long, OrderReviewSnapshot> reviewedActiveOrders,
+            boolean separateOrderApproved) {
+        customerRepository.findByIdForUpdate(customerId)
+                .orElseThrow(() -> new IndexOutOfBoundsException(
+                        "No customer with id=" + customerId));
+        Map<Long, OrderReviewSnapshot> reviewed = reviewedActiveOrders == null
+                ? Map.of() : Map.copyOf(reviewedActiveOrders);
+        List<CustomerOrder> currentOrders = orderRepository.findByCustomer(customerId).stream()
+                .filter(order -> orderDate != null && orderDate.equals(order.getOrderDate()))
+                .filter(order -> "DRAFT".equalsIgnoreCase(order.getStatus())
+                        || "CONFIRMED".equalsIgnoreCase(order.getStatus()))
+                .filter(order -> order.getId() != null)
+                .toList();
+        Map<Long, OrderReviewSnapshot> current = currentOrders.stream()
+                .collect(java.util.stream.Collectors.toUnmodifiableMap(
+                        CustomerOrder::getId, OrderService::reviewSnapshot));
+        if (!current.equals(reviewed) || (!current.isEmpty() && !separateOrderApproved)) {
+            throw new DuplicateOrderReviewChangedException(
+                    customerId, orderDate, reviewed.keySet(), current.keySet());
+        }
+        return create(customerId, orderDate, status, notes, handoffType, lines);
+    }
+
+    public static final class DuplicateOrderReviewChangedException
+            extends IllegalStateException {
+        private final Set<Long> currentActiveOrderIds;
+
+        public DuplicateOrderReviewChangedException(
+                Long customerId, LocalDate orderDate, Set<Long> reviewed, Set<Long> current) {
+            super("Active order details or selection changed for customer #" + customerId
+                    + " on " + orderDate
+                    + " after duplicate review. No order was created. Refresh Customers and "
+                    + "Orders, review " + current.size() + " active order(s), then choose the "
+                    + "intended existing order or explicitly create a separate order.");
+            this.currentActiveOrderIds = Set.copyOf(current);
+        }
+
+        public Set<Long> currentActiveOrderIds() {
+            return currentActiveOrderIds;
+        }
+    }
+
     @Transactional
     public CustomerOrder updateStatus(Long orderId, String status) {
-        CustomerOrder order = orderRepository.findById(orderId)
+        return updateStatus(orderId, status, null, null, null, null);
+    }
+
+    private CustomerOrder updateStatus(Long orderId, String status,
+                                       OrderReviewSnapshot reviewedSnapshot,
+                                       String reviewName, String unchangedConsequence,
+                                       String retryAction) {
+        if (status == null || status.isBlank()) {
+            throw new IllegalArgumentException("status is required.");
+        }
+        String next = CustomerOrder.normalizeStatus(status);
+        CustomerOrder order = orderRepository.findByIdForUpdate(orderId)
                 .orElseThrow(() -> new IndexOutOfBoundsException("No order with id=" + orderId));
-        String next = status == null ? "DRAFT" : status.trim().toUpperCase(Locale.ROOT);
+        if (reviewedSnapshot != null) {
+            verifyReviewedOrderCurrent(orderId, order, reviewedSnapshot,
+                    reviewName, unchangedConsequence, retryAction);
+        } else if (("CONFIRMED".equals(next) || "FULFILLED".equals(next))
+                && "DELIVERY".equals(CustomerOrder.normalizeHandoffType(
+                        order.getHandoffType()))) {
+            refreshCustomerForLifecycle(order);
+        }
         String previous = order.getStatus();
+        if ("CONFIRMED".equals(next) && order.getLines().isEmpty()) {
+            throw new IllegalArgumentException(
+                    "A confirmed order must contain at least one product.");
+        }
+        if ("CONFIRMED".equals(next)) {
+            requireSpecifiedHandoff(order, "confirming");
+            requireDeliveryContext(order, "confirming");
+        }
         if ("FULFILLED".equals(next) && !"FULFILLED".equalsIgnoreCase(previous)) {
-            return fulfill(orderId);
+            return fulfillLocked(order);
         }
         if (next.equalsIgnoreCase(previous)) {
             return order;
@@ -122,6 +387,9 @@ public class OrderService {
         if ("FULFILLED".equalsIgnoreCase(previous) && !"FULFILLED".equals(next)) {
             throw new IllegalArgumentException(
                     "Cannot change status of a FULFILLED order (inventory already deducted).");
+        }
+        if ("CANCELLED".equalsIgnoreCase(previous)) {
+            throw new IllegalArgumentException("Cannot change status of a CANCELLED order.");
         }
         order.setStatus(next);
         CustomerOrder saved = orderRepository.save(order);
@@ -143,18 +411,202 @@ public class OrderService {
         return updateStatus(orderId, "CONFIRMED");
     }
 
+    /** Confirms only when the locked live order exactly matches what the worker reviewed. */
+    @Transactional
+    public CustomerOrder confirmReviewed(Long orderId, OrderReviewSnapshot reviewedSnapshot) {
+        requireMatchingOrderReview(orderId, reviewedSnapshot, "confirmation");
+        return updateStatus(orderId, "CONFIRMED", reviewedSnapshot,
+                "confirmation", "No status was changed", "confirm it again");
+    }
+
+    private void verifyReviewedOrderCurrent(
+            Long orderId, CustomerOrder order, OrderReviewSnapshot reviewedSnapshot,
+            String reviewName, String unchangedConsequence, String retryAction) {
+        Customer liveCustomer = order.getCustomer() == null
+                || order.getCustomer().getId() == null
+                ? null : customerRepository.findByIdForUpdate(order.getCustomer().getId())
+                .orElse(null);
+        if (liveCustomer != null) {
+            order.setCustomer(liveCustomer);
+        }
+        if (liveCustomer == null || !reviewedSnapshot.equals(reviewSnapshot(order))) {
+            throw new StaleOrderReviewException(
+                    orderId, reviewName, unchangedConsequence, retryAction);
+        }
+    }
+
     /** Mark CANCELLED if not already fulfilled. */
     @Transactional
     public CustomerOrder cancel(Long orderId) {
         return updateStatus(orderId, "CANCELLED");
     }
 
+    /** Cancels only when the locked order exactly matches the worker's review. */
+    @Transactional
+    public CustomerOrder cancelReviewed(Long orderId, OrderReviewSnapshot reviewedSnapshot) {
+        requireMatchingOrderReview(orderId, reviewedSnapshot, "cancellation");
+        return updateStatus(orderId, "CANCELLED", reviewedSnapshot,
+                "cancellation", "The order was not cancelled and inventory was unchanged",
+                "review the cancellation again");
+    }
+
     @Transactional
     public CustomerOrder updateNotes(Long orderId, String notes) {
-        CustomerOrder order = orderRepository.findById(orderId)
+        return updateNotes(orderId, notes, null, false);
+    }
+
+    /** Saves instructions only if the locked order still has the value the worker edited. */
+    @Transactional
+    public CustomerOrder updateNotesReviewed(
+            Long orderId, String reviewedNotes, String notes) {
+        return updateNotes(orderId, notes,
+                reviewedNotes == null ? "" : reviewedNotes.trim(), true);
+    }
+
+    private CustomerOrder updateNotes(
+            Long orderId, String notes, String reviewedNotes, boolean requireReviewMatch) {
+        CustomerOrder order = orderRepository.findByIdForUpdate(orderId)
                 .orElseThrow(() -> new IndexOutOfBoundsException("No order with id=" + orderId));
+        if (requireReviewMatch && !Objects.equals(order.getNotes(), reviewedNotes)) {
+            throw new IllegalArgumentException(
+                    "Order #" + orderId + " instructions changed after you started editing. "
+                            + "The saved instructions now read: “"
+                            + conciseReviewValue(order.getNotes()) + "”. "
+                            + "No order or inventory value was changed. Refresh Customers and "
+                            + "Orders, review the current instructions, then save again.");
+        }
+        if ("FULFILLED".equalsIgnoreCase(order.getStatus())
+                || "CANCELLED".equalsIgnoreCase(order.getStatus())) {
+            throw new IllegalArgumentException(
+                    "Cannot change the instructions of a " + order.getStatus() + " order.");
+        }
+        String previous = order.getNotes();
         order.setNotes(notes);
-        return orderRepository.save(order);
+        if (order.getNotes().equals(previous)) {
+            return order;
+        }
+        CustomerOrder saved = orderRepository.save(order);
+        syncHistoryService.record(
+                "crm", "ORDER_NOTES_UPDATE", true,
+                "Updated instructions for order #" + orderId,
+                "previousCharacters=" + previous.length()
+                        + ", currentCharacters=" + saved.getNotes().length()
+                        + ", inventoryChanged=false",
+                1);
+        return saved;
+    }
+
+    /** Reschedules a draft or confirmed order; inventory is unchanged. */
+    @Transactional
+    public CustomerOrder updateOrderDate(Long orderId, LocalDate orderDate) {
+        return updateOrderDate(orderId, orderDate, null, false);
+    }
+
+    /** Reschedules only if the locked order still has the date the worker edited. */
+    @Transactional
+    public CustomerOrder updateOrderDateReviewed(
+            Long orderId, LocalDate reviewedOrderDate, LocalDate orderDate) {
+        if (reviewedOrderDate == null) {
+            throw new IllegalArgumentException("The reviewed order date is required.");
+        }
+        return updateOrderDate(orderId, orderDate, reviewedOrderDate, true);
+    }
+
+    private CustomerOrder updateOrderDate(
+            Long orderId, LocalDate orderDate, LocalDate reviewedOrderDate,
+            boolean requireReviewMatch) {
+        if (orderDate == null) {
+            throw new IllegalArgumentException("Order date is required.");
+        }
+        CustomerOrder order = orderRepository.findByIdForUpdate(orderId)
+                .orElseThrow(() -> new IndexOutOfBoundsException("No order with id=" + orderId));
+        if (requireReviewMatch && !Objects.equals(order.getOrderDate(), reviewedOrderDate)) {
+            throw new IllegalArgumentException(
+                    "Order #" + orderId + " pickup or delivery date changed after you started "
+                            + "editing. The saved date is now " + order.getOrderDate() + ". "
+                            + "No order or inventory value was changed. Refresh Customers "
+                            + "and Orders, review the current date, then save again.");
+        }
+        if ("FULFILLED".equalsIgnoreCase(order.getStatus())
+                || "CANCELLED".equalsIgnoreCase(order.getStatus())) {
+            throw new IllegalArgumentException(
+                    "Cannot change the date of a " + order.getStatus() + " order.");
+        }
+        LocalDate previous = order.getOrderDate();
+        if (orderDate.equals(previous)) {
+            return order;
+        }
+        order.setOrderDate(orderDate);
+        CustomerOrder saved = orderRepository.save(order);
+        syncHistoryService.record(
+                "crm", "ORDER_DATE_UPDATE", true,
+                "Rescheduled order #" + orderId + " to " + orderDate,
+                "previous=" + previous + ", current=" + orderDate
+                        + ", inventoryChanged=false",
+                1);
+        return saved;
+    }
+
+    /** Changes the operational handoff for a draft or confirmed order. */
+    @Transactional
+    public CustomerOrder updateHandoffType(Long orderId, String handoffType) {
+        return updateHandoffType(orderId, handoffType, null, false);
+    }
+
+    /** Changes the handoff only if the locked order still has the value the worker edited. */
+    @Transactional
+    public CustomerOrder updateHandoffTypeReviewed(
+            Long orderId, String reviewedHandoffType, String handoffType) {
+        if (reviewedHandoffType == null || reviewedHandoffType.isBlank()) {
+            throw new IllegalArgumentException("The reviewed handoff type is required.");
+        }
+        return updateHandoffType(orderId, handoffType, reviewedHandoffType, true);
+    }
+
+    private CustomerOrder updateHandoffType(
+            Long orderId, String handoffType, String reviewedHandoffType,
+            boolean requireReviewMatch) {
+        String requested = CustomerOrder.normalizeHandoffType(handoffType);
+        if ("UNSPECIFIED".equals(requested)) {
+            throw new IllegalArgumentException(
+                    "Choose PICKUP, DELIVERY, or MARKET. An open order cannot be saved with an "
+                            + "unspecified handoff.");
+        }
+        String reviewed = requireReviewMatch
+                ? CustomerOrder.normalizeHandoffType(reviewedHandoffType) : null;
+        CustomerOrder order = orderRepository.findByIdForUpdate(orderId)
+                .orElseThrow(() -> new IndexOutOfBoundsException("No order with id=" + orderId));
+        if (requireReviewMatch && !order.getHandoffType().equals(reviewed)) {
+            throw new IllegalArgumentException(
+                    "Order #" + orderId + " handoff type changed after you started editing. "
+                            + "The saved handoff is now " + order.getHandoffType() + ". "
+                            + "No order or inventory value was changed. Refresh Customers and "
+                            + "Orders, review the current handoff, then save again.");
+        }
+        if ("FULFILLED".equalsIgnoreCase(order.getStatus())
+                || "CANCELLED".equalsIgnoreCase(order.getStatus())) {
+            throw new IllegalArgumentException(
+                    "Cannot change the handoff type of a " + order.getStatus() + " order.");
+        }
+        String previous = order.getHandoffType();
+        if (requested.equals(previous)) {
+            return order;
+        }
+        order.setHandoffType(requested);
+        CustomerOrder saved = orderRepository.save(order);
+        syncHistoryService.record(
+                "crm", "ORDER_HANDOFF_UPDATE", true,
+                "Updated handoff for order #" + orderId + " to " + requested,
+                "previous=" + previous + ", current=" + requested
+                        + ", inventoryChanged=false",
+                1);
+        return saved;
+    }
+
+    private static String conciseReviewValue(String value) {
+        String clean = value == null || value.isBlank()
+                ? "(blank)" : value.replaceAll("\\s+", " ").trim();
+        return clean.length() <= 160 ? clean : clean.substring(0, 159) + "…";
     }
 
     /**
@@ -164,13 +616,26 @@ public class OrderService {
     @Transactional(readOnly = true)
     public List<CustomerOrder> filter(String status, String customerQuery,
                                       LocalDate from, LocalDate to) {
+        return filter(status, customerQuery, from, to, null);
+    }
+
+    /** Filter by lifecycle, customer, date window, and an optional structured handoff. */
+    @Transactional(readOnly = true)
+    public List<CustomerOrder> filter(String status, String customerQuery,
+                                      LocalDate from, LocalDate to, String handoffType) {
         String st = status == null ? "" : status.trim().toUpperCase(Locale.ROOT);
         if ("ALL".equals(st) || "*".equals(st)) {
             st = "";
         }
         String cq = customerQuery == null ? "" : customerQuery.trim().toLowerCase(Locale.ROOT);
+        String handoff = handoffType == null || handoffType.isBlank()
+                || "ALL".equalsIgnoreCase(handoffType) || "*".equals(handoffType.trim())
+                ? "" : CustomerOrder.normalizeHandoffType(handoffType);
         Stream<CustomerOrder> stream = getAll().stream();
-        if (!st.isEmpty()) {
+        if ("OPEN".equals(st)) {
+            stream = stream.filter(order -> "DRAFT".equalsIgnoreCase(order.getStatus())
+                    || "CONFIRMED".equalsIgnoreCase(order.getStatus()));
+        } else if (!st.isEmpty()) {
             String statusKey = st;
             stream = stream.filter(o -> o.getStatus() != null
                     && o.getStatus().equalsIgnoreCase(statusKey));
@@ -182,6 +647,10 @@ public class OrderService {
                 }
                 return o.getCustomer().getName().toLowerCase(Locale.ROOT).contains(cq);
             });
+        }
+        if (!handoff.isEmpty()) {
+            stream = stream.filter(order -> handoff.equals(
+                    CustomerOrder.normalizeHandoffType(order.getHandoffType())));
         }
         if (from != null) {
             stream = stream.filter(o -> o.getOrderDate() != null && !o.getOrderDate().isBefore(from));
@@ -195,73 +664,85 @@ public class OrderService {
     /** Export a filtered subset (e.g. current CRM filter). */
     @Transactional(readOnly = true)
     public void exportToCsv(String filename, List<CustomerOrder> orders) {
-        if (filename == null || filename.isBlank()) {
-            throw new IllegalArgumentException("Export filename must not be null or empty.");
-        }
-        if (orders == null) {
-            orders = List.of();
-        }
-        try (java.io.BufferedWriter bw = new java.io.BufferedWriter(new java.io.FileWriter(filename.trim(), java.nio.charset.StandardCharsets.UTF_8))) {
-            bw.write("OrderId,Date,Customer,Status,LineCount,Total,Notes");
-            bw.newLine();
-            for (CustomerOrder o : orders) {
-                String cust = o.getCustomer() == null ? "" : o.getCustomer().getName();
-                String notes = o.getNotes() == null ? "" : o.getNotes().replace("\"", "\"\"");
-                bw.write(String.format("%s,%s,%s,%s,%d,%.2f,\"%s\"",
-                        o.getId(),
-                        o.getOrderDate(),
-                        csvEscape(cust),
-                        o.getStatus(),
-                        o.getLines() == null ? 0 : o.getLines().size(),
-                        o.lineTotal(),
-                        notes));
-                bw.newLine();
-            }
-            log.info("Orders exported to '{}' ({} row(s)).", filename, orders.size());
-        } catch (java.io.IOException ex) {
-            throw new IllegalStateException("Order export failed: " + ex.getMessage(), ex);
-        }
+        reportGenerator.exportCsv(filename, orders);
     }
 
     /**
      * Marks the order FULFILLED, decrements matching inventory SKUs by product name,
      * and records a CRM audit event in sync history.
      */
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public CustomerOrder fulfill(Long orderId) {
-        CustomerOrder order = orderRepository.findById(orderId)
+        return fulfill(orderId, null);
+    }
+
+    /** Completes only when the locked live order exactly matches the worker's review. */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public CustomerOrder fulfillReviewed(Long orderId, OrderReviewSnapshot reviewedSnapshot) {
+        if (orderId == null || reviewedSnapshot == null
+                || reviewedSnapshot.orderId() != orderId.longValue()) {
+            throw new IllegalArgumentException(
+                    "The completion review does not match the selected order. Refresh Customers "
+                            + "and Orders and review it again.");
+        }
+        return fulfill(orderId, reviewedSnapshot);
+    }
+
+    private CustomerOrder fulfill(Long orderId, OrderReviewSnapshot reviewedSnapshot) {
+        CustomerOrder order = orderRepository.findByIdForUpdate(orderId)
                 .orElseThrow(() -> new IndexOutOfBoundsException("No order with id=" + orderId));
+        if (reviewedSnapshot != null) {
+            verifyReviewedOrderCurrent(orderId, order, reviewedSnapshot,
+                    "completion", "No status or inventory was changed", "complete it again");
+        } else if ("DELIVERY".equals(CustomerOrder.normalizeHandoffType(
+                order.getHandoffType()))) {
+            refreshCustomerForLifecycle(order);
+        }
+        return fulfillLocked(order);
+    }
+
+    private CustomerOrder fulfillLocked(CustomerOrder order) {
+        Long orderId = order.getId();
 
         if ("FULFILLED".equalsIgnoreCase(order.getStatus())) {
             log.info("Order #{} already fulfilled — no inventory change.", orderId);
             return order;
         }
+        if ("CANCELLED".equalsIgnoreCase(order.getStatus())) {
+            throw new IllegalArgumentException("Cannot fulfill a CANCELLED order.");
+        }
+        if (!"CONFIRMED".equalsIgnoreCase(order.getStatus())) {
+            throw new IllegalArgumentException("Only CONFIRMED orders can be fulfilled.");
+        }
+        requireSpecifiedHandoff(order, "completing");
+        requireDeliveryContext(order, "completing");
+        if (order.getLines().isEmpty()) {
+            throw new IllegalArgumentException("Cannot fulfill an order with no lines.");
+        }
 
         int matched = 0;
-        int missing = 0;
         StringBuilder detail = new StringBuilder();
         for (OrderLine line : order.getLines()) {
             int qty = (int) Math.round(line.getQuantity());
-            var updated = inventoryService.decrementQuantityByName(line.getProductName(), qty);
-            if (updated.isPresent()) {
-                matched++;
-                detail.append(line.getProductName()).append(" -").append(qty).append("; ");
-            } else {
-                missing++;
-                detail.append(line.getProductName()).append(" (no inventory match); ");
-                log.warn("Fulfill order #{}: no inventory SKU named '{}'", orderId, line.getProductName());
+            if (qty <= 0) {
+                throw new IllegalArgumentException(
+                        "Order line quantity must round to at least one inventory unit.");
             }
+            inventoryService.decrementQuantityByNameStrict(
+                    line.getProductName(), qty, line.getUnit());
+            matched++;
+            detail.append(line.getProductName()).append(" -").append(qty).append("; ");
         }
 
         order.setStatus("FULFILLED");
         CustomerOrder saved = orderRepository.save(order);
 
         String msg = "Order #" + orderId + " fulfilled — inventory matched " + matched
-                + " line(s)" + (missing > 0 ? ", " + missing + " unmatched" : "");
+                + " line(s)";
         syncHistoryService.record(
                 "crm",
                 "ORDER_FULFILL",
-                missing == 0,
+                true,
                 msg,
                 detail.toString(),
                 matched
@@ -270,24 +751,281 @@ public class OrderService {
         return saved;
     }
 
+    private static void requireSpecifiedHandoff(CustomerOrder order, String action) {
+        if ("UNSPECIFIED".equals(CustomerOrder.normalizeHandoffType(order.getHandoffType()))) {
+            throw new IllegalArgumentException(
+                    "Choose PICKUP, DELIVERY, or MARKET for order #" + order.getId()
+                            + " before " + action
+                            + ". No status or inventory was changed.");
+        }
+    }
+
+    private void refreshCustomerForLifecycle(CustomerOrder order) {
+        Customer customer = order.getCustomer();
+        if (customer == null || customer.getId() == null) {
+            return;
+        }
+        Customer liveCustomer = customerRepository.findByIdForUpdate(customer.getId())
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "The customer account for Delivery order #" + order.getId()
+                                + " is unavailable. No status or inventory was changed."));
+        order.setCustomer(liveCustomer);
+    }
+
+    private static void requireDeliveryContext(CustomerOrder order, String action) {
+        if (!"DELIVERY".equals(CustomerOrder.normalizeHandoffType(order.getHandoffType()))) {
+            return;
+        }
+        Customer customer = order.getCustomer();
+        boolean hasContext = customer != null
+                && ((!customer.getContactName().isBlank())
+                || !customer.getPhone().isBlank()
+                || !customer.getEmail().isBlank()
+                || !customer.getNotes().isBlank());
+        hasContext = hasContext || (order.getNotes() != null && !order.getNotes().isBlank());
+        if (!hasContext) {
+            String target = order.getId() == null
+                    ? "New Delivery order" : "Delivery order #" + order.getId();
+            throw new IllegalArgumentException(
+                    target + " needs customer contact, account delivery notes, or explicit order "
+                            + "delivery instructions before " + action
+                            + ". No status or inventory was changed.");
+        }
+    }
+
     @Transactional
     public CustomerOrder addLine(Long orderId, OrderLine line) {
-        CustomerOrder order = orderRepository.findById(orderId)
-                .orElseThrow(() -> new IndexOutOfBoundsException("No order with id=" + orderId));
+        return addLine(orderId, null, line);
+    }
+
+    /** Adds a product only if the locked order still matches the worker's displayed order. */
+    @Transactional
+    public CustomerOrder addLineReviewed(
+            Long orderId, OrderReviewSnapshot reviewedSnapshot, OrderLine line) {
+        requireMatchingOrderReview(orderId, reviewedSnapshot, "product entry");
+        return addLine(orderId, reviewedSnapshot, line);
+    }
+
+    private CustomerOrder addLine(
+            Long orderId, OrderReviewSnapshot reviewedSnapshot, OrderLine line) {
+        CustomerOrder order = orderRepository.findByIdForUpdate(orderId)
+                .orElseThrow(() -> reviewedSnapshot == null
+                        ? new IndexOutOfBoundsException("No order with id=" + orderId)
+                        : new StaleOrderReviewException(orderId, "product entry",
+                                "The product was not added and inventory was unchanged",
+                                "review the order and add the product again", true));
+        if (reviewedSnapshot != null) {
+            verifyReviewedOrderCurrent(orderId, order, reviewedSnapshot,
+                    "product entry", "The product was not added and inventory was unchanged",
+                    "review the order and add the product again");
+        }
         if (line == null) {
             throw new IllegalArgumentException("Line must not be null.");
+        }
+        if ("FULFILLED".equalsIgnoreCase(order.getStatus())
+                || "CANCELLED".equalsIgnoreCase(order.getStatus())) {
+            throw new IllegalArgumentException(
+                    "Cannot add lines to a " + order.getStatus() + " order.");
+        }
+        if (order.getLines().size() >= MAX_ORDER_LINES) {
+            throw new IllegalArgumentException(
+                    "Order cannot contain more than " + MAX_ORDER_LINES + " lines.");
         }
         order.addLine(new OrderLine(
                 line.getProductName(), line.getQuantity(), line.getUnit(), line.getUnitPrice()));
         return orderRepository.save(order);
     }
 
+    /** Updates one captured product line before fulfillment; inventory is unchanged. */
+    @Transactional
+    public CustomerOrder updateLine(Long orderId, Long lineId, OrderLine replacement) {
+        return updateLine(orderId, lineId, null, null, replacement);
+    }
+
+    /** Updates only if the locked product still matches the worker's captured line. */
+    @Transactional
+    public CustomerOrder updateLineReviewed(
+            Long orderId, Long lineId, OrderReviewLine reviewedLine,
+            OrderLine replacement) {
+        requireMatchingReviewedLineTarget(lineId, reviewedLine);
+        return updateLine(orderId, lineId, null, reviewedLine, replacement);
+    }
+
+    /** Updates only if the saved product and its order still match the worker's review. */
+    @Transactional
+    public CustomerOrder updateLineReviewed(
+            Long orderId, Long lineId, OrderReviewSnapshot reviewedOrder,
+            OrderReviewLine reviewedLine, OrderLine replacement) {
+        requireMatchingOrderReview(orderId, reviewedOrder, "product correction");
+        requireMatchingReviewedLineTarget(lineId, reviewedLine);
+        return updateLine(orderId, lineId, reviewedOrder, reviewedLine, replacement);
+    }
+
+    private CustomerOrder updateLine(
+            Long orderId, Long lineId, OrderReviewSnapshot reviewedOrder,
+            OrderReviewLine reviewedLine,
+            OrderLine replacement) {
+        if (lineId == null) {
+            throw new IllegalArgumentException("Select a saved order product to update.");
+        }
+        if (replacement == null) {
+            throw new IllegalArgumentException("Replacement product details are required.");
+        }
+        CustomerOrder order = orderRepository.findByIdForUpdate(orderId)
+                .orElseThrow(() -> reviewedOrder == null
+                        ? new IndexOutOfBoundsException("No order with id=" + orderId)
+                        : new StaleOrderReviewException(orderId, "product correction",
+                                "The product correction was not saved and inventory was unchanged",
+                                "review the order and correct the product again", true));
+        if ("FULFILLED".equalsIgnoreCase(order.getStatus())
+                || "CANCELLED".equalsIgnoreCase(order.getStatus())) {
+            throw new IllegalArgumentException(
+                    "Cannot update products on a " + order.getStatus() + " order.");
+        }
+        OrderLine line = order.getLines().stream()
+                .filter(candidate -> lineId.equals(candidate.getId()))
+                .findFirst()
+                .orElseThrow(() -> new IndexOutOfBoundsException(
+                        "No product line with id=" + lineId + " on order #" + orderId));
+        if (reviewedLine != null && !reviewedLine.equals(reviewLine(line))) {
+            throw new StaleOrderLineException(orderId, "editing", reviewLine(line));
+        }
+        if (reviewedOrder != null) {
+            verifyReviewedOrderCurrent(orderId, order, reviewedOrder,
+                    "product correction",
+                    "The product correction was not saved and inventory was unchanged",
+                    "review the order and correct the product again");
+        }
+        String previous = line.getProductName() + " × " + line.getQuantity() + " " + line.getUnit();
+        line.setProductName(replacement.getProductName());
+        line.setQuantity(replacement.getQuantity());
+        line.setUnit(replacement.getUnit());
+        line.setUnitPrice(replacement.getUnitPrice());
+        CustomerOrder saved = orderRepository.save(order);
+        syncHistoryService.record(
+                "crm", "ORDER_LINE_UPDATE", true,
+                "Updated " + line.getProductName() + " on order #" + orderId,
+                "lineId=" + lineId + ", previous=" + previous
+                        + ", current=" + line.getProductName() + " × " + line.getQuantity()
+                        + " " + line.getUnit() + ", unitPrice=" + line.getUnitPrice(),
+                1);
+        return saved;
+    }
+
+    /** Removes one captured product line before fulfillment; inventory is unchanged. */
+    @Transactional
+    public CustomerOrder removeLine(Long orderId, Long lineId) {
+        return removeLine(orderId, lineId, null, null);
+    }
+
+    /** Removes only if the locked product still matches the worker's captured line. */
+    @Transactional
+    public CustomerOrder removeLineReviewed(
+            Long orderId, Long lineId, OrderReviewLine reviewedLine) {
+        requireMatchingReviewedLineTarget(lineId, reviewedLine);
+        return removeLine(orderId, lineId, null, reviewedLine);
+    }
+
+    /** Removes only if the saved product and its order still match the worker's review. */
+    @Transactional
+    public CustomerOrder removeLineReviewed(
+            Long orderId, Long lineId, OrderReviewSnapshot reviewedOrder,
+            OrderReviewLine reviewedLine) {
+        requireMatchingOrderReview(orderId, reviewedOrder, "product removal");
+        requireMatchingReviewedLineTarget(lineId, reviewedLine);
+        return removeLine(orderId, lineId, reviewedOrder, reviewedLine);
+    }
+
+    private CustomerOrder removeLine(
+            Long orderId, Long lineId, OrderReviewSnapshot reviewedOrder,
+            OrderReviewLine reviewedLine) {
+        if (lineId == null) {
+            throw new IllegalArgumentException("Select a saved order product to remove.");
+        }
+        CustomerOrder order = orderRepository.findByIdForUpdate(orderId)
+                .orElseThrow(() -> reviewedOrder == null
+                        ? new IndexOutOfBoundsException("No order with id=" + orderId)
+                        : new StaleOrderReviewException(orderId, "product removal",
+                                "Nothing was removed and inventory was unchanged",
+                                "review the order and remove the product again", true));
+        if ("FULFILLED".equalsIgnoreCase(order.getStatus())
+                || "CANCELLED".equalsIgnoreCase(order.getStatus())) {
+            throw new IllegalArgumentException(
+                    "Cannot remove products from a " + order.getStatus() + " order.");
+        }
+        OrderLine line = order.getLines().stream()
+                .filter(candidate -> lineId.equals(candidate.getId()))
+                .findFirst()
+                .orElseThrow(() -> new IndexOutOfBoundsException(
+                        "No product line with id=" + lineId + " on order #" + orderId));
+        if (reviewedLine != null && !reviewedLine.equals(reviewLine(line))) {
+            throw new StaleOrderLineException(orderId, "removing it", reviewLine(line));
+        }
+        if (reviewedOrder != null) {
+            verifyReviewedOrderCurrent(orderId, order, reviewedOrder,
+                    "product removal", "Nothing was removed and inventory was unchanged",
+                    "review the order and remove the product again");
+        }
+        if ("CONFIRMED".equalsIgnoreCase(order.getStatus()) && order.getLines().size() == 1) {
+            throw new IllegalArgumentException(
+                    "A confirmed order must keep at least one product; add the replacement first.");
+        }
+        order.getLines().remove(line);
+        CustomerOrder saved = orderRepository.save(order);
+        syncHistoryService.record(
+                "crm", "ORDER_LINE_REMOVE", true,
+                "Removed " + line.getProductName() + " from order #" + orderId,
+                "lineId=" + lineId + ", quantity=" + line.getQuantity()
+                        + ", unit=" + line.getUnit(),
+                1);
+        return saved;
+    }
+
+    private static void requireMatchingReviewedLineTarget(
+            Long lineId, OrderReviewLine reviewedLine) {
+        if (lineId == null || reviewedLine == null
+                || !Objects.equals(lineId, reviewedLine.lineId())) {
+            throw new IllegalArgumentException(
+                    "The product review does not match the selected saved line. Refresh Customers "
+                            + "and Orders, select the product again, then retry.");
+        }
+    }
+
     @Transactional
     public void delete(Long id) {
-        if (orderRepository.findById(id).isEmpty()) {
-            throw new IndexOutOfBoundsException("No order with id=" + id);
+        delete(id, null);
+    }
+
+    /** Permanently deletes only when the locked order exactly matches the worker's review. */
+    @Transactional
+    public void deleteReviewed(Long id, OrderReviewSnapshot reviewedSnapshot) {
+        requireMatchingOrderReview(id, reviewedSnapshot, "deletion");
+        delete(id, reviewedSnapshot);
+    }
+
+    private void delete(Long id, OrderReviewSnapshot reviewedSnapshot) {
+        CustomerOrder order = orderRepository.findByIdForUpdate(id)
+                .orElseThrow(() -> new IndexOutOfBoundsException("No order with id=" + id));
+        if (reviewedSnapshot != null) {
+            verifyReviewedOrderCurrent(id, order, reviewedSnapshot,
+                    "deletion", "The order was not deleted and inventory was unchanged",
+                    "review the deletion again");
+        }
+        if ("FULFILLED".equalsIgnoreCase(order.getStatus())) {
+            throw new IllegalArgumentException(
+                    "Cannot delete a FULFILLED order because inventory was already deducted.");
         }
         orderRepository.deleteById(id);
+    }
+
+    private static void requireMatchingOrderReview(
+            Long orderId, OrderReviewSnapshot reviewedSnapshot, String action) {
+        if (orderId == null || reviewedSnapshot == null
+                || reviewedSnapshot.orderId() != orderId.longValue()) {
+            throw new IllegalArgumentException(
+                    "The " + action + " review does not match the selected order. Refresh "
+                            + "Customers and Orders and review it again.");
+        }
     }
 
     /**
@@ -454,124 +1192,7 @@ public class OrderService {
     }
 
     public byte[] generateInvoicePdf(CustomerOrder order) {
-        if (order == null) {
-            throw new IllegalArgumentException("order is required.");
-        }
-        try {
-            ByteArrayOutputStream baos = new ByteArrayOutputStream();
-            Document doc = new Document(PageSize.LETTER, 40, 40, 48, 40);
-            PdfWriter.getInstance(doc, baos);
-            doc.open();
-
-            Color brandGreen = new Color(34, 100, 54);
-            Color brandSoft = new Color(232, 245, 233);
-            Font titleFont = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 18, brandGreen);
-            Font h2 = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 12, brandGreen);
-            Font body = FontFactory.getFont(FontFactory.HELVETICA, 10);
-            Font small = FontFactory.getFont(FontFactory.HELVETICA, 9, Color.DARK_GRAY);
-            Font banner = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 11, Color.WHITE);
-
-            PdfPTable bannerTable = new PdfPTable(1);
-            bannerTable.setWidthPercentage(100);
-            PdfPCell bannerCell = new PdfPCell(new Phrase(
-                    "FlowersForever  ·  Port Orchard / Kitsap County  ·  Wholesale Invoice",
-                    banner));
-            bannerCell.setBackgroundColor(brandGreen);
-            bannerCell.setPadding(10);
-            bannerCell.setBorder(Rectangle.NO_BORDER);
-            bannerTable.addCell(bannerCell);
-            doc.add(bannerTable);
-            doc.add(Chunk.NEWLINE);
-
-            String orderNo = order.getId() == null ? "—" : String.valueOf(order.getId());
-            String status = order.getStatus() == null ? "DRAFT" : order.getStatus();
-            doc.add(new Paragraph("Invoice / Order #" + orderNo, titleFont));
-            doc.add(new Paragraph(
-                    "Order date: " + order.getOrderDate()
-                            + "     ·     Status: " + status
-                            + "     ·     Generated: " + LocalDate.now(),
-                    small));
-            doc.add(Chunk.NEWLINE);
-
-            Customer c = order.getCustomer();
-            String custName = c != null && c.getName() != null ? c.getName() : "(no customer)";
-            String contact = c != null && c.getContactName() != null ? c.getContactName() : "";
-            String email = c != null && c.getEmail() != null ? c.getEmail() : "";
-            String phone = c != null && c.getPhone() != null ? c.getPhone() : "";
-            String type = c != null && c.getCustomerType() != null ? c.getCustomerType() : "";
-
-            PdfPTable parties = new PdfPTable(new float[]{1, 1});
-            parties.setWidthPercentage(100);
-            parties.addCell(infoBlock("Bill to / ship to",
-                    custName
-                            + (type.isBlank() ? "" : "  [" + type + "]")
-                            + (contact.isBlank() ? "" : "\nAttn: " + contact)
-                            + (email.isBlank() ? "" : "\n" + email)
-                            + (phone.isBlank() ? "" : "\n" + phone),
-                    brandSoft, body));
-            parties.addCell(infoBlock("From",
-                    "FlowersForever Farm\nPort Orchard / Kitsap County, WA\nPNW West of the Cascades",
-                    brandSoft, body));
-            doc.add(parties);
-            doc.add(Chunk.NEWLINE);
-
-            if (order.getNotes() != null && !order.getNotes().isBlank()) {
-                doc.add(new Paragraph("Notes: " + order.getNotes(), body));
-                doc.add(Chunk.NEWLINE);
-            }
-
-            doc.add(new Paragraph("Line items", h2));
-            doc.add(Chunk.NEWLINE);
-            List<OrderLine> lines = order.getLines() == null ? List.of() : order.getLines();
-            if (lines.isEmpty()) {
-                doc.add(new Paragraph("(no line items)", body));
-            } else {
-                PdfPTable table = new PdfPTable(new float[]{3.2f, 1.1f, 1.1f, 1.2f, 1.3f});
-                table.setWidthPercentage(100);
-                headerCell(table, "Product");
-                headerCell(table, "Qty");
-                headerCell(table, "Unit");
-                headerCell(table, "Unit $");
-                headerCell(table, "Line $");
-                for (OrderLine line : lines) {
-                    table.addCell(cell(line.getProductName(), body));
-                    table.addCell(cell(String.format(Locale.US, "%.1f", line.getQuantity()), body));
-                    table.addCell(cell(line.getUnit() == null ? "" : line.getUnit(), body));
-                    table.addCell(cell(String.format(Locale.US, "%,.2f", line.getUnitPrice()), body));
-                    table.addCell(cell(String.format(Locale.US, "%,.2f", line.lineTotal()), body));
-                }
-                doc.add(table);
-            }
-            doc.add(Chunk.NEWLINE);
-
-            PdfPTable totalBox = new PdfPTable(1);
-            totalBox.setWidthPercentage(40);
-            totalBox.setHorizontalAlignment(Element.ALIGN_RIGHT);
-            PdfPCell totalCell = new PdfPCell(new Phrase(
-                    String.format(Locale.US, "Total  $%,.2f", order.lineTotal()),
-                    FontFactory.getFont(FontFactory.HELVETICA_BOLD, 14, brandGreen)));
-            totalCell.setBackgroundColor(brandSoft);
-            totalCell.setPadding(10);
-            totalCell.setHorizontalAlignment(Element.ALIGN_RIGHT);
-            totalCell.setBorderColor(new Color(180, 200, 180));
-            totalBox.addCell(totalCell);
-            doc.add(totalBox);
-            doc.add(Chunk.NEWLINE);
-
-            doc.add(new Paragraph(
-                    "Thank you for supporting local PNW cut flowers. "
-                            + "Questions: farm@flowersforever.example (demo)",
-                    small));
-            doc.add(new Paragraph(
-                    "FlowersForever · practical tools for PNW flower growers", small));
-
-            doc.close();
-            log.info("Generated order invoice PDF for order #{} (${})",
-                    orderNo, String.format(Locale.US, "%.2f", order.lineTotal()));
-            return baos.toByteArray();
-        } catch (DocumentException e) {
-            throw new IllegalStateException("Failed to build order invoice PDF: " + e.getMessage(), e);
-        }
+        return reportGenerator.generateInvoicePdf(order);
     }
 
     /** Plain-text invoice for CLI / quick view. */
@@ -586,100 +1207,6 @@ public class OrderService {
     }
 
     public String formatInvoiceText(CustomerOrder order) {
-        if (order == null) {
-            throw new IllegalArgumentException("order is required.");
-        }
-        StringBuilder sb = new StringBuilder();
-        String orderNo = order.getId() == null ? "—" : String.valueOf(order.getId());
-        Customer c = order.getCustomer();
-        String cust = c != null && c.getName() != null ? c.getName() : "(no customer)";
-        sb.append("INVOICE / ORDER #").append(orderNo).append('\n');
-        sb.append("═══════════════════════════════════════\n");
-        sb.append("Date: ").append(order.getOrderDate())
-                .append("  ·  Status: ").append(order.getStatus()).append('\n');
-        sb.append("Customer: ").append(cust);
-        if (c != null && c.getCustomerType() != null && !c.getCustomerType().isBlank()) {
-            sb.append(" [").append(c.getCustomerType()).append(']');
-        }
-        sb.append('\n');
-        if (c != null) {
-            if (c.getContactName() != null && !c.getContactName().isBlank()) {
-                sb.append("Attn: ").append(c.getContactName()).append('\n');
-            }
-            if (c.getEmail() != null && !c.getEmail().isBlank()) {
-                sb.append(c.getEmail()).append('\n');
-            }
-            if (c.getPhone() != null && !c.getPhone().isBlank()) {
-                sb.append(c.getPhone()).append('\n');
-            }
-        }
-        if (order.getNotes() != null && !order.getNotes().isBlank()) {
-            sb.append("Notes: ").append(order.getNotes()).append('\n');
-        }
-        sb.append('\n');
-        sb.append(String.format(Locale.US, "%-24s %8s %8s %10s %10s%n",
-                "Product", "Qty", "Unit", "Unit $", "Line $"));
-        sb.append("-".repeat(64)).append('\n');
-        List<OrderLine> lines = order.getLines() == null ? List.of() : order.getLines();
-        if (lines.isEmpty()) {
-            sb.append("  (no lines)\n");
-        } else {
-            for (OrderLine line : lines) {
-                sb.append(String.format(Locale.US, "%-24s %8.1f %8s %10.2f %10.2f%n",
-                        truncate(line.getProductName(), 24),
-                        line.getQuantity(),
-                        truncate(line.getUnit() == null ? "" : line.getUnit(), 8),
-                        line.getUnitPrice(),
-                        line.lineTotal()));
-            }
-        }
-        sb.append("-".repeat(64)).append('\n');
-        sb.append(String.format(Locale.US, "TOTAL  $%,.2f%n", order.lineTotal()));
-        sb.append("\nFlowersForever · Port Orchard / Kitsap County, WA\n");
-        return sb.toString();
-    }
-
-    private static String truncate(String s, int max) {
-        if (s == null) {
-            return "";
-        }
-        return s.length() <= max ? s : s.substring(0, max - 1) + "…";
-    }
-
-    private static void headerCell(PdfPTable table, String text) {
-        PdfPCell cell = new PdfPCell(new Phrase(text,
-                FontFactory.getFont(FontFactory.HELVETICA_BOLD, 9, Color.WHITE)));
-        cell.setBackgroundColor(new Color(34, 100, 54));
-        cell.setPadding(5);
-        table.addCell(cell);
-    }
-
-    private static PdfPCell cell(String text, Font font) {
-        PdfPCell cell = new PdfPCell(new Phrase(text == null ? "" : text, font));
-        cell.setPadding(4);
-        cell.setBorderColor(new Color(200, 210, 200));
-        return cell;
-    }
-
-    private static PdfPCell infoBlock(String title, String bodyText, Color bg, Font body) {
-        Paragraph p = new Paragraph();
-        p.add(new Chunk(title + "\n", FontFactory.getFont(FontFactory.HELVETICA_BOLD, 10,
-                new Color(34, 100, 54))));
-        p.add(new Chunk(bodyText == null ? "" : bodyText, body));
-        PdfPCell cell = new PdfPCell(p);
-        cell.setBackgroundColor(bg);
-        cell.setPadding(10);
-        cell.setBorderColor(new Color(180, 200, 180));
-        return cell;
-    }
-
-    private static String csvEscape(String s) {
-        if (s == null) {
-            return "";
-        }
-        if (s.contains(",") || s.contains("\"")) {
-            return "\"" + s.replace("\"", "\"\"") + "\"";
-        }
-        return s;
+        return reportGenerator.formatInvoiceText(order);
     }
 }

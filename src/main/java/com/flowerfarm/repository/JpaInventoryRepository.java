@@ -38,6 +38,19 @@ public class JpaInventoryRepository implements InventoryRepository {
     }
 
     @Override
+    public Optional<Item> findByIdForUpdate(Long id) {
+        return jpa.findByIdForUpdate(id);
+    }
+
+    @Override
+    public List<Item> findAllByNameIgnoreCaseForUpdate(String name) {
+        if (name == null || name.isBlank()) {
+            return List.of();
+        }
+        return jpa.findAllByNameIgnoreCaseForUpdate(name.trim());
+    }
+
+    @Override
     @Transactional(readOnly = true)
     public long count() {
         return jpa.count();

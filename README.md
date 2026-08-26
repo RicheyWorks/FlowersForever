@@ -16,12 +16,12 @@ Spring Boot **3.5.16** · modular Swing GUI · dual-mode connectors (offline JSO
 |------|------------|
 | **Inventory** | H2/SQLite stock; harvest ↑ / fulfill ↓; low-stock reorder + **price list** PDFs |
 | **Harvest** | Log / edit / batch / filter; bed production + chronological **harvest log** PDFs |
-| **CRM** | Customers & orders; confirm → pipeline; fulfill deducts stock; **invoice** + **statement** PDFs |
-| **Dashboard** | KPIs, sparklines, realized vs pipeline revenue, PACK / WATER alerts, quick actions |
-| **Market day** | Pack list vs stock, packing PDF, batch fulfill all CONFIRMED |
+| **Customers & orders** | Draft and confirm orders; completion deducts stock; **invoice** + **statement** PDFs |
+| **Dashboard** | Weekly harvest and sales overview, plain-language alerts, and quick actions |
+| **Market day** | Packing list vs stock, packing PDF, and confirmed-order completion |
 | **Day ops** | **Morning briefing** + **day closeout** sheets (pack, beds, water, stock, sales) |
 | **Irrigation** | Kitsap Open-Meteo live or offline climatology |
-| **Audit** | Connector · harvest · CRM history; filter, CSV, **audit PDF** (FAIL highlighted) |
+| **Activity history** | Imports, exports, harvests, and orders; filter, CSV, and printable PDF |
 | **Connectors** | CSV, Excel, Airtable, Webhook, Shopify, Square, Sheets, Farmbrite, Floranext — dual-mode |
 | **Auth** | Optional OWNER / HAND / VIEWER barn roles (`auth` profile) |
 | **Demo** | `demo` profile seeds Kitsap CRM + harvest + today’s CONFIRMED orders when empty |
@@ -38,22 +38,47 @@ Spring Boot **3.5.16** · modular Swing GUI · dual-mode connectors (offline JSO
 | Automation | Behavior |
 |------------|----------|
 | **CI** | Every push/PR to `main` → `mvn clean verify` on JDK 17 + 21 (advisory), Docker build, static-analysis job |
-| **Quality** | JaCoCo coverage report every build; SpotBugs + Checkstyle via `-Pquality` (report-only) |
+| **Quality** | JaCoCo report + 51% line / 41% branch gates; Medium+ SpotBugs gate + Checkstyle report via `-Pquality` |
 | **Dependabot** | Weekly Maven + GitHub Actions PRs |
 | **Supply chain** | CodeQL scanning, PR dependency review, CycloneDX SBOM on every build |
 | **Releases** | Tag `v*` → fat JAR + SBOM on GitHub Releases, image to GHCR, MSI/DMG installers via jpackage |
 | **Security** | Auth model & hardening — **[SECURITY.md](SECURITY.md)** |
 
-Decisions and trade-offs: **[docs/adr/ADR-001](docs/adr/ADR-001-infrastructure-and-build-expansion.md)**.
+System map: **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**. Decisions and
+trade-offs: **[ADR-001](docs/adr/ADR-001-infrastructure-and-build-expansion.md)**
+and **[ADR-003](docs/adr/ADR-003-layered-application-boundaries.md)**.
+Report rendering boundaries are recorded in
+**[ADR-004](docs/adr/ADR-004-report-rendering-collaborators.md)**, and desktop
+interaction decomposition in
+**[ADR-005](docs/adr/ADR-005-desktop-interaction-collaborators.md)**.
+Everyday desktop workflows, role behavior, keyboard use, and mistake recovery
+are covered in the **[desktop user guide](docs/USER_GUIDE.md)**.
+Farm rollout and recovery are covered by the **[deployment checklist](docs/DEPLOYMENT.md)**
+and **[backup/restore procedure](docs/BACKUP_RESTORE.md)**. Review the
+**[known limitations](docs/KNOWN_LIMITATIONS.md)** before approving a workstation.
+
+Native MSI and DMG installers are currently unsigned. Windows SmartScreen or
+macOS Gatekeeper may show an unknown-publisher warning; verify that the download
+comes from this repository's GitHub Releases page. See
+**[ADR-002](docs/adr/ADR-002-code-signing.md)** for the signing decision and
+adoption trigger.
 
 ### Docker (headless REST-only)
 
 ```bash
 docker build -t flowersforever .
-docker run -p 8080:8080 -v flowerfarm-data:/app/data flowersforever
+docker run -p 8080:8080 -v flowerfarm-data:/app/data \
+  -e FLOWERFARM_AUTH_USERS='owner:replace-with-a-long-password:OWNER' \
+  flowersforever
 # or from GHCR after a release:
-docker run -p 8080:8080 ghcr.io/richeyworks/flowersforever:latest
+docker run -p 8080:8080 \
+  -e FLOWERFARM_AUTH_USERS='owner:replace-with-a-long-password:OWNER' \
+  ghcr.io/richeyworks/flowersforever:latest
 ```
+
+The image activates the fail-closed `container` profile: HTTP Basic is mandatory,
+every password must contain at least 12 characters, and at least one account must
+have the `OWNER` role. `/actuator/health` remains public for container health checks.
 
 ```bash
 git tag v1.0.19
@@ -69,7 +94,7 @@ git clone https://github.com/RicheyWorks/FlowersForever.git
 cd FlowersForever
 mvn clean verify
 
-# GUI + REST on :8080
+# GUI + REST on loopback :8080
 mvn spring-boot:run
 # or
 java -jar target/flowerfarm-manager-1.0.19.jar
@@ -79,7 +104,8 @@ java -jar target/flowerfarm-manager-1.0.19.jar --cli
 
 # Profiles (combine with commas)
 java -jar target/flowerfarm-manager-1.0.19.jar --spring.profiles.active=sqlite
-java -jar target/flowerfarm-manager-1.0.19.jar --spring.profiles.active=auth
+FLOWERFARM_AUTH_USERS='owner:replace-with-a-long-password:OWNER' \
+  java -jar target/flowerfarm-manager-1.0.19.jar --spring.profiles.active=auth
 java -jar target/flowerfarm-manager-1.0.19.jar --spring.profiles.active=demo
 java -jar target/flowerfarm-manager-1.0.19.jar --spring.profiles.active=demo,auth
 ```
@@ -88,11 +114,16 @@ java -jar target/flowerfarm-manager-1.0.19.jar --spring.profiles.active=demo,aut
 |---------|---------|
 | *(default)* | H2 file DB + GUI + REST |
 | `sqlite` | SQLite under `./data/flowerfarm.sqlite` |
-| `auth` | HTTP Basic + GUI login — `farm/kitsap` · `hand/harvest` · `viewer/view` |
+| `auth` | HTTP Basic + GUI login; requires strong credentials from environment |
 | `demo` | Non-destructive seed of CRM / harvest / today’s CONFIRMED orders when empty |
 | `cli` | Interactive CLI only (no Tomcat) |
+| `container` | Headless external bind + mandatory non-demo HTTP Basic credentials |
 
-Empty DB seeds from `farm_inventory.csv` if present, else sample PNW SKUs. Default store: `./data/flowerfarm.mv.db`.
+Empty DB seeds from `farm_inventory.csv` if present, else sample PNW SKUs. Portable JAR store: `./data/flowerfarm.mv.db`.
+The packaged Windows app uses `%LOCALAPPDATA%\\FlowersForever\\data`; override either mode with
+`FLOWERFARM_DATA_DIR`. On its first packaged launch, legacy `./data` content is copied forward
+without deleting the source.
+Open desktop mode listens only on `127.0.0.1`; the `auth` profile enables LAN binding. REST-triggered CSV exports are written beneath `./data/exports`.
 
 ### Portfolio demo
 
@@ -106,13 +137,13 @@ powershell -File scripts/demo-rest.ps1 -User farm -Pass kitsap   # with auth
 
 **Happy path (~5 min)**
 
-1. **Dashboard** — KPIs, sparklines, morning briefing / day closeout  
-2. **Harvest Log** — log Nootka Rose stems → stock ↑; bed production + harvest log PDFs  
-3. **CRM** — CONFIRMED order → invoice PDF; fulfill → stock ↓; customer statement PDF  
-4. **Market Day** — packing list / PDF → fulfill all CONFIRMED  
-5. **Inventory** — low-stock reorder + price list PDFs  
-6. **Sync History** — HARVEST_LOG / ORDER_FULFILL; audit PDF  
-7. **Connectors** — Export Farmbrite/Shopify (local mirrors, no API keys)  
+1. **Dashboard** — weekly overview, morning briefing / day closeout
+2. **Harvest Log** — log Nootka Rose stems → stock ↑; bed production + harvest log PDFs
+3. **Customers & Orders** — confirm an order → invoice PDF; complete it → stock ↓
+4. **Market Day** — packing list / PDF → complete confirmed orders
+5. **Inventory** — low-stock reorder + price list PDFs
+6. **Activity History** — review successful work or items needing attention
+7. **Connectors** — Export Farmbrite/Shopify (local mirrors, no API keys)
 8. Optional **auth** — switch to `viewer` (writes blocked)
 
 ---
@@ -146,11 +177,12 @@ powershell -File scripts/demo-rest.ps1 -User farm -Pass kitsap   # with auth
 | **HAND** | yes | no | Harvest crew |
 | **VIEWER** | no | no | Office / guest |
 
-```properties
-flowerfarm.auth.users=farm:kitsap:OWNER,hand:harvest:HAND,viewer:view:VIEWER
+```bash
+export FLOWERFARM_AUTH_USERS='owner:replace-with-a-long-password:OWNER,hand:another-long-password:HAND'
+java -jar target/flowerfarm-manager-1.0.19.jar --spring.profiles.active=auth
 ```
 
-GUI: **Account → Who am I? / Switch user**.  
+GUI: **Account → My access / Switch user**.
 REST: `GET /api/auth/me` (Basic), `GET /api/auth/accounts` (usernames only).
 
 ---
@@ -203,7 +235,7 @@ Full market-day, filter, and connector endpoints: see controllers under `com.flo
 ```
 com.flowerfarm
 ├── FlowerFarmApp
-├── auth/           # FarmSession, roles, directory
+├── auth/           # DesktopSession, roles, directory
 ├── model/          # Item, Harvest, Customer, Order, SyncHistory
 ├── service/        # Inventory, Harvest, Order, Market Day, Briefing, Closeout, …
 ├── connector/      # DualModeCapable, LocalJsonMirror, registry, impl.*
@@ -212,8 +244,10 @@ com.flowerfarm
 └── lsystem/        # Rose generative rules
 ```
 
-**Add a dual-mode connector:** implement `ExternalConnector` + `DualModeCapable`, use `LocalJsonMirror` for offline, `@Value` for credentials, register `@Component` or `@Bean`.  
-GUI design notes: **[docs/GUI_ARCHITECTURE.md](docs/GUI_ARCHITECTURE.md)**.
+**Add a dual-mode connector:** implement `ExternalConnector` + `DualModeCapable`, use `LocalJsonMirror` for offline, inject credentials with `@Value`, and register it with `@Component`.
+Full dependency, data-flow, transaction, profile, and deployment map:
+**[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**. GUI design notes:
+**[docs/GUI_ARCHITECTURE.md](docs/GUI_ARCHITECTURE.md)**.
 
 ---
 
@@ -244,6 +278,7 @@ GUI design notes: **[docs/GUI_ARCHITECTURE.md](docs/GUI_ARCHITECTURE.md)**.
 | [SECURITY.md](SECURITY.md) | Auth model, defaults, vulnerability reporting |
 | [docs/DEMO.md](docs/DEMO.md) | Portfolio / demo runbook |
 | [docs/CONNECTORS_SANDBOX.md](docs/CONNECTORS_SANDBOX.md) | Offline mirrors + live keys |
+| [docs/BACKEND_ARCHITECTURE.md](docs/BACKEND_ARCHITECTURE.md) | Transactions, validation, API errors, and connector safety |
 | [docs/GUI_ARCHITECTURE.md](docs/GUI_ARCHITECTURE.md) | GUI design history |
 | [scripts/demo-rest.ps1](scripts/demo-rest.ps1) | REST smoke (Windows) |
 | [scripts/demo-rest.sh](scripts/demo-rest.sh) | REST smoke (Unix) |

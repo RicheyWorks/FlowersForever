@@ -2,6 +2,7 @@ package com.flowerfarm.connector.impl;
 
 import com.flowerfarm.connector.*;
 import com.flowerfarm.model.Item;
+import com.flowerfarm.util.CsvSupport;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -80,9 +81,9 @@ public class CsvInventoryConnector implements ExternalConnector<String[]> {
         this.fieldMapper = new FieldMapper()
                 .registerOutbound(colName,     Item::getName)
                 .registerOutbound(colCategory, Item::getCategory)
-                .registerOutbound(colPrice,    item -> String.format("%.2f", item.getPrice()))
+                .registerOutbound(colPrice,    item -> String.format(Locale.ROOT, "%.2f", item.getPrice()))
                 .registerOutbound(colUnit,     Item::getUnit)
-                .registerOutbound(colCost,     item -> String.format("%.2f", item.getCost()))
+                .registerOutbound(colCost,     item -> String.format(Locale.ROOT, "%.2f", item.getCost()))
                 .registerOutbound(colQuantity, Item::getQuantity)
                 .registerOutbound(colNotes,    Item::getNotes);
         // Inbound mappings are handled by header-index lookup in mapToItem()
@@ -115,32 +116,28 @@ public class CsvInventoryConnector implements ExternalConnector<String[]> {
         List<Item>   items    = new ArrayList<>();
         List<String> warnings = new ArrayList<>();
 
-        try (BufferedReader br = new BufferedReader(new FileReader(file, java.nio.charset.StandardCharsets.UTF_8))) {
-            String headerLine = br.readLine();
-            if (headerLine == null) {
+        try (Reader reader = new FileReader(file, java.nio.charset.StandardCharsets.UTF_8)) {
+            char delimiter = delimiter();
+            List<List<String>> records = CsvSupport.readAll(reader, delimiter);
+            if (records.isEmpty()) {
                 return ConnectorResult.fail("CSV file is empty.", filePath, getName());
             }
 
-            String   delim   = config.get("delimiter", ",");
-            String[] headers = parseCsvRow(headerLine, delim);
+            String[] headers = records.get(0).toArray(new String[0]);
             Map<String, Integer> headerIndex = buildHeaderIndex(headers);
 
-            String line;
-            int lineNo = 1;
-            while ((line = br.readLine()) != null) {
-                lineNo++;
-                if (line.isBlank()) continue;
+            for (int rowIndex = 1; rowIndex < records.size(); rowIndex++) {
                 try {
-                    String[] row = parseCsvRow(line, delim);
+                    String[] row = records.get(rowIndex).toArray(new String[0]);
                     items.add(mapToItem(row, headerIndex));
                 } catch (Exception e) {
-                    String msg = "Line " + lineNo + ": " + e.getMessage();
+                    String msg = "Row " + (rowIndex + 1) + ": " + e.getMessage();
                     warnings.add(msg);
                     log.warn("[csv] Skipping malformed row — {}", msg);
                 }
             }
 
-        } catch (IOException e) {
+        } catch (IOException | IllegalArgumentException e) {
             return ConnectorResult.fail("Failed to read CSV file.", e, getName());
         }
 
@@ -154,12 +151,20 @@ public class CsvInventoryConnector implements ExternalConnector<String[]> {
 
     @Override
     public ConnectorResult<Integer> exportItems(List<Item> items) {
+        if (items == null) {
+            items = List.of();
+        }
         String filePath = config.get("export-file");
-        String delim    = config.get("delimiter", ",");
+        final char delimiter;
+        try {
+            delimiter = delimiter();
+        } catch (IllegalArgumentException e) {
+            return ConnectorResult.fail("Export failed.", e, getName());
+        }
 
         try (BufferedWriter bw = new BufferedWriter(new FileWriter(filePath, java.nio.charset.StandardCharsets.UTF_8))) {
             // Header row — use configured column names
-            bw.write(String.join(delim, fieldMapper.outboundFields()));
+            bw.write(CsvSupport.row(delimiter, fieldMapper.outboundFields()));
             bw.newLine();
 
             int count = 0;
@@ -168,13 +173,9 @@ public class CsvInventoryConnector implements ExternalConnector<String[]> {
                 List<String> row = new ArrayList<>();
                 for (Object val : fields.values()) {
                     String s = val == null ? "" : val.toString();
-                    // Quote fields containing delimiter or newline
-                    if (s.contains(delim) || s.contains("\n") || s.contains("\"")) {
-                        s = "\"" + s.replace("\"", "\"\"") + "\"";
-                    }
                     row.add(s);
                 }
-                bw.write(String.join(delim, row));
+                bw.write(CsvSupport.row(delimiter, row));
                 bw.newLine();
                 count++;
             }
@@ -198,16 +199,24 @@ public class CsvInventoryConnector implements ExternalConnector<String[]> {
      */
     @Override
     public ConnectorResult<SyncSummary> syncUpdates(List<Item> localItems) {
+        if (localItems == null) {
+            localItems = List.of();
+        }
         // Read existing CSV state
         ConnectorResult<List<Item>> imported = importItems();
         Map<String, Item> csvByName = new LinkedHashMap<>();
 
         if (imported.isSuccess() && imported.getPayload() != null) {
-            imported.getPayload().forEach(i -> csvByName.put(i.getName().toLowerCase(), i));
+            imported.getPayload().forEach(i -> csvByName.put(i.getName().toLowerCase(Locale.ROOT), i));
+        } else if (new File(config.get("import-file")).exists()) {
+            return ConnectorResult.fail(
+                    "CSV sync aborted because the existing file could not be read.",
+                    imported.getErrorDetail(),
+                    getName());
         }
 
         Map<String, Item> localByName = new LinkedHashMap<>();
-        localItems.forEach(i -> localByName.put(i.getName().toLowerCase(), i));
+        localItems.forEach(i -> localByName.put(i.getName().toLowerCase(Locale.ROOT), i));
 
         int created = 0, updated = 0, skipped = 0, errors = 0;
         List<Item> merged = new ArrayList<>(localItems);
@@ -218,10 +227,17 @@ public class CsvInventoryConnector implements ExternalConnector<String[]> {
 
             if (csv == null) {
                 created++;          // new local item — will be written
-            } else if (csv.getQuantity() != local.getQuantity()
-                    || csv.getPrice() != local.getPrice()) {
+            } else if (!sameItem(csv, local)) {
                 updated++;          // changed item — overwrite in CSV
             } else {
+                skipped++;
+            }
+        }
+
+        // Remote-only rows are explicitly preserved rather than erased by the rewrite.
+        for (Map.Entry<String, Item> entry : csvByName.entrySet()) {
+            if (!localByName.containsKey(entry.getKey())) {
+                merged.add(entry.getValue());
                 skipped++;
             }
         }
@@ -305,23 +321,24 @@ public class CsvInventoryConnector implements ExternalConnector<String[]> {
         catch (NumberFormatException e) { return def; }
     }
 
-    private String[] parseCsvRow(String line, String delim) {
-        // Handles quoted fields containing the delimiter
-        List<String> parts = new ArrayList<>();
-        StringBuilder sb = new StringBuilder();
-        boolean inQuotes = false;
-        for (char c : line.toCharArray()) {
-            if (c == '"') {
-                inQuotes = !inQuotes;
-            } else if (!inQuotes && String.valueOf(c).equals(delim)) {
-                parts.add(sb.toString().trim());
-                sb.setLength(0);
-            } else {
-                sb.append(c);
-            }
+    private char delimiter() {
+        String configured = config.get("delimiter", ",");
+        if (configured.length() != 1 || configured.charAt(0) == '"'
+                || configured.charAt(0) == '\r' || configured.charAt(0) == '\n') {
+            throw new IllegalArgumentException("CSV delimiter must be one non-quote character.");
         }
-        parts.add(sb.toString().trim());
-        return parts.toArray(new String[0]);
+        return configured.charAt(0);
+    }
+
+    private boolean sameItem(Item left, Item right) {
+        return left != null && right != null
+                && left.getName().equalsIgnoreCase(right.getName())
+                && Objects.equals(left.getCategory(), right.getCategory())
+                && Double.compare(left.getPrice(), right.getPrice()) == 0
+                && Objects.equals(left.getUnit(), right.getUnit())
+                && Double.compare(left.getCost(), right.getCost()) == 0
+                && left.getQuantity() == right.getQuantity()
+                && Objects.equals(left.getNotes(), right.getNotes());
     }
 
     private double parseDouble(String s) {

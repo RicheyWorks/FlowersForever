@@ -139,7 +139,18 @@ class ItemTest {
     @DisplayName("toCsv() produces correct comma-separated line")
     void toCsvHappyPath() {
         Item item = new Item("Nootka Rose", "Flowers/Plants", 3.50, "Per Stem", 2.00, 50, "PNW native");
-        assertThat(item.toCsv()).isEqualTo("Nootka Rose,Flowers/Plants,3.50,Per Stem,2.00,50,\"PNW native\"");
+        assertThat(item.toCsv()).isEqualTo("Nootka Rose,Flowers/Plants,3.50,Per Stem,2.00,50,PNW native");
+    }
+
+    @Test
+    @DisplayName("toCsv() escapes every field that can break the record")
+    void toCsvEscapesAllFields() {
+        Item item = new Item("Rose, red", "Flowers\nPlants", 1.00,
+                "Stem \"large\"", 0.50, 1, "Line one\nLine two");
+
+        assertThat(item.toCsv())
+                .startsWith("\"Rose, red\",\"Flowers\nPlants\",1.00,\"Stem \"\"large\"\"\"")
+                .endsWith("\"Line one\nLine two\"");
     }
 
     @Test

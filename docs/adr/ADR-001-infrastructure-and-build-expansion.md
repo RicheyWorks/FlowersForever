@@ -19,7 +19,7 @@ Forces at play:
 
 Expand build and infrastructure in five areas, all on GitHub-native, zero-cost tooling, with quality gates introduced **report-first** (visible but non-blocking) so they can be ratcheted later without a big-bang cleanup:
 
-1. **Code quality gates** — JaCoCo coverage reports on every build; SpotBugs + Checkstyle as non-failing report profiles wired into a dedicated CI job.
+1. **Code quality gates** — JaCoCo coverage reports on every build; SpotBugs + Checkstyle as non-failing report profiles wired into a dedicated CI job. Conservative coverage and SpotBugs gates were added after clean baselines were established (see ratchet history below).
 2. **Docker** — multi-stage Dockerfile producing a headless REST-only image, published to GHCR on release. A headless guard added to `FlowerFarmGUI.run()` so the default profile boots cleanly without a display.
 3. **CI matrix + caching** — JDK 17 (baseline) + JDK 21 (forward-compat) matrix; Maven cache already present via `setup-java`.
 4. **Supply-chain security** — CodeQL scanning, dependency-review on PRs, CycloneDX SBOM generated every build and attached to releases.
@@ -70,7 +70,7 @@ Rejected outright: no deployment target exists that would justify k8s/IaC, and a
 
 ## Action Items
 
-1. [x] JaCoCo, SpotBugs, Checkstyle, CycloneDX in `pom.xml` (reports non-blocking)
+1. [x] JaCoCo, SpotBugs, Checkstyle, CycloneDX in `pom.xml` (initially report-only; subsequently ratcheted below)
 2. [x] Headless guard in `FlowerFarmGUI.run()`
 3. [x] `Dockerfile` + `.dockerignore`; GHCR publish job in release workflow
 4. [x] CI: JDK 17/21 matrix + quality-report job + coverage artifact
@@ -83,8 +83,15 @@ Rejected outright: no deployment target exists that would justify k8s/IaC, and a
 
 SpotBugs baseline was 172 findings: 122 were `EI_EXPOSE_REP`/`EI_EXPOSE_REP2` — mutable-reference noise inherent to Spring constructor injection and JPA entities — now excluded via `config/spotbugs-exclude.xml`. The 12 priority-1 findings (10 platform-default-charset I/O calls, 2 silently swallowed exceptions, 1 per-call `Random`) were fixed in code, bringing the High-priority count to 0.
 
-Ratchet as implemented: the `quality` profile reports everything Medium+ (non-blocking) and **fails on any High-priority finding** (`spotbugs:check`, threshold High) — green at adoption, blocks regressions.
+On 2026-08-21 the remaining 14 Medium findings were cleared (over-broad catches, boxed comparator keys, URL construction in a pagination loop, a nullable `Boolean` return, dead work, and platform-specific formatted newlines). The `quality` profile now **fails on any Medium-or-higher finding** (`spotbugs:check`, threshold Medium), with a zero-finding baseline.
 
-Medium burn-down (2026-07-17): all 13 `NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE` fixed in connector code (captured `response.getBody()` / `path.getParent()` once instead of re-calling across the null check). `CT_CONSTRUCTOR_THROW` (8) and `DM_EXIT` (3) excluded with rationale in the filter file. Remaining backlog ≈14, mostly `REC_CATCH_EXCEPTION` — deliberate defensive catches, burn down opportunistically.
+Medium burn-down (2026-07-17): all 13 `NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE` fixed in connector code (captured `response.getBody()` / `path.getParent()` once instead of re-calling across the null check). `CT_CONSTRUCTOR_THROW` (8) and `DM_EXIT` (3) excluded with rationale in the filter file. At that point the remaining backlog was ≈14 findings, mostly `REC_CATCH_EXCEPTION`; the 2026-08-21 ratchet above records their removal.
 
-Checkstyle baseline was 14,439 violations, 89% `IndentationCheck` (google_checks wants 2-space, codebase uses 4-space) — structural style mismatch, not code health. Stays report-only; revisit with a project-tailored ruleset only if it ever earns its keep.
+Checkstyle baseline was 14,439 violations, 89% `IndentationCheck` (google_checks
+wants 2-space, codebase uses 4-space) — structural style mismatch, not code
+health. On 2026-08-23 it was replaced with an enforced, project-tailored
+zero-baseline ruleset covering file hygiene, imports, empty statements,
+fall-through, and equality/hash-code correctness. This provides a meaningful
+gate without mechanically reformatting unrelated four-space source files.
+
+JaCoCo ratchet (2026-08-23): a clean 324-test build covered 51.8% of lines and 41.5% of branches. Bundle-level gates now require at least 51% line coverage and 41% branch coverage on every `verify`. The small margin absorbs minor compiler instrumentation variation while blocking meaningful untested regressions; thresholds should only move upward as coverage improves.

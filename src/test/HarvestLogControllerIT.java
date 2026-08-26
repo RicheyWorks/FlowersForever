@@ -2,6 +2,7 @@ package com.flowerfarm.integration;
 
 import com.flowerfarm.controller.HarvestController;
 import com.flowerfarm.model.HarvestEntry;
+import com.flowerfarm.service.ExportPathResolver;
 import com.flowerfarm.service.HarvestService;
 import com.flowerfarm.service.HarvestService.HarvestLogReport;
 import org.junit.jupiter.api.DisplayName;
@@ -9,7 +10,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.LocalDate;
@@ -29,7 +30,8 @@ class HarvestLogControllerIT {
 
     @Autowired MockMvc mockMvc;
 
-    @MockBean HarvestService harvestService;
+    @MockitoBean HarvestService harvestService;
+    @MockitoBean ExportPathResolver exportPathResolver;
 
     private HarvestLogReport sample() {
         Map<String, Double> byCrop = new LinkedHashMap<>();

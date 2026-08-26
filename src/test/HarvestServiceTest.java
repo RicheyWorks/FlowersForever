@@ -2,7 +2,7 @@ package com.flowerfarm.service;
 
 import com.flowerfarm.model.HarvestEntry;
 import com.flowerfarm.model.Item;
-import com.flowerfarm.repository.HarvestJpaRepository;
+import com.flowerfarm.repository.HarvestRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -23,14 +23,25 @@ import static org.mockito.Mockito.*;
 @DisplayName("HarvestService")
 class HarvestServiceTest {
 
-    @Mock HarvestJpaRepository repository;
+    @Test
+    @DisplayName("inventory quantity conversion matches the harvest rounding contract")
+    void inventoryQuantityConversion() {
+        assertThat(HarvestService.inventoryQuantityFor(1.49)).isEqualTo(1);
+        assertThat(HarvestService.inventoryQuantityFor(1.5)).isEqualTo(2);
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> HarvestService.inventoryQuantityFor(0.49))
+                .withMessageContaining("0.5 or more");
+    }
+
+    @Mock HarvestRepository repository;
     @Mock InventoryService inventoryService;
     @Mock SyncHistoryService syncHistoryService;
     HarvestService service;
 
     @BeforeEach
     void setUp() {
-        service = new HarvestService(repository, inventoryService, syncHistoryService);
+        service = new HarvestService(repository, inventoryService, syncHistoryService,
+                new HarvestReportGenerator(), new HarvestCsvExporter());
         lenient().when(syncHistoryService.record(any(), any(), anyBoolean(), any(), any(), any()))
                 .thenReturn(null);
     }
@@ -55,9 +66,47 @@ class HarvestServiceTest {
     }
 
     @Test
+    @DisplayName("missing inventory preview is case-insensitive and deduplicates batch crops")
+    void identifiesMissingInventoryProducts() {
+        when(inventoryService.findByNameIgnoreCase("Nootka Rose"))
+                .thenReturn(Optional.of(new Item(
+                        "Nootka Rose", "Flowers/Plants", 4, "stems", 1, 12, "")));
+        when(inventoryService.findByNameIgnoreCase("Anemone")).thenReturn(Optional.empty());
+
+        List<String> missing = service.missingInventoryProducts(List.of(
+                new HarvestEntry(LocalDate.now(), "Nootka Rose", 4, "stems", "", ""),
+                new HarvestEntry(LocalDate.now(), "Anemone", 8, "stems", "", ""),
+                new HarvestEntry(LocalDate.now(), "anemone", 6, "stems", "", "")));
+
+        assertThat(missing).containsExactly("Anemone");
+        verify(inventoryService).findByNameIgnoreCase("Nootka Rose");
+        verify(inventoryService).findByNameIgnoreCase("Anemone");
+    }
+
+    @Test
     @DisplayName("add() rejects null")
     void addNull() {
         assertThatIllegalArgumentException().isThrownBy(() -> service.add(null));
+    }
+
+    @Test
+    @DisplayName("future-dated add, batch, and edit are rejected before persistence or inventory changes")
+    void futureHarvestDatesAreRejectedBeforeMutation() {
+        LocalDate tomorrow = LocalDate.now().plusDays(1);
+        HarvestEntry future = new HarvestEntry(
+                tomorrow, "Nootka Rose", 12, "stems", "Bed A", "mistyped date");
+
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> service.add(future))
+                .withMessageContaining("cannot be after today");
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> service.addBatch(List.of(future)))
+                .withMessageContaining("cannot be after today");
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> service.update(7L, future))
+                .withMessageContaining("cannot be after today");
+
+        verifyNoInteractions(repository, inventoryService);
     }
 
     @Test
@@ -70,7 +119,7 @@ class HarvestServiceTest {
     @Test
     @DisplayName("totalsByCrop aggregates quantities")
     void totalsByCrop() {
-        when(repository.findAllByOrderByHarvestDateDescIdDesc()).thenReturn(List.of(
+        when(repository.findAllNewestFirst()).thenReturn(List.of(
                 new HarvestEntry(LocalDate.now(), "Nootka Rose", 50, "stems", "", ""),
                 new HarvestEntry(LocalDate.now(), "Nootka Rose", 30, "stems", "", ""),
                 new HarvestEntry(LocalDate.now(), "Dahlia", 12, "stems", "", "")
@@ -87,7 +136,7 @@ class HarvestServiceTest {
         HarvestEntry existing = new HarvestEntry(
                 LocalDate.of(2026, 7, 10), "Nootka Rose", 40, "stems", "A", "");
         existing.setId(5L);
-        when(repository.findById(5L)).thenReturn(Optional.of(existing));
+        when(repository.findByIdForUpdate(5L)).thenReturn(Optional.of(existing));
         when(inventoryService.decrementQuantityByName("Nootka Rose", 40))
                 .thenReturn(Optional.of(new Item("Nootka Rose", "Flowers/Plants", 0, "stems", 0, 60, "")));
 
@@ -101,7 +150,7 @@ class HarvestServiceTest {
     @Test
     @DisplayName("delete() throws when missing")
     void deleteMissing() {
-        when(repository.findById(5L)).thenReturn(Optional.empty());
+        when(repository.findByIdForUpdate(5L)).thenReturn(Optional.empty());
         assertThatExceptionOfType(IndexOutOfBoundsException.class)
                 .isThrownBy(() -> service.delete(5L));
     }
@@ -109,7 +158,7 @@ class HarvestServiceTest {
     @Test
     @DisplayName("totalQuantityLast7Days sums period")
     void weekTotal() {
-        when(repository.findByHarvestDateBetweenOrderByHarvestDateDescIdDesc(any(), any()))
+        when(repository.findBetween(any(), any()))
                 .thenReturn(List.of(
                         new HarvestEntry(LocalDate.now(), "A", 10, "stems", "", ""),
                         new HarvestEntry(LocalDate.now(), "B", 5, "stems", "", "")
@@ -121,7 +170,7 @@ class HarvestServiceTest {
     @DisplayName("weekOverWeekPercentChange when prior week has data")
     void weekOverWeek() {
         // first call = current week, second = prior week (order of service method calls)
-        when(repository.findByHarvestDateBetweenOrderByHarvestDateDescIdDesc(any(), any()))
+        when(repository.findBetween(any(), any()))
                 .thenReturn(
                         List.of(new HarvestEntry(LocalDate.now(), "A", 20, "stems", "", "")),
                         List.of(new HarvestEntry(LocalDate.now().minusDays(10), "A", 10, "stems", "", ""))
@@ -136,7 +185,7 @@ class HarvestServiceTest {
         HarvestEntry existing = new HarvestEntry(
                 LocalDate.of(2026, 7, 10), "Nootka Rose", 40, "stems", "A", "am");
         existing.setId(3L);
-        when(repository.findById(3L)).thenReturn(Optional.of(existing));
+        when(repository.findByIdForUpdate(3L)).thenReturn(Optional.of(existing));
         when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(inventoryService.incrementQuantityByName(eq("Nootka Rose"), eq(20), eq("stems"), anyString()))
                 .thenReturn(new Item("Nootka Rose", "Flowers/Plants", 0, "stems", 0, 60, ""));
@@ -157,7 +206,7 @@ class HarvestServiceTest {
         HarvestEntry existing = new HarvestEntry(
                 LocalDate.of(2026, 7, 10), "Nootka Rose", 30, "stems", "A", "");
         existing.setId(4L);
-        when(repository.findById(4L)).thenReturn(Optional.of(existing));
+        when(repository.findByIdForUpdate(4L)).thenReturn(Optional.of(existing));
         when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(inventoryService.decrementQuantityByName("Nootka Rose", 30))
                 .thenReturn(Optional.of(new Item("Nootka Rose", "Flowers/Plants", 0, "stems", 0, 0, "")));
@@ -176,7 +225,7 @@ class HarvestServiceTest {
     @Test
     @DisplayName("filter() applies crop and date bounds")
     void filter() {
-        when(repository.findAllByOrderByHarvestDateDescIdDesc()).thenReturn(List.of(
+        when(repository.findAllNewestFirst()).thenReturn(List.of(
                 new HarvestEntry(LocalDate.of(2026, 7, 1), "Nootka Rose", 10, "stems", "", ""),
                 new HarvestEntry(LocalDate.of(2026, 7, 5), "Dahlia", 5, "stems", "", ""),
                 new HarvestEntry(LocalDate.of(2026, 7, 8), "Nootka Rose", 20, "stems", "", "")
@@ -190,7 +239,7 @@ class HarvestServiceTest {
     @Test
     @DisplayName("filter() applies bed substring")
     void filterByBed() {
-        when(repository.findAllByOrderByHarvestDateDescIdDesc()).thenReturn(List.of(
+        when(repository.findAllNewestFirst()).thenReturn(List.of(
                 new HarvestEntry(LocalDate.of(2026, 7, 8), "Nootka Rose", 20, "stems", "Bed A", ""),
                 new HarvestEntry(LocalDate.of(2026, 7, 8), "Dahlia", 5, "stems", "Bed B", "")
         ));
@@ -202,7 +251,7 @@ class HarvestServiceTest {
     @Test
     @DisplayName("filter() applies notes substring")
     void filterByNotes() {
-        when(repository.findAllByOrderByHarvestDateDescIdDesc()).thenReturn(List.of(
+        when(repository.findAllNewestFirst()).thenReturn(List.of(
                 new HarvestEntry(LocalDate.of(2026, 7, 8), "Nootka Rose", 20, "stems", "A", "morning cut"),
                 new HarvestEntry(LocalDate.of(2026, 7, 8), "Dahlia", 5, "stems", "B", "evening only")
         ));
@@ -222,11 +271,9 @@ class HarvestServiceTest {
         when(inventoryService.incrementQuantityByName(anyString(), anyInt(), anyString(), anyString()))
                 .thenReturn(new Item("x", "Flowers/Plants", 0, "stems", 0, 1, ""));
 
-        List<HarvestEntry> saved = service.addBatch(java.util.Arrays.asList(
+        List<HarvestEntry> saved = service.addBatch(List.of(
                 new HarvestEntry(LocalDate.now(), "Nootka Rose", 10, "stems", "A", ""),
-                new HarvestEntry(LocalDate.now(), "Dahlia", 5, "stems", "B", ""),
-                null, // skipped
-                new HarvestEntry(LocalDate.now(), "SkipZero", 0, "stems", "", "") // skipped qty ≤ 0
+                new HarvestEntry(LocalDate.now(), "Dahlia", 5, "stems", "B", "")
         ));
 
         assertThat(saved).hasSize(2);
@@ -238,19 +285,30 @@ class HarvestServiceTest {
     }
 
     @Test
-    @DisplayName("addBatch() rejects empty / all-invalid")
+    @DisplayName("addBatch() rejects empty or invalid batches without partial writes")
     void addBatchEmpty() {
         assertThatIllegalArgumentException().isThrownBy(() -> service.addBatch(List.of()));
         assertThatIllegalArgumentException().isThrownBy(() -> service.addBatch(null));
-        assertThatIllegalArgumentException().isThrownBy(() -> service.addBatch(List.of(
-                new HarvestEntry(LocalDate.now(), "OnlyZero", 0, "stems", "", "")
-        )));
+        assertThatIllegalArgumentException().isThrownBy(() -> service.addBatch(
+                java.util.Arrays.asList(
+                        new HarvestEntry(LocalDate.now(), "Valid", 1, "stems", "", ""),
+                        null)));
+        verifyNoInteractions(repository, inventoryService, syncHistoryService);
+    }
+
+    @Test
+    @DisplayName("findBetween() bounds database query windows")
+    void findBetweenRejectsUnboundedRange() {
+        assertThatIllegalArgumentException().isThrownBy(() -> service.findBetween(
+                LocalDate.of(2000, 1, 1), LocalDate.of(2026, 1, 1)))
+                .withMessageContaining("10 years");
+        verifyNoInteractions(repository);
     }
 
     @Test
     @DisplayName("productionByBed aggregates qty and crops; blank bed is unassigned")
     void productionByBed() {
-        when(repository.findAllByOrderByHarvestDateDescIdDesc()).thenReturn(List.of(
+        when(repository.findAllNewestFirst()).thenReturn(List.of(
                 new HarvestEntry(LocalDate.of(2026, 7, 10), "Nootka Rose", 40, "stems", "Bed A", ""),
                 new HarvestEntry(LocalDate.of(2026, 7, 11), "Nootka Rose", 20, "stems", "Bed A", ""),
                 new HarvestEntry(LocalDate.of(2026, 7, 11), "Dahlia", 15, "stems", "Bed C", ""),
@@ -289,7 +347,7 @@ class HarvestServiceTest {
     @Test
     @DisplayName("buildHarvestLogReport chronological + by-crop PDF")
     void harvestLogReportAndPdf() {
-        when(repository.findByHarvestDateBetweenOrderByHarvestDateDescIdDesc(any(), any()))
+        when(repository.findBetween(any(), any()))
                 .thenReturn(List.of(
                         new HarvestEntry(LocalDate.of(2026, 7, 12), "Dahlia", 15, "stems", "Bed C", ""),
                         new HarvestEntry(LocalDate.of(2026, 7, 10), "Nootka Rose", 40, "stems", "Bed A", "am cut"),
@@ -320,7 +378,7 @@ class HarvestServiceTest {
     @DisplayName("dailyQuantitiesLast7Days buckets by day oldest→today")
     void dailyQuantities() {
         LocalDate today = LocalDate.now();
-        when(repository.findByHarvestDateBetweenOrderByHarvestDateDescIdDesc(any(), any()))
+        when(repository.findBetween(any(), any()))
                 .thenReturn(List.of(
                         new HarvestEntry(today, "A", 10, "stems", "", ""),
                         new HarvestEntry(today.minusDays(2), "B", 7, "stems", "", ""),
@@ -339,7 +397,7 @@ class HarvestServiceTest {
         java.nio.file.Path tmp = java.nio.file.Files.createTempFile("harvest-export", ".csv");
         HarvestEntry a = new HarvestEntry(LocalDate.of(2026, 7, 1), "Nootka Rose", 12.5, "stems", "Bed A", "am cut");
         a.setId(1L);
-        when(repository.findAllByOrderByHarvestDateDescIdDesc()).thenReturn(List.of(a));
+        when(repository.findAllNewestFirst()).thenReturn(List.of(a));
 
         service.exportToCsv(tmp.toString());
         String body = java.nio.file.Files.readString(tmp);

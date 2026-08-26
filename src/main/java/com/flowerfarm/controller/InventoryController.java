@@ -1,14 +1,15 @@
 package com.flowerfarm.controller;
 
 import com.flowerfarm.model.Item;
+import com.flowerfarm.service.ExportPathResolver;
 import com.flowerfarm.service.InventoryService;
 import com.flowerfarm.service.InventoryService.LowStockReport;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 
@@ -33,9 +34,12 @@ import java.util.Map;
 public class InventoryController {
 
     private final InventoryService inventoryService;
+    private final ExportPathResolver exportPathResolver;
 
-    public InventoryController(InventoryService inventoryService) {
+    public InventoryController(InventoryService inventoryService,
+                               ExportPathResolver exportPathResolver) {
         this.inventoryService = inventoryService;
+        this.exportPathResolver = exportPathResolver;
     }
 
     /** Returns all inventory items as a JSON array (ordered by id). */
@@ -73,10 +77,7 @@ public class InventoryController {
         LowStockReport report = inventoryService.buildLowStockReport(threshold);
         byte[] pdf = inventoryService.generateLowStockPdf(report);
         String filename = "low-stock-reorder-" + report.date() + ".pdf";
-        return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
-                .contentType(MediaType.APPLICATION_PDF)
-                .body(pdf);
+        return DownloadResponse.pdf(pdf, filename);
     }
 
     /**
@@ -101,10 +102,7 @@ public class InventoryController {
         var report = inventoryService.buildPriceListReport(inStockOnly);
         byte[] pdf = inventoryService.generatePriceListPdf(report);
         String filename = "price-list-" + report.date() + ".pdf";
-        return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
-                .contentType(MediaType.APPLICATION_PDF)
-                .body(pdf);
+        return DownloadResponse.pdf(pdf, filename);
     }
 
     /** Returns items matching the search query (name or category). */
@@ -116,84 +114,56 @@ public class InventoryController {
     /** Returns a single item by database id. */
     @GetMapping("/by-id/{id}")
     public ResponseEntity<?> getById(@PathVariable Long id) {
-        return inventoryService.findById(id)
-                .<ResponseEntity<?>>map(ResponseEntity::ok)
-                .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND)
-                        .body(Map.of("error", "No inventory item with id=" + id)));
+        Item item = inventoryService.findById(id)
+                .orElseThrow(() -> new IndexOutOfBoundsException(
+                        "No inventory item with id=" + id));
+        return ResponseEntity.ok(item);
     }
 
     /** Adds a new item from the JSON body. Returns 201 Created with the persisted item (incl. id). */
     @PostMapping
     public ResponseEntity<?> addItem(@RequestBody Item item) {
-        try {
-            Item saved = inventoryService.addItem(item);
-            return ResponseEntity.status(HttpStatus.CREATED).body(saved);
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
-        }
+        Item saved = inventoryService.addItem(item);
+        return ResponseEntity.status(HttpStatus.CREATED).body(saved);
     }
 
     /** Replaces the item at {@code index} with the JSON body. Returns 200 OK. */
     @PutMapping("/{index}")
     public ResponseEntity<?> editItem(@PathVariable int index, @RequestBody Item item) {
-        try {
-            Item saved = inventoryService.editItem(index, item);
-            return ResponseEntity.ok(saved);
-        } catch (IndexOutOfBoundsException e) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", e.getMessage()));
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
-        }
+        return ResponseEntity.ok(inventoryService.editItem(index, item));
     }
 
     /** Replaces the item with the given database id. Preferred over index-based edit. */
     @PutMapping("/by-id/{id}")
     public ResponseEntity<?> updateById(@PathVariable Long id, @RequestBody Item item) {
-        try {
-            Item saved = inventoryService.updateById(id, item);
-            return ResponseEntity.ok(saved);
-        } catch (IndexOutOfBoundsException e) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", e.getMessage()));
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
-        }
+        return ResponseEntity.ok(inventoryService.updateById(id, item));
     }
 
     /** Deletes the item at {@code index}. Returns 204 No Content. */
     @DeleteMapping("/{index}")
     public ResponseEntity<?> deleteItem(@PathVariable int index) {
-        try {
-            inventoryService.deleteItem(index);
-            return ResponseEntity.noContent().build();
-        } catch (IndexOutOfBoundsException e) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", e.getMessage()));
-        }
+        inventoryService.deleteItem(index);
+        return ResponseEntity.noContent().build();
     }
 
     /** Deletes the item with the given database id. Preferred over index-based delete. */
     @DeleteMapping("/by-id/{id}")
     public ResponseEntity<?> deleteById(@PathVariable Long id) {
-        try {
-            inventoryService.deleteById(id);
-            return ResponseEntity.noContent().build();
-        } catch (IndexOutOfBoundsException e) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", e.getMessage()));
-        }
+        inventoryService.deleteById(id);
+        return ResponseEntity.noContent().build();
     }
 
     /**
-     * Triggers a server-side CSV export to {@code exported_inventory.csv}.
+     * Triggers a server-side CSV export beneath the configured export directory.
      * Returns 200 OK with a confirmation message, or 500 if the write fails.
      */
     @PostMapping("/export")
-    public ResponseEntity<Map<String, String>> exportCsv() {
-        try {
-            inventoryService.exportToCsv("exported_inventory.csv");
-            return ResponseEntity.ok(Map.of("message", "Exported to exported_inventory.csv"));
-        } catch (IllegalStateException e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of("error", e.getMessage()));
-        }
+    public ResponseEntity<Map<String, String>> exportCsv(
+            @RequestParam(value = "filename", defaultValue = "exported_inventory.csv")
+            String filename) {
+        Path exportPath = exportPathResolver.resolveCsv(filename, "exported_inventory.csv");
+        inventoryService.exportToCsv(exportPath.toString());
+        return ResponseEntity.ok(Map.of("message", "Exported inventory to " + filename));
     }
 
     /**
@@ -202,20 +172,16 @@ public class InventoryController {
      */
     @PostMapping("/sample-rose")
     public ResponseEntity<?> addSampleRose() {
-        try {
-            Item rose = new Item(
-                    "Nootka Rose",
-                    "Flowers/Plants",
-                    3.50,
-                    "Per Stem",
-                    2.00,
-                    50,
-                    "Native PNW rose, pink blooms, hardy in wet soils"
-            );
-            Item saved = inventoryService.addItem(rose);
-            return ResponseEntity.status(HttpStatus.CREATED).body(saved);
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
-        }
+        Item rose = new Item(
+                "Nootka Rose",
+                "Flowers/Plants",
+                3.50,
+                "Per Stem",
+                2.00,
+                50,
+                "Native PNW rose, pink blooms, hardy in wet soils"
+        );
+        Item saved = inventoryService.addItem(rose);
+        return ResponseEntity.status(HttpStatus.CREATED).body(saved);
     }
 }

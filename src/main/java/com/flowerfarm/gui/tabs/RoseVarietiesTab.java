@@ -1,11 +1,17 @@
 package com.flowerfarm.gui.tabs;
 
+import com.flowerfarm.gui.FarmUi;
 import com.flowerfarm.gui.GuiPermissions;
 import com.flowerfarm.model.Item;
 import com.flowerfarm.service.InventoryService;
 
 import javax.swing.*;
+import javax.swing.event.DocumentEvent;
+import javax.swing.event.DocumentListener;
+import javax.swing.table.DefaultTableModel;
+import javax.swing.table.TableRowSorter;
 import java.awt.*;
+import java.util.Locale;
 
 /**
  * Rose varieties reference tab with a one-click "add sample Nootka Rose" action.
@@ -15,11 +21,37 @@ import java.awt.*;
  */
 public class RoseVarietiesTab implements FlowerFarmTab {
 
+    private static final Object[][] VARIETIES = {
+            {"One-time", "Alba Maxima", "Shade and fragrance", "White, hardy"},
+            {"One-time", "Ispahan", "Dry sites and scent", "Pink Damask"},
+            {"One-time", "Charles de Mills", "Compact beds", "Crimson Gallica"},
+            {"One-time", "Fantin Latour", "Full romantic blooms", "Pink Centifolia"},
+            {"One-time", "William Lobb", "Vigorous hedges", "Purple Moss rose"},
+            {"Repeat", "Zephirine Drouhin", "Shaded climbing", "Pink, thornless"},
+            {"Repeat", "Reine des Violettes", "Fragrant cutting", "Purple recurrent"},
+            {"Repeat", "Comte de Chambord", "Compact cutting beds", "Pink, spicy scent"},
+            {"Native / regional", "Nootka Rose", "Wet soils and wildlife", "Native pink"},
+            {"Native / regional", "Baldhip Rose", "Woodland shade", "Native, small hips"},
+            {"Native / regional", "Cluster Rose", "Erosion control", "Native pink clusters"},
+            {"Native / regional", "Rosa rugosa Hansa", "Salt and exposed sites", "Rugged purple"},
+            {"Native / regional", "New Dawn Climber", "Trellises", "Blackspot-resistant"},
+            {"Native / regional", "Queen Elizabeth", "Tall cutting rows", "Hardy pink"},
+            {"Native / regional", "Strawberry Hill", "Fragrant climbing", "David Austin pink"},
+            {"Native / regional", "Munstead Wood", "Dark fragrant cuts", "Deep red"},
+            {"Native / regional", "Harison's Yellow", "Dry shrub borders",
+                    "Yellow, drought tolerant"}
+    };
+
     private final InventoryService inventoryService;
     private final TabHost host;
 
     private JPanel panel;
     private JButton sampleButton;
+    private JButton openInventoryButton;
+    private JLabel sampleStatusLabel;
+    private boolean canWrite = true;
+    private boolean savingSample;
+    private boolean sampleAvailable = true;
 
     public RoseVarietiesTab(InventoryService inventoryService, TabHost host) {
         this.inventoryService = inventoryService;
@@ -46,86 +78,234 @@ public class RoseVarietiesTab implements FlowerFarmTab {
 
     @Override
     public void applyRolePermissions(boolean canWrite) {
-        GuiPermissions.setWritable(canWrite, sampleButton);
+        this.canWrite = canWrite;
+        GuiPermissions.setWritable(canWrite && !savingSample && sampleAvailable, sampleButton);
     }
 
     private void buildUI() {
-        panel = new JPanel(new BorderLayout());
+        panel = FarmUi.page();
 
-        JTextArea roseText = new JTextArea(getRoseSuggestionsText());
-        roseText.setEditable(false);
-        roseText.setLineWrap(true);
-        roseText.setWrapStyleWord(true);
-        roseText.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 13));
-        roseText.setCaretPosition(0);
-        panel.add(new JScrollPane(roseText), BorderLayout.CENTER);
-
-        JPanel south = new JPanel(new FlowLayout(FlowLayout.LEFT));
-        sampleButton = new JButton("Add Sample Nootka Rose to Inventory");
-        sampleButton.addActionListener(e -> addSampleRose());
-        JButton visualizer = new JButton("Open Rose Visualizer (L-Systems)");
-        visualizer.setToolTipText("Generative growth habits for Nootka, rugosa, Bourbon, climbers…");
-        visualizer.addActionListener(e -> {
+        sampleButton = FarmUi.primaryButton("Add sample Nootka Rose");
+        sampleButton.setName("rose.addSample");
+        sampleButton.setToolTipText("Add a ready-to-edit native rose product to inventory.");
+        sampleButton.addActionListener(event -> addSampleRose());
+        sampleStatusLabel = FarmUi.statusBadge("Inventory sample ready", FarmUi.Tone.NEUTRAL);
+        sampleStatusLabel.setName("rose.sampleStatus");
+        sampleStatusLabel.getAccessibleContext().setAccessibleName(
+                "Rose sample inventory status");
+        openInventoryButton = FarmUi.secondaryButton("Open Inventory");
+        openInventoryButton.setToolTipText(
+                "Review or edit Nootka Rose and other flower products in Inventory.");
+        openInventoryButton.addActionListener(event -> {
+            if (host != null) {
+                host.selectTab("Inventory");
+                host.setStatus("Opened Inventory from the rose variety guide.");
+            }
+        });
+        JButton visualizer = FarmUi.secondaryButton("Open Rose Visualizer");
+        visualizer.setToolTipText(
+                "Explore generative growth habits for Nootka, rugosa, Bourbon, and climbers.");
+        visualizer.addActionListener(event -> {
             if (host != null) {
                 host.selectTab("Rose Visualizer");
                 host.setStatus("Rose Visualizer — grow & mutate PNW rose L-Systems.");
             }
         });
-        south.add(sampleButton);
-        south.add(visualizer);
-        panel.add(south, BorderLayout.SOUTH);
+        panel.add(FarmUi.pageHeader(
+                "Rose varieties",
+                "Field notes for resilient roses west of the Cascades",
+                FarmUi.toolbar(sampleButton, sampleStatusLabel,
+                        openInventoryButton, visualizer)), BorderLayout.NORTH);
+
+        DefaultTableModel model = new DefaultTableModel(
+                new String[]{"Bloom habit", "Variety", "Best for", "Field notes"}, 0) {
+            @Override
+            public boolean isCellEditable(int row, int column) {
+                return false;
+            }
+        };
+        for (Object[] variety : VARIETIES) {
+            model.addRow(variety);
+        }
+        JTable roseTable = new JTable(model);
+        roseTable.setName("rose.varieties.guide");
+        FarmUi.configureTable(roseTable, "Pacific Northwest rose variety table");
+        TableRowSorter<DefaultTableModel> sorter = new TableRowSorter<>(model);
+        roseTable.setRowSorter(sorter);
+        roseTable.getColumnModel().getColumn(0).setPreferredWidth(120);
+        roseTable.getColumnModel().getColumn(1).setPreferredWidth(180);
+        roseTable.getColumnModel().getColumn(2).setPreferredWidth(220);
+        roseTable.getColumnModel().getColumn(3).setPreferredWidth(220);
+
+        JTextField search = FarmUi.searchField(
+                "Rose variety search", "Search variety, habit, or field use", 24);
+        FarmUi.initialFocus(search);
+        JComboBox<String> habit = new JComboBox<>(new String[]{
+                "All bloom habits", "One-time", "Repeat", "Native / regional"});
+        habit.getAccessibleContext().setAccessibleName("Rose bloom habit filter");
+        JLabel results = FarmUi.statusBadge(
+                VARIETIES.length + " varieties", FarmUi.Tone.INFO);
+        Runnable applyFilter = () -> {
+            String query = search.getText().trim().toLowerCase(Locale.ROOT);
+            String selectedHabit = String.valueOf(habit.getSelectedItem());
+            sorter.setRowFilter(new RowFilter<>() {
+                @Override
+                public boolean include(
+                        Entry<? extends DefaultTableModel, ? extends Integer> entry) {
+                    boolean habitMatches = selectedHabit.startsWith("All")
+                            || selectedHabit.equals(entry.getStringValue(0));
+                    boolean textMatches = query.isBlank();
+                    for (int column = 0;
+                         column < entry.getValueCount() && !textMatches; column++) {
+                        textMatches = entry.getStringValue(column)
+                                .toLowerCase(Locale.ROOT).contains(query);
+                    }
+                    return habitMatches && textMatches;
+                }
+            });
+            FarmUi.updateStatusBadge(results,
+                    roseTable.getRowCount() + " varieties", FarmUi.Tone.INFO);
+        };
+        search.getDocument().addDocumentListener(new DocumentListener() {
+            @Override public void insertUpdate(DocumentEvent event) { applyFilter.run(); }
+            @Override public void removeUpdate(DocumentEvent event) { applyFilter.run(); }
+            @Override public void changedUpdate(DocumentEvent event) { applyFilter.run(); }
+        });
+        habit.addActionListener(event -> applyFilter.run());
+        JButton clear = FarmUi.secondaryButton("Clear filters");
+        clear.addActionListener(event -> {
+            search.setText("");
+            habit.setSelectedIndex(0);
+        });
+        JPanel filters = FarmUi.toolbar(
+                new JLabel("Search:"), search,
+                new JLabel("Bloom habit:"), habit, clear, results);
+        JPanel content = new JPanel(new BorderLayout(0, FarmUi.SECTION_GAP));
+        content.setOpaque(false);
+        content.add(FarmUi.section(
+                "Find a resilient rose",
+                "Filter by bloom habit or search the variety, field use, and notes.",
+                filters), BorderLayout.NORTH);
+        content.add(FarmUi.section(
+                "Regional variety guide",
+                "Compare disease resilience, shade tolerance, wet-soil fit, and cutting use.",
+                FarmUi.tableScroll(roseTable)), BorderLayout.CENTER);
+        panel.add(content, BorderLayout.CENTER);
     }
 
     private void addSampleRose() {
+        if (savingSample || !sampleAvailable) {
+            return;
+        }
         if (!GuiPermissions.requireWrite(host, panel, "add sample inventory items")) {
             return;
         }
-        try {
-            inventoryService.addItem(new Item(
-                    "Nootka Rose", "Flowers/Plants", 3.50, "Per Stem", 2.00, 50,
-                    "Native PNW rose, pink blooms, hardy in wet soils"));
-            if (host != null) {
-                host.refreshAll();
-                host.setStatus("Sample rose added: Nootka Rose.");
+        startAddSampleRose();
+    }
+
+    void startAddSampleRose() {
+        if (savingSample || !sampleAvailable) {
+            return;
+        }
+        savingSample = true;
+        applyRolePermissions(canWrite);
+        showSampleState("Checking Inventory…",
+                "Looking for an existing Nootka Rose before adding the sample in the background.",
+                FarmUi.Tone.INFO);
+        if (host != null) {
+            host.setStatus("Checking Inventory before adding the Nootka Rose sample…");
+        }
+        Item sample = new Item(
+                "Nootka Rose", "Flowers/Plants", 3.50, "Per Stem", 2.00, 50,
+                "Native PNW rose, pink blooms, hardy in wet soils");
+
+        new SwingWorker<SampleResult, Void>() {
+            @Override
+            protected SampleResult doInBackground() {
+                boolean exists = inventoryService.getAllItems().stream()
+                        .anyMatch(item -> "Nootka Rose".equalsIgnoreCase(item.getName()));
+                if (exists) {
+                    return new SampleResult(false);
+                }
+                inventoryService.addItem(sample);
+                return new SampleResult(true);
             }
-            JOptionPane.showMessageDialog(panel, "Nootka Rose added to inventory.",
-                    "Success", JOptionPane.INFORMATION_MESSAGE);
-        } catch (IllegalArgumentException ex) {
-            JOptionPane.showMessageDialog(panel, "Error: " + ex.getMessage(),
-                    "Add Error", JOptionPane.ERROR_MESSAGE);
+
+            @Override
+            protected void done() {
+                try {
+                    completeSampleSave(get());
+                } catch (InterruptedException exception) {
+                    Thread.currentThread().interrupt();
+                    failSampleSave(exception);
+                } catch (java.util.concurrent.ExecutionException exception) {
+                    failSampleSave(exception.getCause() == null
+                            ? exception : exception.getCause());
+                } catch (RuntimeException exception) {
+                    failSampleSave(exception);
+                }
+            }
+        }.execute();
+    }
+
+    private void completeSampleSave(SampleResult result) {
+        savingSample = false;
+        sampleAvailable = false;
+        sampleButton.setText(result.added() ? "Nootka Rose added" : "Already in Inventory");
+        applyRolePermissions(canWrite);
+        String status = result.added()
+                ? "Nootka Rose added · open Inventory to edit"
+                : "Nootka Rose already exists · open Inventory to review";
+        showSampleState(status,
+                result.added()
+                        ? "The sample was saved once. Open Inventory to adjust quantity, price, or notes."
+                        : "No duplicate was added. Open Inventory to review the existing product.",
+                result.added() ? FarmUi.Tone.SUCCESS : FarmUi.Tone.INFO);
+        String refreshGuidance = "";
+        if (host != null) {
+            try {
+                host.refreshAll();
+            } catch (RuntimeException refreshFailure) {
+                refreshGuidance = " Refresh Inventory manually. "
+                        + FarmUi.actionableError("Refreshing the saved rose", refreshFailure);
+            }
+            host.setStatus((result.added()
+                    ? "Nootka Rose added to Inventory."
+                    : "Nootka Rose is already in Inventory; no duplicate was added.")
+                    + refreshGuidance);
+        }
+        if (panel.isShowing()) {
+            JOptionPane.showMessageDialog(panel,
+                    result.added()
+                            ? "Nootka Rose was added to Inventory.\nOpen Inventory to edit its details."
+                            : "Nootka Rose is already in Inventory.\nNo duplicate was added.",
+                    result.added() ? "Sample added" : "Already in Inventory",
+                    JOptionPane.INFORMATION_MESSAGE);
         }
     }
 
-    private String getRoseSuggestionsText() {
-        return """
-                Rose Varieties — Oregon & Western Washington West of the Cascades
-                ──────────────────────────────────────────────────────────────────
-
-                ONE-TIME BLOOMERS (from course slides)
-                  Alba       → Alba Maxima: White, fragrant, hardy in shade.
-                  Damask     → Ispahan: Pink, strong scent, drought-tolerant.
-                  Gallicas   → Charles de Mills: Crimson, compact shrub.
-                  Centifolia → Fantin Latour: Pink, very full blooms.
-                  Moss       → William Lobb: Purple, mossy buds, vigorous.
-
-                REPEAT BLOOMERS (from course slides)
-                  Bourbon          → Zephirine Drouhin: Pink climber, thornless, shade-tolerant.
-                  Hybrid Perpetual → Reine des Violettes: Purple, recurrent, fragrant.
-                  Portland         → Comte de Chambord: Pink, compact, spicy scent.
-
-                REGIONAL / NATIVE (Hardy, Disease-Resistant for PNW)
-                  Nootka Rose (Rosa nutkana)     — Native, pink, wildlife-friendly, tolerates wet soils.
-                  Baldhip Rose (Rosa gymnocarpa) — Native, pink, small hips, shade-loving.
-                  Cluster Rose (Rosa pisocarpa)  — Native, pink clusters, good for erosion control.
-                  Rosa rugosa Hansa              — Purple, rugged, salt-tolerant.
-                  New Dawn Climber               — Light pink, vigorous, blackspot-resistant.
-                  Queen Elizabeth Hybrid Tea     — Pink, tall, hearty.
-                  Strawberry Hill (D.Austin)     — Pink climber, fragrant.
-                  Munstead Wood (D.Austin)       — Rich dark red, OGR-type fragrance.
-                  Harison's Yellow Shrub         — Yellow, drought-tolerant.
-
-                TIP: For humid PNW conditions choose disease-resistant varieties (rugosas,
-                Nootka). Consult Portland Nursery or Swansons (Seattle) for availability.
-                """;
+    private void failSampleSave(Throwable failure) {
+        savingSample = false;
+        applyRolePermissions(canWrite);
+        String guidance = FarmUi.actionableError("Adding the Nootka Rose sample", failure);
+        showSampleState("Sample not added · retry",
+                guidance + " The variety guide and filters were kept.", FarmUi.Tone.DANGER);
+        if (host != null) {
+            host.setStatus(guidance + " The sample button is ready to retry.");
+        }
+        if (panel.isShowing()) {
+            JOptionPane.showMessageDialog(panel, guidance, "Sample not added",
+                    JOptionPane.ERROR_MESSAGE);
+        }
     }
+
+    private void showSampleState(String message, String description, FarmUi.Tone tone) {
+        FarmUi.updateStatusBadge(sampleStatusLabel, message, tone);
+        sampleStatusLabel.setToolTipText(description);
+        sampleStatusLabel.getAccessibleContext().setAccessibleDescription(description);
+    }
+
+    private record SampleResult(boolean added) {
+    }
+
 }

@@ -34,8 +34,11 @@ jobs:
         id: jar
         run: |
           JAR=$(ls target/flowerfarm-manager-*.jar | grep -v '\.original$' | head -n1)
+          test -s target/bom.json
+          test -s target/bom.xml
           echo "path=$JAR" >> "$GITHUB_OUTPUT"
           echo "name=$(basename "$JAR")" >> "$GITHUB_OUTPUT"
+          sha256sum "$JAR" target/bom.json target/bom.xml > target/SHA256SUMS.txt
           ls -la "$JAR"
 
       - name: Create GitHub Release
@@ -46,6 +49,7 @@ jobs:
             ${{ steps.jar.outputs.path }}
             target/bom.json
             target/bom.xml
+            target/SHA256SUMS.txt
           body: |
             ## FlowersForever ${{ github.ref_name }}
 
@@ -60,7 +64,9 @@ jobs:
             Headless REST-only container:
 
             ```bash
-            docker run -p 8080:8080 ghcr.io/${{ github.repository_owner }}/flowersforever:${{ github.ref_name }}
+            docker run -p 8080:8080 \
+              -e FLOWERFARM_AUTH_USERS='owner:replace-with-a-long-password:OWNER' \
+              ghcr.io/${{ github.repository_owner }}/flowersforever:${{ github.ref_name }}
             ```
 
             Native installers (MSI / DMG) are attached by the Installers workflow.

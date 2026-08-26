@@ -4,6 +4,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 
 @DisplayName("FarmUserDirectory")
 class FarmUserDirectoryTest {
@@ -31,5 +32,19 @@ class FarmUserDirectoryTest {
         assertThat(dir.listUsers()).hasSize(1);
         assertThat(dir.authenticate("solo", "secret".toCharArray())).isPresent()
                 .get().extracting(FarmUser::role).isEqualTo(FarmRole.OWNER);
+    }
+
+    @Test
+    @DisplayName("rejects malformed, duplicate, and unknown-role account configuration")
+    void rejectsUnsafeConfiguration() {
+        assertThatIllegalArgumentException().isThrownBy(() ->
+                new FarmUserDirectory("owner:secret:ADMIN", "x", "y"))
+                .withMessageContaining("Unknown farm role");
+        assertThatIllegalArgumentException().isThrownBy(() ->
+                new FarmUserDirectory("owner:one:OWNER,OWNER:two:OWNER", "x", "y"))
+                .withMessageContaining("Duplicate");
+        assertThatIllegalArgumentException().isThrownBy(() ->
+                new FarmUserDirectory("broken-entry", "x", "y"))
+                .withMessageContaining("username:password");
     }
 }

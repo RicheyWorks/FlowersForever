@@ -1,7 +1,6 @@
 package com.flowerfarm.controller;
 
 import com.flowerfarm.auth.FarmRole;
-import com.flowerfarm.auth.FarmUser;
 import com.flowerfarm.auth.FarmUserDirectory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
@@ -11,6 +10,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -60,7 +60,8 @@ public class AuthController {
                 .map(a -> a.startsWith("ROLE_") ? a.substring(5) : a)
                 .collect(Collectors.toList());
         FarmRole role = roles.stream()
-                .map(FarmRole::fromString)
+                .flatMap(raw -> Arrays.stream(FarmRole.values())
+                        .filter(candidate -> candidate.name().equalsIgnoreCase(raw)))
                 .findFirst()
                 .orElse(FarmRole.VIEWER);
         body.put("authenticated", true);

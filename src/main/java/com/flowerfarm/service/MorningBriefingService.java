@@ -121,8 +121,6 @@ public class MorningBriefingService {
         MarketDayPlan pack = marketDayPackingService.planForDay(today);
         BedProductionReport beds = harvestService.productionByBedLast7Days();
         IrrigationAdvice water = irrigationAdvisorService.advise(preferLiveWeather);
-        InventoryService.InventoryKpiSnapshot inv =
-                inventoryService.inventoryKpis(DEFAULT_LOW_STOCK);
         OrderService.WeekRevenueSummary rev = orderService.weekRevenueSummary();
         double weekHarvest = harvestService.totalQuantityLast7Days();
 
@@ -236,7 +234,7 @@ public class MorningBriefingService {
                             ? "No CONFIRMED orders for today."
                             : pack.orderCount() + " order(s) · pipeline $"
                             + String.format(Locale.US, "%,.2f", pack.pipelineValue())
-                            + " · shortfalls " + pack.shortfallSkuCount(),
+                            + " · packing issues " + pack.shortfallSkuCount(),
                     body));
             if (pack.shortfallSkuCount() > 0) {
                 doc.add(Chunk.NEWLINE);
@@ -245,15 +243,19 @@ public class MorningBriefingService {
                 headerCell(t, "Product");
                 headerCell(t, "Need");
                 headerCell(t, "Stock");
-                headerCell(t, "Short");
+                headerCell(t, "Issue");
                 for (ProductNeed p : pack.pickList()) {
-                    if (!p.shortfall()) {
+                    if (!p.blockingIssue()) {
                         continue;
                     }
                     t.addCell(cell(p.productName(), body));
                     t.addCell(cell(String.format(Locale.US, "%.1f", p.neededQty()), body));
                     t.addCell(cell(String.valueOf(p.stockOnHand()), body));
-                    t.addCell(cell(String.format(Locale.US, "%.1f", p.shortfallQty()), body));
+                    t.addCell(cell(p.quantityInvalid()
+                            ? "Invalid quantity"
+                            : p.unitMismatch()
+                                    ? "Unit " + p.unit() + " / " + p.inventoryUnit()
+                                    : String.format(Locale.US, "%.1f", p.shortfallQty()), body));
                 }
                 doc.add(t);
             }
@@ -343,8 +345,11 @@ public class MorningBriefingService {
                     + String.format(Locale.US, "%,.2f", pack.pipelineValue()) + " pipeline).");
         }
         if (pack.shortfallSkuCount() > 0) {
+            boolean nonStockIssue = pack.pickList().stream().anyMatch(need ->
+                    need.unitMismatch() || need.quantityInvalid());
             actions.add("Resolve " + pack.shortfallSkuCount()
-                    + " packing shortfall SKU(s) before load-out.");
+                    + (nonStockIssue ? " packing issue SKU(s)" : " packing shortfall SKU(s)")
+                    + " before load-out.");
         }
         if (water.priority() == Priority.HIGH || water.priority() == Priority.MEDIUM) {
             actions.add("Water (" + water.priority().name() + "): " + water.headline());
@@ -396,13 +401,23 @@ public class MorningBriefingService {
         sb.append("MARKET DAY\n");
         sb.append("──────────\n");
         sb.append(String.format(Locale.US,
-                "  Orders: %d  ·  Pipeline $%,.2f  ·  Shortfalls: %d%n",
+                "  Orders: %d  ·  Pipeline $%,.2f  ·  Packing issues: %d%n",
                 pack.orderCount(), pack.pipelineValue(), pack.shortfallSkuCount()));
         for (ProductNeed p : pack.pickList()) {
-            if (p.shortfall()) {
-                sb.append(String.format(Locale.US,
-                        "  SHORT %-24s need %.1f stock %d%n",
-                        p.productName(), p.neededQty(), p.stockOnHand()));
+            if (p.blockingIssue()) {
+                if (p.quantityInvalid()) {
+                    sb.append(String.format(Locale.US,
+                            "  QTY   %-24s must round to at least 1 inventory unit%n",
+                            p.productName()));
+                } else if (p.unitMismatch()) {
+                    sb.append(String.format(Locale.US,
+                            "  UNIT  %-24s order %s inventory %s%n",
+                            p.productName(), p.unit(), p.inventoryUnit()));
+                } else {
+                    sb.append(String.format(Locale.US,
+                            "  SHORT %-24s need %.1f stock %d%n",
+                            p.productName(), p.neededQty(), p.stockOnHand()));
+                }
             }
         }
         sb.append('\n');

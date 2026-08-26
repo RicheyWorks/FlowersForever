@@ -85,6 +85,21 @@ class ConnectorResultTest {
         assertThat(result.getConnectorName()).isEqualTo("csv");
     }
 
+    @Test
+    @DisplayName("failure details redact credentials and remove line breaks")
+    void failureDetailsRedactSecrets() {
+        RuntimeException cause = new RuntimeException(
+                "GET https://user:pass@example.test/items?api-key=abc123\r\n"
+                        + "Authorization: Bearer top-secret");
+
+        ConnectorResult<Integer> result = ConnectorResult.fail("Remote call failed", cause);
+
+        assertThat(result.getErrorDetail())
+                .contains("api-key=[REDACTED]", "user:[REDACTED]@",
+                        "Authorization: Bearer [REDACTED]")
+                .doesNotContain("abc123", "pass@example", "top-secret", "\r", "\n");
+    }
+
     // ── unavailable() ────────────────────────────────────────────────────────
 
     @Test

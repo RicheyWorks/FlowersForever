@@ -5,8 +5,8 @@ import com.flowerfarm.connector.ConnectorResult;
 import com.flowerfarm.connector.SyncSummary;
 import com.flowerfarm.model.Item;
 import com.flowerfarm.model.SyncHistoryEntry;
+import com.flowerfarm.service.ExportPathResolver;
 import com.flowerfarm.service.SyncHistoryService;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.Map;
+import java.nio.file.Path;
 
 /**
  * REST API surface for the connector layer.
@@ -39,10 +40,14 @@ public class ConnectorController {
 
     private final ConnectorRegistry registry;
     private final SyncHistoryService syncHistoryService;
+    private final ExportPathResolver exportPathResolver;
 
-    public ConnectorController(ConnectorRegistry registry, SyncHistoryService syncHistoryService) {
+    public ConnectorController(ConnectorRegistry registry,
+                               SyncHistoryService syncHistoryService,
+                               ExportPathResolver exportPathResolver) {
         this.registry = registry;
         this.syncHistoryService = syncHistoryService;
+        this.exportPathResolver = exportPathResolver;
     }
 
     // ── Discovery ─────────────────────────────────────────────────────────────
@@ -87,19 +92,13 @@ public class ConnectorController {
             @RequestParam(value = "success", required = false) Boolean success,
             @RequestParam(value = "q", required = false) String query,
             @RequestParam(value = "limit", defaultValue = "500") int limit) {
-        try {
-            List<SyncHistoryEntry> rows = syncHistoryService.filter(
-                    connector, operation, success, query, limit);
-            syncHistoryService.exportToCsv(filename, rows);
-            return ResponseEntity.ok(Map.of(
-                    "message", "Exported " + rows.size() + " audit row(s) to " + filename,
-                    "rows", String.valueOf(rows.size())));
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
-        } catch (IllegalStateException e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of("error", e.getMessage()));
-        }
+        Path exportPath = exportPathResolver.resolveCsv(filename, "sync_history.csv");
+        List<SyncHistoryEntry> rows = syncHistoryService.filter(
+                connector, operation, success, query, limit);
+        syncHistoryService.exportToCsv(exportPath.toString(), rows);
+        return ResponseEntity.ok(Map.of(
+                "message", "Exported " + rows.size() + " audit row(s) to " + filename,
+                "rows", String.valueOf(rows.size())));
     }
 
     /** Audit history report JSON (same filters as {@code /history}). */
@@ -138,10 +137,7 @@ public class ConnectorController {
                 connector, operation, success, query, limit);
         byte[] pdf = syncHistoryService.generateAuditPdf(report);
         String filename = "audit-history-" + report.generatedOn() + ".pdf";
-        return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
-                .contentType(MediaType.APPLICATION_PDF)
-                .body(pdf);
+        return DownloadResponse.pdf(pdf, filename);
     }
 
     /** Clears the entire sync history audit log. */

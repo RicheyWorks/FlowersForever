@@ -1,15 +1,16 @@
 package com.flowerfarm.controller;
 
 import com.flowerfarm.model.HarvestEntry;
+import com.flowerfarm.service.ExportPathResolver;
 import com.flowerfarm.service.HarvestService;
 import org.springframework.format.annotation.DateTimeFormat;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 
@@ -35,9 +36,12 @@ import java.util.Map;
 public class HarvestController {
 
     private final HarvestService harvestService;
+    private final ExportPathResolver exportPathResolver;
 
-    public HarvestController(HarvestService harvestService) {
+    public HarvestController(HarvestService harvestService,
+                             ExportPathResolver exportPathResolver) {
         this.harvestService = harvestService;
+        this.exportPathResolver = exportPathResolver;
     }
 
     @GetMapping
@@ -49,11 +53,7 @@ public class HarvestController {
     public ResponseEntity<?> range(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
-        try {
-            return ResponseEntity.ok(harvestService.findBetween(from, to));
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
-        }
+        return ResponseEntity.ok(harvestService.findBetween(from, to));
     }
 
     @GetMapping("/search")
@@ -74,15 +74,10 @@ public class HarvestController {
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam(value = "to", required = false)
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
-        try {
-            if (from != null && to != null && to.isBefore(from)) {
-                return ResponseEntity.badRequest()
-                        .body(Map.of("error", "to date must be on or after from date."));
-            }
-            return ResponseEntity.ok(harvestService.filter(crop, bed, notes, from, to));
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        if (from != null && to != null && to.isBefore(from)) {
+            throw new IllegalArgumentException("to date must be on or after from date.");
         }
+        return ResponseEntity.ok(harvestService.filter(crop, bed, notes, from, to));
     }
 
     @GetMapping("/totals")
@@ -110,14 +105,10 @@ public class HarvestController {
             @RequestParam(value = "to", required = false)
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
             @RequestParam(value = "week", defaultValue = "false") boolean week) {
-        try {
-            HarvestService.BedProductionReport report = week
-                    ? harvestService.productionByBedLast7Days()
-                    : harvestService.productionByBed(from, to);
-            return ResponseEntity.ok(report.toMap());
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
-        }
+        HarvestService.BedProductionReport report = week
+                ? harvestService.productionByBedLast7Days()
+                : harvestService.productionByBed(from, to);
+        return ResponseEntity.ok(report.toMap());
     }
 
     @GetMapping(value = "/beds/text", produces = "text/plain")
@@ -127,14 +118,10 @@ public class HarvestController {
             @RequestParam(value = "to", required = false)
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
             @RequestParam(value = "week", defaultValue = "false") boolean week) {
-        try {
-            HarvestService.BedProductionReport report = week
-                    ? harvestService.productionByBedLast7Days()
-                    : harvestService.productionByBed(from, to);
-            return ResponseEntity.ok(report.plainText());
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
-        }
+        HarvestService.BedProductionReport report = week
+                ? harvestService.productionByBedLast7Days()
+                : harvestService.productionByBed(from, to);
+        return ResponseEntity.ok(report.plainText());
     }
 
     /** Printable bed / field production PDF. */
@@ -145,19 +132,12 @@ public class HarvestController {
             @RequestParam(value = "to", required = false)
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
             @RequestParam(value = "week", defaultValue = "false") boolean week) {
-        try {
-            HarvestService.BedProductionReport report = week
-                    ? harvestService.productionByBedLast7Days()
-                    : harvestService.productionByBed(from, to);
-            byte[] pdf = harvestService.generateBedProductionPdf(report);
-            String filename = "bed-production-" + report.to() + ".pdf";
-            return ResponseEntity.ok()
-                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
-                    .contentType(MediaType.APPLICATION_PDF)
-                    .body(pdf);
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
-        }
+        HarvestService.BedProductionReport report = week
+                ? harvestService.productionByBedLast7Days()
+                : harvestService.productionByBed(from, to);
+        byte[] pdf = harvestService.generateBedProductionPdf(report);
+        String filename = "bed-production-" + report.to() + ".pdf";
+        return DownloadResponse.pdf(pdf, filename);
     }
 
     /**
@@ -171,14 +151,10 @@ public class HarvestController {
             @RequestParam(value = "to", required = false)
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
             @RequestParam(value = "week", defaultValue = "false") boolean week) {
-        try {
-            HarvestService.HarvestLogReport report = week
-                    ? harvestService.buildHarvestLogReportLast7Days()
-                    : harvestService.buildHarvestLogReport(from, to);
-            return ResponseEntity.ok(report.toMap());
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
-        }
+        HarvestService.HarvestLogReport report = week
+                ? harvestService.buildHarvestLogReportLast7Days()
+                : harvestService.buildHarvestLogReport(from, to);
+        return ResponseEntity.ok(report.toMap());
     }
 
     @GetMapping(value = "/log/text", produces = MediaType.TEXT_PLAIN_VALUE)
@@ -188,14 +164,10 @@ public class HarvestController {
             @RequestParam(value = "to", required = false)
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
             @RequestParam(value = "week", defaultValue = "false") boolean week) {
-        try {
-            HarvestService.HarvestLogReport report = week
-                    ? harvestService.buildHarvestLogReportLast7Days()
-                    : harvestService.buildHarvestLogReport(from, to);
-            return ResponseEntity.ok(report.plainText());
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().body(e.getMessage());
-        }
+        HarvestService.HarvestLogReport report = week
+                ? harvestService.buildHarvestLogReportLast7Days()
+                : harvestService.buildHarvestLogReport(from, to);
+        return ResponseEntity.ok(report.plainText());
     }
 
     @GetMapping(value = "/log/report.pdf", produces = MediaType.APPLICATION_PDF_VALUE)
@@ -205,37 +177,26 @@ public class HarvestController {
             @RequestParam(value = "to", required = false)
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
             @RequestParam(value = "week", defaultValue = "false") boolean week) {
-        try {
-            HarvestService.HarvestLogReport report = week
-                    ? harvestService.buildHarvestLogReportLast7Days()
-                    : harvestService.buildHarvestLogReport(from, to);
-            byte[] pdf = harvestService.generateHarvestLogPdf(report);
-            String filename = "harvest-log-" + report.to() + ".pdf";
-            return ResponseEntity.ok()
-                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
-                    .contentType(MediaType.APPLICATION_PDF)
-                    .body(pdf);
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().body(null);
-        }
+        HarvestService.HarvestLogReport report = week
+                ? harvestService.buildHarvestLogReportLast7Days()
+                : harvestService.buildHarvestLogReport(from, to);
+        byte[] pdf = harvestService.generateHarvestLogPdf(report);
+        String filename = "harvest-log-" + report.to() + ".pdf";
+        return DownloadResponse.pdf(pdf, filename);
     }
 
     @GetMapping("/{id}")
     public ResponseEntity<?> get(@PathVariable Long id) {
-        return harvestService.findById(id)
-                .<ResponseEntity<?>>map(ResponseEntity::ok)
-                .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND)
-                        .body(Map.of("error", "No harvest entry with id=" + id)));
+        HarvestEntry entry = harvestService.findById(id)
+                .orElseThrow(() -> new IndexOutOfBoundsException(
+                        "No harvest entry with id=" + id));
+        return ResponseEntity.ok(entry);
     }
 
     @PostMapping
     public ResponseEntity<?> add(@RequestBody HarvestEntry entry) {
-        try {
-            HarvestEntry saved = harvestService.add(entry);
-            return ResponseEntity.status(HttpStatus.CREATED).body(saved);
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
-        }
+        HarvestEntry saved = harvestService.add(entry);
+        return ResponseEntity.status(HttpStatus.CREATED).body(saved);
     }
 
     /**
@@ -244,33 +205,19 @@ public class HarvestController {
      */
     @PostMapping("/batch")
     public ResponseEntity<?> addBatch(@RequestBody List<HarvestEntry> entries) {
-        try {
-            List<HarvestEntry> saved = harvestService.addBatch(entries);
-            return ResponseEntity.status(HttpStatus.CREATED).body(saved);
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
-        }
+        List<HarvestEntry> saved = harvestService.addBatch(entries);
+        return ResponseEntity.status(HttpStatus.CREATED).body(saved);
     }
 
     @PutMapping("/{id}")
     public ResponseEntity<?> update(@PathVariable Long id, @RequestBody HarvestEntry entry) {
-        try {
-            return ResponseEntity.ok(harvestService.update(id, entry));
-        } catch (IndexOutOfBoundsException e) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", e.getMessage()));
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
-        }
+        return ResponseEntity.ok(harvestService.update(id, entry));
     }
 
     @DeleteMapping("/{id}")
     public ResponseEntity<?> delete(@PathVariable Long id) {
-        try {
-            harvestService.delete(id);
-            return ResponseEntity.noContent().build();
-        } catch (IndexOutOfBoundsException e) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", e.getMessage()));
-        }
+        harvestService.delete(id);
+        return ResponseEntity.noContent().build();
     }
 
     /**
@@ -287,25 +234,19 @@ public class HarvestController {
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam(value = "to", required = false)
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
-        try {
-            boolean anyFilter = (crop != null && !crop.isBlank())
-                    || (bed != null && !bed.isBlank())
-                    || (notes != null && !notes.isBlank())
-                    || from != null || to != null;
-            if (anyFilter) {
-                List<HarvestEntry> filtered = harvestService.filter(crop, bed, notes, from, to);
-                harvestService.exportToCsv(filename, filtered);
-                return ResponseEntity.ok(Map.of(
-                        "message", "Exported " + filtered.size() + " filtered harvest row(s) to " + filename,
-                        "rows", String.valueOf(filtered.size())));
-            }
-            harvestService.exportToCsv(filename);
-            return ResponseEntity.ok(Map.of("message", "Exported harvest log to " + filename));
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
-        } catch (IllegalStateException e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of("error", e.getMessage()));
+        Path exportPath = exportPathResolver.resolveCsv(filename, "harvest_log.csv");
+        boolean anyFilter = (crop != null && !crop.isBlank())
+                || (bed != null && !bed.isBlank())
+                || (notes != null && !notes.isBlank())
+                || from != null || to != null;
+        if (anyFilter) {
+            List<HarvestEntry> filtered = harvestService.filter(crop, bed, notes, from, to);
+            harvestService.exportToCsv(exportPath.toString(), filtered);
+            return ResponseEntity.ok(Map.of(
+                    "message", "Exported " + filtered.size() + " filtered harvest row(s) to " + filename,
+                    "rows", String.valueOf(filtered.size())));
         }
+        harvestService.exportToCsv(exportPath.toString());
+        return ResponseEntity.ok(Map.of("message", "Exported harvest log to " + filename));
     }
 }

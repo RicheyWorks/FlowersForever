@@ -3,6 +3,7 @@ package com.flowerfarm.service;
 import com.flowerfarm.model.CustomerOrder;
 import com.flowerfarm.model.Item;
 import com.flowerfarm.model.OrderLine;
+import com.flowerfarm.util.InventoryUnits;
 import com.lowagie.text.Chunk;
 import com.lowagie.text.Document;
 import com.lowagie.text.DocumentException;
@@ -27,9 +28,12 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 
 /**
  * Market-morning packing list for Kitsap / Port Orchard growers.
@@ -42,6 +46,7 @@ import java.util.Map;
 public class MarketDayPackingService {
 
     private static final Logger log = LoggerFactory.getLogger(MarketDayPackingService.class);
+    private static final int MAX_WINDOW_DAYS = 366;
 
     private final OrderService orderService;
     private final InventoryService inventoryService;
@@ -56,19 +61,62 @@ public class MarketDayPackingService {
             String unit,
             double quantity,
             double unitPrice,
-            double lineTotal
-    ) {}
+            double lineTotal,
+            Long lineId
+    ) {
+        /** Compatibility constructor for plans that predate saved-line handoffs. */
+        public PackLine(String productName, String unit, double quantity,
+                        double unitPrice, double lineTotal) {
+            this(productName, unit, quantity, unitPrice, lineTotal, null);
+        }
+    }
 
     public record CustomerPack(
             long orderId,
             String customerName,
             String customerType,
+            String contactName,
+            String phone,
+            String email,
+            String accountNotes,
             String status,
             LocalDate orderDate,
             String notes,
             List<PackLine> lines,
-            double orderTotal
-    ) {}
+            double orderTotal,
+            String handoffType
+    ) {
+        public CustomerPack {
+            handoffType = CustomerOrder.normalizeHandoffType(handoffType);
+            lines = lines == null ? List.of() : List.copyOf(lines);
+            accountNotes = accountNotes == null ? "" : accountNotes;
+        }
+
+        /** Compatibility constructor for callers without customer account notes. */
+        public CustomerPack(long orderId, String customerName, String customerType,
+                            String contactName, String phone, String email, String status,
+                            LocalDate orderDate, String notes, List<PackLine> lines,
+                            double orderTotal, String handoffType) {
+            this(orderId, customerName, customerType, contactName, phone, email, "", status,
+                    orderDate, notes, lines, orderTotal, handoffType);
+        }
+
+        public CustomerPack(long orderId, String customerName, String customerType,
+                            String contactName, String phone, String email, String status,
+                            LocalDate orderDate, String notes, List<PackLine> lines,
+                            double orderTotal) {
+            this(orderId, customerName, customerType, contactName, phone, email, status,
+                    orderDate, notes, lines, orderTotal, "UNSPECIFIED");
+        }
+
+        /** Compatibility constructor for plans created without customer contact context. */
+        public CustomerPack(long orderId, String customerName, String customerType,
+                            String status, LocalDate orderDate, String notes,
+                            List<PackLine> lines, double orderTotal) {
+            this(orderId, customerName, customerType, "", "", "", status,
+                    orderDate, notes, lines, orderTotal, "UNSPECIFIED");
+        }
+    }
 
     public record ProductNeed(
             String productName,
@@ -76,8 +124,26 @@ public class MarketDayPackingService {
             double neededQty,
             int stockOnHand,
             boolean shortfall,
-            double shortfallQty
-    ) {}
+            double shortfallQty,
+            boolean unitMismatch,
+            String inventoryUnit,
+            boolean quantityInvalid
+    ) {
+        /** Compatibility constructor for stock-only packing needs. */
+        public ProductNeed(String productName, String unit, double neededQty,
+                           int stockOnHand, boolean shortfall, double shortfallQty) {
+            this(productName, unit, neededQty, stockOnHand, shortfall, shortfallQty,
+                    false, "", false);
+        }
+
+        public ProductNeed {
+            inventoryUnit = inventoryUnit == null ? "" : inventoryUnit;
+        }
+
+        public boolean blockingIssue() {
+            return shortfall || unitMismatch || quantityInvalid;
+        }
+    }
 
     public record MarketDayPlan(
             LocalDate marketDate,
@@ -89,8 +155,32 @@ public class MarketDayPackingService {
             List<CustomerPack> customers,
             List<ProductNeed> pickList,
             int shortfallSkuCount,
+            List<ProductNeed> confirmedPickList,
+            int confirmedShortfallSkuCount,
             String plainText
     ) {
+        /** Compatibility constructor for callers that provide a confirmed-only plan. */
+        public MarketDayPlan(LocalDate marketDate, LocalDate from, LocalDate to, String scope,
+                             int orderCount, double pipelineValue,
+                             List<CustomerPack> customers, List<ProductNeed> pickList,
+                             int shortfallSkuCount, String plainText) {
+            this(marketDate, from, to, scope, orderCount, pipelineValue, customers,
+                    pickList, shortfallSkuCount, pickList, shortfallSkuCount, plainText);
+        }
+
+        public int confirmedOrderCount() {
+            return (int) customers.stream()
+                    .filter(customer -> "CONFIRMED".equalsIgnoreCase(customer.status()))
+                    .count();
+        }
+
+        public double confirmedValue() {
+            return round2(customers.stream()
+                    .filter(customer -> "CONFIRMED".equalsIgnoreCase(customer.status()))
+                    .mapToDouble(CustomerPack::orderTotal)
+                    .sum());
+        }
+
         public Map<String, Object> toMap() {
             Map<String, Object> m = new LinkedHashMap<>();
             m.put("marketDate", marketDate.toString());
@@ -100,23 +190,23 @@ public class MarketDayPackingService {
             m.put("orderCount", orderCount);
             m.put("pipelineValue", pipelineValue);
             m.put("shortfallSkuCount", shortfallSkuCount);
-            m.put("pickList", pickList.stream().map(p -> {
-                Map<String, Object> row = new LinkedHashMap<>();
-                row.put("productName", p.productName());
-                row.put("unit", p.unit());
-                row.put("neededQty", p.neededQty());
-                row.put("stockOnHand", p.stockOnHand());
-                row.put("shortfall", p.shortfall());
-                row.put("shortfallQty", p.shortfallQty());
-                return row;
-            }).toList());
+            m.put("confirmedOrderCount", confirmedOrderCount());
+            m.put("confirmedValue", confirmedValue());
+            m.put("confirmedShortfallSkuCount", confirmedShortfallSkuCount);
+            m.put("pickList", needMaps(pickList));
+            m.put("confirmedPickList", needMaps(confirmedPickList));
             m.put("customers", customers.stream().map(c -> {
                 Map<String, Object> row = new LinkedHashMap<>();
                 row.put("orderId", c.orderId());
                 row.put("customerName", c.customerName());
                 row.put("customerType", c.customerType());
+                row.put("contactName", c.contactName());
+                row.put("phone", c.phone());
+                row.put("email", c.email());
+                row.put("accountNotes", c.accountNotes());
                 row.put("status", c.status());
                 row.put("orderDate", c.orderDate().toString());
+                row.put("handoffType", c.handoffType());
                 row.put("notes", c.notes());
                 row.put("orderTotal", c.orderTotal());
                 row.put("lines", c.lines().stream().map(l -> {
@@ -132,6 +222,22 @@ public class MarketDayPackingService {
             }).toList());
             m.put("plainText", plainText);
             return m;
+        }
+
+        private static List<Map<String, Object>> needMaps(List<ProductNeed> needs) {
+            return needs.stream().map(p -> {
+                Map<String, Object> row = new LinkedHashMap<>();
+                row.put("productName", p.productName());
+                row.put("unit", p.unit());
+                row.put("neededQty", p.neededQty());
+                row.put("stockOnHand", p.stockOnHand());
+                row.put("shortfall", p.shortfall());
+                row.put("shortfallQty", p.shortfallQty());
+                row.put("unitMismatch", p.unitMismatch());
+                row.put("inventoryUnit", p.inventoryUnit());
+                row.put("quantityInvalid", p.quantityInvalid());
+                return row;
+            }).toList();
         }
     }
 
@@ -149,20 +255,25 @@ public class MarketDayPackingService {
                                    boolean includeDraft, boolean includeFulfilled) {
         LocalDate day = marketDate != null ? marketDate : LocalDate.now();
         int window = windowDays <= 0 ? 1 : windowDays;
+        if (window > MAX_WINDOW_DAYS) {
+            throw new IllegalArgumentException(
+                    "windowDays cannot exceed " + MAX_WINDOW_DAYS + ".");
+        }
         LocalDate from = day.minusDays(window - 1L);
         LocalDate to = day;
 
         List<CustomerOrder> orders = orderService.findBetween(from, to).stream()
                 .filter(o -> includeStatus(o.getStatus(), includeDraft, includeFulfilled))
                 .sorted(Comparator
-                        .comparing((CustomerOrder o) -> o.getCustomer() != null
+                        .comparingInt((CustomerOrder o) -> handoffSequence(o.getHandoffType()))
+                        .thenComparing(CustomerOrder::getOrderDate,
+                                Comparator.nullsLast(LocalDate::compareTo))
+                        .thenComparing((CustomerOrder o) -> o.getCustomer() != null
                                 ? o.getCustomer().getName() : "", String.CASE_INSENSITIVE_ORDER)
                         .thenComparing(CustomerOrder::getId, Comparator.nullsLast(Long::compareTo)))
                 .toList();
 
         List<CustomerPack> packs = new ArrayList<>();
-        Map<String, Agg> needs = new LinkedHashMap<>();
-
         for (CustomerOrder order : orders) {
             List<PackLine> lines = new ArrayList<>();
             for (OrderLine line : order.getLines()) {
@@ -171,48 +282,28 @@ public class MarketDayPackingService {
                         line.getUnit(),
                         line.getQuantity(),
                         line.getUnitPrice(),
-                        line.lineTotal());
+                        line.lineTotal(),
+                        line.getId());
                 lines.add(pl);
-                String key = normalizeKey(line.getProductName()) + "|" + normalizeKey(line.getUnit());
-                Agg agg = needs.computeIfAbsent(key, k -> new Agg(line.getProductName(), line.getUnit()));
-                agg.qty += line.getQuantity();
             }
-            String custName = order.getCustomer() != null ? order.getCustomer().getName() : "(unknown)";
-            String custType = order.getCustomer() != null ? order.getCustomer().getCustomerType() : "";
-            packs.add(new CustomerPack(
-                    order.getId() != null ? order.getId() : 0L,
-                    custName,
-                    custType == null ? "" : custType,
-                    order.getStatus(),
-                    order.getOrderDate(),
-                    order.getNotes() == null ? "" : order.getNotes(),
-                    List.copyOf(lines),
-                    order.lineTotal()
-            ));
+            packs.add(customerPack(order, lines));
         }
 
+        List<CustomerPack> activePacks = packs.stream()
+                .filter(pack -> "CONFIRMED".equalsIgnoreCase(pack.status())
+                        || "DRAFT".equalsIgnoreCase(pack.status()))
+                .toList();
+        List<CustomerPack> confirmedPacks = packs.stream()
+                .filter(pack -> "CONFIRMED".equalsIgnoreCase(pack.status()))
+                .toList();
         List<Item> inventory = inventoryService.getAllItems();
-        List<ProductNeed> pickList = new ArrayList<>();
-        int shortfalls = 0;
-        for (Agg agg : needs.values()) {
-            int stock = stockForProduct(inventory, agg.productName);
-            double shortBy = Math.max(0, agg.qty - stock);
-            boolean shortfall = shortBy > 0.0001;
-            if (shortfall) {
-                shortfalls++;
-            }
-            pickList.add(new ProductNeed(
-                    agg.productName,
-                    agg.unit,
-                    round1(agg.qty),
-                    stock,
-                    shortfall,
-                    round1(shortBy)
-            ));
-        }
-        pickList.sort(Comparator.comparing(ProductNeed::productName, String.CASE_INSENSITIVE_ORDER));
+        List<ProductNeed> pickList = productNeeds(activePacks, inventory);
+        int shortfalls = (int) pickList.stream().filter(ProductNeed::blockingIssue).count();
+        List<ProductNeed> confirmedPickList = productNeeds(confirmedPacks, inventory);
+        int confirmedShortfalls = (int) confirmedPickList.stream()
+                .filter(ProductNeed::blockingIssue).count();
 
-        double pipeline = packs.stream().mapToDouble(CustomerPack::orderTotal).sum();
+        double pipeline = activePacks.stream().mapToDouble(CustomerPack::orderTotal).sum();
         String scope = describeScope(includeDraft, includeFulfilled);
         String text = formatPlainText(day, from, to, scope, packs, pickList, pipeline, shortfalls);
 
@@ -223,8 +314,20 @@ public class MarketDayPackingService {
                 List.copyOf(packs),
                 List.copyOf(pickList),
                 shortfalls,
+                List.copyOf(confirmedPickList),
+                confirmedShortfalls,
                 text
         );
+    }
+
+    private static int handoffSequence(String handoffType) {
+        return switch (CustomerOrder.normalizeHandoffType(handoffType)) {
+            case "UNSPECIFIED" -> 0;
+            case "MARKET" -> 1;
+            case "DELIVERY" -> 2;
+            case "PICKUP" -> 3;
+            default -> 4;
+        };
     }
 
     /** Convenience: confirmed pipeline for a single calendar day. */
@@ -238,8 +341,51 @@ public class MarketDayPackingService {
             int fulfilled,
             int skipped,
             int failed,
-            List<String> messages
+            List<String> messages,
+            Set<Long> fulfilledOrderIds,
+            Set<Long> failedOrderIds
     ) {
+        public FulfillBatchResult {
+            messages = messages == null ? List.of() : List.copyOf(messages);
+            fulfilledOrderIds = fulfilledOrderIds == null
+                    ? Set.of() : Set.copyOf(fulfilledOrderIds);
+            failedOrderIds = failedOrderIds == null ? Set.of() : Set.copyOf(failedOrderIds);
+        }
+
+        /** Compatibility constructor for callers that only have legacy receipt messages. */
+        public FulfillBatchResult(int attempted, int fulfilled, int skipped, int failed,
+                                  List<String> messages) {
+            this(attempted, fulfilled, skipped, failed, messages,
+                    outcomeOrderIds(messages, "→"), outcomeOrderIds(messages, "FAILED:"));
+        }
+
+        private static Set<Long> outcomeOrderIds(
+                List<String> messages, String outcomeMarker) {
+            Set<Long> ids = new LinkedHashSet<>();
+            if (messages == null) {
+                return Set.of();
+            }
+            for (String message : messages) {
+                if (message == null || !message.contains(outcomeMarker)
+                        || !message.startsWith("#")) {
+                    continue;
+                }
+                int end = message.indexOf(' ');
+                if (end <= 1) {
+                    continue;
+                }
+                try {
+                    long id = Long.parseLong(message.substring(1, end));
+                    if (id > 0) {
+                        ids.add(id);
+                    }
+                } catch (NumberFormatException ignored) {
+                    // A malformed public message must never become completion evidence.
+                }
+            }
+            return Set.copyOf(ids);
+        }
+
         public Map<String, Object> toMap() {
             Map<String, Object> m = new LinkedHashMap<>();
             m.put("attempted", attempted);
@@ -247,6 +393,8 @@ public class MarketDayPackingService {
             m.put("skipped", skipped);
             m.put("failed", failed);
             m.put("messages", messages);
+            m.put("fulfilledOrderIds", fulfilledOrderIds());
+            m.put("failedOrderIds", failedOrderIds());
             return m;
         }
     }
@@ -255,16 +403,19 @@ public class MarketDayPackingService {
      * Fulfill every CONFIRMED order in the plan (post-market load-out).
      * Already-fulfilled rows are skipped; DRAFT/CANCELLED are not in a normal plan.
      */
-    @Transactional
     public FulfillBatchResult fulfillConfirmedOrders(MarketDayPlan plan) {
         if (plan == null) {
             throw new IllegalArgumentException("plan is required.");
         }
+        Map<Long, OrderService.OrderReviewSnapshot> reviewedOrders =
+                verifyReviewedPlanIsCurrent(plan);
         List<String> messages = new ArrayList<>();
         int fulfilled = 0;
         int skipped = 0;
         int failed = 0;
         int attempted = 0;
+        Set<Long> fulfilledOrderIds = new LinkedHashSet<>();
+        Set<Long> failedOrderIds = new LinkedHashSet<>();
 
         for (CustomerPack pack : plan.customers()) {
             if (pack.orderId() <= 0) {
@@ -278,22 +429,252 @@ public class MarketDayPackingService {
             }
             attempted++;
             try {
-                var order = orderService.fulfill(pack.orderId());
+                var order = orderService.fulfillReviewed(
+                        pack.orderId(), reviewedOrders.get(pack.orderId()));
                 fulfilled++;
+                fulfilledOrderIds.add(pack.orderId());
                 messages.add("#" + pack.orderId() + " " + pack.customerName()
                         + " → " + order.getStatus()
                         + " ($" + String.format(Locale.US, "%.2f", pack.orderTotal()) + ")");
             } catch (Exception ex) {
                 failed++;
+                failedOrderIds.add(pack.orderId());
                 messages.add("#" + pack.orderId() + " " + pack.customerName()
-                        + " FAILED: " + ex.getMessage());
-                log.warn("Batch fulfill failed for order #{}: {}", pack.orderId(), ex.getMessage());
+                        + " FAILED: " + publicFulfillmentFailure(ex));
+                if (ex instanceof IllegalArgumentException) {
+                    log.warn("Batch fulfill rejected for order #{}: {}",
+                            pack.orderId(), ex.getMessage());
+                } else {
+                    log.error("Batch fulfill failed unexpectedly for order #{}",
+                            pack.orderId(), ex);
+                }
             }
         }
 
         log.info("Market-day batch fulfill: attempted={} fulfilled={} skipped={} failed={}",
                 attempted, fulfilled, skipped, failed);
-        return new FulfillBatchResult(attempted, fulfilled, skipped, failed, List.copyOf(messages));
+        return new FulfillBatchResult(attempted, fulfilled, skipped, failed,
+                List.copyOf(messages), fulfilledOrderIds, failedOrderIds);
+    }
+
+    /**
+     * Rechecks the reviewed customer scope, exact loads, and aggregate stock before any batch write.
+     * This prevents a stale checklist from omitting new work or completing changed packing details.
+     */
+    private Map<Long, OrderService.OrderReviewSnapshot> verifyReviewedPlanIsCurrent(
+            MarketDayPlan plan) {
+        List<CustomerPack> confirmed = plan.customers().stream()
+                .filter(pack -> "CONFIRMED".equalsIgnoreCase(pack.status()))
+                .toList();
+        List<CustomerPack> emptyOrders = confirmed.stream()
+                .filter(pack -> pack.lines().isEmpty())
+                .toList();
+        if (!emptyOrders.isEmpty()) {
+            String orders = emptyOrders.stream()
+                    .map(pack -> "#" + pack.orderId() + " " + pack.customerName())
+                    .reduce((left, right) -> left + ", " + right)
+                    .orElse("confirmed order");
+            throw new IllegalArgumentException(
+                    "Confirmed packing order has no saved products: " + orders
+                            + ". Add at least one product in Customers & Orders, then rebuild "
+                            + "the packing list before completing orders.");
+        }
+
+        List<CustomerPack> contextFreeDeliveries = confirmed.stream()
+                .filter(MarketDayPackingService::missingDeliveryContext)
+                .toList();
+        if (!contextFreeDeliveries.isEmpty()) {
+            String orders = contextFreeDeliveries.stream()
+                    .map(pack -> "#" + pack.orderId() + " " + pack.customerName())
+                    .reduce((left, right) -> left + ", " + right)
+                    .orElse("delivery order");
+            throw new IllegalArgumentException(
+                    "Confirmed Delivery order has no contact or destination context: " + orders
+                            + ". Add customer contact or account delivery notes, or save explicit "
+                            + "order delivery instructions, then rebuild the packing list before "
+                            + "completing orders.");
+        }
+
+        List<CustomerOrder> unreviewedConfirmed = orderService.findBetween(plan.from(), plan.to())
+                .stream()
+                .filter(order -> "CONFIRMED".equalsIgnoreCase(order.getStatus()))
+                .filter(order -> order.getId() != null && confirmed.stream()
+                        .noneMatch(reviewed -> reviewed.orderId() == order.getId()))
+                .toList();
+        if (!unreviewedConfirmed.isEmpty()) {
+            String orders = unreviewedConfirmed.stream()
+                    .map(order -> "#" + order.getId() + " "
+                            + (order.getCustomer() == null
+                            ? "(unknown customer)" : order.getCustomer().getName()))
+                    .reduce((left, right) -> left + ", " + right)
+                    .orElse("new confirmed order");
+            throw new IllegalArgumentException(
+                    "New confirmed work entered this Market Day window after review: " + orders
+                            + ". Rebuild the packing list and pack every current confirmed load "
+                            + "before completing orders.");
+        }
+
+        List<String> changed = new ArrayList<>();
+        Map<Long, OrderService.OrderReviewSnapshot> reviewedOrders = new LinkedHashMap<>();
+        for (CustomerPack reviewed : confirmed) {
+            Optional<CustomerOrder> current = orderService.findById(reviewed.orderId());
+            if (current.isEmpty()
+                    || !reviewed.equals(customerPack(current.get(), packLines(current.get())))) {
+                changed.add("#" + reviewed.orderId() + " " + reviewed.customerName());
+            } else {
+                reviewedOrders.put(reviewed.orderId(),
+                        OrderService.reviewSnapshot(current.get()));
+            }
+        }
+        if (!changed.isEmpty()) {
+            throw new IllegalArgumentException(
+                    "Packing details changed for " + String.join(", ", changed)
+                            + ". Rebuild the packing list and check the updated load before completing orders.");
+        }
+
+        List<ProductNeed> liveNeeds = productNeeds(confirmed, inventoryService.getAllItems());
+        List<ProductNeed> gaps = liveNeeds.stream().filter(ProductNeed::blockingIssue).toList();
+        if (!gaps.isEmpty()) {
+            String detail = gaps.stream()
+                    .limit(3)
+                    .map(MarketDayPackingService::blockingIssueText)
+                    .reduce((left, right) -> left + "; " + right)
+                    .orElse("stock unavailable");
+            if (gaps.size() > 3) {
+                detail += "; +" + (gaps.size() - 3) + " more";
+            }
+            boolean nonStockIssue = gaps.stream().anyMatch(need ->
+                    need.unitMismatch() || need.quantityInvalid());
+            throw new IllegalArgumentException(nonStockIssue
+                    ? "Reviewed packing list has blocking product issues: " + detail
+                            + ". Correct the order or Inventory, then rebuild the packing list "
+                            + "before completing orders."
+                    : "Current inventory no longer covers the reviewed packing list: " + detail
+                            + ". Resolve stock, then rebuild the packing list before completing orders.");
+        }
+        return Map.copyOf(reviewedOrders);
+    }
+
+    private static CustomerPack customerPack(CustomerOrder order, List<PackLine> lines) {
+        String custName = order.getCustomer() != null ? order.getCustomer().getName() : "(unknown)";
+        String custType = order.getCustomer() != null ? order.getCustomer().getCustomerType() : "";
+        String contactName = order.getCustomer() != null ? order.getCustomer().getContactName() : "";
+        String phone = order.getCustomer() != null ? order.getCustomer().getPhone() : "";
+        String email = order.getCustomer() != null ? order.getCustomer().getEmail() : "";
+        String accountNotes = order.getCustomer() != null ? order.getCustomer().getNotes() : "";
+        return new CustomerPack(
+                order.getId() != null ? order.getId() : 0L,
+                custName,
+                custType == null ? "" : custType,
+                contactName == null ? "" : contactName,
+                phone == null ? "" : phone,
+                email == null ? "" : email,
+                accountNotes == null ? "" : accountNotes,
+                order.getStatus(),
+                order.getOrderDate(),
+                order.getNotes() == null ? "" : order.getNotes(),
+                List.copyOf(lines),
+                order.lineTotal(),
+                order.getHandoffType());
+    }
+
+    public static boolean missingDeliveryContext(CustomerPack pack) {
+        return pack != null
+                && "DELIVERY".equals(CustomerOrder.normalizeHandoffType(pack.handoffType()))
+                && (pack.contactName() == null || pack.contactName().isBlank())
+                && (pack.phone() == null || pack.phone().isBlank())
+                && (pack.email() == null || pack.email().isBlank())
+                && (pack.accountNotes() == null || pack.accountNotes().isBlank())
+                && (pack.notes() == null || pack.notes().isBlank());
+    }
+
+    private static List<PackLine> packLines(CustomerOrder order) {
+        return order.getLines().stream()
+                .map(line -> new PackLine(
+                        line.getProductName(), line.getUnit(), line.getQuantity(),
+                        line.getUnitPrice(), line.lineTotal(), line.getId()))
+                .toList();
+    }
+
+    private static List<ProductNeed> productNeeds(List<CustomerPack> packs, List<Item> inventory) {
+        Map<String, Agg> needs = new LinkedHashMap<>();
+        for (CustomerPack pack : packs) {
+            for (PackLine line : pack.lines()) {
+                String key = normalizeKey(line.productName());
+                Agg agg = needs.computeIfAbsent(
+                        key, ignored -> new Agg(line.productName(), line.unit()));
+                agg.add(line.unit(), roundedInventoryQuantity(line.quantity()));
+            }
+        }
+        List<ProductNeed> result = new ArrayList<>();
+        for (Agg agg : needs.values()) {
+            int stock = stockForProduct(inventory, agg.productName);
+            String inventoryUnit = inventoryUnitForProduct(inventory, agg.productName);
+            boolean unitMismatch = agg.mixedUnits
+                    || (!inventoryUnit.isBlank()
+                    && !InventoryUnits.equivalent(inventoryUnit, agg.unit));
+            double shortBy = Math.max(0, agg.qty - stock);
+            result.add(new ProductNeed(
+                    agg.productName, agg.unit, round1(agg.qty), stock,
+                    shortBy > 0.0001, round1(shortBy), unitMismatch, inventoryUnit,
+                    agg.invalidQuantity));
+        }
+        result.sort(Comparator.comparing(ProductNeed::productName, String.CASE_INSENSITIVE_ORDER));
+        return List.copyOf(result);
+    }
+
+    private static int roundedInventoryQuantity(double quantity) {
+        return Math.max(0, (int) Math.round(quantity));
+    }
+
+    private static String inventoryUnitForProduct(List<Item> inventory, String productName) {
+        if (productName == null || productName.isBlank()) {
+            return "";
+        }
+        String target = normalizeKey(productName);
+        return inventory.stream()
+                .filter(item -> normalizeKey(item.getName()).equals(target))
+                .map(Item::getUnit)
+                .filter(unit -> unit != null && !unit.isBlank())
+                .map(String::trim)
+                .findFirst()
+                .orElse("");
+    }
+
+    private static String blockingIssueText(ProductNeed need) {
+        if (need.quantityInvalid()) {
+            return need.productName() + " has a line below one rounded inventory unit";
+        }
+        if (need.unitMismatch()) {
+            String inventoryUnit = need.inventoryUnit().isBlank()
+                    ? "unknown" : need.inventoryUnit();
+            return need.productName() + " unit mismatch (order " + need.unit()
+                    + ", inventory " + inventoryUnit + ")";
+        }
+        return need.productName() + " short "
+                + String.format(Locale.US, "%.1f", need.shortfallQty())
+                + " " + need.unit();
+    }
+
+    private static String packingStatus(ProductNeed need) {
+        if (need.quantityInvalid()) {
+            return "INVALID QTY";
+        }
+        if (need.unitMismatch()) {
+            return "UNIT MISMATCH";
+        }
+        return need.shortfall()
+                ? "SHORT " + String.format(Locale.US, "%.1f", need.shortfallQty())
+                : "OK";
+    }
+
+    private static String publicFulfillmentFailure(Exception exception) {
+        if (exception instanceof IllegalArgumentException && exception.getMessage() != null
+                && !exception.getMessage().isBlank()) {
+            String safe = exception.getMessage().replace('\r', ' ').replace('\n', ' ').trim();
+            return safe.length() <= 240 ? safe : safe.substring(0, 239) + "…";
+        }
+        return "The order could not be completed. Check server logs and retry.";
     }
 
     /**
@@ -338,6 +719,23 @@ public class MarketDayPackingService {
                     "Date: " + period + "     ·     Scope: " + plan.scope()
                             + "     ·     Generated: " + LocalDate.now(),
                     small));
+            doc.add(new Paragraph(
+                    "Load sequence: needs handoff review → Market → Delivery → Pickup",
+                    small));
+            long unresolvedHandoffs = confirmedUnspecifiedHandoffCount(plan.customers());
+            if (unresolvedHandoffs > 0) {
+                doc.add(new Paragraph(
+                        "ACTION REQUIRED: " + unresolvedHandoffs
+                                + " confirmed order(s) need Pickup, Delivery, or Market before load-out.",
+                        FontFactory.getFont(FontFactory.HELVETICA_BOLD, 10, Color.RED)));
+            }
+            long contextFreeDeliveries = confirmedMissingDeliveryContextCount(plan.customers());
+            if (contextFreeDeliveries > 0) {
+                doc.add(new Paragraph(
+                        "ACTION REQUIRED: " + contextFreeDeliveries
+                                + " confirmed Delivery order(s) have no contact or destination context.",
+                        FontFactory.getFont(FontFactory.HELVETICA_BOLD, 10, Color.RED)));
+            }
             doc.add(Chunk.NEWLINE);
 
             PdfPTable summary = new PdfPTable(new float[]{1, 1, 1});
@@ -345,7 +743,7 @@ public class MarketDayPackingService {
             summary.addCell(summaryCell("Orders", String.valueOf(plan.orderCount()), brandSoft));
             summary.addCell(summaryCell("Pipeline $",
                     String.format(Locale.US, "%,.2f", plan.pipelineValue()), brandSoft));
-            summary.addCell(summaryCell("Shortfalls",
+            summary.addCell(summaryCell("Product issues",
                     String.valueOf(plan.shortfallSkuCount()),
                     plan.shortfallSkuCount() > 0 ? shortRed : brandSoft));
             doc.add(summary);
@@ -365,14 +763,12 @@ public class MarketDayPackingService {
                 headerCell(pick, "Stock");
                 headerCell(pick, "Status");
                 for (ProductNeed p : plan.pickList()) {
-                    Color rowBg = p.shortfall() ? shortRed : Color.WHITE;
+                    Color rowBg = p.blockingIssue() ? shortRed : Color.WHITE;
                     pick.addCell(cell(p.productName(), body, rowBg));
                     pick.addCell(cell(String.format(Locale.US, "%.1f", p.neededQty()), body, rowBg));
                     pick.addCell(cell(p.unit(), body, rowBg));
                     pick.addCell(cell(String.valueOf(p.stockOnHand()), body, rowBg));
-                    pick.addCell(cell(p.shortfall()
-                            ? "SHORT " + String.format(Locale.US, "%.1f", p.shortfallQty())
-                            : "OK", body, rowBg));
+                    pick.addCell(cell(packingStatus(p), body, rowBg));
                 }
                 doc.add(pick);
             }
@@ -392,6 +788,15 @@ public class MarketDayPackingService {
                             + String.format(Locale.US, "%.2f", c.orderTotal());
                     doc.add(new Paragraph(head,
                             FontFactory.getFont(FontFactory.HELVETICA_BOLD, 10, brandGreen)));
+                    doc.add(new Paragraph("Handoff: " + friendlyHandoff(c.handoffType())
+                            + "  ·  Date: " + c.orderDate(), small));
+                    String contact = contactDetails(c);
+                    if (!contact.isBlank()) {
+                        doc.add(new Paragraph("Contact: " + contact, small));
+                    }
+                    if (c.accountNotes() != null && !c.accountNotes().isBlank()) {
+                        doc.add(new Paragraph("Account delivery note: " + c.accountNotes(), small));
+                    }
                     if (c.notes() != null && !c.notes().isBlank()) {
                         doc.add(new Paragraph("Notes: " + c.notes(), small));
                     }
@@ -400,6 +805,8 @@ public class MarketDayPackingService {
                     } else {
                         PdfPTable lines = new PdfPTable(new float[]{3, 1.2f, 1.2f, 1.2f, 1.4f});
                         lines.setWidthPercentage(100);
+                        lines.setSpacingBefore(8f);
+                        lines.setSpacingAfter(4f);
                         headerCell(lines, "Product");
                         headerCell(lines, "Qty");
                         headerCell(lines, "Unit");
@@ -425,7 +832,7 @@ public class MarketDayPackingService {
                     "FlowersForever · practical tools for PNW flower growers", small));
 
             doc.close();
-            log.info("Generated market-day packing PDF for {} ({} orders, {} shortfalls)",
+            log.info("Generated market-day packing PDF for {} ({} orders, {} packing issues)",
                     plan.marketDate(), plan.orderCount(), plan.shortfallSkuCount());
             return baos.toByteArray();
         } catch (DocumentException e) {
@@ -463,31 +870,27 @@ public class MarketDayPackingService {
 
     public String exportCsv(MarketDayPlan plan) {
         StringBuilder sb = new StringBuilder();
-        sb.append("section,orderId,customer,status,product,unit,qty,unitPrice,lineTotal,stock,shortfall\n");
+        sb.append("section,orderId,customer,status,handoffType,product,unit,qty,unitPrice,lineTotal,stock,shortfall,unitMismatch,inventoryUnit,quantityInvalid,contactName,phone,email,accountNotes,notes,orderDate\n");
         for (ProductNeed p : plan.pickList()) {
-            sb.append("PICK,,,").append(csv(p.productName())).append(',')
-                    .append(csv(p.unit())).append(',')
-                    .append(p.neededQty()).append(",,,")
-                    .append(p.stockOnHand()).append(',')
-                    .append(p.shortfall() ? p.shortfallQty() : 0)
-                    .append('\n');
+            sb.append(csvRow("PICK", "", "", "", "", p.productName(), p.unit(),
+                    p.neededQty(), "", "", p.stockOnHand(),
+                    p.shortfall() ? p.shortfallQty() : 0, p.unitMismatch(),
+                    p.inventoryUnit(), p.quantityInvalid(), "", "", "", "", "", ""));
         }
         for (CustomerPack c : plan.customers()) {
             if (c.lines().isEmpty()) {
-                sb.append("ORDER,").append(c.orderId()).append(',')
-                        .append(csv(c.customerName())).append(',')
-                        .append(csv(c.status())).append(",,,,,,\n");
+                sb.append(csvRow("ORDER", c.orderId(), c.customerName(), c.status(),
+                        c.handoffType(), "", "", "", "", "", "", "", "", "", "",
+                        c.contactName(), c.phone(), c.email(), c.accountNotes(), c.notes(),
+                        c.orderDate()));
                 continue;
             }
             for (PackLine l : c.lines()) {
-                sb.append("ORDER,").append(c.orderId()).append(',')
-                        .append(csv(c.customerName())).append(',')
-                        .append(csv(c.status())).append(',')
-                        .append(csv(l.productName())).append(',')
-                        .append(csv(l.unit())).append(',')
-                        .append(l.quantity()).append(',')
-                        .append(l.unitPrice()).append(',')
-                        .append(l.lineTotal()).append(",,\n");
+                sb.append(csvRow("ORDER", c.orderId(), c.customerName(), c.status(),
+                        c.handoffType(), l.productName(), l.unit(), l.quantity(),
+                        l.unitPrice(), l.lineTotal(), "", "", "", "", "",
+                        c.contactName(), c.phone(), c.email(), c.accountNotes(), c.notes(),
+                        c.orderDate()));
             }
         }
         return sb.toString();
@@ -525,23 +928,13 @@ public class MarketDayPackingService {
             return 0;
         }
         String target = productName.trim().toLowerCase(Locale.ROOT);
-        // Prefer exact name match, then starts-with / contains (same spirit as fulfill)
-        int exact = 0;
-        int fuzzy = 0;
-        boolean anyExact = false;
-        for (Item item : inventory) {
-            if (item.getName() == null) {
-                continue;
-            }
-            String n = item.getName().trim().toLowerCase(Locale.ROOT);
-            if (n.equals(target)) {
-                exact += item.getQuantity();
-                anyExact = true;
-            } else if (n.contains(target) || target.contains(n)) {
-                fuzzy += item.getQuantity();
-            }
-        }
-        return anyExact ? exact : fuzzy;
+        // Fulfillment requires the same exact case-insensitive SKU match. Never borrow
+        // availability from a similarly named product such as "Rose" / "Spray Rose".
+        return inventory.stream()
+                .filter(item -> item.getName() != null
+                        && item.getName().trim().toLowerCase(Locale.ROOT).equals(target))
+                .mapToInt(Item::getQuantity)
+                .sum();
     }
 
     private static String formatPlainText(LocalDate marketDate, LocalDate from, LocalDate to,
@@ -556,10 +949,22 @@ public class MarketDayPackingService {
             sb.append("Orders from : ").append(from).append(" → ").append(to).append('\n');
         }
         sb.append("Scope       : ").append(scope).append('\n');
+        sb.append("Load order  : needs handoff review → Market → Delivery → Pickup\n");
         sb.append("Orders      : ").append(packs.size())
                 .append("   Pipeline $").append(String.format(Locale.US, "%,.2f", pipeline)).append('\n');
+        long unresolvedHandoffs = confirmedUnspecifiedHandoffCount(packs);
+        if (unresolvedHandoffs > 0) {
+            sb.append("⚠ Unspecified handoffs: ").append(unresolvedHandoffs)
+                    .append(" confirmed order(s) need Pickup, Delivery, or Market\n");
+        }
+        long contextFreeDeliveries = confirmedMissingDeliveryContextCount(packs);
+        if (contextFreeDeliveries > 0) {
+            sb.append("⚠ Missing Delivery context: ").append(contextFreeDeliveries)
+                    .append(" confirmed order(s) need contact or destination instructions\n");
+        }
         if (shortfalls > 0) {
-            sb.append("⚠ Shortfalls: ").append(shortfalls).append(" product(s) under stock\n");
+            sb.append("⚠ Packing issues: ").append(shortfalls)
+                    .append(" product(s) need attention\n");
         }
         sb.append('\n');
 
@@ -571,9 +976,7 @@ public class MarketDayPackingService {
             sb.append(String.format(Locale.US, "  %-28s %8s %-10s %8s %s%n",
                     "Product", "Need", "Unit", "Stock", "Status"));
             for (ProductNeed p : pickList) {
-                String flag = p.shortfall()
-                        ? "SHORT " + String.format(Locale.US, "%.1f", p.shortfallQty())
-                        : "OK";
+                String flag = packingStatus(p);
                 sb.append(String.format(Locale.US, "  %-28s %8.1f %-10s %8d %s%n",
                         truncate(p.productName(), 28), p.neededQty(), p.unit(),
                         p.stockOnHand(), flag));
@@ -596,6 +999,15 @@ public class MarketDayPackingService {
                 sb.append("  ").append(c.status())
                         .append("  $").append(String.format(Locale.US, "%.2f", c.orderTotal()))
                         .append('\n');
+                sb.append("    handoff: ").append(friendlyHandoff(c.handoffType()))
+                        .append(" · date: ").append(c.orderDate()).append('\n');
+                String contact = contactDetails(c);
+                if (!contact.isBlank()) {
+                    sb.append("    contact: ").append(contact).append('\n');
+                }
+                if (c.accountNotes() != null && !c.accountNotes().isBlank()) {
+                    sb.append("    account delivery note: ").append(c.accountNotes()).append('\n');
+                }
                 if (c.notes() != null && !c.notes().isBlank()) {
                     sb.append("    notes: ").append(c.notes()).append('\n');
                 }
@@ -609,6 +1021,29 @@ public class MarketDayPackingService {
         sb.append('\n');
         sb.append("Tip: Fulfill in CRM after the market to deduct inventory & record revenue.\n");
         return sb.toString();
+    }
+
+    private static long confirmedUnspecifiedHandoffCount(List<CustomerPack> packs) {
+        return packs.stream()
+                .filter(pack -> "CONFIRMED".equalsIgnoreCase(pack.status()))
+                .filter(pack -> "UNSPECIFIED".equals(
+                        CustomerOrder.normalizeHandoffType(pack.handoffType())))
+                .count();
+    }
+
+    private static long confirmedMissingDeliveryContextCount(List<CustomerPack> packs) {
+        return packs.stream()
+                .filter(pack -> "CONFIRMED".equalsIgnoreCase(pack.status()))
+                .filter(MarketDayPackingService::missingDeliveryContext)
+                .count();
+    }
+
+    private static String contactDetails(CustomerPack customer) {
+        return java.util.stream.Stream.of(
+                        customer.contactName(), customer.phone(), customer.email())
+                .filter(value -> value != null && !value.isBlank())
+                .map(String::trim)
+                .collect(java.util.stream.Collectors.joining(" · "));
     }
 
     private static String normalizeKey(String s) {
@@ -632,6 +1067,22 @@ public class MarketDayPackingService {
         return s;
     }
 
+    private static String csvRow(Object... values) {
+        return java.util.Arrays.stream(values)
+                .map(value -> csv(value == null ? "" : String.valueOf(value)))
+                .reduce((left, right) -> left + "," + right)
+                .orElse("") + "\n";
+    }
+
+    private static String friendlyHandoff(String value) {
+        String normalized = CustomerOrder.normalizeHandoffType(value);
+        if ("UNSPECIFIED".equals(normalized)) {
+            return "Unspecified";
+        }
+        String lower = normalized.toLowerCase(Locale.ROOT);
+        return Character.toUpperCase(lower.charAt(0)) + lower.substring(1);
+    }
+
     private static double round1(double v) {
         return Math.round(v * 10.0) / 10.0;
     }
@@ -642,12 +1093,26 @@ public class MarketDayPackingService {
 
     private static final class Agg {
         final String productName;
-        final String unit;
-        double qty;
+        String unit;
+        int qty;
+        boolean mixedUnits;
+        boolean invalidQuantity;
 
         Agg(String productName, String unit) {
             this.productName = productName;
             this.unit = unit == null ? "" : unit;
+        }
+
+        void add(String lineUnit, int lineQuantity) {
+            String normalizedUnit = lineUnit == null ? "" : lineUnit.trim();
+            if (!InventoryUnits.equivalent(unit, normalizedUnit)) {
+                mixedUnits = true;
+                unit = "mixed units";
+            }
+            if (lineQuantity <= 0) {
+                invalidQuantity = true;
+            }
+            qty += lineQuantity;
         }
     }
 }

@@ -1,14 +1,17 @@
 package com.flowerfarm.connector.impl;
 
+import com.flowerfarm.connector.ConnectorHttpClient;
 import com.flowerfarm.connector.*;
 import com.flowerfarm.model.Item;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.web.util.UriComponentsBuilder;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -41,13 +44,15 @@ public class SquareConnector implements ExternalConnector<Map<String, Object>>, 
     private final ConnectorConfig config;
     private final RestTemplate restTemplate;
 
+    @Autowired
     public SquareConnector(
             @Value("${connector.square.access-token:}") String accessToken,
             @Value("${connector.square.location-id:}") String locationId,
             @Value("${connector.square.environment:sandbox}") String environment,
             @Value("${connector.square.currency:USD}") String currency,
             @Value("${connector.square.local-file:}") String localFile) {
-        this(accessToken, locationId, environment, currency, localFile, new RestTemplate());
+        this(accessToken, locationId, environment, currency, localFile,
+                ConnectorHttpClient.create());
     }
 
     /** Package-private for unit tests with a mockable {@link RestTemplate}. */
@@ -459,10 +464,14 @@ public class SquareConnector implements ExternalConnector<Map<String, Object>>, 
         String cursor = null;
 
         do {
-            String url = baseUrl() + "/v2/catalog/list?types=ITEM";
+            UriComponentsBuilder request = UriComponentsBuilder
+                    .fromUriString(baseUrl())
+                    .path("/v2/catalog/list")
+                    .queryParam("types", "ITEM");
             if (cursor != null && !cursor.isBlank()) {
-                url += "&cursor=" + cursor;
+                request.queryParam("cursor", cursor);
             }
+            String url = request.build().encode().toUriString();
 
             ResponseEntity<Map> response = restTemplate.exchange(
                     url, HttpMethod.GET, new HttpEntity<>(authHeaders()), Map.class);

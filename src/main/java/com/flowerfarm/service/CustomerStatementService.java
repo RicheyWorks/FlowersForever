@@ -134,7 +134,7 @@ public class CustomerStatementService {
                         && !o.getOrderDate().isBefore(start)
                         && !o.getOrderDate().isAfter(end))
                 .sorted(Comparator.comparing(CustomerOrder::getOrderDate)
-                        .thenComparing(o -> o.getId() == null ? 0L : o.getId()))
+                        .thenComparingLong(o -> o.getId() == null ? 0L : o.getId()))
                 .toList();
 
         List<StatementLine> lines = new ArrayList<>();

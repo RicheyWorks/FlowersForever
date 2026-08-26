@@ -51,19 +51,26 @@ jobs:
         shell: bash
         run: |
           JAR=$(basename "$(ls target/flowerfarm-manager-*.jar | grep -v '\.original$' | head -n1)")
-          mkdir -p dist
+          test -n "$JAR"
+          rm -rf target/jpackage-input
+          mkdir -p target/jpackage-input dist
+          cp "target/$JAR" target/jpackage-input/
+          test "$(find target/jpackage-input -maxdepth 1 -type f | wc -l | tr -d ' ')" = "1"
           jpackage \
             --type ${{ matrix.type }} \
             --name FlowersForever \
             --app-version "${{ steps.ver.outputs.version }}" \
             --vendor RicheyWorks \
-            --description "Flower Farm Manager - PNW inventory, harvest, CRM" \
-            --input target \
+            --description "Flower Farm Manager - PNW inventory, harvests, customers, and orders" \
+            --input target/jpackage-input \
             --main-jar "$JAR" \
             --java-options "-Djava.awt.headless=false" \
+            --java-options "-Dflowerfarm.packaged=true" \
             --dest dist \
             ${{ matrix.extra }}
-          ls dist
+          test -n "$(find dist -maxdepth 1 -type f -print -quit)"
+          sha256sum dist/* > dist/SHA256SUMS-installers.txt
+          ls -lh dist
 
       - name: Attach installer to release
         uses: softprops/action-gh-release@v3

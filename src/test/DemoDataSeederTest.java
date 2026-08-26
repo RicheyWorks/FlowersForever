@@ -56,14 +56,16 @@ class DemoDataSeederTest {
             harvests.add(e);
             return e;
         });
-        lenient().when(orderService.create(anyLong(), any(), any(), any(), any())).thenAnswer(inv -> {
+        lenient().when(orderService.create(
+                anyLong(), any(), any(), any(), anyString(), anyList())).thenAnswer(inv -> {
             CustomerOrder o = new CustomerOrder(
                     customers.stream().filter(c -> c.getId().equals(inv.getArgument(0))).findFirst().orElseThrow(),
                     inv.getArgument(1),
                     inv.getArgument(2),
-                    inv.getArgument(3));
+                    inv.getArgument(3),
+                    inv.getArgument(4));
             o.setId((long) (orders.size() + 1));
-            List<OrderLine> lines = inv.getArgument(4);
+            List<OrderLine> lines = inv.getArgument(5);
             if (lines != null) {
                 lines.forEach(o::addLine);
             }
@@ -82,8 +84,11 @@ class DemoDataSeederTest {
         assertThat(orders).hasSize(3);
         assertThat(orders.stream().filter(o -> "CONFIRMED".equals(o.getStatus())).count()).isEqualTo(2);
         assertThat(orders.stream().anyMatch(o -> "DRAFT".equals(o.getStatus()))).isTrue();
+        assertThat(orders).extracting(CustomerOrder::getHandoffType)
+                .containsExactly("PICKUP", "MARKET", "DELIVERY");
         assertThat(harvests.stream().anyMatch(h -> "Bed A".equals(h.getBedOrField()))).isTrue();
-        verify(orderService, atLeastOnce()).create(anyLong(), any(), eq("CONFIRMED"), any(), any());
+        verify(orderService, atLeastOnce()).create(
+                anyLong(), any(), eq("CONFIRMED"), any(), anyString(), anyList());
     }
 
     @Test
@@ -98,6 +103,7 @@ class DemoDataSeederTest {
 
         verify(customerService, never()).add(any());
         verify(harvestService, never()).add(any());
-        verify(orderService, never()).create(anyLong(), any(), any(), any(), any());
+        verify(orderService, never()).create(
+                anyLong(), any(), any(), any(), anyString(), anyList());
     }
 }

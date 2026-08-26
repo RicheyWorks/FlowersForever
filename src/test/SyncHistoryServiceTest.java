@@ -1,10 +1,7 @@
 package com.flowerfarm.service;
 
-import com.flowerfarm.connector.ConnectorResult;
-import com.flowerfarm.connector.SyncSummary;
-import com.flowerfarm.model.Item;
 import com.flowerfarm.model.SyncHistoryEntry;
-import com.flowerfarm.repository.SyncHistoryJpaRepository;
+import com.flowerfarm.repository.SyncHistoryRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -12,7 +9,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.data.domain.Pageable;
 
 import java.util.List;
 
@@ -25,7 +21,7 @@ import static org.mockito.Mockito.*;
 @DisplayName("SyncHistoryService")
 class SyncHistoryServiceTest {
 
-    @Mock SyncHistoryJpaRepository repository;
+    @Mock SyncHistoryRepository repository;
     SyncHistoryService service;
 
     @BeforeEach
@@ -35,15 +31,9 @@ class SyncHistoryServiceTest {
     }
 
     @Test
-    @DisplayName("recordResult stores success with list size as count")
-    void recordImportSuccess() {
-        List<Item> items = List.of(
-                new Item("A", "Other", 1, "u", 0.5, 1, ""),
-                new Item("B", "Other", 1, "u", 0.5, 1, "")
-        );
-        ConnectorResult<List<Item>> result = ConnectorResult.ok(items, "Imported 2", "csv");
-
-        service.recordResult("csv", "IMPORT", result);
+    @DisplayName("record stores connector-neutral audit data")
+    void recordAuditData() {
+        service.record("csv", "IMPORT", true, "Imported 2", "", 2);
 
         ArgumentCaptor<SyncHistoryEntry> cap = ArgumentCaptor.forClass(SyncHistoryEntry.class);
         verify(repository).save(cap.capture());
@@ -56,36 +46,10 @@ class SyncHistoryServiceTest {
     }
 
     @Test
-    @DisplayName("recordResult stores SyncSummary total")
-    void recordSyncSummary() {
-        ConnectorResult<SyncSummary> result = ConnectorResult.ok(
-                new SyncSummary(1, 2, 0, 3, 0), "done", "shopify");
-        service.recordResult("shopify", "SYNC", result);
-
-        ArgumentCaptor<SyncHistoryEntry> cap = ArgumentCaptor.forClass(SyncHistoryEntry.class);
-        verify(repository).save(cap.capture());
-        assertThat(cap.getValue().getRecordCount()).isEqualTo(6);
-        assertThat(cap.getValue().getOperation()).isEqualTo("SYNC");
-    }
-
-    @Test
-    @DisplayName("recordResult stores failure without count")
-    void recordFailure() {
-        ConnectorResult<Integer> result = ConnectorResult.fail("boom", "detail", "square");
-        service.recordResult("square", "EXPORT", result);
-
-        ArgumentCaptor<SyncHistoryEntry> cap = ArgumentCaptor.forClass(SyncHistoryEntry.class);
-        verify(repository).save(cap.capture());
-        assertThat(cap.getValue().isSuccess()).isFalse();
-        assertThat(cap.getValue().getRecordCount()).isNull();
-        assertThat(cap.getValue().getDetail()).isEqualTo("detail");
-    }
-
-    @Test
     @DisplayName("recent clamps limit and queries repository")
     void recentClamps() {
         service.recent(9999);
-        verify(repository).findAllByOrderByOccurredAtDesc(any(Pageable.class));
+        verify(repository).findRecent(500);
     }
 
     @Test
@@ -94,7 +58,7 @@ class SyncHistoryServiceTest {
         SyncHistoryEntry ok = new SyncHistoryEntry("harvest", "HARVEST_LOG", true, "logged roses", "bed A", 10);
         SyncHistoryEntry fail = new SyncHistoryEntry("shopify", "IMPORT", false, "token expired", "401", null);
         SyncHistoryEntry crm = new SyncHistoryEntry("crm", "ORDER_FULFILL", true, "fulfilled #3", "", 1);
-        when(repository.findAllByOrderByOccurredAtDesc(any(Pageable.class)))
+        when(repository.findRecent(anyInt()))
                 .thenReturn(List.of(ok, fail, crm));
 
         assertThat(service.filter("harvest", null, null, null, 50)).hasSize(1);

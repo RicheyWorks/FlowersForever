@@ -1,6 +1,5 @@
 package com.flowerfarm.gui.tabs;
 
-import com.flowerfarm.lsystem.LSystem;
 import com.flowerfarm.lsystem.SeasonPalette;
 
 import javax.swing.*;

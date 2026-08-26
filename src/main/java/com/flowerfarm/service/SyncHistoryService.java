@@ -1,10 +1,8 @@
 package com.flowerfarm.service;
 
-import com.flowerfarm.connector.ConnectorResult;
-import com.flowerfarm.connector.SyncSummary;
-import com.flowerfarm.model.Item;
 import com.flowerfarm.model.SyncHistoryEntry;
-import com.flowerfarm.repository.SyncHistoryJpaRepository;
+import com.flowerfarm.repository.SyncHistoryRepository;
+import com.flowerfarm.util.CsvSupport;
 import com.lowagie.text.Chunk;
 import com.lowagie.text.Document;
 import com.lowagie.text.DocumentException;
@@ -20,7 +18,6 @@ import com.lowagie.text.pdf.PdfPTable;
 import com.lowagie.text.pdf.PdfWriter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -48,9 +45,9 @@ public class SyncHistoryService {
     private static final int DEFAULT_LIMIT = 100;
     private static final int MAX_LIMIT = 500;
 
-    private final SyncHistoryJpaRepository repository;
+    private final SyncHistoryRepository repository;
 
-    public SyncHistoryService(SyncHistoryJpaRepository repository) {
+    public SyncHistoryService(SyncHistoryRepository repository) {
         this.repository = repository;
     }
 
@@ -66,27 +63,10 @@ public class SyncHistoryService {
         return saved;
     }
 
-    @Transactional
-    public <T> void recordResult(String connectorName, String operation, ConnectorResult<T> result) {
-        if (result == null) {
-            record(connectorName, operation, false, "Null result", "", null);
-            return;
-        }
-        Integer count = extractCount(result);
-        record(
-                result.getConnectorName() != null ? result.getConnectorName() : connectorName,
-                operation,
-                result.isSuccess(),
-                result.getMessage(),
-                result.getErrorDetail(),
-                count
-        );
-    }
-
     @Transactional(readOnly = true)
     public List<SyncHistoryEntry> recent(int limit) {
         int n = clamp(limit);
-        return repository.findAllByOrderByOccurredAtDesc(PageRequest.of(0, n));
+        return repository.findRecent(n);
     }
 
     @Transactional(readOnly = true)
@@ -95,8 +75,7 @@ public class SyncHistoryService {
         if (connectorName == null || connectorName.isBlank()) {
             return recent(n);
         }
-        return repository.findByConnectorNameIgnoreCaseOrderByOccurredAtDesc(
-                connectorName.trim(), PageRequest.of(0, n));
+        return repository.findRecentForConnector(connectorName.trim(), n);
     }
 
     /**
@@ -202,8 +181,8 @@ public class SyncHistoryService {
                 bw.write(String.format("%s,%s,%s,%s,%s,%s,\"%s\",\"%s\"",
                         e.getId() == null ? "" : e.getId(),
                         e.getOccurredAt(),
-                        csvEscape(e.getConnectorName()),
-                        csvEscape(e.getOperation()),
+                        CsvSupport.escape(e.getConnectorName(), ','),
+                        CsvSupport.escape(e.getOperation(), ','),
                         e.isSuccess(),
                         e.getRecordCount() == null ? "" : e.getRecordCount(),
                         msg,
@@ -445,19 +424,9 @@ public class SyncHistoryService {
         return cell;
     }
 
-    private static String csvEscape(String s) {
-        if (s == null) {
-            return "";
-        }
-        if (s.contains(",") || s.contains("\"")) {
-            return "\"" + s.replace("\"", "\"\"") + "\"";
-        }
-        return s;
-    }
-
     @Transactional
     public void clearAll() {
-        repository.deleteAllInBatch();
+        repository.deleteAll();
         log.info("Sync history cleared.");
     }
 
@@ -466,24 +435,4 @@ public class SyncHistoryService {
         return Math.min(limit, MAX_LIMIT);
     }
 
-    @SuppressWarnings("unchecked")
-    private static <T> Integer extractCount(ConnectorResult<T> result) {
-        if (!result.isSuccess() || result.getPayload() == null) {
-            return null;
-        }
-        Object payload = result.getPayload();
-        if (payload instanceof Integer i) {
-            return i;
-        }
-        if (payload instanceof List<?> list) {
-            return list.size();
-        }
-        if (payload instanceof SyncSummary s) {
-            return s.total();
-        }
-        if (payload instanceof Item) {
-            return 1;
-        }
-        return null;
-    }
 }

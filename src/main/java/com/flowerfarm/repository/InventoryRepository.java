@@ -17,6 +17,12 @@ public interface InventoryRepository {
 
     Optional<Item> findById(Long id);
 
+    /** Loads one item under a write lock for edit/delete operations. */
+    Optional<Item> findByIdForUpdate(Long id);
+
+    /** Exact-name lookup for stock mutations; production implementations lock matching rows. */
+    List<Item> findAllByNameIgnoreCaseForUpdate(String name);
+
     long count();
 
     /** Persists a new or existing item; returns the managed instance (with id). */

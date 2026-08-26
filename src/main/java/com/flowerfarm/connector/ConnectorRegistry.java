@@ -43,7 +43,11 @@ public class ConnectorRegistry {
         this.inventoryService = inventoryService;
         this.syncHistoryService = syncHistoryService;
         for (ExternalConnector<?> c : connectors) {
-            registry.put(c.getName().toLowerCase(), c);
+            String key = connectorKey(c.getName());
+            if (registry.putIfAbsent(key, c) != null) {
+                throw new IllegalStateException(
+                        "Duplicate connector registration for name '" + c.getName() + "'.");
+            }
             log.info("Registered connector: '{}' ({})", c.getName(), c.getSupportedDirection());
         }
     }
@@ -51,7 +55,10 @@ public class ConnectorRegistry {
     // ── Discovery ─────────────────────────────────────────────────────────────
 
     public Optional<ExternalConnector<?>> find(String name) {
-        return Optional.ofNullable(registry.get(name.toLowerCase()));
+        if (name == null || name.isBlank()) {
+            return Optional.empty();
+        }
+        return Optional.ofNullable(registry.get(connectorKey(name)));
     }
 
     /**
@@ -112,18 +119,33 @@ public class ConnectorRegistry {
                     ConnectorResult<List<Item>> importResult =
                             ((ExternalConnector<Object>) c).importItems();
                     if (importResult.isSuccess() && importResult.getPayload() != null) {
-                        int persisted = 0;
+                        List<Item> persisted = new ArrayList<>();
+                        List<String> failures = new ArrayList<>();
                         for (Item item : importResult.getPayload()) {
+                            String itemName = item == null ? "(null)" : item.getName();
                             try {
-                                inventoryService.addItem(item);
-                                persisted++;
+                                persisted.add(inventoryService.upsertByName(item));
                             } catch (RuntimeException ex) {
                                 log.warn("[{}] Failed to persist '{}': {} — continuing with remaining items.",
-                                        name, item.getName(), ex.getMessage());
+                                        name, itemName, ex.getMessage());
+                                failures.add(itemName + ": " + ex.getMessage());
                             }
                         }
-                        log.info("[{}] Import complete — {} of {} items added to inventory.",
-                                name, persisted, importResult.getPayload().size());
+                        log.info("[{}] Import complete — {} of {} items upserted into inventory.",
+                                name, persisted.size(), importResult.getPayload().size());
+                        if (!failures.isEmpty() && persisted.isEmpty()) {
+                            return ConnectorResult.<List<Item>>fail(
+                                    "Import failed: no records could be persisted.",
+                                    String.join("; ", failures), name);
+                        }
+                        if (!failures.isEmpty()) {
+                            return ConnectorResult.ok(List.copyOf(persisted),
+                                    "Imported " + persisted.size() + " record(s); skipped "
+                                            + failures.size() + " invalid record(s).",
+                                    name);
+                        }
+                        return ConnectorResult.ok(List.copyOf(persisted),
+                                importResult.getMessage(), name);
                     }
                     return importResult;
                 })
@@ -199,10 +221,47 @@ public class ConnectorRegistry {
 
     private void recordHistory(String name, String operation, ConnectorResult<?> result) {
         try {
-            syncHistoryService.recordResult(name, operation, result);
+            if (result == null) {
+                syncHistoryService.record(name, operation, false, "Null result", "", null);
+                return;
+            }
+            syncHistoryService.record(
+                    result.getConnectorName() != null ? result.getConnectorName() : name,
+                    operation,
+                    result.isSuccess(),
+                    result.getMessage(),
+                    result.getErrorDetail(),
+                    extractCount(result));
         } catch (Exception e) {
             // History must never break a connector operation
             log.warn("Failed to record sync history for {} {}: {}", name, operation, e.getMessage());
         }
+    }
+
+    private static String connectorKey(String name) {
+        if (name == null || name.isBlank()) {
+            throw new IllegalStateException("Connector names must not be blank.");
+        }
+        return name.trim().toLowerCase(Locale.ROOT);
+    }
+
+    private static Integer extractCount(ConnectorResult<?> result) {
+        if (!result.isSuccess() || result.getPayload() == null) {
+            return null;
+        }
+        Object payload = result.getPayload();
+        if (payload instanceof Integer count) {
+            return count;
+        }
+        if (payload instanceof List<?> list) {
+            return list.size();
+        }
+        if (payload instanceof SyncSummary summary) {
+            return summary.total();
+        }
+        if (payload instanceof Item) {
+            return 1;
+        }
+        return null;
     }
 }

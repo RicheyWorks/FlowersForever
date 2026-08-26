@@ -10,6 +10,8 @@ import jakarta.persistence.*;
 @Table(name = "order_lines")
 public class OrderLine {
 
+    private static final double MAX_UNIT_PRICE = 1_000_000_000.0;
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -58,25 +60,36 @@ public class OrderLine {
         if (productName == null || productName.isBlank()) {
             throw new IllegalArgumentException("Product name is required.");
         }
-        this.productName = productName.trim();
+        this.productName = requireMaxLength(productName.trim(), 255, "Product name");
     }
 
     public void setQuantity(double quantity) {
-        if (quantity < 0) {
-            throw new IllegalArgumentException("Quantity cannot be negative.");
+        if (!Double.isFinite(quantity) || quantity <= 0 || quantity > Integer.MAX_VALUE) {
+            throw new IllegalArgumentException(
+                    "Quantity must be a finite number greater than 0 and no more than "
+                            + Integer.MAX_VALUE + ".");
         }
         this.quantity = quantity;
     }
 
     public void setUnit(String unit) {
-        this.unit = (unit == null || unit.isBlank()) ? "bunch" : unit.trim();
+        String normalized = (unit == null || unit.isBlank()) ? "bunch" : unit.trim();
+        this.unit = requireMaxLength(normalized, 64, "Unit");
     }
 
     public void setUnitPrice(double unitPrice) {
-        if (unitPrice < 0) {
-            throw new IllegalArgumentException("Unit price cannot be negative.");
+        if (!Double.isFinite(unitPrice) || unitPrice < 0 || unitPrice > MAX_UNIT_PRICE) {
+            throw new IllegalArgumentException("Unit price must be a finite number between 0 and "
+                    + (long) MAX_UNIT_PRICE + ".");
         }
         this.unitPrice = unitPrice;
+    }
+
+    private static String requireMaxLength(String value, int max, String field) {
+        if (value.length() > max) {
+            throw new IllegalArgumentException(field + " cannot exceed " + max + " characters.");
+        }
+        return value;
     }
 
     public double lineTotal() {

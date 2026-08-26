@@ -51,7 +51,7 @@ jobs:
         with:
           name: sbom
           path: target/bom.*
-          if-no-files-found: ignore
+          if-no-files-found: error
 
       - name: Upload Surefire reports on failure
         if: failure()
@@ -62,7 +62,7 @@ jobs:
           if-no-files-found: ignore
 
   quality:
-    name: Static analysis (report-only)
+    name: Static analysis (Medium gate)
     runs-on: ubuntu-latest
     timeout-minutes: 25
 
@@ -100,3 +100,31 @@ jobs:
 
       - name: Build image (no push)
         run: docker build -t flowersforever:ci .
+
+      - name: Smoke-test authenticated container profile
+        run: |
+          docker run -d --name flowersforever-ci -p 18080:8080 \
+            -e FLOWERFARM_AUTH_USERS='owner:a-long-ci-password:OWNER' \
+            flowersforever:ci
+          for attempt in {1..45}; do
+            health="$(docker inspect --format='{{.State.Health.Status}}' flowersforever-ci)"
+            if [ "$health" = "healthy" ]; then
+              break
+            fi
+            if [ "$health" = "unhealthy" ]; then
+              docker logs flowersforever-ci
+              exit 1
+            fi
+            sleep 2
+          done
+          test "$(docker inspect --format='{{.State.Health.Status}}' flowersforever-ci)" = "healthy"
+          test "$(curl --silent --output /dev/null --write-out '%{http_code}' \
+            http://127.0.0.1:18080/api/inventory)" = "401"
+
+      - name: Container logs on failure
+        if: failure()
+        run: docker logs flowersforever-ci || true
+
+      - name: Remove smoke container
+        if: always()
+        run: docker rm --force flowersforever-ci || true

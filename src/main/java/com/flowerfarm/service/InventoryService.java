@@ -2,19 +2,8 @@ package com.flowerfarm.service;
 
 import com.flowerfarm.model.Item;
 import com.flowerfarm.repository.InventoryRepository;
-import com.lowagie.text.Chunk;
-import com.lowagie.text.Document;
-import com.lowagie.text.DocumentException;
-import com.lowagie.text.Element;
-import com.lowagie.text.Font;
-import com.lowagie.text.FontFactory;
-import com.lowagie.text.PageSize;
-import com.lowagie.text.Paragraph;
-import com.lowagie.text.Phrase;
-import com.lowagie.text.Rectangle;
-import com.lowagie.text.pdf.PdfPCell;
-import com.lowagie.text.pdf.PdfPTable;
-import com.lowagie.text.pdf.PdfWriter;
+import com.flowerfarm.util.CsvSupport;
+import com.flowerfarm.util.InventoryUnits;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -22,7 +11,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import jakarta.annotation.PostConstruct;
-import java.awt.Color;
 import java.io.*;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -48,17 +36,24 @@ import java.util.Optional;
 public class InventoryService {
 
     private static final Logger log = LoggerFactory.getLogger(InventoryService.class);
+    private static final int MAX_LOW_STOCK_THRESHOLD = 1_000_000;
 
     /** Standard CSV header shared by export and legacy seed files. */
     public static final String CSV_HEADER = "Name,Category,Price,Unit,Cost,Quantity,Notes";
 
     private final InventoryRepository repository;
     private final String seedCsvPath;
+    private final InventoryReportGenerator reportGenerator;
+    private final InventoryCsvExporter csvExporter;
 
     public InventoryService(
             InventoryRepository repository,
-            @Value("${flowerfarm.inventory.seed-csv:farm_inventory.csv}") String seedCsvPath) {
+            @Value("${flowerfarm.inventory.seed-csv:farm_inventory.csv}") String seedCsvPath,
+            InventoryReportGenerator reportGenerator,
+            InventoryCsvExporter csvExporter) {
         this.repository = repository;
+        this.reportGenerator = reportGenerator;
+        this.csvExporter = csvExporter;
         this.seedCsvPath = seedCsvPath == null || seedCsvPath.isBlank()
                 ? "farm_inventory.csv"
                 : seedCsvPath.trim();
@@ -109,10 +104,56 @@ public class InventoryService {
         if (item == null) {
             throw new IllegalArgumentException("Item must not be null.");
         }
+        ensureNameAvailable(item.getName(), null);
         // Force insert
         item.setId(null);
         Item saved = repository.save(item);
         log.debug("Added item id={} name={}", saved.getId(), saved.getName());
+        return saved;
+    }
+
+    /** Raised when an interactive add would create an ambiguous exact-name SKU. */
+    public static final class DuplicateItemNameException extends IllegalArgumentException {
+        private final Long existingId;
+        private final String itemName;
+
+        public DuplicateItemNameException(Long existingId, String itemName) {
+            super("Inventory already contains ‘" + itemName
+                    + "’. Open the existing item to count, replenish, or edit it.");
+            this.existingId = existingId;
+            this.itemName = itemName;
+        }
+
+        public Long existingId() {
+            return existingId;
+        }
+
+        public String itemName() {
+            return itemName;
+        }
+    }
+
+    /**
+     * Idempotent connector-import boundary: update an exact-name SKU when it
+     * exists, otherwise insert it. The database lookup is locked for updates.
+     */
+    @Transactional
+    public synchronized Item upsertByName(Item incoming) {
+        if (incoming == null) {
+            throw new IllegalArgumentException("Item must not be null.");
+        }
+        Optional<Item> existing = repository
+                .findAllByNameIgnoreCaseForUpdate(incoming.getName()).stream().findFirst();
+        if (existing.isPresent()) {
+            Item target = existing.get();
+            target.copyBusinessFieldsFrom(incoming);
+            Item saved = repository.save(target);
+            log.debug("Upsert updated inventory id={} name={}", saved.getId(), saved.getName());
+            return saved;
+        }
+        incoming.setId(null);
+        Item saved = repository.save(incoming);
+        log.debug("Upsert inserted inventory id={} name={}", saved.getId(), saved.getName());
         return saved;
     }
 
@@ -125,9 +166,8 @@ public class InventoryService {
         if (newItem == null) {
             throw new IllegalArgumentException("Replacement item must not be null.");
         }
-        Item existing = itemAtIndex(index);
-        existing.copyBusinessFieldsFrom(newItem);
-        Item saved = repository.save(existing);
+        Long id = itemAtIndex(index).getId();
+        Item saved = updateById(id, newItem);
         log.debug("Edited item at index {} id={}", index, saved.getId());
         return saved;
     }
@@ -137,24 +177,37 @@ public class InventoryService {
         if (newItem == null) {
             throw new IllegalArgumentException("Replacement item must not be null.");
         }
-        Item existing = repository.findById(id)
+        Item existing = repository.findByIdForUpdate(id)
                 .orElseThrow(() -> new IndexOutOfBoundsException("No inventory item with id=" + id));
+        ensureNameAvailable(newItem.getName(), id);
         existing.copyBusinessFieldsFrom(newItem);
         Item saved = repository.save(existing);
         log.debug("Updated item id={}", id);
         return saved;
     }
 
+    private void ensureNameAvailable(String name, Long excludedId) {
+        Item conflict = repository.findAllByNameIgnoreCaseForUpdate(name).stream()
+                .filter(item -> excludedId == null || !excludedId.equals(item.getId()))
+                .findFirst().orElse(null);
+        if (conflict != null) {
+            throw new DuplicateItemNameException(conflict.getId(), conflict.getName());
+        }
+    }
+
     @Transactional
     public synchronized void deleteItem(int index) {
-        Item existing = itemAtIndex(index);
+        Long id = itemAtIndex(index).getId();
+        Item existing = repository.findByIdForUpdate(id)
+                .orElseThrow(() -> new IndexOutOfBoundsException(
+                        "Inventory item at index " + index + " no longer exists."));
         repository.deleteById(existing.getId());
         log.debug("Deleted item at index {} id={}", index, existing.getId());
     }
 
     @Transactional
     public synchronized void deleteById(Long id) {
-        if (repository.findById(id).isEmpty()) {
+        if (repository.findByIdForUpdate(id).isEmpty()) {
             throw new IndexOutOfBoundsException("No inventory item with id=" + id);
         }
         repository.deleteById(id);
@@ -184,7 +237,7 @@ public class InventoryService {
         if (amount < 0) {
             throw new IllegalArgumentException("Decrement amount cannot be negative.");
         }
-        Optional<Item> found = findByNameIgnoreCase(name);
+        Optional<Item> found = repository.findAllByNameIgnoreCaseForUpdate(name).stream().findFirst();
         if (found.isEmpty()) {
             return Optional.empty();
         }
@@ -194,6 +247,51 @@ public class InventoryService {
         Item saved = repository.save(item);
         log.info("Inventory '{}' qty → {} (decremented by {})", saved.getName(), next, amount);
         return Optional.of(saved);
+    }
+
+    /**
+     * Decrements a required SKU without silently overselling it.
+     * Used by order fulfillment, where a missing SKU or shortfall must abort the
+     * enclosing transaction instead of producing a partially deducted order.
+     */
+    @Transactional
+    public synchronized Item decrementQuantityByNameStrict(String name, int amount) {
+        return decrementQuantityByNameStrict(name, amount, null);
+    }
+
+    /**
+     * Strict fulfillment decrement that also verifies the order and inventory units agree.
+     */
+    @Transactional
+    public synchronized Item decrementQuantityByNameStrict(
+            String name, int amount, String expectedUnit) {
+        if (name == null || name.isBlank()) {
+            throw new IllegalArgumentException("Inventory item name is required.");
+        }
+        if (amount < 0) {
+            throw new IllegalArgumentException("Decrement amount cannot be negative.");
+        }
+        Item item = repository.findAllByNameIgnoreCaseForUpdate(name).stream().findFirst()
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "Cannot fulfill: no inventory SKU matches '" + name.trim() + "'."));
+        if (expectedUnit != null && !expectedUnit.isBlank()
+                && !InventoryUnits.equivalent(item.getUnit(), expectedUnit)) {
+            throw new IllegalArgumentException(
+                    "Cannot fulfill '" + item.getName() + "': order unit "
+                            + expectedUnit.trim() + " does not match inventory unit "
+                            + item.getUnit() + ".");
+        }
+        if (item.getQuantity() < amount) {
+            throw new IllegalArgumentException(
+                    "Cannot fulfill '" + item.getName() + "': requires " + amount
+                            + " " + item.getUnit() + " but only " + item.getQuantity()
+                            + " available.");
+        }
+        item.setQuantity(item.getQuantity() - amount);
+        Item saved = repository.save(item);
+        log.info("Inventory '{}' qty → {} (strict decrement by {})",
+                saved.getName(), saved.getQuantity(), amount);
+        return saved;
     }
 
     /**
@@ -208,10 +306,17 @@ public class InventoryService {
         if (amount < 0) {
             throw new IllegalArgumentException("Increment amount cannot be negative.");
         }
-        Optional<Item> found = findByNameIgnoreCase(name);
+        Optional<Item> found = repository.findAllByNameIgnoreCaseForUpdate(name).stream().findFirst();
         if (found.isPresent()) {
             Item item = found.get();
-            item.setQuantity(item.getQuantity() + amount);
+            final int next;
+            try {
+                next = Math.addExact(item.getQuantity(), amount);
+            } catch (ArithmeticException exception) {
+                throw new IllegalArgumentException(
+                        "Inventory quantity would exceed the supported maximum.", exception);
+            }
+            item.setQuantity(next);
             Item saved = repository.save(item);
             log.info("Inventory '{}' qty → {} (incremented by {})", saved.getName(), saved.getQuantity(), amount);
             return saved;
@@ -231,13 +336,13 @@ public class InventoryService {
      */
     @Transactional(readOnly = true)
     public InventoryKpiSnapshot inventoryKpis(int lowStockThreshold) {
-        int threshold = Math.max(0, lowStockThreshold);
+        int threshold = normalizeLowStockThreshold(lowStockThreshold);
         List<Item> items = getAllItems();
         int skuCount = items.size();
         double sellValue = 0;
         double costBasis = 0;
         int lowStock = 0;
-        int totalUnits = 0;
+        long totalUnits = 0;
         for (Item i : items) {
             sellValue += i.getPrice() * i.getQuantity();
             costBasis += i.getCost() * i.getQuantity();
@@ -254,7 +359,7 @@ public class InventoryService {
             double sellValue,
             double costBasis,
             int lowStockCount,
-            int totalUnits,
+            long totalUnits,
             int lowStockThreshold
     ) {}
 
@@ -315,7 +420,7 @@ public class InventoryService {
     /** Items with quantity ≤ threshold, lowest stock first. */
     @Transactional(readOnly = true)
     public List<Item> findLowStock(int threshold) {
-        int t = Math.max(0, threshold);
+        int t = normalizeLowStockThreshold(threshold);
         return getAllItems().stream()
                 .filter(i -> i.getQuantity() <= t)
                 .sorted(Comparator.comparingInt(Item::getQuantity)
@@ -329,7 +434,7 @@ public class InventoryService {
      */
     @Transactional(readOnly = true)
     public LowStockReport buildLowStockReport(int threshold) {
-        int t = Math.max(0, threshold);
+        int t = normalizeLowStockThreshold(threshold);
         List<Item> all = getAllItems();
         List<LowStockLine> lines = new ArrayList<>();
         double costTotal = 0;
@@ -364,100 +469,7 @@ public class InventoryService {
     }
 
     public byte[] generateLowStockPdf(LowStockReport report) {
-        if (report == null) {
-            throw new IllegalArgumentException("report is required.");
-        }
-        try {
-            ByteArrayOutputStream baos = new ByteArrayOutputStream();
-            Document doc = new Document(PageSize.LETTER, 40, 40, 48, 40);
-            PdfWriter.getInstance(doc, baos);
-            doc.open();
-
-            Color brandGreen = new Color(34, 100, 54);
-            Color brandSoft = new Color(232, 245, 233);
-            Color warnSoft = new Color(255, 243, 224);
-            Font titleFont = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 18, brandGreen);
-            Font h2 = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 12, brandGreen);
-            Font body = FontFactory.getFont(FontFactory.HELVETICA, 10);
-            Font small = FontFactory.getFont(FontFactory.HELVETICA, 9, Color.DARK_GRAY);
-            Font banner = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 11, Color.WHITE);
-
-            PdfPTable bannerTable = new PdfPTable(1);
-            bannerTable.setWidthPercentage(100);
-            PdfPCell bannerCell = new PdfPCell(new Phrase(
-                    "FlowersForever  ·  Port Orchard / Kitsap  ·  Low-Stock Reorder",
-                    banner));
-            bannerCell.setBackgroundColor(brandGreen);
-            bannerCell.setPadding(10);
-            bannerCell.setBorder(Rectangle.NO_BORDER);
-            bannerTable.addCell(bannerCell);
-            doc.add(bannerTable);
-            doc.add(Chunk.NEWLINE);
-
-            doc.add(new Paragraph("Low-Stock Reorder List", titleFont));
-            doc.add(new Paragraph(
-                    "Date: " + report.date()
-                            + "     ·     Threshold: ≤ " + report.threshold()
-                            + "     ·     SKUs: " + report.skuCount(),
-                    small));
-            doc.add(Chunk.NEWLINE);
-
-            PdfPTable summary = new PdfPTable(new float[]{1, 1, 1});
-            summary.setWidthPercentage(100);
-            summary.addCell(summaryCell("Low SKUs",
-                    String.valueOf(report.lowStockCount()),
-                    report.lowStockCount() > 0 ? warnSoft : brandSoft));
-            summary.addCell(summaryCell("Suggest cost $",
-                    String.format(Locale.US, "%,.0f", report.suggestedOrderCostTotal()), brandSoft));
-            summary.addCell(summaryCell("Threshold",
-                    "≤ " + report.threshold(), brandSoft));
-            doc.add(summary);
-            doc.add(Chunk.NEWLINE);
-
-            doc.add(new Paragraph("1. Reorder sheet (lowest first)", h2));
-            doc.add(Chunk.NEWLINE);
-            if (report.lines().isEmpty()) {
-                doc.add(new Paragraph(
-                        "All SKUs above threshold — no restock needed today.", body));
-            } else {
-                PdfPTable t = new PdfPTable(new float[]{2.8f, 1.5f, 0.9f, 1.0f, 1.1f, 1.2f});
-                t.setWidthPercentage(100);
-                headerCell(t, "SKU");
-                headerCell(t, "Category");
-                headerCell(t, "On hand");
-                headerCell(t, "Unit");
-                headerCell(t, "Order qty");
-                headerCell(t, "Est. cost");
-                for (LowStockLine line : report.lines()) {
-                    Color rowBg = line.quantity() == 0 ? new Color(255, 235, 230) : Color.WHITE;
-                    t.addCell(cell(line.name(), body, rowBg));
-                    t.addCell(cell(line.category(), body, rowBg));
-                    t.addCell(cell(String.valueOf(line.quantity()), body, rowBg));
-                    t.addCell(cell(line.unit(), body, rowBg));
-                    t.addCell(cell(String.valueOf(line.suggestedOrderQty()), body, rowBg));
-                    t.addCell(cell(String.format(Locale.US, "%,.2f", line.suggestedOrderCost()), body, rowBg));
-                }
-                doc.add(t);
-                doc.add(Chunk.NEWLINE);
-                doc.add(new Paragraph(String.format(Locale.US,
-                        "Suggested restock total (at cost): $%,.2f",
-                        report.suggestedOrderCostTotal()), body));
-            }
-            doc.add(Chunk.NEWLINE);
-            doc.add(new Paragraph(
-                    "Tip: target qty = max(2× threshold, threshold+1). "
-                            + "Zero-qty rows are highlighted for harvest priority.",
-                    small));
-            doc.add(new Paragraph(
-                    "FlowersForever · practical tools for PNW flower growers", small));
-
-            doc.close();
-            log.info("Generated low-stock reorder PDF (threshold={}, lines={})",
-                    report.threshold(), report.lowStockCount());
-            return baos.toByteArray();
-        } catch (DocumentException e) {
-            throw new IllegalStateException("Failed to build low-stock PDF: " + e.getMessage(), e);
-        }
+        return reportGenerator.generateLowStockPdf(report);
     }
 
     /**
@@ -562,101 +574,7 @@ public class InventoryService {
     }
 
     public byte[] generatePriceListPdf(PriceListReport report) {
-        if (report == null) {
-            throw new IllegalArgumentException("report is required.");
-        }
-        try {
-            ByteArrayOutputStream baos = new ByteArrayOutputStream();
-            Document doc = new Document(PageSize.LETTER, 40, 40, 48, 40);
-            PdfWriter.getInstance(doc, baos);
-            doc.open();
-
-            Color brandGreen = new Color(34, 100, 54);
-            Color brandSoft = new Color(232, 245, 233);
-            Font titleFont = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 18, brandGreen);
-            Font h2 = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 12, brandGreen);
-            Font body = FontFactory.getFont(FontFactory.HELVETICA, 10);
-            Font small = FontFactory.getFont(FontFactory.HELVETICA, 9, Color.DARK_GRAY);
-            Font banner = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 11, Color.WHITE);
-
-            PdfPTable bannerTable = new PdfPTable(1);
-            bannerTable.setWidthPercentage(100);
-            PdfPCell bannerCell = new PdfPCell(new Phrase(
-                    "FlowersForever  ·  Port Orchard / Kitsap  ·  Price List",
-                    banner));
-            bannerCell.setBackgroundColor(brandGreen);
-            bannerCell.setPadding(10);
-            bannerCell.setBorder(Rectangle.NO_BORDER);
-            bannerTable.addCell(bannerCell);
-            doc.add(bannerTable);
-            doc.add(Chunk.NEWLINE);
-
-            doc.add(new Paragraph("Wholesale / Market Price List", titleFont));
-            doc.add(new Paragraph(
-                    "Date: " + report.date()
-                            + "     ·     "
-                            + (report.inStockOnly() ? "In-stock only" : "All SKUs")
-                            + "     ·     SKUs: " + report.skuCount(),
-                    small));
-            doc.add(Chunk.NEWLINE);
-
-            PdfPTable summary = new PdfPTable(new float[]{1, 1, 1});
-            summary.setWidthPercentage(100);
-            summary.addCell(summaryCell("SKUs", String.valueOf(report.skuCount()), brandSoft));
-            summary.addCell(summaryCell("Sell value $",
-                    String.format(Locale.US, "%,.0f", report.sellValue()), brandSoft));
-            summary.addCell(summaryCell("Units on hand",
-                    String.valueOf(report.totalUnits()), brandSoft));
-            doc.add(summary);
-            doc.add(Chunk.NEWLINE);
-
-            doc.add(new Paragraph("1. Catalog (by category)", h2));
-            doc.add(Chunk.NEWLINE);
-            if (report.lines().isEmpty()) {
-                doc.add(new Paragraph(
-                        report.inStockOnly()
-                                ? "No in-stock SKUs — harvest or clear in-stock filter."
-                                : "Inventory is empty.",
-                        body));
-            } else {
-                PdfPTable t = new PdfPTable(new float[]{2.6f, 1.6f, 1.1f, 1.0f, 0.9f, 1.2f});
-                t.setWidthPercentage(100);
-                headerCell(t, "SKU");
-                headerCell(t, "Category");
-                headerCell(t, "Unit $");
-                headerCell(t, "Unit");
-                headerCell(t, "Qty");
-                headerCell(t, "Ext. $");
-                for (PriceListLine line : report.lines()) {
-                    Color bg = line.quantity() <= 0 ? new Color(245, 245, 245) : Color.WHITE;
-                    t.addCell(cell(line.name(), body, bg));
-                    t.addCell(cell(line.category(), body, bg));
-                    t.addCell(cell(String.format(Locale.US, "%,.2f", line.unitPrice()), body, bg));
-                    t.addCell(cell(line.unit(), body, bg));
-                    t.addCell(cell(String.valueOf(line.quantity()), body, bg));
-                    t.addCell(cell(String.format(Locale.US, "%,.2f", line.lineSellValue()), body, bg));
-                }
-                doc.add(t);
-                doc.add(Chunk.NEWLINE);
-                doc.add(new Paragraph(String.format(Locale.US,
-                        "Catalog sell value: $%,.2f   ·   Cost basis: $%,.2f",
-                        report.sellValue(), report.costBasis()), body));
-            }
-            doc.add(Chunk.NEWLINE);
-            doc.add(new Paragraph(
-                    "Tip: booth sheet = in-stock only; full list includes zeros for planning. "
-                            + "Low-stock reorder is a separate PDF.",
-                    small));
-            doc.add(new Paragraph(
-                    "FlowersForever · practical tools for PNW flower growers", small));
-
-            doc.close();
-            log.info("Generated price list PDF (skus={}, inStockOnly={})",
-                    report.skuCount(), report.inStockOnly());
-            return baos.toByteArray();
-        } catch (DocumentException e) {
-            throw new IllegalStateException("Failed to build price list PDF: " + e.getMessage(), e);
-        }
+        return reportGenerator.generatePriceListPdf(report);
     }
 
     private static String formatPriceListText(boolean inStockOnly, List<PriceListLine> lines,
@@ -732,53 +650,10 @@ public class InventoryService {
         return s.length() <= max ? s : s.substring(0, max - 1) + "…";
     }
 
-    private static void headerCell(PdfPTable table, String text) {
-        PdfPCell cell = new PdfPCell(new Phrase(text,
-                FontFactory.getFont(FontFactory.HELVETICA_BOLD, 9, Color.WHITE)));
-        cell.setBackgroundColor(new Color(34, 100, 54));
-        cell.setPadding(5);
-        table.addCell(cell);
-    }
-
-    private static PdfPCell cell(String text, Font font, Color bg) {
-        PdfPCell cell = new PdfPCell(new Phrase(text == null ? "" : text, font));
-        cell.setPadding(4);
-        cell.setBackgroundColor(bg);
-        cell.setBorderColor(new Color(200, 210, 200));
-        return cell;
-    }
-
-    private static PdfPCell summaryCell(String label, String value, Color bg) {
-        Paragraph p = new Paragraph();
-        p.add(new Chunk(label + "\n", FontFactory.getFont(FontFactory.HELVETICA, 9, Color.DARK_GRAY)));
-        p.add(new Chunk(value, FontFactory.getFont(FontFactory.HELVETICA_BOLD, 13)));
-        PdfPCell cell = new PdfPCell(p);
-        cell.setBackgroundColor(bg);
-        cell.setPadding(8);
-        cell.setBorderColor(new Color(180, 200, 180));
-        cell.setHorizontalAlignment(Element.ALIGN_CENTER);
-        return cell;
-    }
-
     @Transactional(readOnly = true)
     public synchronized void exportToCsv(String filename) {
-        if (filename == null || filename.trim().isEmpty()) {
-            throw new IllegalArgumentException("Export filename must not be null or empty.");
-        }
+        csvExporter.export(filename, repository.findAllOrdered());
 
-        List<Item> inventory = repository.findAllOrdered();
-        try (BufferedWriter bw = new BufferedWriter(new FileWriter(filename.trim(), java.nio.charset.StandardCharsets.UTF_8))) {
-            bw.write(CSV_HEADER);
-            bw.newLine();
-            for (Item item : inventory) {
-                bw.write(item.toCsv());
-                bw.newLine();
-            }
-            log.info("Inventory exported to '{}' ({} item(s)).", filename, inventory.size());
-        } catch (IOException e) {
-            log.error("Export to '{}' failed: {}", filename, e.getMessage());
-            throw new IllegalStateException("Export to '" + filename + "' failed: " + e.getMessage(), e);
-        }
     }
 
     // ── Internals ─────────────────────────────────────────────────────────────
@@ -792,6 +667,10 @@ public class InventoryService {
         return all.get(index);
     }
 
+    private static int normalizeLowStockThreshold(int threshold) {
+        return Math.min(Math.max(0, threshold), MAX_LOW_STOCK_THRESHOLD);
+    }
+
     private List<Item> loadSeedFromCsv() {
         File file = new File(seedCsvPath);
         if (!file.exists()) {
@@ -799,14 +678,12 @@ public class InventoryService {
         }
 
         List<Item> items = new ArrayList<>();
-        try (BufferedReader br = new BufferedReader(new FileReader(file, java.nio.charset.StandardCharsets.UTF_8))) {
-            String line;
+        try (Reader reader = new FileReader(file, java.nio.charset.StandardCharsets.UTF_8)) {
             boolean firstDataLine = true;
-            while ((line = br.readLine()) != null) {
-                if (line.isBlank()) {
-                    continue;
-                }
-                String[] parts = parseCsvLine(line);
+            int rowNumber = 0;
+            for (List<String> row : CsvSupport.readAll(reader, ',')) {
+                rowNumber++;
+                String[] parts = row.toArray(new String[0]);
                 if (firstDataLine && isHeaderRow(parts)) {
                     firstDataLine = false;
                     continue;
@@ -823,11 +700,11 @@ public class InventoryService {
                                 parts[6]
                         ));
                     } catch (Exception e) {
-                        log.warn("Skipping malformed seed CSV line: '{}' — {}", line, e.getMessage());
+                        log.warn("Skipping malformed seed CSV row {} — {}", rowNumber, e.getMessage());
                     }
                 }
             }
-        } catch (IOException e) {
+        } catch (IOException | IllegalArgumentException e) {
             log.warn("Could not read seed CSV '{}': {}", seedCsvPath, e.getMessage());
             return List.of();
         }
@@ -836,24 +713,6 @@ public class InventoryService {
 
     private static boolean isHeaderRow(String[] parts) {
         return parts.length > 0 && "name".equalsIgnoreCase(parts[0].trim());
-    }
-
-    private String[] parseCsvLine(String line) {
-        List<String> parts = new ArrayList<>();
-        StringBuilder sb = new StringBuilder();
-        boolean inQuotes = false;
-        for (char c : line.toCharArray()) {
-            if (c == '"') {
-                inQuotes = !inQuotes;
-            } else if (c == ',' && !inQuotes) {
-                parts.add(sb.toString().trim());
-                sb.setLength(0);
-            } else {
-                sb.append(c);
-            }
-        }
-        parts.add(sb.toString().trim());
-        return parts.toArray(new String[0]);
     }
 
     private List<Item> buildSampleInventory() {

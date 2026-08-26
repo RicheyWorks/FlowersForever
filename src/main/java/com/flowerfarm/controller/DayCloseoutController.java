@@ -2,7 +2,6 @@ package com.flowerfarm.controller;
 
 import com.flowerfarm.service.DayCloseoutService;
 import com.flowerfarm.service.DayCloseoutService.DayCloseout;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -45,9 +44,6 @@ public class DayCloseoutController {
         DayCloseout closeout = dayCloseoutService.build();
         byte[] pdf = dayCloseoutService.generatePdf(closeout);
         String filename = "day-closeout-" + closeout.date() + ".pdf";
-        return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
-                .contentType(MediaType.APPLICATION_PDF)
-                .body(pdf);
+        return DownloadResponse.pdf(pdf, filename);
     }
 }

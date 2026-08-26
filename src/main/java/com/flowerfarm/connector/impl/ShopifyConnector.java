@@ -1,9 +1,11 @@
 package com.flowerfarm.connector.impl;
 
+import com.flowerfarm.connector.ConnectorHttpClient;
 import com.flowerfarm.connector.*;
 import com.flowerfarm.model.Item;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.stereotype.Component;
@@ -44,12 +46,13 @@ public class ShopifyConnector implements ExternalConnector<Map<String, Object>>,
     private final ConnectorConfig config;
     private final RestTemplate restTemplate;
 
+    @Autowired
     public ShopifyConnector(
             @Value("${connector.shopify.shop-name:}") String shopName,
             @Value("${connector.shopify.api-token:}") String apiToken,
             @Value("${connector.shopify.api-version:2024-01}") String apiVersion,
             @Value("${connector.shopify.local-file:}") String localFile) {
-        this(shopName, apiToken, apiVersion, localFile, new RestTemplate());
+        this(shopName, apiToken, apiVersion, localFile, ConnectorHttpClient.create());
     }
 
     /** Package-private constructor for unit tests with a mockable {@link RestTemplate}. */
