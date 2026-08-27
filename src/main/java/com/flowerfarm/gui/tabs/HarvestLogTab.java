@@ -1298,7 +1298,6 @@ public class HarvestLogTab implements FlowerFarmTab {
 
     private void failEntrySave(EntryMutation mutation, Throwable failure) {
         finishEntrySaveControls();
-        String detail = safeMessage(failure);
         String status = mutation == EntryMutation.ADD
                 ? "Harvest not logged · retry" : "Edit not saved · retry";
         updateEntryStatus(status, FarmUi.Tone.DANGER);

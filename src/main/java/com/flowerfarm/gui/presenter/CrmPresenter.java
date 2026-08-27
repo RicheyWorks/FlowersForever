@@ -130,7 +130,10 @@ public final class CrmPresenter {
     }
 
     public CustomerOrder createOrder(OrderDraft draft) {
-        LocalDate orderDate = parseOrderDate(draft == null ? null : draft.orderDate());
+        if (draft == null) {
+            throw new InputValidationException("orderForm", "Enter the order details.");
+        }
+        LocalDate orderDate = parseOrderDate(draft.orderDate());
         OrderLine line = toOrderLine(new LineDraft(
                 draft.product(), draft.quantity(), draft.unit(), draft.unitPrice()));
         return orderService.create(draft.customerId(), orderDate, "DRAFT",
@@ -142,7 +145,10 @@ public final class CrmPresenter {
             OrderDraft draft,
             java.util.Map<Long, OrderService.OrderReviewSnapshot> reviewedActiveOrders,
             boolean separateOrderApproved) {
-        LocalDate orderDate = parseOrderDate(draft == null ? null : draft.orderDate());
+        if (draft == null) {
+            throw new InputValidationException("orderForm", "Enter the order details.");
+        }
+        LocalDate orderDate = parseOrderDate(draft.orderDate());
         OrderLine line = toOrderLine(new LineDraft(
                 draft.product(), draft.quantity(), draft.unit(), draft.unitPrice()));
         // Desktop workers review the saved multi-product order before confirmation. Keeping this

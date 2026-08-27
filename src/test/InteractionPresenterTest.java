@@ -240,6 +240,10 @@ class InteractionPresenterTest {
                 .isInstanceOfSatisfying(CrmPresenter.InputValidationException.class,
                         error -> assertThat(error.field()).isEqualTo("orderDate"))
                 .hasMessageContaining("YYYY-MM-DD");
+        assertThatThrownBy(() -> presenter.createOrder(null))
+                .isInstanceOfSatisfying(CrmPresenter.InputValidationException.class,
+                        error -> assertThat(error.field()).isEqualTo("orderForm"))
+                .hasMessageContaining("order details");
         assertThat(presenter.inventoryChoices()).singleElement()
                 .satisfies(choice -> assertThat(choice.toString())
                         .isEqualTo("Dahlia Mix — 4 on hand"));
@@ -280,6 +284,10 @@ class InteractionPresenterTest {
         verify(orders).createReviewed(eq(7L), eq(LocalDate.of(2026, 9, 12)),
                 eq("DRAFT"), eq("Separate market load"), eq("MARKET"),
                 argThat(lines -> lines.size() == 1), eq(reviewed), eq(true));
+        assertThatThrownBy(() -> presenter.createOrder(null, reviewed, true))
+                .isInstanceOfSatisfying(CrmPresenter.InputValidationException.class,
+                        error -> assertThat(error.field()).isEqualTo("orderForm"))
+                .hasMessageContaining("order details");
     }
 
     @Test

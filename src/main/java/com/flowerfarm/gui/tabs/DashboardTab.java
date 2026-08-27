@@ -1305,10 +1305,12 @@ public class DashboardTab implements FlowerFarmTab {
 
     private void finishDailySheetExport(String sheet, SwingWorker<Path, Void> worker) {
         try {
-            Path destination = worker.get();
+            Path destination = java.util.Objects.requireNonNull(
+                    worker.get(), "Daily-sheet export returned no destination.");
             finishDailySheetControls();
-            String fileName = destination.getFileName() == null
-                    ? destination.toString() : destination.getFileName().toString();
+            Path destinationFileName = destination.getFileName();
+            String fileName = destinationFileName == null
+                    ? destination.toString() : destinationFileName.toString();
             updateDailySheetStatus(sheet + " saved · " + fileName,
                     sheet + " PDF saved successfully to " + destination.toAbsolutePath() + ".",
                     FarmUi.Tone.SUCCESS);
@@ -1352,7 +1354,8 @@ public class DashboardTab implements FlowerFarmTab {
         if (parent == null || !Files.isDirectory(parent)) {
             throw new IllegalArgumentException("Choose an existing destination folder.");
         }
-        String leaf = target.getFileName() == null ? "daily-sheet" : target.getFileName().toString();
+        Path targetFileName = target.getFileName();
+        String leaf = targetFileName == null ? "daily-sheet" : targetFileName.toString();
         Path temporary = Files.createTempFile(parent, "." + leaf + "-", ".tmp");
         try {
             Files.write(temporary, pdf);

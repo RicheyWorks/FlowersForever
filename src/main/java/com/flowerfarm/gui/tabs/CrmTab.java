@@ -1053,7 +1053,8 @@ public class CrmTab implements FlowerFarmTab {
         JPanel filterCriteria = FarmUi.toolbar(
                 fieldLabel("Status", filterStatus, '\0'), filterStatus,
                 fieldLabel("Handoff", filterHandoff, '\0'), filterHandoff,
-                fieldLabel("Customer", filterCustomer, '\0'), filterCustomer,
+                fieldLabel("Customer", filterCustomer, '\0'), filterCustomer);
+        JPanel filterDates = FarmUi.toolbar(
                 fieldLabel("From", filterFrom, '\0'), filterFrom,
                 fieldLabel("To", filterTo, '\0'), filterTo);
         JPanel filterActions = FarmUi.toolbar(
@@ -1075,6 +1076,7 @@ public class CrmTab implements FlowerFarmTab {
         orderHandoffBanner.setVisible(false);
         filterBar.add(orderHandoffBanner);
         filterBar.add(filterCriteria);
+        filterBar.add(filterDates);
         filterBar.add(Box.createVerticalStrut(FarmUi.CONTROL_GAP));
         filterBar.add(filterActions);
         p.add(filterBar, BorderLayout.NORTH);
@@ -1592,12 +1594,15 @@ public class CrmTab implements FlowerFarmTab {
     }
 
     private boolean revealFirstOrderEntryProblem() {
+        JComboBox<CrmPresenter.CustomerChoice> customerControl = orderCustomer;
         if (selectedOrderId() == null
-                && (orderCustomer == null || orderCustomer.getSelectedItem() == null)) {
+                && (customerControl == null || customerControl.getSelectedItem() == null)) {
             String message = "Add or select a customer before creating this order.";
-            orderCustomer.setToolTipText(message);
-            orderCustomer.getAccessibleContext().setAccessibleDescription(message);
-            FarmUi.revealAndFocus(orderCustomer);
+            if (customerControl != null) {
+                customerControl.setToolTipText(message);
+                customerControl.getAccessibleContext().setAccessibleDescription(message);
+                FarmUi.revealAndFocus(customerControl);
+            }
             status(message);
             return true;
         }
