@@ -22,7 +22,7 @@ Expand build and infrastructure in five areas, all on GitHub-native, zero-cost t
 1. **Code quality gates** — JaCoCo coverage reports on every build; SpotBugs + Checkstyle as non-failing report profiles wired into a dedicated CI job. Conservative coverage and SpotBugs gates were added after clean baselines were established (see ratchet history below).
 2. **Docker** — multi-stage Dockerfile producing a headless REST-only image, published to GHCR on release. A headless guard added to `FlowerFarmGUI.run()` so the default profile boots cleanly without a display.
 3. **CI matrix + caching** — JDK 17 (baseline) + JDK 21 (forward-compat) matrix; Maven cache already present via `setup-java`.
-4. **Supply-chain security** — CodeQL scanning, dependency-review on PRs, CycloneDX SBOM generated every build and attached to releases.
+4. **Supply-chain security** — CodeQL scanning, dependency-review on PRs when GitHub's API supports the repository visibility, and a CycloneDX SBOM generated every build and attached to releases.
 5. **Native installers** — `jpackage` MSI (Windows) and DMG (macOS) built on tag push and attached to the GitHub Release alongside the fat JAR.
 
 ## Options Considered
@@ -64,7 +64,7 @@ Rejected outright: no deployment target exists that would justify k8s/IaC, and a
 
 ## Consequences
 
-- Easier: onboarding farm users (double-click installer), demoing the REST API (one `docker run`), spotting regressions (coverage + static analysis visible per PR), responding to CVEs (SBOM + CodeQL + dependency-review).
+- Easier: onboarding farm users (double-click installer), demoing the REST API (one `docker run`), spotting regressions (coverage + static analysis visible per PR), responding to CVEs (SBOM + CodeQL, plus dependency-review where GitHub makes it available).
 - Harder: release pipeline goes from 1 job to 4 (JAR, image, MSI, DMG) — more surface to break on tag day; installer artifacts are unsigned so users see OS warnings.
 - Revisit: ratchet JaCoCo/SpotBugs from report to enforce once baseline is clean; code signing if distribution widens; SonarCloud if trend history becomes valuable; GUI-in-container is explicitly out of scope.
 
@@ -74,7 +74,7 @@ Rejected outright: no deployment target exists that would justify k8s/IaC, and a
 2. [x] Headless guard in `FlowerFarmGUI.run()`
 3. [x] `Dockerfile` + `.dockerignore`; GHCR publish job in release workflow
 4. [x] CI: JDK 17/21 matrix + quality-report job + coverage artifact
-5. [x] `codeql.yml` + `dependency-review.yml` workflows
+5. [x] `codeql.yml` + `dependency-review.yml` workflows (dependency review skips private repositories unless GitHub Advanced Security is enabled)
 6. [x] `installers.yml`: jpackage MSI + DMG attached to releases
 7. [x] Baseline recorded and ratchet set (2026-07-16, see below)
 8. [x] Code signing evaluated — deferred with defined trigger, see [ADR-002](ADR-002-code-signing.md)

@@ -334,8 +334,8 @@ com.flowerfarm
 |---|---|
 | **CI** | `mvn clean verify` on JDK 17 and 21, plus Docker build and smoke test |
 | **Quality** | JaCoCo coverage gates, zero-baseline Medium+ SpotBugs, and Checkstyle |
-| **Security** | CodeQL, dependency review, role tests, and fail-closed container authentication |
-| **Supply chain** | CycloneDX SBOM on every build and weekly Dependabot updates |
+| **Security** | CodeQL, role tests, and fail-closed container authentication |
+| **Supply chain** | CycloneDX SBOM, automatic dependency submission, and weekly Dependabot updates |
 | **Releases** | Fat JAR, SBOM, GHCR image, MSI, and DMG from `v*` tags |
 
 Read the [system architecture](docs/ARCHITECTURE.md), [backend boundaries](docs/BACKEND_ARCHITECTURE.md), [GUI architecture](docs/GUI_ARCHITECTURE.md), and [architecture decisions](docs/adr/).
