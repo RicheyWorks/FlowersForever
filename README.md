@@ -1,291 +1,329 @@
-# FlowersForever — Flower Farm Manager
+<div align="center">
+
+<img src="docs/images/flowersforever-hero.jpg" alt="A Pacific Northwest flower farm at sunrise with fresh-cut flowers and a laptop ready for the day's work" width="100%">
+
+# FlowersForever
+
+### Run the flower farm—not the spreadsheet.
+
+One calm desktop workspace for harvests, inventory, customers, orders, market packing, and the paperwork that keeps a growing farm moving.
+
+[![Download for Windows](https://img.shields.io/badge/Download-Windows-256c46?style=for-the-badge&logo=windows)](https://github.com/RicheyWorks/FlowersForever/releases/download/v1.0.19/FlowersForever-1.0.19.msi)
+[![Download for macOS](https://img.shields.io/badge/Download-macOS-256c46?style=for-the-badge&logo=apple)](https://github.com/RicheyWorks/FlowersForever/releases/download/v1.0.19/FlowersForever-1.0.19.dmg)
+[![Latest release](https://img.shields.io/github/v/release/RicheyWorks/FlowersForever?style=for-the-badge&label=Latest)](https://github.com/RicheyWorks/FlowersForever/releases/latest)
 
 [![CI](https://github.com/RicheyWorks/FlowersForever/actions/workflows/ci.yml/badge.svg)](https://github.com/RicheyWorks/FlowersForever/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/RicheyWorks/FlowersForever?include_prereleases&sort=semver)](https://github.com/RicheyWorks/FlowersForever/releases)
+[![CodeQL](https://github.com/RicheyWorks/FlowersForever/actions/workflows/codeql.yml/badge.svg)](https://github.com/RicheyWorks/FlowersForever/actions/workflows/codeql.yml)
 
-**Practical desktop + REST inventory for PNW flower growers**  
-Port Orchard / Kitsap County · roses, stems, tools, supplies · west of the Cascades.
+</div>
 
-Spring Boot **3.5.16** · modular Swing GUI · dual-mode connectors (offline JSON mirrors **or** live REST) · fat JAR **1.0.19**.
+## Your whole farm day, in one place
 
----
+FlowersForever turns the everyday flow of a small flower farm into a clear, connected routine. Log a harvest and stock goes up. Complete an order and stock goes down. Prepare for market, print the paperwork, and see the next priority without rebuilding the same information in several spreadsheets.
 
-## Features
+It was built around real cut-flower work in Port Orchard and Kitsap County, Washington—but the core workflow fits small growers anywhere.
 
-| Area | Highlights |
-|------|------------|
-| **Inventory** | H2/SQLite stock; harvest ↑ / fulfill ↓; low-stock reorder + **price list** PDFs |
-| **Harvest** | Log / edit / batch / filter; bed production + chronological **harvest log** PDFs |
-| **Customers & orders** | Draft and confirm orders; completion deducts stock; **invoice** + **statement** PDFs |
-| **Dashboard** | Weekly harvest and sales overview, plain-language alerts, and quick actions |
-| **Market day** | Packing list vs stock, packing PDF, and confirmed-order completion |
-| **Day ops** | **Morning briefing** + **day closeout** sheets (pack, beds, water, stock, sales) |
-| **Irrigation** | Kitsap Open-Meteo live or offline climatology |
-| **Activity history** | Imports, exports, harvests, and orders; filter, CSV, and printable PDF |
-| **Connectors** | CSV, Excel, Airtable, Webhook, Shopify, Square, Sheets, Farmbrite, Floranext — dual-mode |
-| **Auth** | Optional OWNER / HAND / VIEWER barn roles (`auth` profile) |
-| **Demo** | `demo` profile seeds Kitsap CRM + harvest + today’s CONFIRMED orders when empty |
-| **Reports / CLI** | Weekly harvest + sales PDF; full ops menu via `--cli` |
-| **Rose visualizer** | L-Systems: grow, mutate, save rulesets, inventory link, PNG |
+| Start the day | Grow and track | Sell and fulfill | Finish with confidence |
+|---|---|---|---|
+| See priorities, low stock, harvest totals, and sales | Log single or batch harvests and review bed production | Manage customers, orders, pickup, delivery, and market handoffs | Print invoices, packing lists, reports, briefings, and closeouts |
 
----
+## Start in minutes—no coding required
 
-## Requirements
+### 1. Download the app
 
-- **JDK 17+**
-- **Maven 3.9+**
+- **Windows:** [download the `.msi` installer](https://github.com/RicheyWorks/FlowersForever/releases/download/v1.0.19/FlowersForever-1.0.19.msi)
+- **macOS:** [download the `.dmg` installer](https://github.com/RicheyWorks/FlowersForever/releases/download/v1.0.19/FlowersForever-1.0.19.dmg)
+- **All downloads:** [open the latest GitHub release](https://github.com/RicheyWorks/FlowersForever/releases/latest)
 
-| Automation | Behavior |
-|------------|----------|
-| **CI** | Every push/PR to `main` → `mvn clean verify` on JDK 17 + 21 (advisory), Docker build, static-analysis job |
-| **Quality** | JaCoCo report + 51% line / 41% branch gates; Medium+ SpotBugs gate + Checkstyle report via `-Pquality` |
-| **Dependabot** | Weekly Maven + GitHub Actions PRs |
-| **Supply chain** | CodeQL scanning, PR dependency review, CycloneDX SBOM on every build |
-| **Releases** | Tag `v*` → fat JAR + SBOM on GitHub Releases, image to GHCR, MSI/DMG installers via jpackage |
-| **Security** | Auth model & hardening — **[SECURITY.md](SECURITY.md)** |
+The desktop installers include the runtime they need. You do not need to install Java, Maven, or use a command line.
 
-System map: **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**. Decisions and
-trade-offs: **[ADR-001](docs/adr/ADR-001-infrastructure-and-build-expansion.md)**
-and **[ADR-003](docs/adr/ADR-003-layered-application-boundaries.md)**.
-Report rendering boundaries are recorded in
-**[ADR-004](docs/adr/ADR-004-report-rendering-collaborators.md)**, and desktop
-interaction decomposition in
-**[ADR-005](docs/adr/ADR-005-desktop-interaction-collaborators.md)**.
-Everyday desktop workflows, role behavior, keyboard use, and mistake recovery
-are covered in the **[desktop user guide](docs/USER_GUIDE.md)**.
-Farm rollout and recovery are covered by the **[deployment checklist](docs/DEPLOYMENT.md)**
-and **[backup/restore procedure](docs/BACKUP_RESTORE.md)**. Review the
-**[known limitations](docs/KNOWN_LIMITATIONS.md)** before approving a workstation.
+> [!IMPORTANT]
+> The installers are not code-signed yet, so Windows SmartScreen or macOS Gatekeeper may say the publisher is unknown. Download only from this repository's **Releases** page and review the [installer safety note](docs/adr/ADR-002-code-signing.md).
 
-Native MSI and DMG installers are currently unsigned. Windows SmartScreen or
-macOS Gatekeeper may show an unknown-publisher warning; verify that the download
-comes from this repository's GitHub Releases page. See
-**[ADR-002](docs/adr/ADR-002-code-signing.md)** for the signing decision and
-adoption trigger.
+### 2. Open FlowersForever
 
-### Docker (headless REST-only)
+The app starts with a small sample inventory when no farm data exists. Your records stay on your computer by default, and you can [back them up or restore them](docs/BACKUP_RESTORE.md).
 
-```bash
-docker build -t flowersforever .
-docker run -p 8080:8080 -v flowerfarm-data:/app/data \
-  -e FLOWERFARM_AUTH_USERS='owner:replace-with-a-long-password:OWNER' \
-  flowersforever
-# or from GHCR after a release:
-docker run -p 8080:8080 \
-  -e FLOWERFARM_AUTH_USERS='owner:replace-with-a-long-password:OWNER' \
-  ghcr.io/richeyworks/flowersforever:latest
+### 3. Begin with **Today**
+
+The dashboard shows what needs attention first: orders ready to pack, low-stock items, recent harvest totals, sales, irrigation guidance, and shortcuts to the next task.
+
+For a guided first visit, follow the [plain-language desktop user guide](docs/USER_GUIDE.md).
+
+## See it in action
+
+<p align="center"><em>Real application screens using sample farm data.</em></p>
+
+<table>
+  <tr>
+    <td width="50%">
+      <img src="docs/images/app-dashboard.png" alt="FlowersForever Today dashboard showing inventory, low stock, harvest, revenue, and priority actions">
+      <br><strong>Know what needs attention today.</strong><br>
+      One dashboard brings stock, harvest, sales, orders, and farm priorities together.
+    </td>
+    <td width="50%">
+      <img src="docs/images/app-inventory.png" alt="FlowersForever inventory screen showing flower products, prices, quantities, and low-stock highlighting">
+      <br><strong>Trust the stock count.</strong><br>
+      Search inventory, spot shortages, record counts, and print reorder or price lists.
+    </td>
+  </tr>
+  <tr>
+    <td width="50%">
+      <img src="docs/images/app-harvest-log.png" alt="FlowersForever harvest log with filters, history, and a simple harvest entry form">
+      <br><strong>Turn cuts into usable records.</strong><br>
+      Log harvests quickly, keep bed context, filter history, and review production totals.
+    </td>
+    <td width="50%">
+      <img src="docs/images/app-market-day.png" alt="FlowersForever market-day packing screen with packing scope, pick list, customer load-out, and readiness checks">
+      <br><strong>Pack market day with fewer surprises.</strong><br>
+      Build a pick list, catch stock gaps, review customer loads, and complete confirmed orders.
+    </td>
+  </tr>
+</table>
+
+## What FlowersForever helps you do
+
+### Keep growing work connected
+
+- Log, edit, batch, search, and filter harvests.
+- Track production by bed or field.
+- Increase inventory automatically when flowers are harvested.
+- Get Kitsap-aware irrigation guidance from live weather or an offline seasonal fallback.
+
+### Know what you can sell
+
+- See on-hand quantities, pricing, costs, and low-stock warnings.
+- Record physical stock counts without losing the audit trail.
+- Print a low-stock reorder sheet or customer-ready price list.
+- Export visible information to CSV when you need a spreadsheet.
+
+### Move orders from conversation to completion
+
+- Keep customer contacts, notes, and order history together.
+- Build Draft orders, review them, then confirm when they are ready.
+- Track Pickup, Delivery, and Market handoffs.
+- Deduct inventory only when an order is completed.
+- Print invoices and customer statements.
+
+### Make market day easier
+
+- Build packing lists from confirmed orders.
+- Compare required products with current stock before loading.
+- Review each customer handoff and catch missing information.
+- Print the packing PDF and complete orders safely.
+
+### Start and close the day clearly
+
+- **Morning briefing:** what to pack, harvest, water, or restock.
+- **Day closeout:** completed sales, harvest activity, open work, and exceptions.
+- **Activity history:** a searchable record of imports, exports, harvests, and orders.
+- **Reports:** printable PDFs for the farm office, crew, market table, or customer.
+
+## A simple, safer workflow
+
+```text
+Harvest flowers
+      ↓
+Inventory increases
+      ↓
+Create and confirm an order
+      ↓
+Build the market or delivery packing list
+      ↓
+Complete the order → inventory decreases
+      ↓
+Print the closeout and review activity history
 ```
 
-The image activates the fail-closed `container` profile: HTTP Basic is mandatory,
-every password must contain at least 12 characters, and at least one account must
-have the `OWNER` role. `/actuator/health` remains public for container health checks.
+FlowersForever keeps those steps linked. It also pauses destructive or inventory-changing actions for review, explains what went wrong in plain language, and keeps unfinished form details available for retry.
 
-```bash
-git tag v1.0.19
-git push origin v1.0.19
-```
+## Farm-friendly by design
+
+| Need | How FlowersForever responds |
+|---|---|
+| **Works when the internet does not** | Core desktop work and local connector mirrors are offline-first. |
+| **Keeps farm data close** | Records are stored on the workstation by default, with backup and restore tools. |
+| **Supports different helpers** | Optional OWNER, HAND, and VIEWER roles control who can change records. |
+| **Avoids surprise stock changes** | Confirming an order does not deduct stock; completion does. |
+| **Connects when you are ready** | CSV, Excel, Airtable, Google Sheets, Shopify, Square, Farmbrite, Floranext, and webhooks are available. |
+| **Explains the next step** | Status messages, validation highlights, and dashboard priorities use direct farm language. |
+
+## Is it a fit for your farm?
+
+FlowersForever is designed for small and growing cut-flower operations that want one dependable workstation for daily records and paperwork. It is especially useful when:
+
+- harvest, stock, customer, and market information currently lives in separate places;
+- the same numbers are being copied into several spreadsheets;
+- more than one person needs to understand what is ready, blocked, or running low;
+- the farm needs printable paperwork without a cloud subscription workflow;
+- internet access is inconsistent or deliberately avoided for core farm records.
+
+Before placing it on a production workstation, review the [deployment checklist](docs/DEPLOYMENT.md), [backup procedure](docs/BACKUP_RESTORE.md), and [known limitations](docs/KNOWN_LIMITATIONS.md).
+
+## Help and documentation
+
+| I want to… | Start here |
+|---|---|
+| Learn the desktop app | [User guide](docs/USER_GUIDE.md) |
+| Try a five-minute walkthrough | [Demo runbook](docs/DEMO.md) |
+| Set up a farm workstation | [Deployment checklist](docs/DEPLOYMENT.md) |
+| Protect or recover my data | [Backup and restore](docs/BACKUP_RESTORE.md) |
+| Understand roles and security | [Security guide](SECURITY.md) |
+| Connect another service | [Connector sandbox guide](docs/CONNECTORS_SANDBOX.md) |
+| Check current caveats | [Known limitations](docs/KNOWN_LIMITATIONS.md) |
 
 ---
 
-## Quick start
+<details>
+<summary><strong>Developer quick start</strong></summary>
+
+### Requirements
+
+- JDK 17 or newer
+- Maven 3.9 or newer
+
+### Build and run
 
 ```bash
 git clone https://github.com/RicheyWorks/FlowersForever.git
 cd FlowersForever
 mvn clean verify
 
-# GUI + REST on loopback :8080
+# Desktop app + REST API on 127.0.0.1:8080
 mvn spring-boot:run
-# or
+
+# Or run the packaged JAR
 java -jar target/flowerfarm-manager-1.0.19.jar
 
-# CLI
+# Interactive command-line mode
 java -jar target/flowerfarm-manager-1.0.19.jar --cli
-
-# Profiles (combine with commas)
-java -jar target/flowerfarm-manager-1.0.19.jar --spring.profiles.active=sqlite
-FLOWERFARM_AUTH_USERS='owner:replace-with-a-long-password:OWNER' \
-  java -jar target/flowerfarm-manager-1.0.19.jar --spring.profiles.active=auth
-java -jar target/flowerfarm-manager-1.0.19.jar --spring.profiles.active=demo
-java -jar target/flowerfarm-manager-1.0.19.jar --spring.profiles.active=demo,auth
 ```
+
+### Runtime profiles
 
 | Profile | Purpose |
-|---------|---------|
-| *(default)* | H2 file DB + GUI + REST |
+|---|---|
+| *(default)* | H2 file database + desktop GUI + loopback REST API |
 | `sqlite` | SQLite under `./data/flowerfarm.sqlite` |
-| `auth` | HTTP Basic + GUI login; requires strong credentials from environment |
-| `demo` | Non-destructive seed of CRM / harvest / today’s CONFIRMED orders when empty |
-| `cli` | Interactive CLI only (no Tomcat) |
-| `container` | Headless external bind + mandatory non-demo HTTP Basic credentials |
-
-Empty DB seeds from `farm_inventory.csv` if present, else sample PNW SKUs. Portable JAR store: `./data/flowerfarm.mv.db`.
-The packaged Windows app uses `%LOCALAPPDATA%\\FlowersForever\\data`; override either mode with
-`FLOWERFARM_DATA_DIR`. On its first packaged launch, legacy `./data` content is copied forward
-without deleting the source.
-Open desktop mode listens only on `127.0.0.1`; the `auth` profile enables LAN binding. REST-triggered CSV exports are written beneath `./data/exports`.
-
-### Portfolio demo
-
-Full runbook: **[docs/DEMO.md](docs/DEMO.md)**
-
-```powershell
-# App must already be running on :8080
-powershell -File scripts/demo-rest.ps1
-powershell -File scripts/demo-rest.ps1 -User farm -Pass kitsap   # with auth
-```
-
-**Happy path (~5 min)**
-
-1. **Dashboard** — weekly overview, morning briefing / day closeout
-2. **Harvest Log** — log Nootka Rose stems → stock ↑; bed production + harvest log PDFs
-3. **Customers & Orders** — confirm an order → invoice PDF; complete it → stock ↓
-4. **Market Day** — packing list / PDF → complete confirmed orders
-5. **Inventory** — low-stock reorder + price list PDFs
-6. **Activity History** — review successful work or items needing attention
-7. **Connectors** — Export Farmbrite/Shopify (local mirrors, no API keys)
-8. Optional **auth** — switch to `viewer` (writes blocked)
-
----
-
-## Connectors (dual-mode)
-
-**Default:** local JSON under `data/` (offline demos / CI).  
-**Live:** clear `local-file` and set credentials in `application-local.properties` (gitignored).
-
-| Name | Directions | Offline mirror | Live keys |
-|------|------------|----------------|-----------|
-| **csv** | I/E/S | file paths | — |
-| **excel** | I/E | `.xlsx` | — |
-| **farmbrite** | I/E/S | `data/farmbrite-mirror.json` | api-key + account-id |
-| **floranext** | I/E/S | `data/floranext-mirror.json` | api-key + store-url |
-| **shopify** | I/E/S | `data/shopify-mirror.json` | shop-name + api-token |
-| **square** | I/E/S | `data/square-mirror.json` | access-token (+ location) |
-| **google-sheets** | I/E/S | `data/google-sheets-mirror.json` | spreadsheet-id + key/token |
-| **airtable** | I/E/S | `data/airtable-mirror.json` | api-key + base-id |
-| **webhook** | E | `data/webhook-last-payload.json` | url (+ secret HMAC) |
-
-`GET /api/connectors` includes `mode` / `localMode`. Details: **[docs/CONNECTORS_SANDBOX.md](docs/CONNECTORS_SANDBOX.md)**.
-
----
-
-## Auth (optional)
-
-| Role | Write | Clear audit | Typical use |
-|------|-------|-------------|-------------|
-| **OWNER** | yes | yes | Farm manager |
-| **HAND** | yes | no | Harvest crew |
-| **VIEWER** | no | no | Office / guest |
+| `auth` | HTTP Basic + desktop login; requires strong credentials from the environment |
+| `demo` | Non-destructive sample CRM, harvest, and confirmed orders when the database is empty |
+| `cli` | Interactive CLI only, without Tomcat |
+| `container` | Headless external bind with mandatory, non-demo HTTP Basic credentials |
 
 ```bash
-export FLOWERFARM_AUTH_USERS='owner:replace-with-a-long-password:OWNER,hand:another-long-password:HAND'
-java -jar target/flowerfarm-manager-1.0.19.jar --spring.profiles.active=auth
+java -jar target/flowerfarm-manager-1.0.19.jar --spring.profiles.active=sqlite
+java -jar target/flowerfarm-manager-1.0.19.jar --spring.profiles.active=demo
+
+FLOWERFARM_AUTH_USERS='owner:replace-with-a-long-password:OWNER' \
+  java -jar target/flowerfarm-manager-1.0.19.jar --spring.profiles.active=auth
 ```
 
-GUI: **Account → My access / Switch user**.
-REST: `GET /api/auth/me` (Basic), `GET /api/auth/accounts` (usernames only).
+Empty databases seed from `farm_inventory.csv` when it is present, otherwise from sample PNW inventory. The portable JAR stores H2 data under `./data`; the packaged Windows app uses `%LOCALAPPDATA%\\FlowersForever\\data`. `FLOWERFARM_DATA_DIR` overrides the data directory.
 
----
+</details>
 
-## REST API (selected)
+<details>
+<summary><strong>Docker and server deployment</strong></summary>
 
-### Core
+The container is headless and REST-only. Its `container` profile fails closed: HTTP Basic is mandatory, passwords must contain at least 12 characters, and at least one account must have the OWNER role.
 
-| Method | Path | Purpose |
-|--------|------|---------|
-| GET | `/api/dashboard` | Inventory + harvest week + revenue KPIs |
-| GET | `/api/inventory` | List / search / kpis |
-| GET/POST | `/api/harvest` | Harvest CRUD |
-| POST | `/api/harvest/batch` | Batch log |
-| GET | `/api/harvest/week` | 7-day total + daily series |
-| GET | `/api/harvest/filter` | crop / bed / notes / dates |
-| GET/POST | `/api/customers` | CRM customers |
-| GET/POST | `/api/orders` | Orders |
-| GET | `/api/orders/week` | Realized + pipeline + sparklines |
-| POST | `/api/orders/{id}/confirm` | → CONFIRMED pipeline |
-| POST | `/api/orders/{id}/fulfill` | Deduct inventory |
-| GET | `/api/auth/me` | Session / role |
-| GET | `/actuator/health` | Health |
+```bash
+docker build -t flowersforever .
+docker run -p 8080:8080 \
+  -v flowerfarm-data:/app/data \
+  -e FLOWERFARM_AUTH_USERS='owner:replace-with-a-long-password:OWNER' \
+  flowersforever
 
-### Printables & ops sheets
-
-| Method | Path | Purpose |
-|--------|------|---------|
-| GET | `/api/inventory/low-stock/report.pdf` | Low-stock reorder (`threshold`) |
-| GET | `/api/inventory/price-list/report.pdf` | Price list (`inStockOnly`) |
-| GET | `/api/harvest/beds/report.pdf` | Bed / field production |
-| GET | `/api/harvest/log/report.pdf` | Chronological harvest log |
-| GET | `/api/orders/{id}/invoice.pdf` | Wholesale invoice |
-| GET | `/api/customers/{id}/statement.pdf` | Account statement (`from` / `to`) |
-| GET | `/api/market-day/packing.pdf` | Market packing list |
-| POST | `/api/market-day/fulfill` | Fulfill all CONFIRMED in window |
-| GET | `/api/briefing/report.pdf` | Morning briefing |
-| GET | `/api/closeout/report.pdf` | Day closeout |
-| GET | `/api/reports/weekly.pdf` | Trailing week report |
-| GET | `/api/connectors/history/report.pdf` | Audit history |
-| GET | `/api/irrigation/advice` | Kitsap water plan (`live=true\|false`) |
-
-Most printable routes also expose JSON and plain-text siblings (`/text` or bare path without `.pdf`).  
-Full market-day, filter, and connector endpoints: see controllers under `com.flowerfarm.controller`.
-
----
-
-## Architecture
-
+# Published release image
+docker run -p 8080:8080 \
+  -e FLOWERFARM_AUTH_USERS='owner:replace-with-a-long-password:OWNER' \
+  ghcr.io/richeyworks/flowersforever:latest
 ```
+
+`/actuator/health` remains public for container health checks. See the [deployment guide](docs/DEPLOYMENT.md) for the full checklist.
+
+</details>
+
+<details>
+<summary><strong>Connectors and REST API</strong></summary>
+
+### Connectors
+
+Connectors use local files by default for offline demos and CI. To use a live service, clear its `local-file` setting and provide credentials through gitignored local configuration or environment variables.
+
+| Connector | Import | Export | Sync | Offline option |
+|---|:---:|:---:|:---:|---|
+| CSV | ✓ | ✓ | ✓ | File paths |
+| Excel | ✓ | ✓ | ✓ | `.xlsx` |
+| Airtable | ✓ | ✓ | ✓ | JSON mirror |
+| Google Sheets | ✓ | ✓ | ✓ | JSON mirror |
+| Shopify | ✓ | ✓ | ✓ | JSON mirror |
+| Square | ✓ | ✓ | ✓ | JSON mirror |
+| Farmbrite | ✓ | ✓ | ✓ | JSON mirror |
+| Floranext | ✓ | ✓ | ✓ | JSON mirror |
+| Webhook |  | ✓ |  | Last-payload JSON |
+
+Full setup details: [connector sandbox guide](docs/CONNECTORS_SANDBOX.md).
+
+### Selected REST endpoints
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/api/dashboard` | Inventory, harvest, sales, and priority overview |
+| `GET/POST` | `/api/inventory` | Inventory list and changes |
+| `GET/POST` | `/api/harvest` | Harvest records |
+| `POST` | `/api/harvest/batch` | Batch harvest logging |
+| `GET/POST` | `/api/customers` | Customer records |
+| `GET/POST` | `/api/orders` | Order records |
+| `POST` | `/api/orders/{id}/confirm` | Move a Draft order to Confirmed |
+| `POST` | `/api/orders/{id}/fulfill` | Complete an order and deduct inventory |
+| `GET` | `/api/market-day/packing.pdf` | Market packing list |
+| `GET` | `/api/briefing/report.pdf` | Morning briefing |
+| `GET` | `/api/closeout/report.pdf` | Day closeout |
+| `GET` | `/actuator/health` | Application health |
+
+Printable inventory, harvest, invoice, statement, packing, weekly, and audit routes also provide PDF output. Browse `com.flowerfarm.controller` for the full API surface.
+
+</details>
+
+<details>
+<summary><strong>Architecture, quality, and release engineering</strong></summary>
+
+FlowersForever is a Spring Boot 3.5.16 application with a modular Swing desktop interface, REST controllers, transaction-aware services, offline-first connectors, and H2/SQLite storage.
+
+```text
 com.flowerfarm
-├── FlowerFarmApp
-├── auth/           # DesktopSession, roles, directory
-├── model/          # Item, Harvest, Customer, Order, SyncHistory
-├── service/        # Inventory, Harvest, Order, Market Day, Briefing, Closeout, …
-├── connector/      # DualModeCapable, LocalJsonMirror, registry, impl.*
-├── controller/     # REST
-├── gui/            # FlowerFarmGUI (TabHost) + tabs
-└── lsystem/        # Rose generative rules
+├── auth/           roles, desktop session, and user directory
+├── model/          inventory, harvest, customer, order, and activity records
+├── service/        farm rules, reports, market day, briefing, and closeout
+├── connector/      offline mirrors, live adapters, and connector registry
+├── controller/     REST API
+├── gui/            desktop shell, tabs, presenters, and shared UI components
+└── lsystem/        rose visualization rules
 ```
 
-**Add a dual-mode connector:** implement `ExternalConnector` + `DualModeCapable`, use `LocalJsonMirror` for offline, inject credentials with `@Value`, and register it with `@Component`.
-Full dependency, data-flow, transaction, profile, and deployment map:
-**[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**. GUI design notes:
-**[docs/GUI_ARCHITECTURE.md](docs/GUI_ARCHITECTURE.md)**.
+| Automation | What it protects |
+|---|---|
+| **CI** | `mvn clean verify` on JDK 17 and 21, plus Docker build and smoke test |
+| **Quality** | JaCoCo coverage gates, zero-baseline Medium+ SpotBugs, and Checkstyle |
+| **Security** | CodeQL, dependency review, role tests, and fail-closed container authentication |
+| **Supply chain** | CycloneDX SBOM on every build and weekly Dependabot updates |
+| **Releases** | Fat JAR, SBOM, GHCR image, MSI, and DMG from `v*` tags |
 
----
+Read the [system architecture](docs/ARCHITECTURE.md), [backend boundaries](docs/BACKEND_ARCHITECTURE.md), [GUI architecture](docs/GUI_ARCHITECTURE.md), and [architecture decisions](docs/adr/).
 
-## Status
+</details>
 
-**Current release: [v1.0.19](https://github.com/RicheyWorks/FlowersForever/releases/tag/v1.0.19)** — Spring Boot 3.5.16, offline-first dual-mode, full market-day ops loop with printable PDFs, hardened build pipeline (coverage, SBOM, CodeQL, Docker/GHCR, native installers — [ADR-001](docs/adr/ADR-001-infrastructure-and-build-expansion.md)).
+## Project status
 
-| Theme | Shipped (highlights) |
-|-------|----------------------|
-| **Core farm ops** | Harvest path, CRM pipeline/fulfill, dashboard KPIs, weekly PDF |
-| **Market day** | Pack list, packing PDF, batch fulfill (1.0.5–1.0.10) |
-| **Day bookends** | Morning briefing, day closeout (1.0.9, 1.0.12) |
-| **Printables** | Beds, harvest log, invoices, statements, low-stock, price list, audit (1.0.6–1.0.18) |
-| **Platform** | Dual-mode connectors, VIEWER locks, `demo` profile, Dependabot, SECURITY.md |
+Current release: **[v1.0.19](https://github.com/RicheyWorks/FlowersForever/releases/tag/v1.0.19)**
 
-### Later ideas
+The current product includes the complete harvest → inventory → order → market-day → printable closeout loop, offline-first connectors, optional farm roles, native desktop installers, container deployment, and automated quality and security checks.
 
-- Spring Boot **4.x** migration (deliberate; 3.5.16 is final 3.5 OSS)  
-- Deeper POS adapters (only with real merchant APIs)
+Longer-term ideas include deeper merchant integrations and a deliberate Spring Boot 4 migration after compatibility review.
 
----
+## Made for growers
 
-## Docs
+Built for Pacific Northwest flower growers in Port Orchard, Kitsap County, Washington.
 
-| File | Role |
-|------|------|
-| [README.md](README.md) | Setup, features, API |
-| [SECURITY.md](SECURITY.md) | Auth model, defaults, vulnerability reporting |
-| [docs/DEMO.md](docs/DEMO.md) | Portfolio / demo runbook |
-| [docs/CONNECTORS_SANDBOX.md](docs/CONNECTORS_SANDBOX.md) | Offline mirrors + live keys |
-| [docs/BACKEND_ARCHITECTURE.md](docs/BACKEND_ARCHITECTURE.md) | Transactions, validation, API errors, and connector safety |
-| [docs/GUI_ARCHITECTURE.md](docs/GUI_ARCHITECTURE.md) | GUI design history |
-| [scripts/demo-rest.ps1](scripts/demo-rest.ps1) | REST smoke (Windows) |
-| [scripts/demo-rest.sh](scripts/demo-rest.sh) | REST smoke (Unix) |
-
----
-
-## License / credit
-
-Built for PNW flower growers · Port Orchard, Kitsap County, WA.  
 Roses, compost, and Cascades mist included free of charge.
