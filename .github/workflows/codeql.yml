@@ -21,6 +21,9 @@ concurrency:
 jobs:
   analyze:
     name: Analyze (java)
+    # Hosted code scanning is not enabled for this private repository. Keep
+    # CodeQL ready for public mirrors or for a future explicitly enabled plan.
+    if: ${{ github.event.repository.private == false }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
 

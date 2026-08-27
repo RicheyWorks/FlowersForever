@@ -15,7 +15,7 @@ One calm desktop workspace for harvests, inventory, customers, orders, market pa
 [![Latest release](https://img.shields.io/github/v/release/RicheyWorks/FlowersForever?style=for-the-badge&label=Latest)](https://github.com/RicheyWorks/FlowersForever/releases/latest)
 
 [![CI](https://github.com/RicheyWorks/FlowersForever/actions/workflows/ci.yml/badge.svg)](https://github.com/RicheyWorks/FlowersForever/actions/workflows/ci.yml)
-[![CodeQL](https://github.com/RicheyWorks/FlowersForever/actions/workflows/codeql.yml/badge.svg)](https://github.com/RicheyWorks/FlowersForever/actions/workflows/codeql.yml)
+![Proprietary — All Rights Reserved](https://img.shields.io/badge/License-Proprietary%20%E2%80%94%20All%20Rights%20Reserved-6e2f45)
 
 </div>
 
@@ -334,7 +334,7 @@ com.flowerfarm
 |---|---|
 | **CI** | `mvn clean verify` on JDK 17 and 21, plus Docker build and smoke test |
 | **Quality** | JaCoCo coverage gates, zero-baseline Medium+ SpotBugs, and Checkstyle |
-| **Security** | CodeQL, role tests, and fail-closed container authentication |
+| **Security** | Medium+ SpotBugs gate, role tests, and fail-closed container authentication |
 | **Supply chain** | CycloneDX SBOM, automatic dependency submission, and weekly Dependabot updates |
 | **Releases** | Fat JAR, SBOM, GHCR image, MSI, and DMG from `v*` tags |
 
