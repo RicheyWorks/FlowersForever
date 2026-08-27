@@ -19,6 +19,15 @@
     <name>Flower Farm Manager</name>
     <description>Spring Boot inventory manager for PNW flower farms (Port Orchard, Kitsap County).</description>
 
+    <licenses>
+        <license>
+            <name>FlowersForever Proprietary License — All Rights Reserved</name>
+            <url>LICENSE</url>
+            <distribution>manual</distribution>
+            <comments>No permission is granted except by written agreement with RicheyWorks.</comments>
+        </license>
+    </licenses>
+
     <properties>
         <java.version>17</java.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>

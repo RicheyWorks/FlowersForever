@@ -355,3 +355,11 @@ Longer-term ideas include deeper merchant integrations and a deliberate Spring B
 Built for Pacific Northwest flower growers in Port Orchard, Kitsap County, Washington.
 
 Roses, compost, and Cascades mist included free of charge.
+
+## Ownership
+
+**FlowersForever is private, proprietary software owned by RicheyWorks. Copyright © 2026 RicheyWorks. All rights reserved.**
+
+Access to this repository does not grant permission to use, copy, modify, distribute, sublicense, sell, publish, or disclose FlowersForever. Use requires a separate written agreement expressly authorized by RicheyWorks. See the [FlowersForever Proprietary License](LICENSE).
+
+Third-party components remain governed by their own licenses; those terms apply only to the applicable components and do not make FlowersForever open source.
