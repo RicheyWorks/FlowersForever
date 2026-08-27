@@ -804,10 +804,12 @@ public class HarvestLogTab implements FlowerFarmTab {
                 "Harvest report and export status");
         JPanel actions = FarmUi.toolbar(
                 apply, clear, thisWeek, new JLabel("Reports & exports"), reportTools,
-                createReportBtn, filterTotalsOnly);
+                createReportBtn);
+        JPanel totalOptions = FarmUi.toolbar(filterTotalsOnly);
         bar.add(fields);
         bar.add(Box.createVerticalStrut(FarmUi.CONTROL_GAP));
         bar.add(actions);
+        bar.add(totalOptions);
         return bar;
     }
 
