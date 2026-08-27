@@ -8,6 +8,8 @@
 
 One calm desktop workspace for harvests, inventory, customers, orders, market packing, and the paperwork that keeps a growing farm moving.
 
+**From first cut to final sale, FlowersForever keeps the details connected—so you can spend less time reconciling records and more time growing, selling, and serving customers.**
+
 [![Download for Windows](https://img.shields.io/badge/Download-Windows-256c46?style=for-the-badge&logo=windows)](https://github.com/RicheyWorks/FlowersForever/releases/download/v1.0.19/FlowersForever-1.0.19.msi)
 [![Download for macOS](https://img.shields.io/badge/Download-macOS-256c46?style=for-the-badge&logo=apple)](https://github.com/RicheyWorks/FlowersForever/releases/download/v1.0.19/FlowersForever-1.0.19.dmg)
 [![Latest release](https://img.shields.io/github/v/release/RicheyWorks/FlowersForever?style=for-the-badge&label=Latest)](https://github.com/RicheyWorks/FlowersForever/releases/latest)
@@ -19,13 +21,29 @@ One calm desktop workspace for harvests, inventory, customers, orders, market pa
 
 ## Your whole farm day, in one place
 
-FlowersForever turns the everyday flow of a small flower farm into a clear, connected routine. Log a harvest and stock goes up. Complete an order and stock goes down. Prepare for market, print the paperwork, and see the next priority without rebuilding the same information in several spreadsheets.
+A flower farm should not need five spreadsheets and a stack of notes to answer one simple question: **What needs to happen next?**
 
-It was built around real cut-flower work in Port Orchard and Kitsap County, Washington—but the core workflow fits small growers anywhere.
+FlowersForever gives small and growing farms a practical operating hub. Log a harvest and stock goes up. Complete an order and stock goes down. Prepare for market, print the paperwork, and see the next priority without rebuilding the same information in several places.
+
+The result is a farm day that feels more visible, repeatable, and ready to grow. FlowersForever was shaped around real cut-flower work in Port Orchard and Kitsap County, Washington—but its core workflow fits small growers anywhere.
 
 | Start the day | Grow and track | Sell and fulfill | Finish with confidence |
 |---|---|---|---|
 | See priorities, low stock, harvest totals, and sales | Log single or batch harvests and review bed production | Manage customers, orders, pickup, delivery, and market handoffs | Print invoices, packing lists, reports, briefings, and closeouts |
+
+## Less daily friction. More room to grow.
+
+FlowersForever replaces scattered information with one dependable flow from the field to the customer.
+
+| When farm records are scattered… | With FlowersForever… |
+|---|---|
+| Stock counts become guesswork | Harvests and completed orders update inventory as the work happens |
+| Market packing depends on memory | Clear pick lists and readiness checks show what to load and what is missing |
+| Customer details hide in messages and notebooks | Contacts, notes, orders, invoices, and statements stay connected |
+| The day starts by hunting for answers | The **Today** dashboard surfaces priorities, shortages, sales, and ready-to-pack work |
+| Paperwork waits until late at night | Farm-ready PDFs turn current records into useful paperwork in a few clicks |
+
+**Know what you have. Know what is promised. Know what comes next.**
 
 ## Start in minutes—no coding required
 
@@ -59,24 +77,24 @@ For a guided first visit, follow the [plain-language desktop user guide](docs/US
     <td width="50%">
       <img src="docs/images/app-dashboard.png" alt="FlowersForever Today dashboard showing inventory, low stock, harvest, revenue, and priority actions">
       <br><strong>Know what needs attention today.</strong><br>
-      One dashboard brings stock, harvest, sales, orders, and farm priorities together.
+      Start with clarity instead of searching through yesterday's notes. Stock, harvest, sales, orders, and farm priorities meet in one view.
     </td>
     <td width="50%">
       <img src="docs/images/app-inventory.png" alt="FlowersForever inventory screen showing flower products, prices, quantities, and low-stock highlighting">
       <br><strong>Trust the stock count.</strong><br>
-      Search inventory, spot shortages, record counts, and print reorder or price lists.
+      See what is ready to sell, spot shortages earlier, record physical counts, and print reorder or customer price lists.
     </td>
   </tr>
   <tr>
     <td width="50%">
       <img src="docs/images/app-harvest-log.png" alt="FlowersForever harvest log with filters, history, and a simple harvest entry form">
       <br><strong>Turn cuts into usable records.</strong><br>
-      Log harvests quickly, keep bed context, filter history, and review production totals.
+      Capture the value coming out of the field. Log harvests quickly, keep bed context, and learn from production history.
     </td>
     <td width="50%">
       <img src="docs/images/app-market-day.png" alt="FlowersForever market-day packing screen with packing scope, pick list, customer load-out, and readiness checks">
       <br><strong>Pack market day with fewer surprises.</strong><br>
-      Build a pick list, catch stock gaps, review customer loads, and complete confirmed orders.
+      Turn confirmed demand into a clear load-out plan, catch stock gaps before departure, and keep every customer handoff visible.
     </td>
   </tr>
 </table>
@@ -159,6 +177,16 @@ FlowersForever is designed for small and growing cut-flower operations that want
 - internet access is inconsistent or deliberately avoided for core farm records.
 
 Before placing it on a production workstation, review the [deployment checklist](docs/DEPLOYMENT.md), [backup procedure](docs/BACKUP_RESTORE.md), and [known limitations](docs/KNOWN_LIMITATIONS.md).
+
+## Give tomorrow's farm day a calmer start
+
+Open FlowersForever, explore the included sample inventory, and see the harvest-to-sale workflow for yourself. No account setup is required for the default desktop experience, and your farm records stay on your workstation by default.
+
+**Ready to bring the field, cooler, office, and market table into one clear routine?**
+
+- [Download FlowersForever for Windows](https://github.com/RicheyWorks/FlowersForever/releases/download/v1.0.19/FlowersForever-1.0.19.msi)
+- [Download FlowersForever for macOS](https://github.com/RicheyWorks/FlowersForever/releases/download/v1.0.19/FlowersForever-1.0.19.dmg)
+- [View the latest release](https://github.com/RicheyWorks/FlowersForever/releases/latest)
 
 ## Help and documentation
 
