@@ -4,27 +4,63 @@
 
 # FlowersForever
 
-### Run the flower farm—not the spreadsheet.
+### Grow flowers. Move orders. Know what comes next.
 
-One calm desktop workspace for harvests, inventory, customers, orders, market packing, and the paperwork that keeps a growing farm moving.
+One colorful desktop workspace for the whole cut-flower day—from bed planning and harvest entry to inventory, customers, market packing, trends, and closeout paperwork.
 
-**From first cut to final sale, FlowersForever keeps the details connected—so you can spend less time reconciling records and more time growing, selling, and serving customers.**
+**FlowersForever turns scattered farm records into one calm, connected flow—so less of the day disappears into spreadsheets, retyping, and “where did we write that down?”**
 
 [![Private pilot](https://img.shields.io/badge/Access-Private%20Pilot-256c46?style=for-the-badge)](docs/PILOT_ACCESS.md)
 [![1.2 private preview](https://img.shields.io/badge/Release-1.2%20Private%20Preview-c99a45?style=for-the-badge)](#project-status)
+[![Desktop first](https://img.shields.io/badge/Experience-Desktop%20First-275c9f?style=for-the-badge)](#farm-friendly-by-design)
 
-[![CI](https://github.com/RicheyWorks/FlowersForever/actions/workflows/ci.yml/badge.svg)](https://github.com/RicheyWorks/FlowersForever/actions/workflows/ci.yml)
-![Proprietary — All Rights Reserved](https://img.shields.io/badge/License-Proprietary%20%E2%80%94%20All%20Rights%20Reserved-6e2f45)
+[![See the real app](https://img.shields.io/badge/SEE_THE_REAL_APP-%E2%86%93-176f4d?style=for-the-badge)](#see-it-in-action)
+[![Take the 5 minute tour](https://img.shields.io/badge/TAKE_THE_5_MINUTE_TOUR-%E2%86%92-b8344a?style=for-the-badge)](docs/DEMO.md)
+
+**[Product tour](#see-it-in-action)** · **[What it does](#what-flowersforever-helps-you-do)** · **[Private pilot](#give-tomorrows-farm-day-a-calmer-start)** · **[Developer setup](#help-and-documentation)**
+
+[![CI](https://github.com/RicheyWorks/FlowersForever/actions/workflows/ci.yml/badge.svg)](https://github.com/RicheyWorks/FlowersForever/actions/workflows/ci.yml) ![Local-first core](https://img.shields.io/badge/Core_Workflows-Local_First-256c46) ![Farm-ready PDFs](https://img.shields.io/badge/Output-Farm_Ready_PDFs-c99a45) ![Proprietary — All Rights Reserved](https://img.shields.io/badge/License-Proprietary-6e2f45)
 
 </div>
 
-## Your whole farm day, in one place
+<table>
+  <tr>
+    <td align="center" width="25%">
+      <h3>🌱 PLAN</h3>
+      Beds, successions, expected stems, and harvest windows in one visual season.
+    </td>
+    <td align="center" width="25%">
+      <h3>✂️ HARVEST</h3>
+      Fast field entry that keeps crop, bed, quantity, and inventory connected.
+    </td>
+    <td align="center" width="25%">
+      <h3>📦 SELL</h3>
+      Customers, orders, packing, handoffs, invoices, and stock-safe completion.
+    </td>
+    <td align="center" width="25%">
+      <h3>📈 LEARN</h3>
+      Grounded trends and searchable farm lessons built from your own records.
+    </td>
+  </tr>
+</table>
+
+## Your farm at a glance
+
+<p align="center">
+  <img src="docs/images/app-dashboard.png" width="100%" alt="FlowersForever Today dashboard showing colorful harvest, revenue, inventory, low-stock, priorities, and farm actions">
+  <br><strong>Open the app. See the day. Take the next action.</strong><br>
+  Harvest, sales, stock, shortages, packing, and watering priorities meet in one colorful command center.
+</p>
+
+> **The promise:** know what you have, know what is promised, and know what needs attention—without rebuilding the answer from five different places.
+
+## Built around the real flow of a flower farm
 
 A flower farm should not need five spreadsheets and a stack of notes to answer one simple question: **What needs to happen next?**
 
 FlowersForever gives small and growing farms a practical operating hub. Log a harvest and stock goes up. Complete an order and stock goes down. Prepare for market, print the paperwork, and save what the farm learned so next season does not start from memory.
 
-The result is a farm day that feels more visible, repeatable, and ready to grow. FlowersForever was shaped around real cut-flower work in Port Orchard and Kitsap County, Washington—but its core workflow fits small growers anywhere.
+The result is a farm day that feels more visible, repeatable, and ready to grow. FlowersForever was shaped around real cut-flower work in Port Orchard and Kitsap County, Washington, while its core workflow fits small growers anywhere.
 
 | Start the day | Grow and track | Sell and fulfill | Finish with confidence |
 |---|---|---|---|
@@ -44,7 +80,7 @@ FlowersForever replaces scattered information with one dependable flow from the 
 | A hard-won fix leaves with a notebook or crew member | The Knowledge Log keeps observations, actions, results, and confidence searchable on the farm |
 | Crop dates and bed capacity live in a dense spreadsheet | The Season Planner maps each bed, compares weekly actual harvests with planned pace, and keeps expected stems visible |
 
-**Know what you have. Know what is promised. Know what comes next.**
+<p align="center"><strong>🌱 Know what is growing. &nbsp; 🌸 Know what is available. &nbsp; 📦 Know what is promised. &nbsp; ✅ Know what comes next.</strong></p>
 
 ## Start in minutes—no coding required
 
@@ -69,62 +105,77 @@ For a guided first visit, follow the [plain-language desktop user guide](docs/US
 
 ## See it in action
 
-<p align="center"><em>Real application screens using sample farm data.</em></p>
+<p align="center"><em>Every image below is a real FlowersForever screen rendered with sample farm data.</em></p>
+
+### 1. See the season before the season surprises you
+
+<p align="center">
+  <img src="docs/images/app-season-planner.png" width="100%" alt="FlowersForever Season and Bed Planner comparing actual stems with planned harvest bars and flagging a bed overlap">
+  <br><strong>🌱 Plan beds visually—not in a wall of spreadsheet cells.</strong><br>
+  Map sowing, growing, and harvest timing, compare actual stems with the plan, spot double-booked beds, and draft the next succession without retyping the farm data.
+</p>
+
+### 2. Turn every cut into stock you can trust
 
 <table>
   <tr>
-    <td width="50%">
-      <img src="docs/images/app-dashboard.png" alt="FlowersForever Today dashboard showing inventory, low stock, harvest, revenue, and priority actions">
-      <br><strong>Know what needs attention today.</strong><br>
-      Start with clarity instead of searching through yesterday's notes. Stock, harvest, sales, orders, and farm priorities meet in one view.
-    </td>
-    <td width="50%">
-      <img src="docs/images/app-inventory.png" alt="FlowersForever inventory screen showing flower products, prices, quantities, and low-stock highlighting">
-      <br><strong>Trust the stock count.</strong><br>
-      See what is ready to sell, spot shortages earlier, record physical counts, and print reorder or customer price lists.
-    </td>
-  </tr>
-  <tr>
-    <td width="50%">
+    <td width="50%" valign="top">
       <img src="docs/images/app-harvest-log.png" alt="FlowersForever harvest log with filters, history, and a simple harvest entry form">
-      <br><strong>Turn cuts into usable records.</strong><br>
-      Capture the value coming out of the field. Log harvests quickly, keep bed context, and learn from production history.
+      <br><strong>✂️ Fast enough for the field.</strong><br>
+      Log one harvest or a batch, preserve the bed context, correct mistakes safely, and build useful production history while the work is still fresh.
     </td>
-    <td width="50%">
-      <img src="docs/images/app-market-day.png" alt="FlowersForever market-day packing screen with packing scope, pick list, customer load-out, and readiness checks">
-      <br><strong>Pack market day with fewer surprises.</strong><br>
-      Turn confirmed demand into a clear load-out plan, catch stock gaps before departure, and keep every customer handoff visible.
-    </td>
-  </tr>
-  <tr>
-    <td width="50%">
-      <img src="docs/images/app-trend-analysis.png" alt="FlowersForever harvest outlook showing actual harvest, fitted trend, next-week forecast, evidence, and planning guidance">
-      <br><strong>Turn harvest history into a decision.</strong><br>
-      Compare actual output with the fitted direction and next-week forecast, see how strong the signal is, and act without losing the underlying weekly evidence.
-    </td>
-    <td width="50%">
-      <img src="docs/images/app-knowledge-log.png" alt="FlowersForever Farm Knowledge Log showing plain-language search, reusable tags, saved lessons, and selected observation details">
-      <br><strong>Keep hard-won farm knowledge on the farm.</strong><br>
-      Save observations, actions, results, follow-ups, and honest confidence in one searchable record—so a useful lesson can be found and repeated next season.
+    <td width="50%" valign="top">
+      <img src="docs/images/app-inventory.png" alt="FlowersForever inventory screen showing flower products, prices, quantities, and low-stock highlighting">
+      <br><strong>🌸 Clear enough for the cooler.</strong><br>
+      See what is ready to sell, catch shortages earlier, record a physical count, and print a reorder sheet or customer-ready price list.
     </td>
   </tr>
 </table>
 
-<p align="center">
-  <img src="docs/images/app-season-planner.png" width="92%" alt="FlowersForever Season and Bed Planner comparing actual stems with planned harvest bars and flagging a bed overlap">
-  <br><strong>See the whole growing season before the gaps become surprises.</strong><br>
-  Map sowing, growing, and harvest timing by bed, compare recorded stems with the plan, and see overlaps or production gaps before they become surprises.
-</p>
+### 3. Pack the promise before loading the van
 
 <p align="center">
-  <img src="docs/images/app-season-planner-weekly.png" width="92%" alt="FlowersForever weekly harvest pace chart comparing actual stem bars with the planned production line">
-  <br><strong>See whether harvest output is keeping pace.</strong><br>
-  Compare weekly actual stems with the plan, find the current week instantly, and separate expected-to-date pace from the full-season target.
+  <img src="docs/images/app-market-day.png" width="96%" alt="FlowersForever market-day packing screen with packing scope, pick list, customer load-out, and readiness checks">
+  <br><strong>📦 Confirmed demand becomes a practical pick list.</strong><br>
+  See what each customer needs, catch stock and handoff problems before departure, check loads deliberately, and protect inventory from premature completion.
+</p>
+
+### 4. See the signal—and the evidence behind it
+
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <img src="docs/images/app-trend-analysis.png" alt="FlowersForever harvest outlook showing actual harvest, fitted trend, next-week forecast, evidence, and planning guidance">
+      <br><strong>📈 A forecast you can inspect.</strong><br>
+      See next week's outlook, recent change, data coverage, signal quality, and the recorded weeks behind the result—without pretending uncertainty is certainty.
+    </td>
+    <td width="50%" valign="top">
+      <img src="docs/images/app-season-planner-weekly.png" alt="FlowersForever weekly harvest pace chart comparing actual stem bars with the planned production line">
+      <br><strong>🎯 Pace, not just totals.</strong><br>
+      Compare weekly actual stems with the planned line and distinguish what should be harvested by today from the full-season target.
+    </td>
+  </tr>
+</table>
+
+### 5. Keep the farm's memory where the farm can use it
+
+<p align="center">
+  <img src="docs/images/app-knowledge-log.png" width="96%" alt="FlowersForever Farm Knowledge Log showing plain-language search, reusable tags, saved lessons, and selected observation details">
+  <br><strong>🧠 What worked should not disappear into a notebook.</strong><br>
+  Save observations, actions, results, follow-ups, and honest confidence in a searchable farm record—then find the lesson next season in ordinary language.
 </p>
 
 ## What FlowersForever helps you do
 
-### Keep growing work connected
+<table>
+  <tr>
+    <td align="center" width="33%"><strong>⚡ ENTER IT ONCE</strong><br>Reuse saved farm data instead of rebuilding the same record in every workflow.</td>
+    <td align="center" width="33%"><strong>🔗 KEEP IT CONNECTED</strong><br>Harvest, stock, orders, packing, trends, and paperwork use the same operational truth.</td>
+    <td align="center" width="33%"><strong>🚦 ACT WITH CONTEXT</strong><br>Color, evidence, warnings, and direct actions explain what needs attention next.</td>
+  </tr>
+</table>
+
+### 🌱 Keep growing work connected
 
 - Build a visual season timeline from sowing through each expected harvest window.
 - Track bed allocations, bed feet, crop varieties, status, and expected stems in one record.
@@ -139,14 +190,14 @@ For a guided first visit, follow the [plain-language desktop user guide](docs/US
 - Increase inventory automatically when flowers are harvested.
 - Get Kitsap-aware irrigation guidance from live weather or an offline seasonal fallback.
 
-### Know what you can sell
+### 🌸 Know what you can sell
 
 - See on-hand quantities, pricing, costs, and low-stock warnings.
 - Record physical stock counts without losing the audit trail.
 - Print a low-stock reorder sheet or customer-ready price list.
 - Export visible information to CSV when you need a spreadsheet.
 
-### Move orders from conversation to completion
+### 🤝 Move orders from conversation to completion
 
 - Keep customer contacts, notes, and order history together.
 - Build Draft orders, review them, then confirm when they are ready.
@@ -154,21 +205,21 @@ For a guided first visit, follow the [plain-language desktop user guide](docs/US
 - Deduct inventory only when an order is completed.
 - Print invoices and customer statements.
 
-### Make market day easier
+### 📦 Make market day easier
 
 - Build packing lists from confirmed orders.
 - Compare required products with current stock before loading.
 - Review each customer handoff and catch missing information.
 - Print the packing PDF and complete orders safely.
 
-### Start and close the day clearly
+### ☀️ Start and close the day clearly
 
 - **Morning briefing:** what to pack, harvest, water, or restock.
 - **Day closeout:** completed sales, harvest activity, open work, and exceptions.
 - **Activity history:** a searchable record of imports, exports, harvests, and orders.
 - **Reports:** printable PDFs for the farm office, crew, market table, or customer.
 
-### Keep hard-won farm knowledge on the farm
+### 🧠 Keep hard-won farm knowledge on the farm
 
 - Record what happened, where it happened, what the crew tried, and what changed.
 - Tag lessons with familiar words such as mildew, irrigation, pests, timing, harvest, or market.
@@ -176,23 +227,27 @@ For a guided first visit, follow the [plain-language desktop user guide](docs/US
 - Mark a lesson as needs review, an early signal, promising, or proven on this farm.
 - Add a follow-up date and optionally connect the lesson to a saved harvest, product, order, or customer.
 
-**Keep the lessons in the ground. Less waste. More control.**
+<p align="center"><strong>Keep the lessons in the ground. Less waste. More control.</strong></p>
 
-## A simple, safer workflow
+## One connected flow—from bed plan to closeout
 
-```text
-Harvest flowers
-      ↓
-Inventory increases
-      ↓
-Create and confirm an order
-      ↓
-Build the market or delivery packing list
-      ↓
-Complete the order → inventory decreases
-      ↓
-Print the closeout and review activity history
-```
+<p align="center">
+  <strong>🌱 PLAN</strong> &nbsp;→&nbsp;
+  <strong>✂️ HARVEST</strong> &nbsp;→&nbsp;
+  <strong>🌸 STOCK</strong> &nbsp;→&nbsp;
+  <strong>🤝 ORDER</strong> &nbsp;→&nbsp;
+  <strong>📦 PACK</strong> &nbsp;→&nbsp;
+  <strong>✅ COMPLETE</strong> &nbsp;→&nbsp;
+  <strong>🧾 CLOSE OUT</strong>
+</p>
+
+| When this happens | FlowersForever keeps the next step connected |
+|---|---|
+| A harvest is saved | Matching inventory increases and the crop's production history grows |
+| An order is confirmed | Demand becomes visible without deducting stock too early |
+| A packing list is built | Confirmed products, shortages, and customer handoffs meet in one review |
+| An order is completed | Matching inventory decreases exactly once |
+| The day closes | Sales, harvests, open work, and exceptions become printable records |
 
 FlowersForever keeps those steps linked. It also pauses destructive or inventory-changing actions for review, explains what went wrong in plain language, and keeps unfinished form details available for retry.
 
@@ -226,10 +281,12 @@ Join the private pilot, explore the included sample inventory, and see the harve
 
 **Ready to bring the field, cooler, office, and market table into one clear routine?**
 
-- [Request or prepare private pilot access](docs/PILOT_ACCESS.md)
-- [Review the farm-workstation deployment checklist](docs/DEPLOYMENT.md)
-- [See what comes next for farm knowledge](docs/PRODUCT_ROADMAP.md)
-- [Review the maintainer signing gate](docs/SIGNING_SETUP.md)
+<p align="center">
+  <a href="docs/PILOT_ACCESS.md"><img src="https://img.shields.io/badge/REQUEST_PRIVATE_PILOT_ACCESS-%E2%86%92-176f4d?style=for-the-badge" alt="Request private pilot access"></a>
+  <a href="docs/DEMO.md"><img src="https://img.shields.io/badge/TAKE_THE_5_MINUTE_PRODUCT_TOUR-%E2%86%92-b8344a?style=for-the-badge" alt="Take the five minute product tour"></a>
+</p>
+
+<p align="center">Explore the <a href="docs/PRODUCT_ROADMAP.md">product roadmap</a> or prepare a farm workstation with the <a href="docs/DEPLOYMENT.md">deployment checklist</a>.</p>
 
 ## Help and documentation
 
@@ -242,6 +299,7 @@ Join the private pilot, explore the included sample inventory, and see the harve
 | Understand roles and security | [Security guide](SECURITY.md) |
 | Connect another service | [Connector sandbox guide](docs/CONNECTORS_SANDBOX.md) |
 | Check current caveats | [Known limitations](docs/KNOWN_LIMITATIONS.md) |
+| Prepare signed release artifacts | [Maintainer signing gate](docs/SIGNING_SETUP.md) |
 
 ---
 
@@ -391,7 +449,7 @@ Read the [system architecture](docs/ARCHITECTURE.md), [backend boundaries](docs/
 
 Current status: **v1.2.0 proprietary private preview.** The previous v1.0.19 artifacts are retired and must not be distributed to customers.
 
-The current product includes the complete harvest → inventory → order → market-day → printable closeout loop, the first Farm Knowledge Log, offline-first connectors, optional farm roles, native desktop installers, container deployment, and automated quality and security checks.
+The current product includes the complete harvest → inventory → order → market-day → printable closeout loop, a visual Season and Bed Planner, grounded harvest trend analysis, the Farm Knowledge Log, offline-first connectors, optional farm roles, native desktop installers, container deployment, and automated quality and security checks.
 
 The Knowledge Log records practical, searchable lessons tied to crops, beds, dates, problems, actions, results, follow-ups, and confidence. Seasonal comparisons and crew-ready playbooks come next; see the [product roadmap](docs/PRODUCT_ROADMAP.md).
 
