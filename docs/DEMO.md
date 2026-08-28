@@ -12,9 +12,9 @@ cd FlowersForever
 mvn clean verify
 ```
 
-All tests green → fat JAR under `target/flowerfarm-manager-1.0.19.jar`.  
+All tests green → development JAR under `target/flowerfarm-manager-1.1.0-SNAPSHOT.jar`.
 GitHub Actions runs the same command on every push to `main` (see CI badge in the README).  
-Tagged releases (`git tag v1.0.19 && git push origin v1.0.19`) publish the fat JAR on the GitHub Releases page.
+Approved stable tags publish only when the tag, POM, verified JAR, and both native installers agree on the exact version.
 
 ---
 
@@ -23,7 +23,7 @@ Tagged releases (`git tag v1.0.19 && git push origin v1.0.19`) publish the fat J
 | Goal | Command |
 |------|---------|
 | Default GUI + REST + H2 | `mvn spring-boot:run` |
-| Same via JAR | `java -jar target/flowerfarm-manager-1.0.19.jar` |
+| Same via JAR | `java -jar target/flowerfarm-manager-1.1.0-SNAPSHOT.jar` |
 | **Demo seed** (empty CRM/harvest) | `java -jar … --spring.profiles.active=demo` |
 | SQLite file DB | `java -jar … --spring.profiles.active=sqlite` |
 | Barn multi-user | `java -jar … --spring.profiles.active=auth` |
@@ -109,7 +109,7 @@ Narrate as Kitsap / Port Orchard grower:
 ## 3. Auth demo (optional, ~2 min)
 
 ```bash
-java -jar target/flowerfarm-manager-1.0.19.jar --spring.profiles.active=auth
+java -jar target/flowerfarm-manager-1.1.0-SNAPSHOT.jar --spring.profiles.active=auth
 ```
 
 | User | Password | Show |
@@ -182,7 +182,7 @@ Or use `scripts/demo-rest.ps1` from the repo root (app must already be running).
 - **Dual-mode connectors:** demo offline with JSON mirrors; flip to REST with credentials.  
 - **Ops KPIs:** week harvest + **realized** revenue (not inflated by drafts).  
 - **Barn roles:** OWNER / HAND / VIEWER without a separate identity product.  
-- **Stack:** Spring Boot 3, JPA, Swing + FlatLaf, JFreeChart, OpenPDF, Weka — one runnable JAR.
+- **Stack:** Spring Boot 3, JPA, Swing + FlatLaf, JFreeChart, OpenPDF, Flyway, and transparent in-house regression — one runnable JAR.
 
 ---
 

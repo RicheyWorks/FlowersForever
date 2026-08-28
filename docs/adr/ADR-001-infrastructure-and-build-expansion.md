@@ -75,7 +75,7 @@ Rejected outright: no deployment target exists that would justify k8s/IaC, and a
 3. [x] `Dockerfile` + `.dockerignore`; GHCR publish job in release workflow
 4. [x] CI: JDK 17/21 matrix + quality-report job + coverage artifact
 5. [x] `codeql.yml` + `dependency-review.yml` workflows (both skip private repositories unless the corresponding GitHub security features are explicitly enabled)
-6. [x] `installers.yml`: jpackage MSI + DMG attached to releases
+6. [x] Gated `release.yml`: one verified JAR feeds jpackage MSI + DMG before publication
 7. [x] Baseline recorded and ratchet set (2026-07-16, see below)
 8. [x] Code signing evaluated — deferred with defined trigger, see [ADR-002](ADR-002-code-signing.md)
 

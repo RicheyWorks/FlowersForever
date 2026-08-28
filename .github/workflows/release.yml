@@ -1,4 +1,4 @@
-# Build and publish the fat JAR + SBOM + GHCR image when a version tag is pushed (ADR-001)
+# Verified, all-or-nothing FlowersForever release pipeline (ADR-001)
 name: Release
 
 on:
@@ -7,17 +7,20 @@ on:
       - "v*"
 
 permissions:
-  contents: write
-  packages: write
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
-  release:
-    name: Build JAR + GitHub Release
+  verify:
+    name: Verify version, tests, JAR, SBOM, and notices
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
 
     steps:
-      - name: Checkout
+      - name: Checkout tagged source
         uses: actions/checkout@v7
 
       - name: Set up JDK 17
@@ -27,62 +30,184 @@ jobs:
           java-version: "17"
           cache: maven
 
-      - name: Build and test
+      - name: Require an exact stable tag and POM version
+        id: version
+        shell: bash
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          POM_VERSION="$(mvn -q help:evaluate -Dexpression=project.version -DforceStdout)"
+          [[ "$TAG_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          test "$POM_VERSION" = "$TAG_VERSION"
+          case "$POM_VERSION" in
+            *-SNAPSHOT) echo "Snapshot versions cannot be released" >&2; exit 1 ;;
+          esac
+          echo "version=$TAG_VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Build and run every verification gate
         run: mvn -B clean verify
 
-      - name: Locate fat JAR
-        id: jar
+      - name: Require the exact release artifacts
+        shell: bash
         run: |
-          JAR=$(ls target/flowerfarm-manager-*.jar | grep -v '\.original$' | head -n1)
+          VERSION="${{ steps.version.outputs.version }}"
+          JAR="target/flowerfarm-manager-${VERSION}.jar"
+          test -s "$JAR"
           test -s target/bom.json
           test -s target/bom.xml
-          echo "path=$JAR" >> "$GITHUB_OUTPUT"
-          echo "name=$(basename "$JAR")" >> "$GITHUB_OUTPUT"
-          sha256sum "$JAR" target/bom.json target/bom.xml > target/SHA256SUMS.txt
-          ls -la "$JAR"
+          test -s target/generated-resources/licenses/THIRD-PARTY.txt
+          test "$(find target -maxdepth 1 -type f -name 'flowerfarm-manager-*.jar' ! -name '*.original' | wc -l | tr -d ' ')" = "1"
+          mkdir -p target/release-metadata
+          cp target/bom.json target/bom.xml \
+            target/generated-resources/licenses/THIRD-PARTY.txt \
+            target/release-metadata/
 
-      - name: Create GitHub Release
+      - name: Preserve the verified executable
+        uses: actions/upload-artifact@v7
+        with:
+          name: verified-jar
+          path: target/flowerfarm-manager-${{ steps.version.outputs.version }}.jar
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Preserve release metadata
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-metadata
+          path: target/release-metadata/*
+          if-no-files-found: error
+          retention-days: 14
+
+  installers:
+    name: ${{ matrix.label }}
+    needs: verify
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            label: Windows MSI
+            type: msi
+            extra: --win-menu --win-shortcut --win-dir-chooser
+          - os: macos-latest
+            label: macOS DMG
+            type: dmg
+            extra: ""
+
+    steps:
+      - name: Set up JDK 17 packaging tools
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Download the verified executable only
+        uses: actions/download-artifact@v8
+        with:
+          name: verified-jar
+          path: target/jpackage-input
+
+      - name: Package the verified executable
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          JAR="flowerfarm-manager-${VERSION}.jar"
+          test -s "target/jpackage-input/$JAR"
+          test "$(find target/jpackage-input -maxdepth 1 -type f | wc -l | tr -d ' ')" = "1"
+          mkdir -p dist
+          jpackage \
+            --type ${{ matrix.type }} \
+            --name FlowersForever \
+            --app-version "$VERSION" \
+            --vendor RicheyWorks \
+            --description "Flower farm operations and knowledge, kept in one place" \
+            --input target/jpackage-input \
+            --main-jar "$JAR" \
+            --java-options "-Djava.awt.headless=false" \
+            --java-options "-Dflowerfarm.packaged=true" \
+            --dest dist \
+            ${{ matrix.extra }}
+          test "$(find dist -maxdepth 1 -type f | wc -l | tr -d ' ')" = "1"
+
+      - name: Preserve native installer
+        uses: actions/upload-artifact@v7
+        with:
+          name: installer-${{ matrix.type }}
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 14
+
+  publish:
+    name: Publish complete private release
+    needs: [verify, installers]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+
+    steps:
+      - name: Collect verified JAR
+        uses: actions/download-artifact@v8
+        with:
+          name: verified-jar
+          path: release-assets
+
+      - name: Collect SBOM and third-party notices
+        uses: actions/download-artifact@v8
+        with:
+          name: release-metadata
+          path: release-assets
+
+      - name: Collect both native installers
+        uses: actions/download-artifact@v8
+        with:
+          pattern: installer-*
+          path: release-assets
+          merge-multiple: true
+
+      - name: Require the complete release and generate checksums
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          test -s "release-assets/flowerfarm-manager-${VERSION}.jar"
+          test -s release-assets/bom.json
+          test -s release-assets/bom.xml
+          test -s release-assets/THIRD-PARTY.txt
+          test "$(find release-assets -maxdepth 1 -type f -name '*.msi' | wc -l | tr -d ' ')" = "1"
+          test "$(find release-assets -maxdepth 1 -type f -name '*.dmg' | wc -l | tr -d ' ')" = "1"
+          (cd release-assets && sha256sum *) > release-assets/SHA256SUMS.txt
+
+      - name: Create the release only after every platform passed
         uses: softprops/action-gh-release@v3
         with:
           generate_release_notes: true
-          files: |
-            ${{ steps.jar.outputs.path }}
-            target/bom.json
-            target/bom.xml
-            target/SHA256SUMS.txt
+          fail_on_unmatched_files: true
+          files: release-assets/*
           body: |
             ## FlowersForever ${{ github.ref_name }}
 
-            Runnable fat JAR (Spring Boot + Swing GUI + embedded API on :8080).
+            A verified private release for approved FlowersForever customers and pilots.
 
-            ```bash
-            java -jar ${{ steps.jar.outputs.name }}
-            # optional barn auth:
-            java -jar ${{ steps.jar.outputs.name }} --spring.profiles.active=auth
-            ```
+            Every attached artifact was produced from the same tested source and version.
+            `SHA256SUMS.txt` verifies the JAR, installers, SBOM, and third-party notice.
 
-            Headless REST-only container:
-
-            ```bash
-            docker run -p 8080:8080 \
-              -e FLOWERFARM_AUTH_USERS='owner:replace-with-a-long-password:OWNER' \
-              ghcr.io/${{ github.repository_owner }}/flowersforever:${{ github.ref_name }}
-            ```
-
-            Native installers (MSI / DMG) are attached by the Installers workflow.
-            SBOM (CycloneDX `bom.json` / `bom.xml`) attached below.
-
-            See [docs/DEMO.md](docs/DEMO.md) for a walkthrough.
+            The native installers are not yet code-signed. Approved users should obtain
+            access directly from RicheyWorks and verify the checksum before installation.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  docker:
-    name: Publish image to GHCR
+  container:
+    name: Publish private GHCR image
+    needs: [verify, installers]
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    permissions:
+      contents: read
+      packages: write
 
     steps:
-      - name: Checkout
+      - name: Checkout tagged source
         uses: actions/checkout@v7
 
       - name: Log in to GHCR
@@ -101,7 +226,7 @@ jobs:
             type=semver,pattern={{version}}
             type=raw,value=latest
 
-      - name: Build and push
+      - name: Build and publish after all release gates pass
         uses: docker/build-push-action@v6
         with:
           context: .

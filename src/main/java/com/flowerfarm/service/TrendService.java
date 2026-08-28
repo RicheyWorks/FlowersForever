@@ -5,10 +5,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-import weka.classifiers.functions.LinearRegression;
-import weka.core.Attribute;
-import weka.core.DenseInstance;
-import weka.core.Instances;
 
 import java.time.DayOfWeek;
 import java.time.Clock;
@@ -24,15 +20,17 @@ import java.util.Map;
 import java.util.TreeMap;
 
 /**
- * Spring-managed service wrapping Weka ML functionality.
+ * Spring-managed service providing transparent harvest trend analysis.
  *
  * <p>Provides linear-regression trend analysis over real weekly harvest totals.
  * The crop/unit series with the strongest recorded history is selected. The
  * service refuses to invent a forecast when fewer than three distinct weeks
  * are available.
  *
- * <p>Extracted from the original GUI/CLI classes to keep ML concerns in one
- * place and make the logic independently testable.
+ * <p>The regression is implemented directly because ordinary least squares is
+ * sufficient for this single-variable forecast. Keeping this small calculation
+ * in the product avoids bundling a general-purpose analytics workbench and makes
+ * the displayed forecast straightforward to audit.
  */
 @Service
 public class TrendService {
@@ -77,22 +75,7 @@ public class TrendService {
             }
             List<DataPoint> dataPoints = dataPoints(series.weeklyTotals());
 
-            ArrayList<Attribute> attributes = new ArrayList<>();
-            attributes.add(new Attribute("Week"));
-            attributes.add(new Attribute("Quantity"));
-
-            Instances dataset = new Instances("TrendData", attributes, 0);
-            dataset.setClassIndex(1);
-
-            for (DataPoint point : dataPoints) {
-                DenseInstance instance = new DenseInstance(2);
-                instance.setValue(0, point.weekOffset());
-                instance.setValue(1, point.quantity());
-                dataset.add(instance);
-            }
-
-            LinearRegression model = new LinearRegression();
-            model.buildClassifier(dataset);
+            LinearModel model = fitLinearModel(dataPoints);
 
             LocalDate latestWeek = dataPoints.get(dataPoints.size() - 1).weekStart();
             LocalDate forecastWeek = weekStart(LocalDate.now(clock)).plusWeeks(1);
@@ -101,14 +84,11 @@ public class TrendService {
             }
             LocalDate firstWeek = dataPoints.get(0).weekStart();
             int nextWeek = (int) ChronoUnit.WEEKS.between(firstWeek, forecastWeek) + 1;
-            DenseInstance future = new DenseInstance(2);
-            future.setValue(0, nextWeek);
-            future.setDataset(dataset);
-            double predicted = Math.max(0, model.classifyInstance(future));
+            double predicted = Math.max(0, model.predict(nextWeek));
 
             double latest = dataPoints.get(dataPoints.size() - 1).quantity();
             String summary = buildSummary(
-                    series, dataPoints, forecastWeek, predicted, model.toString());
+                    series, dataPoints, forecastWeek, predicted, model.diagnostics());
             log.info("Harvest trend complete — {} / {} predicted next week: {}",
                     series.cropName(), series.unit(), String.format("%.2f", predicted));
             return new TrendResult(predicted, summary, null,
@@ -155,6 +135,43 @@ public class TrendService {
         return points;
     }
 
+    /**
+     * Fits {@code quantity = intercept + slope * weekOffset} with ordinary least
+     * squares. Observations always represent distinct weeks, so the horizontal
+     * variance is non-zero once the minimum-history rule has passed.
+     */
+    private LinearModel fitLinearModel(List<DataPoint> points) {
+        double meanWeek = points.stream().mapToDouble(DataPoint::weekOffset).average()
+                .orElseThrow();
+        double meanQuantity = points.stream().mapToDouble(DataPoint::quantity).average()
+                .orElseThrow();
+
+        double horizontalVariance = 0;
+        double covariance = 0;
+        for (DataPoint point : points) {
+            double centeredWeek = point.weekOffset() - meanWeek;
+            horizontalVariance += centeredWeek * centeredWeek;
+            covariance += centeredWeek * (point.quantity() - meanQuantity);
+        }
+        if (horizontalVariance == 0) {
+            throw new IllegalArgumentException("Trend history must span distinct weeks");
+        }
+
+        double slope = covariance / horizontalVariance;
+        double intercept = meanQuantity - slope * meanWeek;
+        double totalSquares = 0;
+        double residualSquares = 0;
+        for (DataPoint point : points) {
+            double observedDelta = point.quantity() - meanQuantity;
+            double residual = point.quantity()
+                    - (intercept + slope * point.weekOffset());
+            totalSquares += observedDelta * observedDelta;
+            residualSquares += residual * residual;
+        }
+        double rSquared = totalSquares == 0 ? 1 : 1 - residualSquares / totalSquares;
+        return new LinearModel(slope, intercept, rSquared);
+    }
+
     private String buildSummary(HarvestSeries series, List<DataPoint> points,
                                 LocalDate forecastWeek, double predicted,
                                 String modelDetails) {
@@ -182,6 +199,18 @@ public class TrendService {
     }
 
     private record DataPoint(int weekOffset, LocalDate weekStart, double quantity) { }
+
+    private record LinearModel(double slope, double intercept, double rSquared) {
+        private double predict(double weekOffset) {
+            return intercept + slope * weekOffset;
+        }
+
+        private String diagnostics() {
+            return String.format(Locale.ROOT,
+                    "Ordinary least-squares line: quantity = %.4f + %.4f × week; R² = %.4f",
+                    intercept, slope, rSquared);
+        }
+    }
 
     private record HarvestSeries(String cropName, String unit,
                                  Map<LocalDate, Double> weeklyTotals) { }

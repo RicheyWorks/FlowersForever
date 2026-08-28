@@ -1,5 +1,6 @@
 package com.flowerfarm.controller;
 
+import com.flowerfarm.security.SecretRedactor;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -20,14 +21,16 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Objects;
+import java.util.UUID;
 
 /**
  * Consistent, non-sensitive JSON errors for REST endpoints.
  *
  * <p>The legacy {@code error} field remains present for API compatibility;
  * {@code code}, {@code status}, {@code path}, and {@code timestamp} make errors
- * actionable for newer clients. Unexpected exception details are logged on the
- * server and are never returned to callers.
+ * actionable for newer clients. Unexpected exception details are redacted before
+ * logging and are never returned to callers.
  */
 @RestControllerAdvice
 public class ApiExceptionHandler {
@@ -91,16 +94,25 @@ public class ApiExceptionHandler {
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Map<String, Object>> unexpected(
             Exception exception, HttpServletRequest request) {
-        log.error("Unhandled API failure on {} {}", request.getMethod(),
-                request.getRequestURI(), exception);
-        return response(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR",
-                "The operation could not be completed. Check server logs and try again.", request);
+        String incidentId = UUID.randomUUID().toString();
+        String safeDetail = SecretRedactor.redact(exception.getClass().getSimpleName()
+                + (exception.getMessage() == null ? "" : ": " + exception.getMessage()), 500);
+        log.error("Unhandled API failure {} on {} {}: {}", incidentId,
+                request.getMethod(), request.getRequestURI(), safeDetail);
+        ResponseEntity<Map<String, Object>> result = response(
+                HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR",
+                "The operation could not be completed. Give support this incident ID: "
+                        + incidentId,
+                request);
+        Objects.requireNonNull(result.getBody(), "API error body").put("incidentId", incidentId);
+        return result;
     }
 
     private static ResponseEntity<Map<String, Object>> response(
             HttpStatus status, String code, String message, HttpServletRequest request) {
         Map<String, Object> body = new LinkedHashMap<>();
-        body.put("error", sanitize(message));
+        body.put("error", SecretRedactor.redact(
+                message == null ? "Request failed." : message, MAX_PUBLIC_MESSAGE_LENGTH));
         body.put("code", code);
         body.put("status", status.value());
         body.put("path", request.getRequestURI());
@@ -113,14 +125,4 @@ public class ApiExceptionHandler {
                 || exception.getMessage().isBlank() ? fallback : exception.getMessage();
     }
 
-    private static String sanitize(String message) {
-        String safe = message == null ? "Request failed." : message
-                .replace('\r', ' ')
-                .replace('\n', ' ')
-                .trim();
-        if (safe.length() > MAX_PUBLIC_MESSAGE_LENGTH) {
-            return safe.substring(0, MAX_PUBLIC_MESSAGE_LENGTH - 1) + "…";
-        }
-        return safe;
-    }
 }

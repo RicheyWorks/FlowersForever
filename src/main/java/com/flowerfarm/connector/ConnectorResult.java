@@ -1,7 +1,8 @@
 package com.flowerfarm.connector;
 
+import com.flowerfarm.security.SecretRedactor;
+
 import java.time.Instant;
-import java.util.regex.Pattern;
 
 /**
  * Generic result envelope returned by every connector operation.
@@ -16,14 +17,6 @@ import java.util.regex.Pattern;
  */
 public class ConnectorResult<T> {
 
-    private static final Pattern NAMED_SECRET = Pattern.compile(
-            "(?i)([\\\"']?(?:api[-_]?key|access[-_]?token|token|secret|password)"
-                    + "[\\\"']?\\s*[:=]\\s*[\\\"']?)[^&\\s,\\\"'}]+");
-    private static final Pattern AUTHORIZATION = Pattern.compile(
-            "(?i)(authorization\\s*:\\s*(?:bearer|basic)\\s+)[^\\s,;]+");
-    private static final Pattern URL_CREDENTIALS = Pattern.compile(
-            "://([^:/@\\s]+):([^@/\\s]+)@");
-
     private final boolean success;
     private final T       payload;
     private final String  message;
@@ -36,8 +29,8 @@ public class ConnectorResult<T> {
                             String connectorName) {
         this.success       = success;
         this.payload       = payload;
-        this.message       = success ? message : sanitize(message, 512);
-        this.errorDetail   = success ? errorDetail : sanitize(errorDetail, 2000);
+        this.message       = success ? message : SecretRedactor.redact(message, 512);
+        this.errorDetail   = success ? errorDetail : SecretRedactor.redact(errorDetail, 2000);
         this.connectorName = connectorName;
         this.timestamp     = Instant.now();
     }
@@ -84,22 +77,8 @@ public class ConnectorResult<T> {
         if (cause == null) {
             return "unknown error";
         }
-        return sanitize(cause.getClass().getSimpleName()
+        return SecretRedactor.redact(cause.getClass().getSimpleName()
                 + (cause.getMessage() != null ? ": " + cause.getMessage() : ""), 2000);
-    }
-
-    private static String sanitize(String value, int maxLength) {
-        if (value == null) {
-            return null;
-        }
-        String sanitized = value.replace('\r', ' ').replace('\n', ' ');
-        sanitized = NAMED_SECRET.matcher(sanitized).replaceAll("$1[REDACTED]");
-        sanitized = AUTHORIZATION.matcher(sanitized).replaceAll("$1[REDACTED]");
-        sanitized = URL_CREDENTIALS.matcher(sanitized).replaceAll("://$1:[REDACTED]@");
-        if (sanitized.length() > maxLength) {
-            return sanitized.substring(0, maxLength - 1) + "…";
-        }
-        return sanitized;
     }
 
     // ── Accessors ─────────────────────────────────────────────────────────────

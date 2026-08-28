@@ -14,7 +14,7 @@ import java.util.Map;
  * REST controller for harvest-production trend analysis and static rose variety info.
  *
  * <pre>
- * GET /api/trends        → run Weka linear regression, return result
+ * GET /api/trends        → run transparent linear regression, return result
  * GET /api/roses         → structured list of PNW rose variety suggestions
  * </pre>
  */

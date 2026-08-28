@@ -1,16 +1,39 @@
-# Flowers Forever 1.0.19 release-candidate notes
+# FlowersForever 1.1.0 private-pilot notes
 
-This candidate consolidates the production farm workspace and adds deployment safeguards for real Windows use.
+Version 1.1.0 is in proprietary pilot hardening and is not yet approved for
+customer distribution. The previous 1.0.19 artifacts are retired.
 
-- Stable packaged data location under `%LOCALAPPDATA%\FlowersForever\data`, with explicit `FLOWERFARM_DATA_DIR` override.
-- Non-destructive first-launch copy-forward from a legacy `./data` directory; the source remains available for rollback.
-- Persistent local logs, exports, connector mirrors, and backups grouped beneath the resolved data directory.
-- Stop-safe backup and checksum-validated restore scripts with recoverable pre-restore data retention.
-- Reproducible Windows app-image/MSI build script with CycloneDX SBOM and SHA-256 manifest.
-- Expanded release contracts and persistence/restart acceptance coverage.
-- Cohesive worker-oriented desktop navigation, compact 1366×768 layouts, role-aware controls, keyboard access, validation recovery, and selection preservation.
-- Saved-product corrections now validate the worker's complete reviewed order context, preserve the correction when another worker changes the order, and require review of the refreshed customer and handoff before retrying.
-- Product removal now shows and validates the complete reviewed customer, delivery, instruction, and saved-product context; concurrent changes remove nothing and reload the exact order for a fresh review.
-- Orders now exposes the exact saved-product removal review through the unique `Alt+O` keyboard shortcut, with the shortcut and safety consequence available to assistive technology.
+## Release safety
 
-Review `DEPLOYMENT.md`, `BACKUP_RESTORE.md`, and `KNOWN_LIMITATIONS.md` before approving a farm workstation.
+- One fully tested executable JAR feeds both Windows and macOS installers.
+- Tags, POM versions, JAR names, and installer versions must match exactly.
+- A release is created only after tests, SBOM, license policy, and both native
+  packaging jobs pass.
+- SHA-256 values cover every installer, the JAR, SBOM, and third-party notice.
+- Weka and its GPLv3 distribution issue were removed; transparent ordinary
+  least-squares forecasting is implemented directly in FlowersForever.
+- Runtime third-party notices are generated, bundled, and attached to releases.
+
+## Data and security
+
+- H2 schemas now use versioned Flyway migrations followed by Hibernate
+  validation. Existing 1.0 databases are baselined and upgraded without
+  replacing their farm records.
+- A migration acceptance test verifies both fresh installation and an in-place
+  legacy order upgrade.
+- Credential-shaped values are redacted from API and connector logs.
+- Unexpected API failures include a support incident ID without exposing the
+  underlying secret or exception detail.
+- Authentication no longer compiles a demo password fallback into production.
+
+## Existing production workflow
+
+- Stable packaged data under `%LOCALAPPDATA%\FlowersForever\data`
+- Checksum-validated backup and recoverable restore
+- Harvest, inventory, CRM, order, market-day, reports, briefing, and closeout
+- Role-aware desktop and REST controls
+- Offline-first connector mirrors and guarded live connector modes
+
+Review [private pilot access](PILOT_ACCESS.md), [deployment](DEPLOYMENT.md),
+[backup and restore](BACKUP_RESTORE.md), and [known limitations](KNOWN_LIMITATIONS.md)
+before approving a pilot workstation.

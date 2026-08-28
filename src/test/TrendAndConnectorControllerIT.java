@@ -91,12 +91,12 @@ class TrendAndConnectorControllerIT {
         @DisplayName("returns 500 Internal Server Error when analysis fails")
         void returns500OnFailure() throws Exception {
             TrendService.TrendResult result =
-                    new TrendService.TrendResult(0, null, "Weka regression failed");
+                    new TrendService.TrendResult(0, null, "Trend regression failed");
             when(trendService.analyzeQuantityTrend()).thenReturn(result);
 
             mockMvc.perform(get("/api/trends"))
                     .andExpect(status().isInternalServerError())
-                    .andExpect(jsonPath("$.error", is("Weka regression failed")));
+                    .andExpect(jsonPath("$.error", is("Trend regression failed")));
         }
     }
 

@@ -159,7 +159,7 @@ class TrendServiceTest {
     @Test
     @DisplayName("TrendResult.isSuccess() is false when error is non-null")
     void trendResultIsFailureWhenErrorPresent() {
-        TrendService.TrendResult r = new TrendService.TrendResult(0, null, "Weka exploded");
+        TrendService.TrendResult r = new TrendService.TrendResult(0, null, "Regression failed");
         assertThat(r.isSuccess()).isFalse();
     }
 

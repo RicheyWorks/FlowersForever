@@ -33,7 +33,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
         properties = {
                 "spring.main.headless=true",
                 "spring.datasource.url=jdbc:h2:mem:context-smoke;DB_CLOSE_DELAY=-1",
-                "spring.jpa.hibernate.ddl-auto=create-drop",
+                "spring.jpa.hibernate.ddl-auto=validate",
                 "flowerfarm.inventory.seed-csv=target/no-context-smoke-seed.csv",
                 "flowerfarm.irrigation.live-weather=false"
         })

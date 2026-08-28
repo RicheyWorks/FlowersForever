@@ -1,6 +1,6 @@
 # ADR-002: Code signing for native installers
 
-**Status:** Accepted (deferred adoption)
+**Status:** Accepted (pilot trigger reached; enrollment pending)
 **Date:** 2026-07-17
 **Deciders:** Richmond (RicheyWorks)
 
@@ -29,7 +29,7 @@ ADR-001 ships unsigned jpackage installers (MSI, DMG). Windows SmartScreen shows
 
 **Defer purchasing; adopt when there's a distribution trigger.** Signing both platforms costs ~$220/yr (~$120 Azure + $99 Apple) plus setup time — not justified while users are the maintainer's own machines and portfolio reviewers. The trigger to revisit: any external user who is not comfortable clicking through OS warnings, or public promotion of the installers.
 
-When triggered, the chosen stack is **Azure Artifact Signing (Windows) + Apple Developer Program (macOS)**, wired into `installers.yml` as post-jpackage steps (Azure's signing action for the MSI; `--mac-sign`, `notarytool submit --wait`, `stapler staple` for the DMG). Secrets live in GitHub repo secrets; no certificates on disk.
+The chosen stack is **Azure Artifact Signing (Windows) + Apple Developer Program (macOS)**, wired into the gated `release.yml` packaging jobs (Azure's signing action for the MSI; `--mac-sign`, `notarytool submit --wait`, `stapler staple` for the DMG). Secrets live in GitHub repository secrets; no certificates are committed or stored in the release artifacts.
 
 ## Consequences
 
@@ -40,4 +40,5 @@ When triggered, the chosen stack is **Azure Artifact Signing (Windows) + Apple D
 ## Action Items
 
 1. [x] Evaluation recorded (this ADR)
-2. [ ] On trigger: Azure tenant + Artifact Signing account, Apple Developer enrollment, extend `installers.yml`
+2. [ ] Complete Azure tenant + Artifact Signing account enrollment and Apple Developer enrollment
+3. [ ] Add signing and notarization steps to the gated `release.yml` packaging jobs

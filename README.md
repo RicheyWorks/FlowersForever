@@ -10,9 +10,8 @@ One calm desktop workspace for harvests, inventory, customers, orders, market pa
 
 **From first cut to final sale, FlowersForever keeps the details connected—so you can spend less time reconciling records and more time growing, selling, and serving customers.**
 
-[![Download for Windows](https://img.shields.io/badge/Download-Windows-256c46?style=for-the-badge&logo=windows)](https://github.com/RicheyWorks/FlowersForever/releases/download/v1.0.19/FlowersForever-1.0.19.msi)
-[![Download for macOS](https://img.shields.io/badge/Download-macOS-256c46?style=for-the-badge&logo=apple)](https://github.com/RicheyWorks/FlowersForever/releases/download/v1.0.19/FlowersForever-1.0.19.dmg)
-[![Latest release](https://img.shields.io/github/v/release/RicheyWorks/FlowersForever?style=for-the-badge&label=Latest)](https://github.com/RicheyWorks/FlowersForever/releases/latest)
+[![Private pilot](https://img.shields.io/badge/Access-Private%20Pilot-256c46?style=for-the-badge)](docs/PILOT_ACCESS.md)
+[![1.1 hardening](https://img.shields.io/badge/Release-1.1%20Hardening-c99a45?style=for-the-badge)](#project-status)
 
 [![CI](https://github.com/RicheyWorks/FlowersForever/actions/workflows/ci.yml/badge.svg)](https://github.com/RicheyWorks/FlowersForever/actions/workflows/ci.yml)
 ![Proprietary — All Rights Reserved](https://img.shields.io/badge/License-Proprietary%20%E2%80%94%20All%20Rights%20Reserved-6e2f45)
@@ -47,16 +46,14 @@ FlowersForever replaces scattered information with one dependable flow from the 
 
 ## Start in minutes—no coding required
 
-### 1. Download the app
+### 1. Request private pilot access
 
-- **Windows:** [download the `.msi` installer](https://github.com/RicheyWorks/FlowersForever/releases/download/v1.0.19/FlowersForever-1.0.19.msi)
-- **macOS:** [download the `.dmg` installer](https://github.com/RicheyWorks/FlowersForever/releases/download/v1.0.19/FlowersForever-1.0.19.dmg)
-- **All downloads:** [open the latest GitHub release](https://github.com/RicheyWorks/FlowersForever/releases/latest)
+FlowersForever is privately distributed by RicheyWorks. Approved pilot farms receive the correct installer, checksum, onboarding, and support instructions through an authorized private channel. Start with the [private pilot access guide](docs/PILOT_ACCESS.md).
 
 The desktop installers include the runtime they need. You do not need to install Java, Maven, or use a command line.
 
 > [!IMPORTANT]
-> The installers are not code-signed yet, so Windows SmartScreen or macOS Gatekeeper may say the publisher is unknown. Download only from this repository's **Releases** page and review the [installer safety note](docs/adr/ADR-002-code-signing.md).
+> The pilot installers are not code-signed yet, so Windows SmartScreen or macOS Gatekeeper may say the publisher is unknown. Accept an installer only from your established RicheyWorks contact and verify its SHA-256 checksum before opening it. Review the [installer safety note](docs/adr/ADR-002-code-signing.md).
 
 ### 2. Open FlowersForever
 
@@ -180,13 +177,13 @@ Before placing it on a production workstation, review the [deployment checklist]
 
 ## Give tomorrow's farm day a calmer start
 
-Open FlowersForever, explore the included sample inventory, and see the harvest-to-sale workflow for yourself. No account setup is required for the default desktop experience, and your farm records stay on your workstation by default.
+Join the private pilot, explore the included sample inventory, and see the harvest-to-sale workflow with direct RicheyWorks onboarding. No cloud account is required for the default desktop experience, and your farm records stay on your workstation by default.
 
 **Ready to bring the field, cooler, office, and market table into one clear routine?**
 
-- [Download FlowersForever for Windows](https://github.com/RicheyWorks/FlowersForever/releases/download/v1.0.19/FlowersForever-1.0.19.msi)
-- [Download FlowersForever for macOS](https://github.com/RicheyWorks/FlowersForever/releases/download/v1.0.19/FlowersForever-1.0.19.dmg)
-- [View the latest release](https://github.com/RicheyWorks/FlowersForever/releases/latest)
+- [Request or prepare private pilot access](docs/PILOT_ACCESS.md)
+- [Review the farm-workstation deployment checklist](docs/DEPLOYMENT.md)
+- [See what comes next for farm knowledge](docs/PRODUCT_ROADMAP.md)
 
 ## Help and documentation
 
@@ -221,10 +218,10 @@ mvn clean verify
 mvn spring-boot:run
 
 # Or run the packaged JAR
-java -jar target/flowerfarm-manager-1.0.19.jar
+java -jar target/flowerfarm-manager-1.1.0-SNAPSHOT.jar
 
 # Interactive command-line mode
-java -jar target/flowerfarm-manager-1.0.19.jar --cli
+java -jar target/flowerfarm-manager-1.1.0-SNAPSHOT.jar --cli
 ```
 
 ### Runtime profiles
@@ -232,18 +229,18 @@ java -jar target/flowerfarm-manager-1.0.19.jar --cli
 | Profile | Purpose |
 |---|---|
 | *(default)* | H2 file database + desktop GUI + loopback REST API |
-| `sqlite` | SQLite under `./data/flowerfarm.sqlite` |
+| `sqlite` | Developer-preview SQLite compatibility profile; not for customer data |
 | `auth` | HTTP Basic + desktop login; requires strong credentials from the environment |
 | `demo` | Non-destructive sample CRM, harvest, and confirmed orders when the database is empty |
 | `cli` | Interactive CLI only, without Tomcat |
 | `container` | Headless external bind with mandatory, non-demo HTTP Basic credentials |
 
 ```bash
-java -jar target/flowerfarm-manager-1.0.19.jar --spring.profiles.active=sqlite
-java -jar target/flowerfarm-manager-1.0.19.jar --spring.profiles.active=demo
+java -jar target/flowerfarm-manager-1.1.0-SNAPSHOT.jar --spring.profiles.active=sqlite
+java -jar target/flowerfarm-manager-1.1.0-SNAPSHOT.jar --spring.profiles.active=demo
 
 FLOWERFARM_AUTH_USERS='owner:replace-with-a-long-password:OWNER' \
-  java -jar target/flowerfarm-manager-1.0.19.jar --spring.profiles.active=auth
+  java -jar target/flowerfarm-manager-1.1.0-SNAPSHOT.jar --spring.profiles.active=auth
 ```
 
 Empty databases seed from `farm_inventory.csv` when it is present, otherwise from sample PNW inventory. The portable JAR stores H2 data under `./data`; the packaged Windows app uses `%LOCALAPPDATA%\\FlowersForever\\data`. `FLOWERFARM_DATA_DIR` overrides the data directory.
@@ -317,7 +314,7 @@ Printable inventory, harvest, invoice, statement, packing, weekly, and audit rou
 <details>
 <summary><strong>Architecture, quality, and release engineering</strong></summary>
 
-FlowersForever is a Spring Boot 3.5.16 application with a modular Swing desktop interface, REST controllers, transaction-aware services, offline-first connectors, and H2/SQLite storage.
+FlowersForever is a Spring Boot 3.5.16 application with a modular Swing desktop interface, REST controllers, transaction-aware services, offline-first connectors, and a version-migrated local H2 store. SQLite remains a developer-preview compatibility profile.
 
 ```text
 com.flowerfarm
@@ -335,8 +332,8 @@ com.flowerfarm
 | **CI** | `mvn clean verify` on JDK 17 and 21, plus Docker build and smoke test |
 | **Quality** | JaCoCo coverage gates, zero-baseline Medium+ SpotBugs, and Checkstyle |
 | **Security** | Medium+ SpotBugs gate, role tests, and fail-closed container authentication |
-| **Supply chain** | CycloneDX SBOM, automatic dependency submission, and weekly Dependabot updates |
-| **Releases** | Fat JAR, SBOM, GHCR image, MSI, and DMG from `v*` tags |
+| **Supply chain** | CycloneDX SBOM, bundled third-party notices, incompatible-license gates, dependency submission, and Dependabot |
+| **Releases** | One verified JAR feeds both installers; tag/POM versions must match and nothing publishes until every platform passes |
 
 Read the [system architecture](docs/ARCHITECTURE.md), [backend boundaries](docs/BACKEND_ARCHITECTURE.md), [GUI architecture](docs/GUI_ARCHITECTURE.md), and [architecture decisions](docs/adr/).
 
@@ -344,11 +341,11 @@ Read the [system architecture](docs/ARCHITECTURE.md), [backend boundaries](docs/
 
 ## Project status
 
-Current release: **[v1.0.19](https://github.com/RicheyWorks/FlowersForever/releases/tag/v1.0.19)**
+Current status: **v1.1.0 proprietary pilot hardening.** The previous v1.0.19 artifacts are retired and must not be distributed to customers.
 
 The current product includes the complete harvest → inventory → order → market-day → printable closeout loop, offline-first connectors, optional farm roles, native desktop installers, container deployment, and automated quality and security checks.
 
-Longer-term ideas include deeper merchant integrations and a deliberate Spring Boot 4 migration after compatibility review.
+The next product milestone is the Farm Knowledge Log: practical, searchable lessons tied to crops, beds, seasons, problems, actions, and results. See the [product roadmap](docs/PRODUCT_ROADMAP.md).
 
 ## Made for growers
 

@@ -8,7 +8,7 @@ import java.awt.*;
 import java.time.temporal.ChronoUnit;
 
 /**
- * Trend Analysis tab — runs a Weka {@code LinearRegression} forecast over
+ * Trend Analysis tab — runs an ordinary least-squares forecast over
  * real weekly harvest totals on a background thread and shows the planning signal.
  *
  * <p>The forecast is exposed via the public {@link #runAnalysis()} method so it

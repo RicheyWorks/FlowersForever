@@ -104,10 +104,13 @@ interfaces.
 | market-day batch | orchestration plus one transaction per order | one failure does not undo prior successes |
 | sync audit record/clear | required | repository-owned ordering/pagination |
 
-H2 is the default persistent desktop store. SQLite substitutes only the
-persistence configuration and uses a one-connection pool because it is a
-single-writer store. `spring.jpa.open-in-view=false` keeps lazy database access
-out of presentation adapters.
+H2 is the supported persistent desktop store. Flyway owns its versioned schema
+and runs before Hibernate validates the entity mapping; Hibernate never mutates
+the customer schema automatically. A non-empty pre-1.1 database is baselined at
+V1 and then upgraded in place. SQLite remains a developer-preview compatibility
+profile, uses a one-connection pool, and is not approved for customer data in
+1.1. `spring.jpa.open-in-view=false` keeps lazy database access out of
+presentation adapters.
 
 ## Security and failure handling
 
@@ -118,8 +121,9 @@ requires strong non-demo credentials and at least one OWNER. Health remains
 public; farm data follows role policy.
 
 Expected validation failures become stable 4xx envelopes. Persistence races
-become `409 DATA_CONFLICT`. Unexpected details are logged but not returned.
-Connector errors redact credentials before reaching responses or sync history.
+become `409 DATA_CONFLICT`. Unexpected failures receive a correlation ID;
+credential-shaped values are redacted before logging and details are not
+returned. Connector errors use the same redactor before reaching responses or sync history.
 Local mirrors replace files atomically, and download/export filenames reject
 control characters and traversal.
 
@@ -129,7 +133,7 @@ control characters and traversal.
 |---|---|---|---|
 | default | Swing + loopback REST | file H2 | local open mode |
 | `cli` | interactive CLI, no Tomcat | inherits configured store | local process |
-| `sqlite` | inherits adapter | SQLite, pool size 1 | inherits security |
+| `sqlite` | inherits adapter | developer-preview SQLite, pool size 1 | inherits security |
 | `auth` | Swing + externally bound REST | inherits store | credentials required |
 | `demo` | inherits adapter | non-destructive seed | inherits security |
 | `container` | headless external REST | mounted file H2 by default | mandatory credentials |
@@ -148,11 +152,11 @@ container. Releases publish the JAR, SBOM, container, and desktop installers.
 
 ## Deliberate constraints and evolution triggers
 
-1. **A shared production database requires a migration architecture first.**
-   The supported stores are currently per-installation embedded H2 or SQLite;
-   `ddl-auto=update` is deliberately limited to that local-first boundary. Do
-   not add a shared or externally managed database profile until versioned,
-   database-tested migrations and an upgrade/rollback runbook are in place.
+1. **A shared production database requires a separate concurrency and operations design.**
+   Versioned H2 migrations now protect one local customer store, but they do not
+   turn the desktop database into a shared server. Do not add a shared or
+   externally managed database profile until its migration dialect, deployment,
+   backup, concurrency, and rollback paths have dedicated acceptance tests.
 2. **Move report DTOs only when independently useful.** They remain nested in
    compatibility services so existing callers keep the same source-level API.
 

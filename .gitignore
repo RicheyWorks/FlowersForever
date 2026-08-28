@@ -1,4 +1,5 @@
 **/target/
+dist/
 *.jar
 **/*.class
 *.xlsx

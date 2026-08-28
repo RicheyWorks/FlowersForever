@@ -41,7 +41,7 @@ class OperationalAcceptanceIT {
         Map<String, Object> properties = Map.of(
                 "spring.datasource.url", "jdbc:h2:file:"
                         + database.toString().replace('\\', '/') + ";DB_CLOSE_DELAY=-1",
-                "spring.jpa.hibernate.ddl-auto", "update",
+                "spring.jpa.hibernate.ddl-auto", "validate",
                 "flowerfarm.inventory.seed-csv", temporaryDirectory.resolve("missing.csv").toString(),
                 "flowerfarm.irrigation.live-weather", "false",
                 "spring.main.banner-mode", "off");

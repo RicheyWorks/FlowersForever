@@ -13,8 +13,8 @@ import java.util.Optional;
  * Parses multi-user accounts from configuration.
  *
  * <pre>
- * # Format: user:pass:ROLE,user2:pass2:ROLE
- * flowerfarm.auth.users=farm:kitsap:OWNER,hand:harvest:HAND,viewer:view:VIEWER
+     * # Format: user:pass:ROLE,user2:pass2:ROLE
+     * flowerfarm.auth.users=owner:a-long-password-from-env:OWNER
  * </pre>
  *
  * Falls back to single-user {@code flowerfarm.auth.username/password} as OWNER
@@ -28,7 +28,7 @@ public class FarmUserDirectory {
     public FarmUserDirectory(
             @Value("${flowerfarm.auth.users:}") String usersCsv,
             @Value("${flowerfarm.auth.username:farm}") String fallbackUser,
-            @Value("${flowerfarm.auth.password:kitsap}") String fallbackPass) {
+            @Value("${flowerfarm.auth.password:}") String fallbackPass) {
         parse(usersCsv);
         if (users.isEmpty()) {
             users.put(fallbackUser.trim().toLowerCase(),
