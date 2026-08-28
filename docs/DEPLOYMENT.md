@@ -41,6 +41,9 @@ file SHA-256, and build commit; update security definitions and run a full scan.
 After the source and build provenance are confirmed, a maintainer may submit the
 specific file through [Norton's official false-positive review process](https://support.norton.com/sp/en/us/home/current/solutions/kb20090410134005EN).
 External pilot distribution remains blocked until platform signing is active.
+Maintainers preparing the signing accounts should follow the
+[native signing setup](SIGNING_SETUP.md); credentials belong only in the
+protected GitHub `release-signing` environment.
 
 ## Rollback
 

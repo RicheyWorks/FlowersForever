@@ -196,6 +196,7 @@ Join the private pilot, explore the included sample inventory, and see the harve
 - [Request or prepare private pilot access](docs/PILOT_ACCESS.md)
 - [Review the farm-workstation deployment checklist](docs/DEPLOYMENT.md)
 - [See what comes next for farm knowledge](docs/PRODUCT_ROADMAP.md)
+- [Review the maintainer signing gate](docs/SIGNING_SETUP.md)
 
 ## Help and documentation
 

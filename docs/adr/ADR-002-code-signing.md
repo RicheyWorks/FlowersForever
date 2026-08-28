@@ -1,6 +1,6 @@
 # ADR-002: Code signing for native installers
 
-**Status:** Accepted (pilot trigger reached; enrollment pending)
+**Status:** Implemented (external enrollment and credentials pending)
 **Date:** 2026-07-17
 **Deciders:** Richmond (RicheyWorks)
 
@@ -42,5 +42,6 @@ The chosen stack is **Azure Artifact Signing (Windows) + Apple Developer Program
 1. [x] Evaluation recorded (this ADR)
 2. [x] Add non-publishing Windows/macOS candidate packaging and executable smoke tests
 3. [ ] Complete Azure tenant + Artifact Signing account enrollment and Apple Developer enrollment
-4. [ ] Add signing and notarization steps to the gated `release.yml` packaging jobs
-5. [ ] Submit the exact blocked Windows candidate to Norton for false-positive review after provenance confirmation
+4. [x] Add credential-gated signing, notarization, signature verification, and publication dependencies to `release.yml`
+5. [ ] Populate and protect the GitHub `release-signing` environment
+6. [ ] Submit the exact blocked Windows candidate to Norton for false-positive review after provenance confirmation

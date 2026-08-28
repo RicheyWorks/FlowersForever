@@ -1,6 +1,7 @@
 # Private-pilot known limitations
 
-- The Windows MSI and macOS DMG are not code-signed. Unsigned, low-reputation launchers can trigger SmartScreen, Gatekeeper, or antivirus heuristics. Validate the SHA-256 checksum, but do not override an antivirus threat block; stop and send the detection details to RicheyWorks for review.
+- Pull-request and manually dispatched candidate installers are deliberately unsigned, private, and not approved for customer distribution. Unsigned, low-reputation launchers can trigger SmartScreen, Gatekeeper, or antivirus heuristics. Do not override an antivirus threat block; stop and send the detection details to RicheyWorks for review. Tagged releases cannot publish until their signatures and notarization pass.
+- Tagged release publication is now technically gated on Microsoft Artifact Signing and Apple Developer ID notarization. The workflow is implemented, but external identity enrollment and protected GitHub environment values are still pending; see [native signing setup](SIGNING_SETUP.md).
 - The supported customer database is local embedded H2, not a shared multi-workstation database. REST clients may share one running authenticated instance; they must not point separate app processes at copied database files.
 - H2 upgrades use versioned Flyway migrations and Hibernate validation. Always take a pre-upgrade backup; downgrades still require restoring the matching pre-upgrade backup.
 - SQLite remains a developer-preview compatibility profile and is not approved for customer data or covered by the H2 migration guarantee.

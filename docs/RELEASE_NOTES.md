@@ -37,6 +37,10 @@ is approved for customer distribution. The previous 1.0.19 artifacts are retired
   local validation. The runtime completed its controlled startup and shutdown,
   but antivirus blocks must not be bypassed. Code signing is now a pilot release
   gate, and suspected false positives should be reviewed by the security vendor.
+- Tagged publishing now depends on a valid Artifact Signing signature for both
+  the Windows launcher and MSI plus a Developer ID-signed, Apple-notarized,
+  stapled, Gatekeeper-approved DMG. Enrollment credentials stay in the protected
+  `release-signing` environment; pull requests never receive them.
 
 ## Data and security
 

@@ -67,9 +67,27 @@ class ReleaseContractTest {
                 "release-smoke.ok",
                 "FlowersForever.exe",
                 "FlowersForever.app/Contents/MacOS/FlowersForever",
-                "not approved for",
-                "Do not bypass an operating-system or antivirus",
+                "if: github.event_name != 'push'",
                 "if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')");
+    }
+
+    @Test
+    @DisplayName("tagged publishing requires Windows signing and Apple notarization")
+    void taggedPublishingRequiresPlatformTrust() throws Exception {
+        String workflow = Files.readString(Path.of(".github", "workflows", "release.yml"));
+
+        assertThat(workflow).contains(
+                "environment: release-signing",
+                "azure/login@v3",
+                "azure/artifact-signing-action@v2",
+                "Get-AuthenticodeSignature",
+                "--mac-sign",
+                "xcrun notarytool submit",
+                "xcrun stapler staple",
+                "spctl --assess --type execute",
+                "needs: [verify, windows-release, macos-release]");
+        assertThat(workflow).doesNotContain("The native installers are not yet code-signed");
+        assertThat(Path.of("docs", "SIGNING_SETUP.md")).isRegularFile();
     }
 
     @Test
@@ -95,6 +113,7 @@ class ReleaseContractTest {
         assertThat(Path.of("docs", "BACKUP_RESTORE.md")).isRegularFile();
         assertThat(Path.of("docs", "KNOWN_LIMITATIONS.md")).isRegularFile();
         assertThat(Path.of("docs", "RELEASE_NOTES.md")).isRegularFile();
+        assertThat(Path.of("docs", "SIGNING_SETUP.md")).isRegularFile();
     }
 
     @Test
@@ -111,5 +130,7 @@ class ReleaseContractTest {
                 "V1__legacy_1_0_schema.sql")).isRegularFile();
         assertThat(Path.of("src", "main", "resources", "db", "migration", "h2",
                 "V2__add_order_handoff_type.sql")).isRegularFile();
+        assertThat(Path.of("src", "main", "resources", "db", "migration", "h2",
+                "V3__farm_knowledge_log.sql")).isRegularFile();
     }
 }
