@@ -5,6 +5,17 @@ on:
   push:
     tags:
       - "v*"
+  pull_request:
+    paths:
+      - ".github/workflows/release.yml"
+      - "pom.xml"
+      - "scripts/build-release.ps1"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Candidate version (blank uses the POM version without -SNAPSHOT)"
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -18,9 +29,11 @@ jobs:
     name: Verify version, tests, JAR, SBOM, and notices
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    outputs:
+      version: ${{ steps.version.outputs.version }}
 
     steps:
-      - name: Checkout tagged source
+      - name: Checkout release source
         uses: actions/checkout@v7
 
       - name: Set up JDK 17
@@ -30,18 +43,33 @@ jobs:
           java-version: "17"
           cache: maven
 
-      - name: Require an exact stable tag and POM version
+      - name: Resolve and lock the candidate version
         id: version
         shell: bash
+        env:
+          REQUESTED_VERSION: ${{ inputs.version }}
         run: |
-          TAG_VERSION="${GITHUB_REF_NAME#v}"
           POM_VERSION="$(mvn -q help:evaluate -Dexpression=project.version -DforceStdout)"
-          [[ "$TAG_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
-          test "$POM_VERSION" = "$TAG_VERSION"
-          case "$POM_VERSION" in
-            *-SNAPSHOT) echo "Snapshot versions cannot be released" >&2; exit 1 ;;
-          esac
-          echo "version=$TAG_VERSION" >> "$GITHUB_OUTPUT"
+          if test "$GITHUB_EVENT_NAME" = "push"; then
+            TAG_VERSION="${GITHUB_REF_NAME#v}"
+            [[ "$TAG_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+            test "$POM_VERSION" = "$TAG_VERSION"
+            case "$POM_VERSION" in
+              *-SNAPSHOT) echo "Snapshot versions cannot be released" >&2; exit 1 ;;
+            esac
+            VERSION="$TAG_VERSION"
+          else
+            VERSION="${REQUESTED_VERSION:-${POM_VERSION%-SNAPSHOT}}"
+            [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+            if test "$POM_VERSION" != "$VERSION" && test "$POM_VERSION" != "$VERSION-SNAPSHOT"; then
+              echo "Candidate $VERSION does not match POM version $POM_VERSION" >&2
+              exit 1
+            fi
+            if test "$POM_VERSION" != "$VERSION"; then
+              mvn -B versions:set -DnewVersion="$VERSION" -DgenerateBackupPoms=false
+            fi
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Build and run every verification gate
         run: mvn -B clean verify
@@ -90,10 +118,12 @@ jobs:
             label: Windows MSI
             type: msi
             extra: --win-menu --win-shortcut --win-dir-chooser
+            launcher: smoke-dist/FlowersForever/FlowersForever.exe
           - os: macos-latest
             label: macOS DMG
             type: dmg
             extra: ""
+            launcher: smoke-dist/FlowersForever.app/Contents/MacOS/FlowersForever
 
     steps:
       - name: Set up JDK 17 packaging tools
@@ -111,7 +141,7 @@ jobs:
       - name: Package the verified executable
         shell: bash
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
+          VERSION="${{ needs.verify.outputs.version }}"
           JAR="flowerfarm-manager-${VERSION}.jar"
           test -s "target/jpackage-input/$JAR"
           test "$(find target/jpackage-input -maxdepth 1 -type f | wc -l | tr -d ' ')" = "1"
@@ -130,6 +160,34 @@ jobs:
             ${{ matrix.extra }}
           test "$(find dist -maxdepth 1 -type f | wc -l | tr -d ' ')" = "1"
 
+      - name: Launch the packaged runtime and require its smoke marker
+        shell: bash
+        run: |
+          VERSION="${{ needs.verify.outputs.version }}"
+          JAR="flowerfarm-manager-${VERSION}.jar"
+          SMOKE_DATA="target/release-smoke-data-${{ matrix.type }}"
+          mkdir -p "$SMOKE_DATA" smoke-dist
+          jpackage \
+            --type app-image \
+            --name FlowersForever \
+            --app-version "$VERSION" \
+            --vendor RicheyWorks \
+            --description "Flower farm operations and knowledge, kept in one place" \
+            --input target/jpackage-input \
+            --main-jar "$JAR" \
+            --java-options "-Djava.awt.headless=false" \
+            --java-options "-Dflowerfarm.packaged=true" \
+            --dest smoke-dist
+          test -x "${{ matrix.launcher }}"
+          export FLOWERFARM_DATA_DIR="$SMOKE_DATA"
+          "${{ matrix.launcher }}" --release-smoke &
+          for attempt in $(seq 1 90); do
+            test -s "$SMOKE_DATA/release-smoke.ok" && break
+            sleep 1
+          done
+          test -s "$SMOKE_DATA/release-smoke.ok"
+          grep -q "Packaged runtime started successfully" "$SMOKE_DATA/release-smoke.ok"
+
       - name: Preserve native installer
         uses: actions/upload-artifact@v7
         with:
@@ -138,8 +196,56 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+  candidate:
+    name: Validate complete candidate bundle (no release)
+    if: github.event_name != 'push'
+    needs: [verify, installers]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Collect verified JAR
+        uses: actions/download-artifact@v8
+        with:
+          name: verified-jar
+          path: candidate-assets
+
+      - name: Collect SBOM and third-party notices
+        uses: actions/download-artifact@v8
+        with:
+          name: release-metadata
+          path: candidate-assets
+
+      - name: Collect both native installers
+        uses: actions/download-artifact@v8
+        with:
+          pattern: installer-*
+          path: candidate-assets
+          merge-multiple: true
+
+      - name: Require the complete candidate and generate checksums
+        shell: bash
+        run: |
+          VERSION="${{ needs.verify.outputs.version }}"
+          test -s "candidate-assets/flowerfarm-manager-${VERSION}.jar"
+          test -s candidate-assets/bom.json
+          test -s candidate-assets/bom.xml
+          test -s candidate-assets/THIRD-PARTY.txt
+          test "$(find candidate-assets -maxdepth 1 -type f -name '*.msi' | wc -l | tr -d ' ')" = "1"
+          test "$(find candidate-assets -maxdepth 1 -type f -name '*.dmg' | wc -l | tr -d ' ')" = "1"
+          (cd candidate-assets && sha256sum *) > candidate-assets/SHA256SUMS.txt
+
+      - name: Preserve the private candidate bundle
+        uses: actions/upload-artifact@v7
+        with:
+          name: FlowersForever-${{ needs.verify.outputs.version }}-candidate
+          path: candidate-assets/*
+          if-no-files-found: error
+          retention-days: 14
+
   publish:
     name: Publish complete private release
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     needs: [verify, installers]
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -169,7 +275,7 @@ jobs:
       - name: Require the complete release and generate checksums
         shell: bash
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
+          VERSION="${{ needs.verify.outputs.version }}"
           test -s "release-assets/flowerfarm-manager-${VERSION}.jar"
           test -s release-assets/bom.json
           test -s release-assets/bom.xml
@@ -187,18 +293,21 @@ jobs:
           body: |
             ## FlowersForever ${{ github.ref_name }}
 
-            A verified private release for approved FlowersForever customers and pilots.
+            A verified private RicheyWorks release artifact set.
 
             Every attached artifact was produced from the same tested source and version.
             `SHA256SUMS.txt` verifies the JAR, installers, SBOM, and third-party notice.
 
-            The native installers are not yet code-signed. Approved users should obtain
-            access directly from RicheyWorks and verify the checksum before installation.
+            The native installers are not yet code-signed and are not approved for
+            external pilot distribution. Do not bypass an operating-system or antivirus
+            threat block. Maintainers must verify checksums and complete the signing gate
+            before providing an installer to a pilot farm.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   container:
     name: Publish private GHCR image
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     needs: [verify, installers]
     runs-on: ubuntu-latest
     timeout-minutes: 25

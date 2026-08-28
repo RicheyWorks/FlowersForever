@@ -158,7 +158,10 @@ The Maven build targets Java 17, produces one executable JAR and runs unit,
 integration, architecture, transaction, and profile tests. JaCoCo gates line and
 branch coverage. The `quality` profile adds zero-baseline Medium+ SpotBugs and
 project Checkstyle gates. CI also builds and smoke-tests the authenticated
-container. Releases publish the JAR, SBOM, container, and desktop installers.
+container. Candidate release CI builds both native installers and launches a
+temporary app image on clean Windows and macOS runners without publishing.
+Stable version tags may publish the JAR, SBOM, container, and desktop installers
+only after those same gates pass.
 
 ## Deliberate constraints and evolution triggers
 

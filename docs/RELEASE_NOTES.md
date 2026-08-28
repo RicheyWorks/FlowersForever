@@ -22,6 +22,10 @@ is approved for customer distribution. The previous 1.0.19 artifacts are retired
 ## Release safety
 
 - One fully tested executable JAR feeds both Windows and macOS installers.
+- Pull requests that change release packaging build both installers, launch the
+  packaged runtime on clean Windows and macOS runners, require a successful
+  database-startup marker, and preserve a private candidate bundle without
+  creating a release.
 - Tags, POM versions, JAR names, and installer versions must match exactly.
 - A release is created only after tests, SBOM, license policy, and both native
   packaging jobs pass.
@@ -29,6 +33,10 @@ is approved for customer distribution. The previous 1.0.19 artifacts are retired
 - Weka and its GPLv3 distribution issue were removed; transparent ordinary
   least-squares forecasting is implemented directly in FlowersForever.
 - Runtime third-party notices are generated, bundled, and attached to releases.
+- An unsigned Windows app image triggered Norton's `IDP.Generic` heuristic during
+  local validation. The runtime completed its controlled startup and shutdown,
+  but antivirus blocks must not be bypassed. Code signing is now a pilot release
+  gate, and suspected false positives should be reviewed by the security vendor.
 
 ## Data and security
 

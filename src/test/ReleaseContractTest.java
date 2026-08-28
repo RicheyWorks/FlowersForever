@@ -54,6 +54,25 @@ class ReleaseContractTest {
     }
 
     @Test
+    @DisplayName("installer candidates are launched on both platforms without publishing")
+    void installerCandidatesAreSmokeTestedWithoutPublishing() throws Exception {
+        String workflow = Files.readString(Path.of(".github", "workflows", "release.yml"));
+
+        assertThat(workflow).contains(
+                "pull_request:",
+                "workflow_dispatch:",
+                "Validate complete candidate bundle (no release)",
+                "--type app-image",
+                "--release-smoke",
+                "release-smoke.ok",
+                "FlowersForever.exe",
+                "FlowersForever.app/Contents/MacOS/FlowersForever",
+                "not approved for",
+                "Do not bypass an operating-system or antivirus",
+                "if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')");
+    }
+
+    @Test
     @DisplayName("packaged runtime uses durable app data and release recovery artifacts")
     void packagedRuntimeHasDataAndRecoveryContracts() throws Exception {
         String workflow = Files.readString(Path.of(".github", "workflows", "release.yml"));

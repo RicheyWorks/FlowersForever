@@ -54,7 +54,7 @@ FlowersForever is privately distributed by RicheyWorks. Approved pilot farms rec
 The desktop installers include the runtime they need. You do not need to install Java, Maven, or use a command line.
 
 > [!IMPORTANT]
-> The pilot installers are not code-signed yet, so Windows SmartScreen or macOS Gatekeeper may say the publisher is unknown. Accept an installer only from your established RicheyWorks contact and verify its SHA-256 checksum before opening it. Review the [installer safety note](docs/adr/ADR-002-code-signing.md).
+> The pilot installers are not code-signed yet, so Windows SmartScreen, antivirus software, or macOS Gatekeeper may block them or say the publisher is unknown. Do not disable security software or create a broad exception. Accept an installer only from your established RicheyWorks contact, verify its SHA-256 checksum, and stop for RicheyWorks review if security software still blocks it. Review the [installer safety note](docs/adr/ADR-002-code-signing.md).
 
 ### 2. Open FlowersForever
 

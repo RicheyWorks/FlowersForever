@@ -27,8 +27,10 @@ Repository access alone does not grant a license to use or redistribute it.
    shasum -a 256 FlowersForever-1.2.0.dmg
    ```
 
-4. Because pilot installers are not yet code-signed, the operating system may
-   show an unknown-publisher warning. Stop if the checksum does not match.
+4. Because pilot installers are not yet code-signed, the operating system or
+   antivirus software may block them or show an unknown-publisher warning. Do
+   not disable protection or create a broad exclusion. Stop and contact
+   RicheyWorks if the checksum differs or security software reports a threat.
 5. Before upgrading an existing farm, close FlowersForever and make a verified
    off-device backup.
 

@@ -22,6 +22,26 @@
 Maintainers can validate an app image without opening the GUI by running
 `FlowersForever.exe --release-smoke` with `FLOWERFARM_DATA_DIR` pointed at an empty test folder.
 
+## Pre-release candidate validation
+
+The private GitHub Release workflow has a non-publishing candidate path. A pull
+request that changes the release workflow, POM version, or local packaging
+script builds both the MSI and DMG on clean hosted runners. Each runner also
+launches a temporary app image with `--release-smoke` and must produce
+`release-smoke.ok` after the application context, database, and migrations start.
+
+Maintainers can also start the workflow manually and optionally provide an exact
+candidate version. Candidate runs upload a checksum-complete private bundle for
+14 days, but cannot create a GitHub Release or publish a container. Only an exact
+stable `vX.Y.Z` tag matching the POM can enter the publishing jobs.
+
+An antivirus detection is a stop condition even when the checksum matches. Do
+not add broad folder or process exclusions. Record the detection name, alert ID,
+file SHA-256, and build commit; update security definitions and run a full scan.
+After the source and build provenance are confirmed, a maintainer may submit the
+specific file through [Norton's official false-positive review process](https://support.norton.com/sp/en/us/home/current/solutions/kb20090410134005EN).
+External pilot distribution remains blocked until platform signing is active.
+
 ## Rollback
 
 1. Close Flowers Forever and make a new backup of the current data.
