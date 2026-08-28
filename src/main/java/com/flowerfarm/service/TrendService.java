@@ -61,12 +61,24 @@ public class TrendService {
      * @return A {@link TrendResult} containing the prediction and a summary.
      */
     public TrendResult analyzeQuantityTrend() {
+        return analyzeQuantityTrend(null, null, 0);
+    }
+
+    /**
+     * Runs the same transparent forecast for a user-selected crop/unit series.
+     * A positive {@code recentWeeks} value limits the model to that many most
+     * recent recorded weekly observations; zero keeps the complete history.
+     * Blank crop/unit values preserve the original best-supported-series
+     * behavior used by the API and command-line client.
+     */
+    public TrendResult analyzeQuantityTrend(String cropName, String unit, int recentWeeks) {
         try {
-            HarvestSeries series = buildSeries();
+            HarvestSeries series = selectSeries(cropName, unit);
+            series = limitToRecentWeeks(series, recentWeeks);
             if (series == null || series.weeklyTotals().size() < MIN_OBSERVED_WEEKS) {
                 int observed = series == null ? 0 : series.weeklyTotals().size();
                 String crop = series == null ? "" : series.cropName();
-                String unit = series == null ? "" : series.unit();
+                String selectedUnit = series == null ? "" : series.unit();
                 List<TrendPoint> points = series == null ? List.of()
                         : dataPoints(series.weeklyTotals()).stream()
                         .map(point -> new TrendPoint(
@@ -76,7 +88,7 @@ public class TrendService {
                         "Record at least 3 separate weeks for the same crop and unit "
                                 + "before forecasting. Best available series has "
                                 + observed + " week" + (observed == 1 ? "" : "s") + ".",
-                        crop, unit, observed, Double.NaN, null, null,
+                        crop, selectedUnit, observed, Double.NaN, null, null,
                         points, Double.NaN, Double.NaN, Double.NaN);
             }
             List<DataPoint> dataPoints = dataPoints(series.weeklyTotals());
@@ -116,26 +128,78 @@ public class TrendService {
         }
     }
 
+    /**
+     * Lists every recorded crop/unit series so the UI can make the analysis
+     * target explicit instead of silently choosing one. The best-supported
+     * series is returned first.
+     */
+    public List<TrendSeriesSummary> listSeries() {
+        return groupedSeriesBuilders().values().stream()
+                .sorted(Comparator.comparingInt(HarvestSeriesBuilder::weekCount).reversed()
+                        .thenComparing(Comparator.comparingInt(
+                                HarvestSeriesBuilder::entryCount).reversed())
+                        .thenComparing(HarvestSeriesBuilder::cropName,
+                                String.CASE_INSENSITIVE_ORDER)
+                        .thenComparing(HarvestSeriesBuilder::unit,
+                                String.CASE_INSENSITIVE_ORDER))
+                .map(HarvestSeriesBuilder::summary)
+                .toList();
+    }
+
     // ── Helpers ────────────────────────────────────────────────────────────────
 
     /**
      * Groups real harvest entries by normalized crop and unit, then selects the
      * series with the most distinct recorded weeks (and most entries as a tie-breaker).
      */
-    private HarvestSeries buildSeries() {
-        Map<String, HarvestSeriesBuilder> grouped = new LinkedHashMap<>();
-        for (HarvestEntry entry : harvestService.getAll()) {
-            String key = entry.getCropName().toLowerCase(Locale.ROOT) + "\u0000"
-                    + entry.getUnit().toLowerCase(Locale.ROOT);
-            HarvestSeriesBuilder builder = grouped.computeIfAbsent(key,
-                    ignored -> new HarvestSeriesBuilder(entry.getCropName(), entry.getUnit()));
-            builder.add(entry);
+    private HarvestSeries selectSeries(String cropName, String unit) {
+        Map<String, HarvestSeriesBuilder> grouped = groupedSeriesBuilders();
+        if (cropName != null && !cropName.isBlank()) {
+            if (unit != null && !unit.isBlank()) {
+                HarvestSeriesBuilder exact = grouped.get(seriesKey(cropName, unit));
+                return exact == null ? null : exact.build();
+            }
+            return grouped.values().stream()
+                    .filter(builder -> builder.cropName().equalsIgnoreCase(cropName.trim()))
+                    .max(Comparator.comparingInt(HarvestSeriesBuilder::weekCount)
+                            .thenComparingInt(HarvestSeriesBuilder::entryCount))
+                    .map(HarvestSeriesBuilder::build)
+                    .orElse(null);
         }
         return grouped.values().stream()
                 .max(Comparator.comparingInt(HarvestSeriesBuilder::weekCount)
                         .thenComparingInt(HarvestSeriesBuilder::entryCount))
                 .map(HarvestSeriesBuilder::build)
                 .orElse(null);
+    }
+
+    private Map<String, HarvestSeriesBuilder> groupedSeriesBuilders() {
+        Map<String, HarvestSeriesBuilder> grouped = new LinkedHashMap<>();
+        for (HarvestEntry entry : harvestService.getAll()) {
+            String key = seriesKey(entry.getCropName(), entry.getUnit());
+            HarvestSeriesBuilder builder = grouped.computeIfAbsent(key,
+                    ignored -> new HarvestSeriesBuilder(entry.getCropName(), entry.getUnit()));
+            builder.add(entry);
+        }
+        return grouped;
+    }
+
+    private static String seriesKey(String cropName, String unit) {
+        String crop = cropName == null ? "" : cropName.trim().toLowerCase(Locale.ROOT);
+        String normalizedUnit = unit == null ? "" : unit.trim().toLowerCase(Locale.ROOT);
+        return crop + "\u0000" + normalizedUnit;
+    }
+
+    private static HarvestSeries limitToRecentWeeks(HarvestSeries series, int recentWeeks) {
+        if (series == null || recentWeeks <= 0
+                || series.weeklyTotals().size() <= recentWeeks) {
+            return series;
+        }
+        int skip = series.weeklyTotals().size() - recentWeeks;
+        Map<LocalDate, Double> recent = new TreeMap<>();
+        series.weeklyTotals().entrySet().stream().skip(skip)
+                .forEach(entry -> recent.put(entry.getKey(), entry.getValue()));
+        return new HarvestSeries(series.cropName(), series.unit(), recent);
     }
 
     private List<DataPoint> dataPoints(Map<LocalDate, Double> weeklyTotals) {
@@ -246,9 +310,19 @@ public class TrendService {
 
         private int weekCount() { return weeklyTotals.size(); }
         private int entryCount() { return entryCount; }
+        private String cropName() { return cropName; }
+        private String unit() { return unit; }
 
         private HarvestSeries build() {
             return new HarvestSeries(cropName, unit, new TreeMap<>(weeklyTotals));
+        }
+
+        private TrendSeriesSummary summary() {
+            LocalDate firstWeek = weeklyTotals.keySet().stream().findFirst().orElse(null);
+            LocalDate latestWeek = weeklyTotals.keySet().stream()
+                    .reduce((previous, current) -> current).orElse(null);
+            return new TrendSeriesSummary(cropName, unit, weekCount(), entryCount,
+                    firstWeek, latestWeek);
         }
     }
 
@@ -260,6 +334,11 @@ public class TrendService {
      */
     /** One auditable weekly observation and its fitted trend value. */
     public record TrendPoint(LocalDate weekStart, double quantity, double trendQuantity) { }
+
+    /** Lightweight descriptor used by analysis selectors and accessibility text. */
+    public record TrendSeriesSummary(String cropName, String unit, int observedWeeks,
+                                     int entryCount, LocalDate firstWeekStart,
+                                     LocalDate latestWeekStart) { }
 
     public record TrendResult(double predictedQuantity, String summary, String error,
                               String cropName, String unit, int observedWeeks,

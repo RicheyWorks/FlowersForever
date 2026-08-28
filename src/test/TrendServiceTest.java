@@ -152,6 +152,60 @@ class TrendServiceTest {
         assertThat(result.observedWeeks()).isEqualTo(4);
     }
 
+    @Test
+    @DisplayName("lists recorded crop and unit series in strongest-history order")
+    void listsAvailableSeries() {
+        List<HarvestEntry> entries = new java.util.ArrayList<>(weeklyHarvests("Rose", 10, 20));
+        entries.addAll(weeklyHarvests("Dahlia", 30, 35, 40, 45));
+        entries.add(new HarvestEntry(LocalDate.of(2026, 7, 7),
+                "rose", 5, "STEMS", "Field B", ""));
+        when(harvestService.getAll()).thenReturn(entries);
+
+        List<TrendService.TrendSeriesSummary> series = trendService.listSeries();
+
+        assertThat(series).hasSize(2);
+        assertThat(series.get(0).cropName()).isEqualTo("Dahlia");
+        assertThat(series.get(0).observedWeeks()).isEqualTo(4);
+        assertThat(series.get(1).cropName()).isEqualTo("Rose");
+        assertThat(series.get(1).observedWeeks()).isEqualTo(2);
+        assertThat(series.get(1).entryCount()).isEqualTo(3);
+    }
+
+    @Test
+    @DisplayName("analyzes the explicitly selected series instead of the automatic best series")
+    void analyzesSelectedSeries() {
+        List<HarvestEntry> entries = new java.util.ArrayList<>(
+                weeklyHarvests("Dahlia", 30, 35, 40, 45, 50));
+        entries.addAll(weeklyHarvests("Rose", 10, 20, 30));
+        when(harvestService.getAll()).thenReturn(entries);
+
+        TrendService.TrendResult result =
+                trendService.analyzeQuantityTrend("rose", "STEMS", 0);
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(result.cropName()).isEqualTo("Rose");
+        assertThat(result.observedWeeks()).isEqualTo(3);
+        assertThat(result.weeklyPoints()).extracting(TrendService.TrendPoint::quantity)
+                .containsExactly(10.0, 20.0, 30.0);
+    }
+
+    @Test
+    @DisplayName("recent history window keeps only the latest recorded observations")
+    void limitsAnalysisToRecentWeeks() {
+        when(harvestService.getAll()).thenReturn(
+                weeklyHarvests("Rose", 10, 20, 30, 40, 50, 60, 70, 80));
+
+        TrendService.TrendResult result =
+                trendService.analyzeQuantityTrend("Rose", "stems", 6);
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(result.observedWeeks()).isEqualTo(6);
+        assertThat(result.weeklyPoints()).extracting(TrendService.TrendPoint::quantity)
+                .containsExactly(30.0, 40.0, 50.0, 60.0, 70.0, 80.0);
+        assertThat(result.weeklyPoints().get(0).weekStart())
+                .isEqualTo(LocalDate.of(2026, 7, 20));
+    }
+
     // ── TrendResult record ───────────────────────────────────────────────────
 
     @Test

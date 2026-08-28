@@ -12044,6 +12044,59 @@ class PriorityTabsUiTest {
     }
 
     @Test
+    @DisplayName("trend analysis lets growers choose a crop series and recent history window")
+    void trendSeriesAndWindowSelection() throws Exception {
+        TrendService service = mock(TrendService.class);
+        when(service.listSeries()).thenReturn(List.of(
+                new TrendService.TrendSeriesSummary("Dahlia", "stems", 8, 9,
+                        LocalDate.of(2026, 6, 1), LocalDate.of(2026, 7, 20)),
+                new TrendService.TrendSeriesSummary("Nootka Rose", "stems", 6, 7,
+                        LocalDate.of(2026, 6, 15), LocalDate.of(2026, 7, 20))));
+        when(service.analyzeQuantityTrend("Nootka Rose", "stems", 6)).thenReturn(
+                new TrendService.TrendResult(
+                        82, "Selected series details", null,
+                        "Nootka Rose", "stems", 6, 78,
+                        LocalDate.of(2026, 7, 20), LocalDate.of(2026, 8, 31),
+                        List.of(
+                                new TrendService.TrendPoint(
+                                        LocalDate.of(2026, 6, 15), 48, 50),
+                                new TrendService.TrendPoint(
+                                        LocalDate.of(2026, 6, 22), 55, 55),
+                                new TrendService.TrendPoint(
+                                        LocalDate.of(2026, 6, 29), 61, 60),
+                                new TrendService.TrendPoint(
+                                        LocalDate.of(2026, 7, 6), 64, 65),
+                                new TrendService.TrendPoint(
+                                        LocalDate.of(2026, 7, 13), 72, 70),
+                                new TrendService.TrendPoint(
+                                        LocalDate.of(2026, 7, 20), 78, 75)),
+                        5, 45, 0.91));
+        TrendAnalysisTab tab = new TrendAnalysisTab(service, new TestHost());
+        JComponent[] root = new JComponent[1];
+
+        SwingUtilities.invokeAndWait(() -> root[0] = tab.getUIComponent());
+        awaitLabel(root[0], "2 recorded series · strongest history · all recorded history.");
+
+        SwingUtilities.invokeAndWait(() -> {
+            JComboBox<?> series = (JComboBox<?>) findNamed(
+                    root[0], "trend.seriesSelector").get(0);
+            JComboBox<?> window = (JComboBox<?>) findNamed(
+                    root[0], "trend.windowSelector").get(0);
+            series.setSelectedIndex(2);
+            window.setSelectedIndex(1);
+            button(root[0], "Analyze trends").doClick();
+        });
+        awaitLabel(root[0], "Forecast ready");
+
+        assertThat(((JLabel) findNamed(root[0], "trend.seriesHint").get(0)).getText())
+                .isEqualTo("6 recorded weeks · latest 6 weeks.");
+        assertThat(((JLabel) findNamed(root[0], "trend.forecast").get(0)).getText())
+                .isEqualTo("82 stems");
+        verify(service).analyzeQuantityTrend("Nootka Rose", "stems", 6);
+        verify(service, never()).analyzeQuantityTrend();
+    }
+
+    @Test
     @DisplayName("rose visualizer uses a resizeable farm workspace without a button wall")
     void roseVisualizerWorkspace() throws Exception {
         RoseVisualizerTab tab = new RoseVisualizerTab(
