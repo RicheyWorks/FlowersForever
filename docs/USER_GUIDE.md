@@ -121,6 +121,13 @@ today, so you can distinguish an unfinished season from one that is genuinely
 behind pace. Unmatched harvests and units other than stems are not added to the
 green bars.
 
+Open **Plan insights** for a guided review instead of decoding the summary
+counts alone. Color-coded cards name the exact crops, beds, and dates involved
+in each bed overlap or harvest gap, show which planting blocks are behind their
+expected-to-date pace, and total stem harvests that do not match the plan. Use
+the action on a card to jump to the relevant Plan records row or Harvest Log.
+An all-clear state appears when none of those signals needs attention.
+
 ## Record a harvest
 
 Open **Harvest Log**. For one cut, complete the date, crop, quantity, unit, and

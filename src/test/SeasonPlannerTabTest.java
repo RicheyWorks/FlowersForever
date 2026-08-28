@@ -11,6 +11,7 @@ import org.junit.jupiter.api.Test;
 import javax.swing.JButton;
 import javax.swing.JComponent;
 import javax.swing.JLabel;
+import javax.swing.JTabbedPane;
 import javax.swing.JTable;
 import javax.swing.SwingUtilities;
 import java.awt.Component;
@@ -72,6 +73,11 @@ class SeasonPlannerTabTest {
                         "320 actual stems");
         assertThat(((JLabel) named(root[0], "seasonPlanner.weeklyStatus")).getText())
                 .isEqualTo("320 actual stems · 300 expected by today · 6.7% ahead of pace");
+        assertThat(((JLabel) named(root[0], "seasonPlanner.insightsSummary")).getText())
+                .startsWith("Plan looks aligned");
+        assertThat(descendants(root[0], JLabel.class))
+                .extracting(JLabel::getText)
+                .contains("The season plan is aligned");
         assertThat(((JButton) named(root[0], "seasonPlanner.succession")).isEnabled()).isTrue();
 
         SwingUtilities.invokeAndWait(() -> tab.applyRolePermissions(false));
@@ -80,6 +86,62 @@ class SeasonPlannerTabTest {
         assertThat(((JButton) named(root[0], "seasonPlanner.succession")).isEnabled()).isFalse();
         assertThat(((JButton) named(root[0], "seasonPlanner.delete")).isEnabled()).isFalse();
         assertThat(((JButton) named(root[0], "seasonPlanner.refresh")).isEnabled()).isTrue();
+    }
+
+    @Test
+    @DisplayName("turns plan signals into direct record-review actions")
+    void guidesPlanReview() throws Exception {
+        SeasonPlanService service = mock(SeasonPlanService.class);
+        SeasonPlanEntry rose = entry();
+        SeasonPlanEntry sunflower = new SeasonPlanEntry(
+                2026, "Sunflower", "ProCut Plum", "Bed A",
+                LocalDate.of(2026, 5, 18), LocalDate.of(2026, 6, 2),
+                LocalDate.of(2026, 7, 28), LocalDate.of(2026, 9, 5),
+                100, 400, SeasonPlanStatus.SOWN, "Late summer succession.");
+        sunflower.setId(18L);
+        SeasonPlanService.SeasonSummary summary = new SeasonPlanService.SeasonSummary(
+                2, 2, 1, 2, 180, 1_040,
+                LocalDate.of(2026, 6, 20), LocalDate.of(2026, 9, 10));
+        List<SeasonPlanService.PlanPerformance> performance = List.of(
+                new SeasonPlanService.PlanPerformance(
+                        rose, 10, 10, 0, 1.6, SeasonPlanService.PlanPace.ON_TRACK),
+                new SeasonPlanService.PlanPerformance(
+                        sunflower, 0, 100, -100, 0, SeasonPlanService.PlanPace.BEHIND));
+        SeasonPlanService.BedConflict conflict = new SeasonPlanService.BedConflict(
+                rose, sunflower, LocalDate.of(2026, 6, 2), LocalDate.of(2026, 9, 5));
+        SeasonPlanService.HarvestGap gap = new SeasonPlanService.HarvestGap(
+                LocalDate.of(2026, 7, 16), LocalDate.of(2026, 7, 27), 12);
+        when(service.analyze(2026)).thenReturn(new SeasonPlanService.SeasonAnalysis(
+                List.of(rose, sunflower), summary, performance, List.of(conflict),
+                List.of(gap), List.of(), 10, 24, 1));
+        when(service.availableSeasons()).thenReturn(List.of(2026));
+        SeasonPlannerTab tab = new SeasonPlannerTab(service, new TestHost());
+        JComponent[] root = new JComponent[1];
+
+        SwingUtilities.invokeAndWait(() -> {
+            root[0] = tab.getUIComponent();
+            ((javax.swing.JComboBox<?>) named(root[0], "seasonPlanner.season"))
+                    .setSelectedItem(2026);
+            tab.initialize();
+        });
+        awaitStatus(root[0], "10 actual / 1,040 planned stems");
+
+        assertThat(((JLabel) named(root[0], "seasonPlanner.insightsSummary")).getText())
+                .startsWith("4 planning signals to review");
+        assertThat(named(root[0], "seasonPlanner.insight.reviewConflict")).isNotNull();
+        assertThat(named(root[0], "seasonPlanner.insight.reviewGap")).isNotNull();
+        assertThat(named(root[0], "seasonPlanner.insight.openHarvests")).isNotNull();
+
+        JTabbedPane workspace = (JTabbedPane) named(root[0], "seasonPlanner.workspace");
+        JTable table = (JTable) named(root[0], "seasonPlanner.table");
+        SwingUtilities.invokeAndWait(() -> {
+            workspace.setSelectedIndex(3);
+            ((JButton) named(root[0], "seasonPlanner.insight.reviewPace")).doClick();
+        });
+
+        assertThat(workspace.getSelectedIndex()).isEqualTo(1);
+        int selectedModelRow = table.convertRowIndexToModel(table.getSelectedRow());
+        assertThat(table.getValueAt(selectedModelRow, 1)).isEqualTo("Sunflower · ProCut Plum");
     }
 
     private static SeasonPlanEntry entry() {

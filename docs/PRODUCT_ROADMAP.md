@@ -54,12 +54,13 @@ bed overlaps, week-long harvest gaps, and harvests that need cleaner matching.
 Its weekly view distributes every block's expected yield across its harvest
 window and compares that plan line with matched actual stem harvests. A selected
 block can also become a reviewable next-succession draft with its crop, bed,
-capacity, and notes carried forward and every date shifted together.
+capacity, and notes carried forward and every date shifted together. A guided
+insights view turns overlap, harvest-gap, behind-pace, and matching counts into
+color-coded explanations with direct routes to the records that need review.
 
 Next planning increments:
 
 - Extend the implemented week-by-week planned-versus-actual chart with forward projections.
-- Turn overlap and succession-gap warnings into guided corrective actions.
 - Add reusable crop timing templates without hiding or inventing farm inputs.
 - Turn selected planting windows into crew-ready task lists and reminders.
 

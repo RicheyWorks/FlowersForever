@@ -20,6 +20,9 @@
   production line, a current-week marker, and an expected-by-today summary.
 - Adds **Plan succession** to turn a selected planting block into a reviewable
   unsaved draft with its dates shifted forward 14 days and farm data preserved.
+- Adds a colorful **Plan insights** view that names the exact bed overlaps,
+  harvest gaps, pace shortfalls, and unmatched harvest totals, with actions that
+  jump directly to the relevant planting records or Harvest Log.
 
 ## 1.2.0 — Farm Knowledge Log preview
 

@@ -21,6 +21,7 @@ import javax.swing.JTabbedPane;
 import javax.swing.JTable;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
+import javax.swing.SwingUtilities;
 import javax.swing.SwingWorker;
 import javax.swing.table.DefaultTableModel;
 import javax.swing.table.TableRowSorter;
@@ -56,6 +57,8 @@ import java.util.Set;
 public class SeasonPlannerTab implements FlowerFarmTab {
 
     private static final DateTimeFormatter SHORT_DATE = DateTimeFormatter.ofPattern("MMM d");
+    private static final DateTimeFormatter INSIGHT_DATE =
+            DateTimeFormatter.ofPattern("MMM d, uuuu");
     private static final int SUCCESSION_SHIFT_DAYS = 14;
     private static final String[] COLUMNS = {
             "Bed / field", "Crop / variety", "Sow", "Transplant", "Harvest window",
@@ -84,6 +87,9 @@ public class SeasonPlannerTab implements FlowerFarmTab {
     private SeasonTimeline timeline;
     private WeeklyPaceChart weeklyChart;
     private JLabel weeklyStatus;
+    private JTabbedPane workspace;
+    private JPanel insightsList;
+    private JLabel insightsSummary;
     private JTable table;
     private DefaultTableModel tableModel;
     private List<SeasonPlanEntry> lastView = List.of();
@@ -283,12 +289,38 @@ public class SeasonPlannerTab implements FlowerFarmTab {
                 "Green bars are matched stem harvests; the gold line spreads each block's target across its harvest window.",
                 paceContent);
 
-        JTabbedPane workspace = new JTabbedPane();
+        insightsSummary = FarmUi.statusBadge(
+                "Building grounded plan insights…", FarmUi.Tone.INFO);
+        insightsSummary.setName("seasonPlanner.insightsSummary");
+        insightsList = new JPanel();
+        insightsList.setName("seasonPlanner.insightsList");
+        insightsList.setOpaque(false);
+        insightsList.setLayout(new BoxLayout(insightsList, BoxLayout.Y_AXIS));
+        insightsList.setBorder(BorderFactory.createEmptyBorder(2, 0, 2, 0));
+        JScrollPane insightsScroll = new JScrollPane(insightsList);
+        insightsScroll.setName("seasonPlanner.insightsScroll");
+        insightsScroll.setBorder(BorderFactory.createEmptyBorder());
+        insightsScroll.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+        insightsScroll.getVerticalScrollBar().setUnitIncrement(16);
+        insightsScroll.getViewport().setBackground(FarmUi.surfaceColor());
+        insightsScroll.getAccessibleContext().setAccessibleName(
+                "Guided season plan insights scroll area");
+        JPanel insightsContent = new JPanel(new BorderLayout(0, FarmUi.CONTROL_GAP));
+        insightsContent.setOpaque(false);
+        insightsContent.add(insightsSummary, BorderLayout.NORTH);
+        insightsContent.add(insightsScroll, BorderLayout.CENTER);
+        JPanel insightsSection = FarmUi.section(
+                "Guided plan review",
+                "See the exact beds, crops, dates, and pace signals that need attention, then jump to the right record.",
+                insightsContent);
+
+        workspace = new JTabbedPane();
         workspace.setName("seasonPlanner.workspace");
         workspace.getAccessibleContext().setAccessibleName("Season planner views");
         workspace.addTab("Visual timeline", timelineSection);
         workspace.addTab("Plan records", recordsSection);
         workspace.addTab("Weekly pace", paceSection);
+        workspace.addTab("Plan insights", insightsSection);
         return workspace;
     }
 
@@ -357,6 +389,7 @@ public class SeasonPlannerTab implements FlowerFarmTab {
         timeline.setSeason(selectedYear, lastView, lastPerformance, conflictEntries);
         weeklyChart.setSeries(selectedYear, analysis.weeklyProduction());
         updateWeeklyStatus(analysis);
+        updateInsights(analysis);
         updateMetrics(analysis);
         boolean restored = restoreSelection(selectedId);
         requestedSelectionId = null;
@@ -433,6 +466,146 @@ public class SeasonPlannerTab implements FlowerFarmTab {
                 formatNumber(analysis.actualStems()) + " actual stems · "
                         + formatNumber(expectedToDate) + " expected by today · " + direction,
                 tone);
+    }
+
+    private void updateInsights(SeasonPlanService.SeasonAnalysis analysis) {
+        insightsList.removeAll();
+        long behindCount = analysis.performance().stream()
+                .filter(item -> item.pace() == SeasonPlanService.PlanPace.BEHIND)
+                .count();
+        int signalCount = analysis.bedConflicts().size() + analysis.harvestGaps().size()
+                + (int) behindCount + (analysis.unmatchedHarvestCount() > 0 ? 1 : 0);
+        FarmUi.updateStatusBadge(insightsSummary,
+                signalCount == 0
+                        ? "Plan looks aligned · no overlaps, harvest gaps, pace warnings, or unmatched stem harvests"
+                        : countLabel(signalCount, "planning signal", "planning signals")
+                                + " to review · use an action below to reach the relevant records",
+                signalCount == 0 ? FarmUi.Tone.SUCCESS : FarmUi.Tone.WARNING);
+
+        for (SeasonPlanService.BedConflict conflict : analysis.bedConflicts()) {
+            JButton review = insightButton("Review both blocks", "reviewConflict", () ->
+                    showPlanRecord(conflict.first(),
+                            "Opened the two overlapping " + conflict.first().getBedOrField()
+                                    + " planting blocks."));
+            review.getAccessibleContext().setAccessibleDescription(
+                    "Review " + cropLabel(conflict.first()) + " and "
+                            + cropLabel(conflict.second()) + " in Plan records");
+            addInsight("Bed overlap · " + conflict.first().getBedOrField(),
+                    cropLabel(conflict.first()) + " and " + cropLabel(conflict.second())
+                            + " both use this bed from "
+                            + INSIGHT_DATE.format(conflict.overlapStart()) + " through "
+                            + INSIGHT_DATE.format(conflict.overlapEnd()) + ".",
+                    FarmUi.Tone.DANGER, review);
+        }
+
+        for (SeasonPlanService.HarvestGap gap : analysis.harvestGaps()) {
+            SeasonPlanEntry next = nextBlockAfter(gap);
+            JButton review = insightButton(
+                    next == null ? "Review plan records" : "Review next block",
+                    "reviewGap", () -> showPlanRecord(next,
+                            "Opened the planting plan beside the " + gap.days()
+                                    + "-day harvest gap."));
+            addInsight("Harvest gap · " + gap.days() + " days",
+                    "No expected harvest is scheduled from " + INSIGHT_DATE.format(gap.from())
+                            + " through " + INSIGHT_DATE.format(gap.to())
+                            + ". Review nearby timing or add a succession if the farm needs coverage.",
+                    FarmUi.Tone.WARNING, review);
+        }
+
+        for (SeasonPlanService.PlanPerformance performance : analysis.performance()) {
+            if (performance.pace() != SeasonPlanService.PlanPace.BEHIND) {
+                continue;
+            }
+            SeasonPlanEntry entry = performance.entry();
+            JButton review = insightButton("Review planting block", "reviewPace", () ->
+                    showPlanRecord(entry, "Opened the planting block that is behind pace."));
+            addInsight("Behind planned pace · " + cropLabel(entry),
+                    formatNumber(performance.actualStems()) + " actual stems versus "
+                            + formatNumber(performance.expectedToDate())
+                            + " expected by today · "
+                            + formatNumber(Math.abs(performance.varianceToDate()))
+                            + " stems behind.",
+                    FarmUi.Tone.INFO, review);
+        }
+
+        if (analysis.unmatchedHarvestCount() > 0) {
+            JButton openHarvests = insightButton("Open Harvest Log", "openHarvests", () -> {
+                if (host != null) {
+                    host.selectTab("Harvest Log");
+                    host.setStatus("Opened Harvest Log to review stem harvests that do not match the season plan.");
+                }
+            });
+            addInsight("Harvest matching · "
+                            + countLabel(analysis.unmatchedHarvestCount(), "record", "records"),
+                    formatNumber(analysis.unmatchedStems())
+                            + " unmatched stems are not included in plan performance because their crop, bed, or date does not match a planting block.",
+                    FarmUi.Tone.WARNING, openHarvests);
+        }
+
+        if (signalCount == 0) {
+            JPanel clear = FarmUi.emptyState(
+                    "The season plan is aligned",
+                    "Keep recording stem harvests; new overlaps, gaps, and pace changes will appear here.");
+            clear.setAlignmentX(java.awt.Component.LEFT_ALIGNMENT);
+            clear.setMaximumSize(new Dimension(Integer.MAX_VALUE, 220));
+            insightsList.add(clear);
+        }
+        insightsList.revalidate();
+        insightsList.repaint();
+    }
+
+    private JButton insightButton(String text, String name, Runnable action) {
+        JButton button = FarmUi.secondaryButton(text);
+        button.setName("seasonPlanner.insight." + name);
+        button.addActionListener(event -> action.run());
+        return button;
+    }
+
+    private void addInsight(String heading, String message, FarmUi.Tone tone,
+                            JButton... actions) {
+        JLabel messageLabel = new JLabel("<html><body style='width: 650px'>"
+                + html(message) + "</body></html>");
+        messageLabel.getAccessibleContext().setAccessibleName(message);
+        JPanel card = FarmUi.insightCard(heading, messageLabel, tone);
+        card.setAlignmentX(java.awt.Component.LEFT_ALIGNMENT);
+        card.add(FarmUi.toolbar(actions), BorderLayout.EAST);
+        Dimension preferred = card.getPreferredSize();
+        card.setMaximumSize(new Dimension(Integer.MAX_VALUE, preferred.height));
+        insightsList.add(card);
+        insightsList.add(Box.createVerticalStrut(FarmUi.CONTROL_GAP));
+    }
+
+    private static String html(String value) {
+        return value == null ? "" : value
+                .replace("&", "&amp;")
+                .replace("<", "&lt;")
+                .replace(">", "&gt;")
+                .replace("\"", "&quot;");
+    }
+
+    private SeasonPlanEntry nextBlockAfter(SeasonPlanService.HarvestGap gap) {
+        return lastView.stream()
+                .filter(entry -> entry.getHarvestStart().isAfter(gap.to()))
+                .min(java.util.Comparator.comparing(SeasonPlanEntry::getHarvestStart))
+                .orElse(null);
+    }
+
+    private void showPlanRecord(SeasonPlanEntry entry, String status) {
+        int recordsIndex = workspace.indexOfTab("Plan records");
+        if (recordsIndex >= 0) {
+            workspace.setSelectedIndex(recordsIndex);
+        }
+        if (entry != null) {
+            restoreSelection(entry.getId());
+            int selectedRow = table.getSelectedRow();
+            if (selectedRow >= 0) {
+                table.scrollRectToVisible(table.getCellRect(selectedRow, 0, true));
+            }
+        }
+        SwingUtilities.invokeLater(table::requestFocusInWindow);
+        if (host != null) {
+            host.setStatus(status);
+        }
     }
 
     private Object[] row(SeasonPlanEntry entry, SeasonPlanService.PlanPerformance performance) {

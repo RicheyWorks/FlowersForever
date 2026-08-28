@@ -396,6 +396,9 @@ class DataEntryVisualContractTest {
         seasonWorkspace.setSelectedIndex(2);
         render("season-planner-weekly", seasonPlanner.getUIComponent(),
                 new Dimension(1120, 720));
+        seasonWorkspace.setSelectedIndex(3);
+        render("season-planner-insights", seasonPlanner.getUIComponent(),
+                new Dimension(1120, 720));
         seasonWorkspace.setSelectedIndex(0);
         render("trend-analysis", trends.getUIComponent(), new Dimension(1050, 700));
         render("irrigation", irrigation.getUIComponent(), new Dimension(1050, 700));
@@ -517,6 +520,7 @@ class DataEntryVisualContractTest {
         assertThat(OUTPUT.resolve("season-planner-compact.png")).isRegularFile();
         assertThat(OUTPUT.resolve("season-planner-records.png")).isRegularFile();
         assertThat(OUTPUT.resolve("season-planner-weekly.png")).isRegularFile();
+        assertThat(OUTPUT.resolve("season-planner-insights.png")).isRegularFile();
         assertThat(OUTPUT.resolve("trend-analysis.png")).isRegularFile();
         assertThat(OUTPUT.resolve("irrigation.png")).isRegularFile();
         assertThat(OUTPUT.resolve("irrigation-error.png")).isRegularFile();
