@@ -96,7 +96,12 @@ For a guided first visit, follow the [plain-language desktop user guide](docs/US
     </td>
   </tr>
   <tr>
-    <td colspan="2">
+    <td width="50%">
+      <img src="docs/images/app-trend-analysis.png" alt="FlowersForever harvest outlook showing actual harvest, fitted trend, next-week forecast, evidence, and planning guidance">
+      <br><strong>Turn harvest history into a decision.</strong><br>
+      Compare actual output with the fitted direction and next-week forecast, see how strong the signal is, and act without losing the underlying weekly evidence.
+    </td>
+    <td width="50%">
       <img src="docs/images/app-knowledge-log.png" alt="FlowersForever Farm Knowledge Log showing plain-language search, reusable tags, saved lessons, and selected observation details">
       <br><strong>Keep hard-won farm knowledge on the farm.</strong><br>
       Save observations, actions, results, follow-ups, and honest confidence in one searchable record—so a useful lesson can be found and repeated next season.

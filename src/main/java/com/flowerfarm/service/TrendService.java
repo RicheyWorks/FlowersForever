@@ -67,11 +67,17 @@ public class TrendService {
                 int observed = series == null ? 0 : series.weeklyTotals().size();
                 String crop = series == null ? "" : series.cropName();
                 String unit = series == null ? "" : series.unit();
+                List<TrendPoint> points = series == null ? List.of()
+                        : dataPoints(series.weeklyTotals()).stream()
+                        .map(point -> new TrendPoint(
+                                point.weekStart(), point.quantity(), Double.NaN))
+                        .toList();
                 return new TrendResult(0, null,
                         "Record at least 3 separate weeks for the same crop and unit "
                                 + "before forecasting. Best available series has "
                                 + observed + " week" + (observed == 1 ? "" : "s") + ".",
-                        crop, unit, observed, Double.NaN, null, null);
+                        crop, unit, observed, Double.NaN, null, null,
+                        points, Double.NaN, Double.NaN, Double.NaN);
             }
             List<DataPoint> dataPoints = dataPoints(series.weeklyTotals());
 
@@ -91,15 +97,22 @@ public class TrendService {
                     series, dataPoints, forecastWeek, predicted, model.diagnostics());
             log.info("Harvest trend complete — {} / {} predicted next week: {}",
                     series.cropName(), series.unit(), String.format("%.2f", predicted));
+            List<TrendPoint> chartPoints = dataPoints.stream()
+                    .map(point -> new TrendPoint(
+                            point.weekStart(), point.quantity(),
+                            Math.max(0, model.predict(point.weekOffset()))))
+                    .toList();
             return new TrendResult(predicted, summary, null,
                     series.cropName(), series.unit(), dataPoints.size(), latest,
-                    latestWeek, forecastWeek);
+                    latestWeek, forecastWeek, chartPoints,
+                    model.slope(), model.intercept(), model.rSquared());
 
         } catch (Exception e) {
             log.error("Trend analysis failed: {}", e.getMessage(), e);
             return new TrendResult(0, null,
                     "Trend analysis could not be completed. Check server logs and try again.",
-                    "", "", 0, Double.NaN, null, null);
+                    "", "", 0, Double.NaN, null, null,
+                    List.of(), Double.NaN, Double.NaN, Double.NaN);
         }
     }
 
@@ -245,20 +258,41 @@ public class TrendService {
      * Immutable result object returned by {@link #analyzeQuantityTrend()}.
      * {@code error} is {@code null} on success; {@code summary} is {@code null} on failure.
      */
+    /** One auditable weekly observation and its fitted trend value. */
+    public record TrendPoint(LocalDate weekStart, double quantity, double trendQuantity) { }
+
     public record TrendResult(double predictedQuantity, String summary, String error,
                               String cropName, String unit, int observedWeeks,
                               double latestQuantity, LocalDate latestWeekStart,
-                              LocalDate forecastWeekStart) {
+                              LocalDate forecastWeekStart,
+                              List<TrendPoint> weeklyPoints,
+                              double slope, double intercept, double rSquared) {
+        public TrendResult {
+            weeklyPoints = weeklyPoints == null ? List.of() : List.copyOf(weeklyPoints);
+        }
+
         public TrendResult(double predictedQuantity, String summary, String error) {
             this(predictedQuantity, summary, error,
-                    "Farm output", "units", 0, Double.NaN, null, null);
+                    "Farm output", "units", 0, Double.NaN, null, null,
+                    List.of(), Double.NaN, Double.NaN, Double.NaN);
         }
 
         public TrendResult(double predictedQuantity, String summary, String error,
                            String cropName, String unit, int observedWeeks,
                            double latestQuantity) {
             this(predictedQuantity, summary, error,
-                    cropName, unit, observedWeeks, latestQuantity, null, null);
+                    cropName, unit, observedWeeks, latestQuantity, null, null,
+                    List.of(), Double.NaN, Double.NaN, Double.NaN);
+        }
+
+        public TrendResult(double predictedQuantity, String summary, String error,
+                           String cropName, String unit, int observedWeeks,
+                           double latestQuantity, LocalDate latestWeekStart,
+                           LocalDate forecastWeekStart) {
+            this(predictedQuantity, summary, error,
+                    cropName, unit, observedWeeks, latestQuantity,
+                    latestWeekStart, forecastWeekStart,
+                    List.of(), Double.NaN, Double.NaN, Double.NaN);
         }
 
         public boolean isSuccess() { return error == null; }

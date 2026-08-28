@@ -11956,7 +11956,14 @@ class PriorityTabsUiTest {
         when(service.analyzeQuantityTrend()).thenReturn(new TrendService.TrendResult(
                 120, "Real weekly details", null,
                 "Nootka Rose", "stems", 5, 90,
-                LocalDate.of(2026, 7, 27), LocalDate.of(2026, 8, 31)));
+                LocalDate.of(2026, 7, 27), LocalDate.of(2026, 8, 31),
+                List.of(
+                        new TrendService.TrendPoint(LocalDate.of(2026, 6, 29), 50, 52),
+                        new TrendService.TrendPoint(LocalDate.of(2026, 7, 6), 60, 61),
+                        new TrendService.TrendPoint(LocalDate.of(2026, 7, 13), 70, 70),
+                        new TrendService.TrendPoint(LocalDate.of(2026, 7, 20), 80, 79),
+                        new TrendService.TrendPoint(LocalDate.of(2026, 7, 27), 90, 88)),
+                9, 43, 0.96));
         TrackingHost host = new TrackingHost();
         TrendAnalysisTab tab = new TrendAnalysisTab(service, host);
         JComponent[] root = new JComponent[1];
@@ -11971,11 +11978,23 @@ class PriorityTabsUiTest {
         assertThat(findNamed(root[0], "farm.section")).hasSize(1);
         assertThat(button(root[0], "Analyze trends").isEnabled()).isTrue();
         assertThat(findNamed(root[0], "trend.analysis.output")).hasSize(1);
+        assertThat(findNamed(root[0], "farm.metricCard")).hasSize(4);
+        assertThat(findNamed(root[0], "trend.chart")).hasSize(1);
+        assertThat(((JTable) findNamed(root[0], "trend.weeklyTable").get(0)).getRowCount())
+                .isEqualTo(6);
         assertThat(((JLabel) findNamed(root[0], "trend.forecast").get(0)).getText())
-                .isEqualTo("Projected week of 2026-08-31: 120 stems");
-        assertThat(((JLabel) findNamed(root[0], "trend.context").get(0)).getText())
-                .contains("Nootka Rose", "5 recorded weeks", "latest 90 stems",
-                        "last week 2026-07-27");
+                .isEqualTo("120 stems");
+        assertThat(((JLabel) findNamed(root[0], "trend.change").get(0)).getText())
+                .isEqualTo("+33%");
+        assertThat(((JLabel) findNamed(root[0], "trend.reliability").get(0)).getText())
+                .isEqualTo("Strong");
+        JLabel context = (JLabel) findNamed(root[0], "trend.context").get(0);
+        assertThat(context.getText())
+                .contains("Nootka Rose", "5 weeks", "latest Jul 27: 90 stems",
+                        "Forecast +33%");
+        assertThat(context.getAccessibleContext().getAccessibleName())
+                .contains("5 recorded weeks", "latest 90 stems",
+                        "latest week 2026-07-27");
         assertThat(((JLabel) findNamed(root[0], "trend.guidance").get(0)).getText())
                 .contains("History gap of 5 weeks", "update the Harvest Log");
         SwingUtilities.invokeAndWait(() -> button(root[0], "Open Harvest Log").doClick());
@@ -12001,9 +12020,9 @@ class PriorityTabsUiTest {
         awaitLabel(root[0], "Analysis needs attention");
 
         assertThat(((JLabel) findNamed(root[0], "trend.forecast").get(0)).getText())
-                .isEqualTo("More harvest history needed");
+                .isEqualTo("Needs history");
         assertThat(((JLabel) findNamed(root[0], "trend.context").get(0)).getText())
-                .isEqualTo("Nootka Rose · 2 recorded weeks");
+                .contains("Nootka Rose", "2 recorded weeks");
         assertThat(((JLabel) findNamed(root[0], "trend.guidance").get(0)).getText())
                 .contains("at least three separate weeks");
         assertThat(((JTextArea) findNamed(root[0], "trend.analysis.output").get(0)).getText())

@@ -229,7 +229,7 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
 
         frame.setLocationRelativeTo(null);
 
-        // Restore the last-open tab and re-assert the saved theme on the dashboard.
+        // Restore the last-open tab and re-assert custom component paints.
         String lastTitle = prefs.get(PREF_TAB_TITLE, "");
         if (lastTitle.isBlank() || !navigator.select(lastTitle)) {
             int lastTab = prefs.getInt(PREF_TAB, 0);
@@ -239,6 +239,9 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
         }
         if (dashboard != null) {
             dashboard.applyTheme(darkMode);
+        }
+        if (trendTab != null) {
+            trendTab.applyTheme();
         }
 
         // Preserve meaningful CRM drafts unless the worker explicitly discards them.
@@ -473,6 +476,9 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
         }
         if (dashboard != null) {
             dashboard.applyTheme(dark);   // re-assert custom card colors after the L&F reset
+        }
+        if (trendTab != null) {
+            trendTab.applyTheme();
         }
         prefs.putBoolean(PREF_DARK, dark);
         setStatus(dark ? "Dark mode on." : "Light mode on.");

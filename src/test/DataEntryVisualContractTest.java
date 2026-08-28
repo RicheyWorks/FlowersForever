@@ -220,7 +220,16 @@ class DataEntryVisualContractTest {
                 82.4,
                 "FORECAST READY\n\nProjected next-period quantity: 82 stems\n"
                         + "Direction: steady growth\nConfidence note: use alongside harvest plans.",
-                null, "Nootka Rose", "stems", 6, 78));
+                null, "Nootka Rose", "stems", 6, 78,
+                LocalDate.now().minusWeeks(1), LocalDate.now().plusWeeks(1),
+                List.of(
+                        new TrendService.TrendPoint(LocalDate.now().minusWeeks(6), 48, 50),
+                        new TrendService.TrendPoint(LocalDate.now().minusWeeks(5), 55, 55),
+                        new TrendService.TrendPoint(LocalDate.now().minusWeeks(4), 61, 60),
+                        new TrendService.TrendPoint(LocalDate.now().minusWeeks(3), 64, 65),
+                        new TrendService.TrendPoint(LocalDate.now().minusWeeks(2), 72, 70),
+                        new TrendService.TrendPoint(LocalDate.now().minusWeeks(1), 78, 75)),
+                5, 45, 0.91));
         TrendAnalysisTab trends = new TrendAnalysisTab(trendService);
         IrrigationAdvisorService irrigationService = mock(IrrigationAdvisorService.class);
         when(irrigationService.advise(true)).thenReturn(new IrrigationAdvisorService.IrrigationAdvice(
@@ -420,6 +429,8 @@ class DataEntryVisualContractTest {
         shell.add(FarmUi.brandHeader("PORT ORCHARD, WA", "Monday · August 24"),
                 BorderLayout.NORTH);
         shell.add(navigation, BorderLayout.CENTER);
+        awaitNamedLabelPrefix(dashboard.getUIComponent(),
+                "dashboard.overviewStatus", "Updated ");
         render("farm-shell", shell, new Dimension(1366, 768));
         render("farm-shell-compact", shell, new Dimension(1100, 700));
 

@@ -54,7 +54,6 @@ public class DashboardTab implements FlowerFarmTab {
     private JPanel panel;
     private JLabel totalItemsLabel;
     private JLabel totalValueLabel;
-    private JLabel totalCostLabel;
     private JLabel lowStockLabel;
     private JLabel weekHarvestLabel;
     private JLabel weekHarvestDeltaLabel;
@@ -78,7 +77,7 @@ public class DashboardTab implements FlowerFarmTab {
     private boolean priorityQueueUpdating;
     private DashboardPriority selectedDashboardPriority;
 
-    private final JPanel[] kpiCards = new JPanel[5];
+    private final JPanel[] kpiCards = new JPanel[4];
     private SparklinePanel weekHarvestSpark;
     private SparklinePanel weekRevenueSpark;
 
@@ -237,12 +236,9 @@ public class DashboardTab implements FlowerFarmTab {
         OrderService.WeekRevenueSummary rev = snapshot.revenue();
         double priorRev = snapshot.priorRevenue();
 
-        totalItemsLabel.setText(String.valueOf(inv.skuCount()));
+        totalItemsLabel.setText(String.format("%d products · %,d units · cost $%,.0f",
+                inv.skuCount(), inv.totalUnits(), inv.costBasis()));
         totalValueLabel.setText(String.format("$%,.2f", inv.sellValue()));
-        if (totalCostLabel != null) {
-            totalCostLabel.setText(String.format("cost $%,.0f · %d units",
-                    inv.costBasis(), inv.totalUnits()));
-        }
         lowStockLabel.setText(String.valueOf(inv.lowStockCount()));
         weekHarvestLabel.setText(String.format("%,.0f", weekHarvest));
         if (weekHarvestDeltaLabel != null) {
@@ -258,7 +254,7 @@ public class DashboardTab implements FlowerFarmTab {
                     : ((rev.realized() - priorRev) / priorRev) * 100.0;
             String wow = formatWow("prior", revPct, rev.realized() - priorRev, true);
             weekRevenuePipelineLabel.setText(String.format(
-                    "<html><center>confirmed $%,.2f · booked $%,.2f<br/>%s</center></html>",
+                    "<html>confirmed $%,.2f · booked $%,.2f<br/>%s</html>",
                     rev.pipeline(), rev.booked(), wow));
         }
 
@@ -404,7 +400,7 @@ public class DashboardTab implements FlowerFarmTab {
     }
 
     private void applyLowStockCardStyle(boolean warning) {
-        if (kpiCards[2] == null) {
+        if (kpiCards[3] == null) {
             return;
         }
         Color border = warning
@@ -413,10 +409,10 @@ public class DashboardTab implements FlowerFarmTab {
         Color bg = warning
                 ? FarmUi.toneBackgroundColor(FarmUi.Tone.DANGER)
                 : FarmUi.surfaceColor();
-        kpiCards[2].setBackground(bg);
-        kpiCards[2].setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createLineBorder(border, warning ? 2 : 1),
-                BorderFactory.createEmptyBorder(12, 12, 12, 12)));
+        kpiCards[3].setBackground(bg);
+        kpiCards[3].setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createMatteBorder(3, 0, 0, 0, border),
+                BorderFactory.createEmptyBorder(14, 16, 14, 16)));
         if (lowStockLabel != null) {
             lowStockLabel.setForeground(warning
                     ? FarmUi.toneForegroundColor(FarmUi.Tone.DANGER)
@@ -671,25 +667,24 @@ public class DashboardTab implements FlowerFarmTab {
 
         JPanel center = new JPanel(new BorderLayout(0, 12));
 
-        JPanel kpiPanel = new JPanel(new GridLayout(1, 5, 10, 10));
-        kpiCards[0] = createKPICard("Inventory Items", totalItemsLabel = new JLabel("—"), "products and supplies",
-                null, null, "Open Inventory", "Inventory");
-        totalCostLabel = new JLabel("cost basis —");
-        kpiCards[1] = createKPICard("Inventory Value", totalValueLabel = new JLabel("—"), "at sell prices",
-                totalCostLabel, null, "Open Inventory", "Inventory");
-        lowStockSubtitle = new JLabel("items ≤ " + LOW_STOCK_THRESHOLD);
-        kpiCards[2] = createKPICard("Low Stock", lowStockLabel = new JLabel("—"), null,
-                lowStockSubtitle, null, "Review stock", "Inventory");
+        JPanel kpiPanel = new JPanel(new GridLayout(1, 4, 12, 0));
+        kpiPanel.setOpaque(false);
         weekHarvestSpark = new SparklinePanel();
         weekHarvestSpark.setLineColor(new Color(34, 100, 54));
         weekHarvestDeltaLabel = new JLabel("vs prior wk —");
-        kpiCards[3] = createKPICard("Week Harvest", weekHarvestLabel = new JLabel("—"), "amount in last 7 days",
+        kpiCards[0] = createKPICard("Week harvest", weekHarvestLabel = new JLabel("—"), "amount in last 7 days",
                 weekHarvestDeltaLabel, weekHarvestSpark, "Log harvest", "Harvest Log");
         weekRevenueSpark = new SparklinePanel();
-        weekRevenueSpark.setLineColor(new Color(30, 90, 160));
+        weekRevenueSpark.setLineColor(FarmUi.roseAccentColor());
         weekRevenuePipelineLabel = new JLabel("confirmed —");
-        kpiCards[4] = createKPICard("Week Revenue", weekRevenueLabel = new JLabel("—"), "from completed orders",
+        kpiCards[1] = createKPICard("Week revenue", weekRevenueLabel = new JLabel("—"), "from completed orders",
                 weekRevenuePipelineLabel, weekRevenueSpark, "Create order", "Customers & Orders");
+        totalItemsLabel = new JLabel("products and units —");
+        kpiCards[2] = createKPICard("Inventory value", totalValueLabel = new JLabel("—"), "at sell prices",
+                totalItemsLabel, null, "Open Inventory", "Inventory");
+        lowStockSubtitle = new JLabel("items ≤ " + LOW_STOCK_THRESHOLD);
+        kpiCards[3] = createKPICard("Low stock", lowStockLabel = new JLabel("—"), null,
+                lowStockSubtitle, null, "Review stock", "Inventory");
         for (JPanel card : kpiCards) {
             kpiPanel.add(card);
         }
@@ -710,7 +705,7 @@ public class DashboardTab implements FlowerFarmTab {
                 new JScrollPane(alertsArea));
         south.add(alertsPanel, BorderLayout.CENTER);
 
-        JPanel actions = new JPanel(new GridLayout(0, 2, 8, 6));
+        JPanel actions = new JPanel(new GridLayout(2, 3, 8, 6));
         actions.setOpaque(false);
         morningBriefingButton = FarmUi.primaryButton("Morning briefing");
         morningBriefingButton.setName("dashboard.morningBriefing");
@@ -749,10 +744,10 @@ public class DashboardTab implements FlowerFarmTab {
         dailySheetStatusLabel.setName("dashboard.dailySheetStatus");
         dailySheetStatusLabel.getAccessibleContext().setAccessibleName(
                 "Morning briefing and day closeout status");
-        JPanel actionFooter = new JPanel(new BorderLayout(0, FarmUi.CONTROL_GAP));
+        JPanel actionFooter = new JPanel(new BorderLayout(FarmUi.CONTROL_GAP, 0));
         actionFooter.setOpaque(false);
-        actionFooter.add(dailySheetStatusLabel, BorderLayout.NORTH);
-        actionFooter.add(moreToolsRow, BorderLayout.SOUTH);
+        actionFooter.add(dailySheetStatusLabel, BorderLayout.WEST);
+        actionFooter.add(moreToolsRow, BorderLayout.CENTER);
         JPanel actionWorkspace = new JPanel(new BorderLayout(0, FarmUi.CONTROL_GAP));
         actionWorkspace.setOpaque(false);
         priorityStatusLabel = FarmUi.statusBadge(
@@ -764,10 +759,19 @@ public class DashboardTab implements FlowerFarmTab {
         priorityDetailLabel.setName("dashboard.priorityDetail");
         priorityDetailLabel.getAccessibleContext().setAccessibleName(
                 "Selected farm priority details");
+        priorityDetailLabel.setVisible(false);
         priorityQueue = new JComboBox<>();
         priorityQueue.setName("dashboard.priorityQueue");
         priorityQueue.setEnabled(false);
         priorityQueue.getAccessibleContext().setAccessibleName("Ranked farm priorities");
+        priorityQueue.setToolTipText(priorityDetailLabel.getText());
+        priorityQueue.getAccessibleContext().setAccessibleDescription(
+                priorityDetailLabel.getText());
+        priorityDetailLabel.addPropertyChangeListener("text", event -> {
+            String detail = String.valueOf(event.getNewValue());
+            priorityQueue.setToolTipText(detail);
+            priorityQueue.getAccessibleContext().setAccessibleDescription(detail);
+        });
         priorityQueue.addActionListener(event -> {
             if (!priorityQueueUpdating) {
                 selectDashboardPriority(priorityQueue.getSelectedIndex());
@@ -792,7 +796,7 @@ public class DashboardTab implements FlowerFarmTab {
         actionWorkspace.add(actionFooter, BorderLayout.SOUTH);
         south.add(FarmUi.section(
                 "Today’s work",
-                "Start the next task, then use More farm tools for occasional work.",
+                null,
                 actionWorkspace), BorderLayout.EAST);
 
         JTabbedPane workspace = new JTabbedPane();
@@ -1563,16 +1567,16 @@ public class DashboardTab implements FlowerFarmTab {
 
         for (int i = 0; i < kpiCards.length; i++) {
             JPanel card = kpiCards[i];
-            if (card != null && i != 2) { // low-stock styled separately
+            if (card != null && i != 3) { // low-stock styled separately
                 card.setBackground(cardBg);
                 card.setBorder(BorderFactory.createCompoundBorder(
-                        BorderFactory.createLineBorder(border, 1),
-                        BorderFactory.createEmptyBorder(12, 12, 12, 12)));
+                        BorderFactory.createMatteBorder(3, 0, 0, 0,
+                                i == 1 ? FarmUi.roseAccentColor() : valueFg),
+                        BorderFactory.createEmptyBorder(14, 16, 14, 16)));
             }
         }
-        if (totalItemsLabel != null) totalItemsLabel.setForeground(valueFg);
+        if (totalItemsLabel != null) totalItemsLabel.setForeground(mutedFg);
         if (totalValueLabel != null) totalValueLabel.setForeground(valueFg);
-        if (totalCostLabel != null) totalCostLabel.setForeground(mutedFg);
         if (weekHarvestLabel != null) weekHarvestLabel.setForeground(valueFg);
         if (weekRevenueLabel != null) weekRevenueLabel.setForeground(valueFg);
         if (weekRevenuePipelineLabel != null) weekRevenuePipelineLabel.setForeground(mutedFg);
@@ -1642,18 +1646,22 @@ public class DashboardTab implements FlowerFarmTab {
                                  JLabel secondary, SparklinePanel spark,
                                  String actionLabel, String tabTitle) {
         JPanel card = new JPanel();
+        card.setName("dashboard.metricCard");
         card.setLayout(new BoxLayout(card, BoxLayout.Y_AXIS));
         card.setOpaque(true);
         card.setBackground(FarmUi.surfaceColor());
-        card.setBorder(FarmUi.cardBorder());
+        Color stripe = "Week revenue".equals(title)
+                ? FarmUi.roseAccentColor() : FarmUi.accentColor();
+        card.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createMatteBorder(3, 0, 0, 0, stripe),
+                BorderFactory.createEmptyBorder(14, 16, 14, 16)));
 
-        JLabel titleLabel = new JLabel(title);
-        titleLabel.setFont(titleLabel.getFont().deriveFont(Font.BOLD, 12f));
-        titleLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+        JLabel titleLabel = FarmUi.eyebrowLabel(title, FarmUi.Tone.NEUTRAL);
+        titleLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
 
-        valueLabel.setFont(valueLabel.getFont().deriveFont(Font.BOLD, 24f));
+        valueLabel.setFont(valueLabel.getFont().deriveFont(Font.BOLD, 27f));
         valueLabel.setForeground(FarmUi.accentColor());
-        valueLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+        valueLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
 
         card.add(titleLabel);
         card.add(Box.createVerticalStrut(6));
@@ -1663,22 +1671,22 @@ public class DashboardTab implements FlowerFarmTab {
             JLabel subLabel = new JLabel(subtitle);
             subLabel.setFont(subLabel.getFont().deriveFont(11f));
             subLabel.setForeground(FarmUi.mutedColor());
-            subLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+            subLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
             card.add(Box.createVerticalStrut(4));
             card.add(subLabel);
         }
 
         if (secondary != null) {
             secondary.setFont(secondary.getFont().deriveFont(11f));
-            secondary.setAlignmentX(Component.CENTER_ALIGNMENT);
+            secondary.setAlignmentX(Component.LEFT_ALIGNMENT);
             secondary.setForeground(FarmUi.mutedColor());
             card.add(Box.createVerticalStrut(2));
             card.add(secondary);
         }
 
         if (spark != null) {
-            spark.setAlignmentX(Component.CENTER_ALIGNMENT);
-            spark.setMaximumSize(new Dimension(100, 30));
+            spark.setAlignmentX(Component.LEFT_ALIGNMENT);
+            spark.setMaximumSize(new Dimension(145, 32));
             card.add(Box.createVerticalStrut(6));
             card.add(spark);
         }
@@ -1686,7 +1694,7 @@ public class DashboardTab implements FlowerFarmTab {
         if (actionLabel != null && tabTitle != null) {
             JButton action = FarmUi.secondaryButton(actionLabel);
             action.setFont(action.getFont().deriveFont(11f));
-            action.setAlignmentX(Component.CENTER_ALIGNMENT);
+            action.setAlignmentX(Component.LEFT_ALIGNMENT);
             action.setFocusable(false);
             action.setToolTipText(actionLabel + " in " + tabTitle + ".");
             action.addActionListener(e -> openDashboardDestination(

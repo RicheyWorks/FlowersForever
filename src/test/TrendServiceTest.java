@@ -90,6 +90,11 @@ class TrendServiceTest {
         assertThat(result.latestQuantity()).isEqualTo(90);
         assertThat(result.latestWeekStart()).isEqualTo(LocalDate.of(2026, 8, 3));
         assertThat(result.forecastWeekStart()).isEqualTo(LocalDate.of(2026, 8, 31));
+        assertThat(result.weeklyPoints()).hasSize(5);
+        assertThat(result.weeklyPoints().get(0).quantity()).isEqualTo(50);
+        assertThat(result.weeklyPoints()).allSatisfy(point ->
+                assertThat(point.trendQuantity()).isFinite());
+        assertThat(result.rSquared()).isEqualTo(1.0);
     }
 
     @Test

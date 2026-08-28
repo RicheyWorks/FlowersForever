@@ -428,7 +428,7 @@ public class HarvestLogTab implements FlowerFarmTab {
         reviewNewSkuBtn.addActionListener(event -> reviewNewInventoryProducts());
         panel.add(FarmUi.pageHeader(
                 "Harvest log",
-                "Record each cut, keep inventory synchronized, and review production by bed.",
+                "Record a cut in seconds, keep inventory synchronized, and spot production patterns.",
                 FarmUi.toolbar(accessLabel, filterStatusLabel,
                         reportStatusLabel, newSkuStatusLabel,
                         reviewNewSkuBtn, refreshHistoryBtn)), BorderLayout.NORTH);
@@ -503,9 +503,9 @@ public class HarvestLogTab implements FlowerFarmTab {
         totalsArea.getAccessibleContext().setAccessibleName("Harvest totals by crop");
         workbench = new JTabbedPane();
         workbench.setName("harvest.workspace");
-        workbench.addTab("Single entry", FarmUi.section(
-                "Add or edit a harvest",
-                null,
+        workbench.addTab("Quick entry", FarmUi.section(
+                "Record today’s cut",
+                "Start with crop and quantity. Repeated cuts keep their date, crop, unit, and bed.",
                 buildForm()));
         workbench.addTab("Batch entry", FarmUi.section(
                 "Log a morning cut in one pass",
@@ -519,13 +519,13 @@ public class HarvestLogTab implements FlowerFarmTab {
         workbench.setMnemonicAt(1, 'B');
         workbench.setMnemonicAt(2, 'P');
         workbench.getAccessibleContext().setAccessibleName("Harvest entry and totals workspace");
-        history.setMinimumSize(new Dimension(0, 305));
-        workbench.setMinimumSize(new Dimension(0, 300));
+        history.setMinimumSize(new Dimension(0, 275));
+        workbench.setMinimumSize(new Dimension(0, 325));
 
         JSplitPane split = new JSplitPane(JSplitPane.VERTICAL_SPLIT, history, workbench);
         split.setBorder(null);
-        split.setResizeWeight(0.50);
-        split.setDividerLocation(0.50);
+        split.setResizeWeight(0.45);
+        split.setDividerLocation(0.45);
         split.setContinuousLayout(true);
         split.setOneTouchExpandable(true);
         panel.add(split, BorderLayout.CENTER);
@@ -874,6 +874,7 @@ public class HarvestLogTab implements FlowerFarmTab {
         dateField = new JTextField(LocalDate.now().toString(), 10);
         cropField = new JTextField(14);
         FarmUi.initialFocus(cropField);
+        cropField.putClientProperty("JTextField.placeholderText", "Search or type a crop");
         cropSuggest = new JComboBox<>();
         cropSuggest.setEditable(false);
         cropSuggest.setPrototypeDisplayValue("Recent crop…");
@@ -884,6 +885,7 @@ public class HarvestLogTab implements FlowerFarmTab {
             }
         });
         qtyField = new JTextField("1", 6);
+        qtyField.putClientProperty("JTextField.placeholderText", "Amount");
         unitField = new JTextField("stems", 8);
         unitSuggest = new JComboBox<>(new String[]{
                 "stems", "bunches", "buckets", "lbs", "oz", "each"
@@ -896,7 +898,9 @@ public class HarvestLogTab implements FlowerFarmTab {
             }
         });
         bedField = new JTextField(10);
+        bedField.putClientProperty("JTextField.placeholderText", "Optional growing location");
         notesField = new JTextField(18);
+        notesField.putClientProperty("JTextField.placeholderText", "Optional field note");
         dateField.getAccessibleContext().setAccessibleName("Harvest date");
         cropField.getAccessibleContext().setAccessibleName("Harvest crop or variety");
         qtyField.getAccessibleContext().setAccessibleName("Harvest quantity");
@@ -920,16 +924,18 @@ public class HarvestLogTab implements FlowerFarmTab {
         });
 
         int row = 0;
-        addField(form, c, row, 0, "Date (YYYY-MM-DD)", dateField, 'D');
-        addField(form, c, row++, 1, "Crop / variety", cropField, 'C');
-        addField(form, c, row, 0, "Recent crops", cropSuggest, 'R');
-        addField(form, c, row++, 1, "Bed / field", bedField, 'B');
-        addField(form, c, row, 0, "Quantity", qtyField, 'Q');
+        addField(form, c, row, 0, "Crop / variety", cropField, 'C');
+        addField(form, c, row++, 1, "Quantity", qtyField, 'Q');
+        addField(form, c, row, 0, "Bed / field", bedField, 'B');
         addField(form, c, row++, 1, "Unit", unitField, 'U');
-        addField(form, c, row, 0, "Unit presets", unitSuggest, 'P');
+        addField(form, c, row, 0, "Date", dateField, 'D');
         addField(form, c, row++, 1, "Notes", notesField, 'N');
+        addField(form, c, row, 0, "Recent crops", cropSuggest, 'R');
+        addField(form, c, row++, 1, "Unit presets", unitSuggest, 'P');
 
         addBtn = FarmUi.primaryButton("Add harvest");
+        addBtn.setToolTipText(
+                "Save this cut and keep the harvest context ready for another quantity.");
         addBtn.addActionListener(e -> addHarvest());
         keepContextBox = new JCheckBox("Keep harvest context", true);
         keepContextBox.setName("harvest.keepContext");
@@ -943,7 +949,7 @@ public class HarvestLogTab implements FlowerFarmTab {
         saveBtn = FarmUi.primaryButton("Save edit");
         saveBtn.setToolTipText("Save the changes and adjust inventory automatically.");
         saveBtn.addActionListener(e -> saveEdit());
-        JPanel buttons = FarmUi.toolbar(addBtn, loadBtn, saveBtn);
+        JPanel buttons = FarmUi.toolbar(addBtn, saveBtn, loadBtn);
         entryTools = new JComboBox<>();
         setEntryToolChoices(true);
         entryTools.setName("harvest.entryTools");
@@ -953,16 +959,24 @@ public class HarvestLogTab implements FlowerFarmTab {
         runEntryToolBtn.addActionListener(e -> runEntryTool((String) entryTools.getSelectedItem()));
         entryStatusLabel = FarmUi.statusBadge("Ready for a new harvest", FarmUi.Tone.NEUTRAL);
         updateEntryMode();
-        JPanel actions = FarmUi.toolbar(
-                buttons, entryStatusLabel, entryTools, runEntryToolBtn);
+        JPanel actionTools = FarmUi.toolbar(entryTools, runEntryToolBtn);
+        JPanel actions = new JPanel(new BorderLayout(FarmUi.CONTROL_GAP, 0));
+        actions.setOpaque(false);
+        actions.add(buttons, BorderLayout.WEST);
+        actions.add(actionTools, BorderLayout.EAST);
         updateEntryToolActions();
 
         c.gridx = 0;
         c.gridy = row++;
         c.weightx = 1;
         c.gridwidth = 4;
-        form.add(FarmUi.toolbar(keepContextBox, FarmUi.formHint(
-                "Retains date, crop, unit, and bed; quantity and notes always reset.")), c);
+        JPanel retainedContext = new JPanel(new BorderLayout(FarmUi.CONTROL_GAP, 0));
+        retainedContext.setOpaque(false);
+        retainedContext.add(FarmUi.toolbar(keepContextBox, FarmUi.formHint(
+                "Retains date, crop, unit, and bed; quantity and notes reset.")),
+                BorderLayout.WEST);
+        retainedContext.add(entryStatusLabel, BorderLayout.EAST);
+        form.add(retainedContext, c);
 
         c.gridx = 0;
         c.gridy = row;
