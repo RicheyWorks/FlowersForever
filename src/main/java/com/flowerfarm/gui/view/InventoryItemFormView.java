@@ -64,7 +64,7 @@ public final class InventoryItemFormView extends JPanel {
         FarmUi.initialFocus(nameField);
 
         GridBagConstraints constraints = new GridBagConstraints();
-        constraints.insets = new Insets(2, 5, 2, 5);
+        constraints.insets = new Insets(1, 5, 1, 5);
         constraints.fill = GridBagConstraints.HORIZONTAL;
         constraints.anchor = GridBagConstraints.WEST;
         int row = 0;

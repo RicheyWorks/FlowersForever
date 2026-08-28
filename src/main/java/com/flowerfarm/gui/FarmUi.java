@@ -30,9 +30,11 @@ import java.awt.FlowLayout;
 import java.awt.Font;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
+import java.awt.GradientPaint;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.Insets;
+import java.awt.LayoutManager;
 import java.awt.Rectangle;
 import java.awt.RenderingHints;
 
@@ -77,26 +79,37 @@ public final class FarmUi {
         UIManager.put("ScrollBar.width", 12);
         UIManager.put("TabbedPane.tabHeight", 42);
         UIManager.put("TabbedPane.showTabSeparators", false);
-        UIManager.put("TabbedPane.selectedBackground", surfaceColor());
+        UIManager.put("TabbedPane.selectedBackground",
+                blend(surfaceColor(), toneBackgroundColor(Tone.SUCCESS), 0.72));
         UIManager.put("TabbedPane.underlineColor", accentColor());
         UIManager.put("TabbedPane.inactiveUnderlineColor", borderColor());
-        UIManager.put("TabbedPane.hoverColor", toneBackgroundColor(Tone.SUCCESS));
+        UIManager.put("TabbedPane.hoverColor", toneBackgroundColor(Tone.INFO));
+        UIManager.put("TabbedPane.focusColor", toneBackgroundColor(Tone.WARNING));
+        UIManager.put("Table.background", surfaceColor());
+        UIManager.put("Table.alternateRowColor",
+                blend(surfaceColor(), toneBackgroundColor(Tone.INFO), 0.34));
+        UIManager.put("Table.gridColor", borderColor());
         UIManager.put("Table.selectionBackground",
-                isDark() ? new Color(47, 91, 68) : new Color(213, 234, 220));
+                isDark() ? new Color(45, 103, 75) : new Color(202, 232, 213));
         UIManager.put("Table.selectionForeground",
                 isDark() ? Color.WHITE : new Color(20, 62, 41));
         UIManager.put("TableHeader.background",
-                isDark() ? new Color(48, 54, 50) : new Color(232, 237, 233));
+                blend(surfaceColor(), toneBackgroundColor(Tone.SUCCESS), 0.72));
         UIManager.put("TableHeader.foreground",
                 isDark() ? new Color(238, 242, 239) : new Color(31, 48, 38));
+        UIManager.put("TextField.background", surfaceColor());
+        UIManager.put("FormattedTextField.background", surfaceColor());
+        UIManager.put("TextArea.background", surfaceColor());
+        UIManager.put("ComboBox.background", surfaceColor());
+        UIManager.put("ScrollBar.thumb", blend(borderColor(), accentColor(), 0.42));
+        UIManager.put("ScrollBar.hoverThumbColor", accentColor());
         UIManager.put("Component.accentColor", accentColor());
     }
 
     /** Branded masthead used above every farm workflow. */
     public static JPanel brandHeader(String location, String dateText) {
-        JPanel header = new JPanel(new BorderLayout(16, 0));
+        JPanel header = new FloralWashPanel(new BorderLayout(16, 0), true);
         header.setName("farm.brandHeader");
-        header.setBackground(surfaceColor());
         header.setBorder(BorderFactory.createCompoundBorder(
                 BorderFactory.createMatteBorder(0, 0, 1, 0, borderColor()),
                 BorderFactory.createEmptyBorder(12, 18, 12, 18)));
@@ -175,18 +188,35 @@ public final class FarmUi {
         if (root instanceof JComponent component) {
             if ("farm.page".equals(component.getName())) {
                 component.setBackground(pageBackgroundColor());
+            } else if ("farm.brandHeader".equals(component.getName())) {
+                component.setBorder(BorderFactory.createCompoundBorder(
+                        BorderFactory.createMatteBorder(0, 0, 1, 0, borderColor()),
+                        BorderFactory.createEmptyBorder(12, 18, 12, 18)));
+                component.repaint();
+            } else if ("farm.pageHeader".equals(component.getName())) {
+                component.setBorder(BorderFactory.createCompoundBorder(
+                        BorderFactory.createLineBorder(
+                                blend(borderColor(), roseAccentColor(), 0.22)),
+                        BorderFactory.createEmptyBorder(0, 12, 5, 12)));
+                component.repaint();
             } else if ("farm.section".equals(component.getName())) {
-                component.setBackground(surfaceColor());
+                Tone tone = componentTone(component);
+                component.setBackground(sectionBackground(tone));
                 component.setBorder(BorderFactory.createCompoundBorder(
                         BorderFactory.createLineBorder(borderColor()),
-                        BorderFactory.createEmptyBorder(12, 12, 12, 12)));
+                        BorderFactory.createCompoundBorder(
+                                BorderFactory.createMatteBorder(3, 0, 0, 0,
+                                        toneForegroundColor(tone)),
+                                BorderFactory.createEmptyBorder(10, 12, 12, 12))));
             } else if ("farm.metricCard".equals(component.getName())) {
                 Tone tone = componentTone(component);
-                component.setBackground(surfaceColor());
+                component.setBackground(metricBackground(tone));
                 component.setBorder(BorderFactory.createCompoundBorder(
-                        BorderFactory.createMatteBorder(3, 0, 0, 0,
-                                toneForegroundColor(tone)),
-                        BorderFactory.createEmptyBorder(13, 15, 14, 15)));
+                        BorderFactory.createLineBorder(toneBorder(tone)),
+                        BorderFactory.createCompoundBorder(
+                                BorderFactory.createMatteBorder(4, 0, 0, 0,
+                                        toneForegroundColor(tone)),
+                                BorderFactory.createEmptyBorder(11, 14, 13, 14))));
             } else if ("farm.insightCard".equals(component.getName())) {
                 Tone tone = componentTone(component);
                 component.setBackground(toneBackgroundColor(tone));
@@ -196,10 +226,17 @@ public final class FarmUi {
             }
             Tone tone = componentTone(component);
             Object role = component.getClientProperty(ROLE_PROPERTY);
-            if ("eyebrow".equals(role) || "insight-message".equals(role)) {
+            if ("button-primary".equals(role)) {
+                component.putClientProperty(STYLE, primaryButtonStyle());
+            } else if ("button-secondary".equals(role)) {
+                component.putClientProperty(STYLE, secondaryButtonStyle());
+            } else if ("button-danger".equals(role)) {
+                component.putClientProperty(STYLE, dangerButtonStyle());
+            } else if ("eyebrow".equals(role) || "insight-message".equals(role)
+                    || "section-title".equals(role)) {
                 component.setForeground(toneForegroundColor(tone));
             } else if ("metric-value".equals(role)) {
-                component.setForeground(accentColor());
+                component.setForeground(toneForegroundColor(tone));
             } else if ("metric-detail".equals(role)) {
                 component.setForeground(mutedColor());
             }
@@ -213,10 +250,12 @@ public final class FarmUi {
 
     /** Builds a consistent title/subtitle row with optional right-side actions. */
     public static JPanel pageHeader(String title, String subtitle, JComponent actions) {
-        JPanel header = new JPanel(new BorderLayout(CONTROL_GAP, 0));
-        header.setOpaque(false);
+        JPanel header = new FloralWashPanel(new BorderLayout(CONTROL_GAP, 0), false);
         header.setName("farm.pageHeader");
-        header.setBorder(BorderFactory.createEmptyBorder(0, 0, 8, 0));
+        header.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(
+                        blend(borderColor(), roseAccentColor(), 0.22)),
+                BorderFactory.createEmptyBorder(0, 12, 5, 12)));
 
         JPanel copy = new JPanel();
         copy.setOpaque(false);
@@ -245,20 +284,28 @@ public final class FarmUi {
 
     /** Wraps content in a quiet surface with a strong section label. */
     public static JPanel section(String title, String description, JComponent content) {
+        Tone tone = decorativeTone(title);
         JPanel section = new JPanel(new BorderLayout(0, CONTROL_GAP));
         section.setName("farm.section");
+        section.putClientProperty(TONE_PROPERTY, tone);
         section.setOpaque(true);
-        section.setBackground(surfaceColor());
+        section.setBackground(sectionBackground(tone));
         section.putClientProperty(STYLE, "arc: 16");
         section.setBorder(BorderFactory.createCompoundBorder(
                 BorderFactory.createLineBorder(borderColor()),
-                BorderFactory.createEmptyBorder(12, 12, 12, 12)));
+                BorderFactory.createCompoundBorder(
+                        BorderFactory.createMatteBorder(3, 0, 0, 0,
+                                toneForegroundColor(tone)),
+                        BorderFactory.createEmptyBorder(10, 12, 12, 12))));
 
         JPanel heading = new JPanel();
         heading.setOpaque(false);
         heading.setLayout(new BoxLayout(heading, BoxLayout.Y_AXIS));
         JLabel label = new JLabel(title);
         label.setFont(label.getFont().deriveFont(Font.BOLD, 14f));
+        label.setForeground(toneForegroundColor(tone));
+        label.putClientProperty(TONE_PROPERTY, tone);
+        label.putClientProperty(ROLE_PROPERTY, "section-title");
         heading.add(label);
         if (description != null && !description.isBlank()) {
             JLabel help = mutedLabel(description);
@@ -285,15 +332,45 @@ public final class FarmUi {
     }
 
     public static JButton primaryButton(String text) {
-        return button(text, "background: #176b4a; foreground: #ffffff; font: +1 bold");
+        JButton button = button(text, primaryButtonStyle());
+        button.putClientProperty(ROLE_PROPERTY, "button-primary");
+        return button;
     }
 
     public static JButton secondaryButton(String text) {
-        return button(text, "font: +1");
+        JButton button = button(text, secondaryButtonStyle());
+        button.putClientProperty(ROLE_PROPERTY, "button-secondary");
+        return button;
     }
 
     public static JButton dangerButton(String text) {
-        return button(text, "foreground: $Actions.Red; font: +1 bold");
+        JButton button = button(text, dangerButtonStyle());
+        button.putClientProperty(ROLE_PROPERTY, "button-danger");
+        return button;
+    }
+
+    private static String primaryButtonStyle() {
+        return isDark()
+                ? "background: #287a55; hoverBackground: #34966b; pressedBackground: #1d6042; "
+                        + "foreground: #ffffff; borderColor: #52a77c; font: +1 bold"
+                : "background: #176f4d; hoverBackground: #21845e; pressedBackground: #10583c; "
+                        + "foreground: #ffffff; borderColor: #176f4d; font: +1 bold";
+    }
+
+    private static String secondaryButtonStyle() {
+        return isDark()
+                ? "background: #344b60; hoverBackground: #405f79; foreground: #d7eaff; "
+                        + "borderColor: #587b99; font: +1"
+                : "background: #e9f2fb; hoverBackground: #d9eafb; foreground: #23568f; "
+                        + "borderColor: #a9c8e7; font: +1";
+    }
+
+    private static String dangerButtonStyle() {
+        return isDark()
+                ? "background: #643b43; hoverBackground: #7a4650; foreground: #ffd6d8; "
+                        + "borderColor: #a45f69; font: +1 bold"
+                : "background: #f9e8ea; hoverBackground: #f5d8dc; foreground: #a32f42; "
+                        + "borderColor: #dfa6af; font: +1 bold";
     }
 
     private static JButton button(String text, String style) {
@@ -364,6 +441,7 @@ public final class FarmUi {
         table.setRowHeight(TABLE_ROW_HEIGHT);
         table.setIntercellSpacing(new Dimension(0, 1));
         table.setGridColor(borderColor());
+        table.setBackground(surfaceColor());
         table.setShowHorizontalLines(true);
         table.setShowVerticalLines(false);
         table.setFillsViewportHeight(true);
@@ -378,7 +456,7 @@ public final class FarmUi {
             header.setReorderingAllowed(false);
             header.setOpaque(true);
             header.setBackground(color("TableHeader.background",
-                    isDark() ? new Color(48, 54, 50) : new Color(232, 237, 233)));
+                    blend(surfaceColor(), toneBackgroundColor(Tone.SUCCESS), 0.72)));
             header.setForeground(color("TableHeader.foreground",
                     isDark() ? new Color(238, 242, 239) : new Color(31, 48, 38)));
             header.setFont(header.getFont().deriveFont(Font.BOLD, 12f));
@@ -442,17 +520,19 @@ public final class FarmUi {
         card.putClientProperty(TONE_PROPERTY, safeTone);
         card.setLayout(new BoxLayout(card, BoxLayout.Y_AXIS));
         card.setOpaque(true);
-        card.setBackground(surfaceColor());
+        card.setBackground(metricBackground(safeTone));
         card.putClientProperty(STYLE, "arc: 16");
         card.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createMatteBorder(3, 0, 0, 0,
-                        tone == null ? borderColor() : toneForegroundColor(safeTone)),
-                BorderFactory.createEmptyBorder(13, 15, 14, 15)));
+                BorderFactory.createLineBorder(toneBorder(safeTone)),
+                BorderFactory.createCompoundBorder(
+                        BorderFactory.createMatteBorder(4, 0, 0, 0,
+                                tone == null ? borderColor() : toneForegroundColor(safeTone)),
+                        BorderFactory.createEmptyBorder(11, 14, 13, 14))));
 
         JLabel titleLabel = eyebrowLabel(title, safeTone);
         titleLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
         valueLabel.setFont(valueLabel.getFont().deriveFont(Font.BOLD, 26f));
-        valueLabel.setForeground(accentColor());
+        valueLabel.setForeground(toneForegroundColor(safeTone));
         valueLabel.putClientProperty(TONE_PROPERTY, safeTone);
         valueLabel.putClientProperty(ROLE_PROPERTY, "metric-value");
         valueLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
@@ -662,12 +742,12 @@ public final class FarmUi {
     }
 
     public static Color accentColor() {
-        return isDark() ? new Color(120, 207, 154) : new Color(23, 107, 74);
+        return isDark() ? new Color(126, 218, 164) : new Color(20, 112, 72);
     }
 
     /** Floral accent reserved for forecast points, highlights, and brand moments. */
     public static Color roseAccentColor() {
-        return isDark() ? new Color(232, 139, 151) : new Color(182, 76, 93);
+        return isDark() ? new Color(240, 145, 160) : new Color(190, 67, 86);
     }
 
     public static Color mutedColor() {
@@ -675,15 +755,15 @@ public final class FarmUi {
     }
 
     public static Color borderColor() {
-        return isDark() ? new Color(82, 92, 86) : new Color(220, 226, 221);
+        return isDark() ? new Color(82, 99, 89) : new Color(211, 222, 214);
     }
 
     public static Color surfaceColor() {
-        return isDark() ? new Color(47, 53, 49) : new Color(255, 255, 252);
+        return isDark() ? new Color(45, 54, 48) : new Color(255, 255, 251);
     }
 
     public static Color pageBackgroundColor() {
-        return isDark() ? new Color(35, 41, 37) : new Color(247, 244, 238);
+        return isDark() ? new Color(32, 42, 35) : new Color(247, 243, 236);
     }
 
     private static Tone componentTone(JComponent component) {
@@ -694,31 +774,62 @@ public final class FarmUi {
     public static Color toneForegroundColor(Tone tone) {
         if (isDark()) {
             return switch (tone) {
-                case SUCCESS -> new Color(164, 224, 176);
-                case WARNING -> new Color(247, 211, 137);
-                case DANGER -> new Color(255, 177, 166);
-                case INFO -> new Color(171, 207, 247);
+                case SUCCESS -> new Color(166, 232, 185);
+                case WARNING -> new Color(250, 214, 137);
+                case DANGER -> new Color(255, 178, 189);
+                case INFO -> new Color(177, 214, 252);
                 case NEUTRAL -> new Color(210, 216, 212);
             };
         }
         return switch (tone) {
-            case SUCCESS -> new Color(23, 103, 55);
-            case WARNING -> new Color(125, 82, 10);
-            case DANGER -> new Color(157, 42, 35);
-            case INFO -> new Color(35, 86, 143);
+            case SUCCESS -> new Color(20, 112, 62);
+            case WARNING -> new Color(143, 86, 6);
+            case DANGER -> new Color(171, 48, 66);
+            case INFO -> new Color(37, 91, 157);
             case NEUTRAL -> new Color(73, 83, 77);
         };
     }
 
     public static Color toneBackgroundColor(Tone tone) {
         Color base = switch (tone) {
-            case SUCCESS -> new Color(86, 169, 115);
-            case WARNING -> new Color(218, 163, 68);
-            case DANGER -> new Color(204, 87, 91);
-            case INFO -> new Color(79, 132, 186);
+            case SUCCESS -> new Color(72, 177, 111);
+            case WARNING -> new Color(229, 169, 55);
+            case DANGER -> new Color(215, 86, 108);
+            case INFO -> new Color(72, 137, 205);
             case NEUTRAL -> new Color(132, 145, 136);
         };
-        return blend(color("Panel.background", Color.WHITE), base, isDark() ? 0.28 : 0.16);
+        return blend(color("Panel.background", Color.WHITE), base, isDark() ? 0.34 : 0.21);
+    }
+
+    /** Rich but quiet card surface for a semantic tone. */
+    public static Color toneSurfaceColor(Tone tone) {
+        return metricBackground(tone == null ? Tone.NEUTRAL : tone);
+    }
+
+    private static Color sectionBackground(Tone tone) {
+        return blend(surfaceColor(), toneBackgroundColor(tone), isDark() ? 0.42 : 0.36);
+    }
+
+    private static Color metricBackground(Tone tone) {
+        return blend(surfaceColor(), toneBackgroundColor(tone), isDark() ? 0.68 : 0.74);
+    }
+
+    private static Tone decorativeTone(String title) {
+        String text = title == null ? "" : title.toLowerCase(java.util.Locale.ROOT);
+        if (text.matches(".*(alert|problem|risk|delete|remove|validation|attention).*$")) {
+            return Tone.DANGER;
+        }
+        if (text.matches(".*(plan|schedule|market|price|save|packing|readiness).*$")) {
+            return Tone.WARNING;
+        }
+        if (text.matches(".*(search|find|filter|report|history|trend|detail|reference|customer|order|irrigation).*$")) {
+            return Tone.INFO;
+        }
+        if (text.matches(".*(inventory|stock|harvest|plant|item|work|knowledge|overview).*$")) {
+            return Tone.SUCCESS;
+        }
+        Tone[] palette = {Tone.SUCCESS, Tone.INFO, Tone.WARNING, Tone.DANGER};
+        return palette[Math.floorMod(text.hashCode(), palette.length)];
     }
 
     private static Color toneBorder(Tone tone) {
@@ -744,6 +855,41 @@ public final class FarmUi {
         int green = (int) Math.round(first.getGreen() * (1 - weight) + second.getGreen() * weight);
         int blue = (int) Math.round(first.getBlue() * (1 - weight) + second.getBlue() * weight);
         return new Color(red, green, blue);
+    }
+
+    /** A subtle mint-to-blush wash that keeps brand color present behind headers. */
+    private static final class FloralWashPanel extends JPanel {
+        private final boolean masthead;
+
+        private FloralWashPanel(LayoutManager layout, boolean masthead) {
+            super(layout);
+            this.masthead = masthead;
+            setOpaque(false);
+        }
+
+        @Override protected void paintComponent(Graphics graphics) {
+            Graphics2D copy = (Graphics2D) graphics.create();
+            try {
+                copy.setRenderingHint(RenderingHints.KEY_ANTIALIASING,
+                        RenderingHints.VALUE_ANTIALIAS_ON);
+                Color base = masthead ? surfaceColor() : pageBackgroundColor();
+                Color start = blend(base, toneBackgroundColor(Tone.SUCCESS),
+                        masthead ? 0.78 : 0.68);
+                Color end = blend(base, toneBackgroundColor(Tone.DANGER),
+                        masthead ? 0.54 : 0.46);
+                copy.setPaint(new GradientPaint(0, 0, start,
+                        Math.max(1, getWidth()), 0, end));
+                if (masthead) {
+                    copy.fillRect(0, 0, getWidth(), getHeight());
+                } else {
+                    copy.fillRoundRect(0, 0, Math.max(0, getWidth() - 1),
+                            Math.max(0, getHeight() - 1), 18, 18);
+                }
+            } finally {
+                copy.dispose();
+            }
+            super.paintComponent(graphics);
+        }
     }
 
     private static final class NavigationIcon implements Icon {

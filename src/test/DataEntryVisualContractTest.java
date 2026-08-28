@@ -681,6 +681,11 @@ class DataEntryVisualContractTest {
         if (component instanceof AbstractButton button) {
             return button.getText();
         }
+        String accessibleName = component.getAccessibleContext() == null ? null
+                : component.getAccessibleContext().getAccessibleName();
+        if (accessibleName != null && !accessibleName.isBlank()) {
+            return component.getClass().getSimpleName() + " (" + accessibleName + ")";
+        }
         return component.getClass().getSimpleName();
     }
 

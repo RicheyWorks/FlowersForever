@@ -2,6 +2,9 @@
 
 ## Next — Visual Season & Bed Planner foundation
 
+- Refreshes the complete desktop visual system with botanical color washes,
+  richer semantic cards, colorful sections, clearer action hierarchy, tinted
+  tables, and coordinated light/dark theme colors.
 - Adds a persistent Season Planner with fast planting-block entry, edit, and
   removal while preserving existing harvest records.
 - Maps sowing, growing, and expected harvest stages on a full-year bed timeline.

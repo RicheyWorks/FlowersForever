@@ -103,6 +103,38 @@ class FarmUiTest {
     }
 
     @Test
+    @DisplayName("botanical tones create distinct card and section surfaces")
+    void botanicalPalette() {
+        Color growth = FarmUi.toneSurfaceColor(FarmUi.Tone.SUCCESS);
+        Color planning = FarmUi.toneSurfaceColor(FarmUi.Tone.WARNING);
+        Color floral = FarmUi.toneSurfaceColor(FarmUi.Tone.DANGER);
+        Color information = FarmUi.toneSurfaceColor(FarmUi.Tone.INFO);
+
+        assertThat(growth).isNotEqualTo(planning).isNotEqualTo(floral)
+                .isNotEqualTo(information);
+        assertThat(planning).isNotEqualTo(floral).isNotEqualTo(information);
+
+        JLabel growthValue = new JLabel("42");
+        JLabel planningValue = new JLabel("640");
+        JPanel growthCard = FarmUi.metricCard(
+                "Beds in use", growthValue, new JLabel("Ready"), FarmUi.Tone.SUCCESS);
+        JPanel planningCard = FarmUi.metricCard(
+                "Expected stems", planningValue, new JLabel("Planned"), FarmUi.Tone.WARNING);
+        JPanel searchSection = FarmUi.section(
+                "Find stock", "Search inventory", new JPanel());
+        JPanel stockSection = FarmUi.section(
+                "Current stock", "Review inventory", new JPanel());
+
+        assertThat(growthCard.getBackground()).isEqualTo(growth);
+        assertThat(planningCard.getBackground()).isEqualTo(planning);
+        assertThat(growthValue.getForeground())
+                .isEqualTo(FarmUi.toneForegroundColor(FarmUi.Tone.SUCCESS));
+        assertThat(planningValue.getForeground())
+                .isEqualTo(FarmUi.toneForegroundColor(FarmUi.Tone.WARNING));
+        assertThat(searchSection.getBackground()).isNotEqualTo(stockSection.getBackground());
+    }
+
+    @Test
     @DisplayName("error copy remains actionable when exceptions have no message")
     void actionableErrorFallback() {
         assertThat(FarmUi.actionableError("Inventory export", new RuntimeException()))

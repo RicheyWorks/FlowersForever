@@ -403,26 +403,37 @@ public class DashboardTab implements FlowerFarmTab {
         if (kpiCards[3] == null) {
             return;
         }
-        Color border = warning
-                ? FarmUi.toneForegroundColor(FarmUi.Tone.DANGER)
-                : FarmUi.borderColor();
-        Color bg = warning
-                ? FarmUi.toneBackgroundColor(FarmUi.Tone.DANGER)
-                : FarmUi.surfaceColor();
-        kpiCards[3].setBackground(bg);
-        kpiCards[3].setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createMatteBorder(3, 0, 0, 0, border),
-                BorderFactory.createEmptyBorder(14, 16, 14, 16)));
+        FarmUi.Tone tone = warning ? FarmUi.Tone.DANGER : FarmUi.Tone.SUCCESS;
+        kpiCards[3].setBackground(FarmUi.toneSurfaceColor(tone));
+        kpiCards[3].setBorder(dashboardCardBorder(tone));
         if (lowStockLabel != null) {
             lowStockLabel.setForeground(warning
                     ? FarmUi.toneForegroundColor(FarmUi.Tone.DANGER)
-                    : FarmUi.accentColor());
+                    : FarmUi.toneForegroundColor(FarmUi.Tone.SUCCESS));
         }
         if (lowStockSubtitle != null) {
             lowStockSubtitle.setText(warning
                     ? "items ≤ " + LOW_STOCK_THRESHOLD + " — restock!"
                     : "items ≤ " + LOW_STOCK_THRESHOLD);
         }
+    }
+
+    private static FarmUi.Tone kpiTone(int index) {
+        return switch (index) {
+            case 1 -> FarmUi.Tone.DANGER;
+            case 2 -> FarmUi.Tone.INFO;
+            case 3 -> FarmUi.Tone.WARNING;
+            default -> FarmUi.Tone.SUCCESS;
+        };
+    }
+
+    private static javax.swing.border.Border dashboardCardBorder(FarmUi.Tone tone) {
+        return BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(FarmUi.borderColor()),
+                BorderFactory.createCompoundBorder(
+                        BorderFactory.createMatteBorder(4, 0, 0, 0,
+                                FarmUi.toneForegroundColor(tone)),
+                        BorderFactory.createEmptyBorder(11, 15, 13, 15)));
     }
 
     private static String formatSparkTip(String prefix, double[] days, boolean money) {
@@ -1557,8 +1568,6 @@ public class DashboardTab implements FlowerFarmTab {
         if (panel == null) {
             return;
         }
-        Color cardBg = FarmUi.surfaceColor();
-        Color valueFg = FarmUi.accentColor();
         Color mutedFg = FarmUi.mutedColor();
 
         styleChart(inventoryValueChart);
@@ -1567,17 +1576,18 @@ public class DashboardTab implements FlowerFarmTab {
         for (int i = 0; i < kpiCards.length; i++) {
             JPanel card = kpiCards[i];
             if (card != null && i != 3) { // low-stock styled separately
-                card.setBackground(cardBg);
-                card.setBorder(BorderFactory.createCompoundBorder(
-                        BorderFactory.createMatteBorder(3, 0, 0, 0,
-                                i == 1 ? FarmUi.roseAccentColor() : valueFg),
-                        BorderFactory.createEmptyBorder(14, 16, 14, 16)));
+                FarmUi.Tone tone = kpiTone(i);
+                card.setBackground(FarmUi.toneSurfaceColor(tone));
+                card.setBorder(dashboardCardBorder(tone));
             }
         }
         if (totalItemsLabel != null) totalItemsLabel.setForeground(mutedFg);
-        if (totalValueLabel != null) totalValueLabel.setForeground(valueFg);
-        if (weekHarvestLabel != null) weekHarvestLabel.setForeground(valueFg);
-        if (weekRevenueLabel != null) weekRevenueLabel.setForeground(valueFg);
+        if (totalValueLabel != null) totalValueLabel.setForeground(
+                FarmUi.toneForegroundColor(FarmUi.Tone.INFO));
+        if (weekHarvestLabel != null) weekHarvestLabel.setForeground(
+                FarmUi.toneForegroundColor(FarmUi.Tone.SUCCESS));
+        if (weekRevenueLabel != null) weekRevenueLabel.setForeground(
+                FarmUi.toneForegroundColor(FarmUi.Tone.DANGER));
         if (weekRevenuePipelineLabel != null) weekRevenuePipelineLabel.setForeground(mutedFg);
         if (weekHarvestDeltaLabel != null) weekHarvestDeltaLabel.setForeground(mutedFg);
 
@@ -1648,18 +1658,20 @@ public class DashboardTab implements FlowerFarmTab {
         card.setName("dashboard.metricCard");
         card.setLayout(new BoxLayout(card, BoxLayout.Y_AXIS));
         card.setOpaque(true);
-        card.setBackground(FarmUi.surfaceColor());
-        Color stripe = "Week revenue".equals(title)
-                ? FarmUi.roseAccentColor() : FarmUi.accentColor();
-        card.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createMatteBorder(3, 0, 0, 0, stripe),
-                BorderFactory.createEmptyBorder(14, 16, 14, 16)));
+        FarmUi.Tone cardTone = switch (title) {
+            case "Week revenue" -> FarmUi.Tone.DANGER;
+            case "Inventory value" -> FarmUi.Tone.INFO;
+            case "Low stock" -> FarmUi.Tone.WARNING;
+            default -> FarmUi.Tone.SUCCESS;
+        };
+        card.setBackground(FarmUi.toneSurfaceColor(cardTone));
+        card.setBorder(dashboardCardBorder(cardTone));
 
-        JLabel titleLabel = FarmUi.eyebrowLabel(title, FarmUi.Tone.NEUTRAL);
+        JLabel titleLabel = FarmUi.eyebrowLabel(title, cardTone);
         titleLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
 
         valueLabel.setFont(valueLabel.getFont().deriveFont(Font.BOLD, 27f));
-        valueLabel.setForeground(FarmUi.accentColor());
+        valueLabel.setForeground(FarmUi.toneForegroundColor(cardTone));
         valueLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
 
         card.add(titleLabel);
