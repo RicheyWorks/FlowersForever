@@ -179,6 +179,38 @@ queries. The header reports progress and the final row/bed count. A failure
 keeps the harvest rows, filters, selection, and entry form intact with a visible
 retry state; correct a highlighted report date before trying again.
 
+## Keep a farm lesson
+
+Open **Knowledge Log** when something is worth remembering: a problem, an
+opportunity, or a practice the crew may want to repeat. Choose **Record a
+lesson**, then describe what happened and what you noticed. Crop, variety, bed
+or field, production stage, action, action owner, result, and follow-up date add
+useful context without turning the entry into a technical report.
+
+Choose confidence honestly:
+
+- **Needs review** means the result is not known yet.
+- **Early signal** means it worked once or the evidence is still limited.
+- **Promising** means the farm has a useful result worth trying again.
+- **Proven on this farm** means repeated farm records support the practice.
+
+Add comma-separated tags the farm already uses, such as `mildew`, `irrigation`,
+`timing`, `pests`, `harvest`, or `market`. FlowersForever normalizes tags so the
+same idea stays grouped. Optional saved-record numbers can connect a lesson to
+one harvest, inventory item, order, or customer. If one of those operational
+records is later removed, the farm lesson remains and only its link is cleared.
+
+The search box accepts ordinary language. A question such as **What worked for
+mildew on this rose last August?** finds matching words across the crop,
+observation, action, result, confidence, and tags, and understands the month as
+a date filter. Use **Follow-up due** for lessons whose review date is today or
+earlier. Select a result to read the facts, action, result, and confidence in
+separate sections.
+
+HAND and OWNER sessions may record, edit, or remove lessons. VIEWER sessions
+keep search and reading access but cannot change the farm record. Removing a
+lesson never changes its linked harvest, inventory, order, or customer.
+
 ## Count physical inventory
 
 Open **Inventory**, search or sort the list into the order you want to count,

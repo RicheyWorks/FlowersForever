@@ -103,6 +103,7 @@ public final class FarmTabNavigator {
         return switch (title) {
             case "Dashboard", "Market Day" -> "Today";
             case "Harvest Log", "Inventory", "Add Item", "Irrigation & Care" -> "Grow & stock";
+            case "Knowledge Log" -> "Learn & improve";
             case "Customers & Orders" -> "Sales & fulfillment";
             case "Reports", "Trend Analysis", "Activity History" -> "Reports & admin";
             case "Reference & Planning" -> "Reference";
@@ -122,6 +123,7 @@ public final class FarmTabNavigator {
             case "Reports" -> 'R';
             case "Trend Analysis" -> 'T';
             case "Activity History" -> 'S';
+            case "Knowledge Log" -> 'K';
             case "Rose Varieties" -> 'V';
             case "Pricing Info" -> 'P';
             case "Rose Visualizer" -> 'Z';

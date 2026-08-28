@@ -3,9 +3,11 @@ package com.flowerfarm.config;
 import com.flowerfarm.model.Customer;
 import com.flowerfarm.model.CustomerOrder;
 import com.flowerfarm.model.HarvestEntry;
+import com.flowerfarm.model.KnowledgeEntry;
 import com.flowerfarm.model.OrderLine;
 import com.flowerfarm.service.CustomerService;
 import com.flowerfarm.service.HarvestService;
+import com.flowerfarm.service.KnowledgeService;
 import com.flowerfarm.service.OrderService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -31,18 +33,22 @@ class DemoDataSeederTest {
     @Mock CustomerService customerService;
     @Mock HarvestService harvestService;
     @Mock OrderService orderService;
+    @Mock KnowledgeService knowledgeService;
 
     DemoDataSeeder seeder;
     List<Customer> customers = new ArrayList<>();
     List<HarvestEntry> harvests = new ArrayList<>();
     List<CustomerOrder> orders = new ArrayList<>();
+    List<KnowledgeEntry> knowledge = new ArrayList<>();
 
     @BeforeEach
     void setUp() {
-        seeder = new DemoDataSeeder(customerService, harvestService, orderService);
+        seeder = new DemoDataSeeder(
+                customerService, harvestService, orderService, knowledgeService);
         when(customerService.getAll()).thenAnswer(inv -> new ArrayList<>(customers));
         when(harvestService.getAll()).thenAnswer(inv -> new ArrayList<>(harvests));
         when(orderService.findBetween(any(), any())).thenAnswer(inv -> new ArrayList<>(orders));
+        when(knowledgeService.search(any())).thenAnswer(inv -> new ArrayList<>(knowledge));
 
         lenient().when(customerService.add(any())).thenAnswer(inv -> {
             Customer c = inv.getArgument(0);
@@ -72,21 +78,30 @@ class DemoDataSeederTest {
             orders.add(o);
             return o;
         });
+        lenient().when(knowledgeService.create(any())).thenAnswer(inv -> {
+            KnowledgeEntry entry = inv.getArgument(0);
+            entry.setId((long) (knowledge.size() + 1));
+            knowledge.add(entry);
+            return entry;
+        });
     }
 
     @Test
-    @DisplayName("empty DB seeds customers, harvests, and today's orders")
+    @DisplayName("empty DB seeds customers, harvests, orders, and practical farm lessons")
     void seedsWhenEmpty() {
         seeder.run(new DefaultApplicationArguments(new String[]{}));
 
         assertThat(customers).hasSize(3);
         assertThat(harvests).hasSize(5);
         assertThat(orders).hasSize(3);
+        assertThat(knowledge).hasSize(3);
         assertThat(orders.stream().filter(o -> "CONFIRMED".equals(o.getStatus())).count()).isEqualTo(2);
         assertThat(orders.stream().anyMatch(o -> "DRAFT".equals(o.getStatus()))).isTrue();
         assertThat(orders).extracting(CustomerOrder::getHandoffType)
                 .containsExactly("PICKUP", "MARKET", "DELIVERY");
         assertThat(harvests.stream().anyMatch(h -> "Bed A".equals(h.getBedOrField()))).isTrue();
+        assertThat(knowledge).extracting(KnowledgeEntry::getSummary)
+                .anyMatch(summary -> summary.contains("mildew"));
         verify(orderService, atLeastOnce()).create(
                 anyLong(), any(), eq("CONFIRMED"), any(), anyString(), anyList());
     }
@@ -98,6 +113,10 @@ class DemoDataSeederTest {
         customers.get(0).setId(1L);
         harvests.add(new HarvestEntry(LocalDate.now(), "X", 1, "stems", "B", ""));
         orders.add(new CustomerOrder(customers.get(0), LocalDate.now(), "CONFIRMED", ""));
+        knowledge.add(new com.flowerfarm.model.KnowledgeEntry(
+                LocalDate.now(), "Existing lesson", com.flowerfarm.model.KnowledgeKind.PRACTICE,
+                "Rose", "", "A", "Harvest", "Existing observation", "", "", "",
+                null, com.flowerfarm.model.KnowledgeConfidence.NEEDS_REVIEW, List.of()));
 
         seeder.run(new DefaultApplicationArguments(new String[]{}));
 
@@ -105,5 +124,6 @@ class DemoDataSeederTest {
         verify(harvestService, never()).add(any());
         verify(orderService, never()).create(
                 anyLong(), any(), any(), any(), anyString(), anyList());
+        verify(knowledgeService, never()).create(any());
     }
 }

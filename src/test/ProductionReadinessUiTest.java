@@ -11,6 +11,7 @@ import com.flowerfarm.service.HarvestService;
 import com.flowerfarm.service.InventoryService;
 import com.flowerfarm.service.IrrigationAdvisorService;
 import com.flowerfarm.service.MarketDayPackingService;
+import com.flowerfarm.service.KnowledgeService;
 import com.flowerfarm.service.MorningBriefingService;
 import com.flowerfarm.service.OrderService;
 import com.flowerfarm.service.ReportService;
@@ -94,7 +95,7 @@ class ProductionReadinessUiTest {
                 mock(OrderService.class), mock(ReportService.class),
                 mock(IrrigationAdvisorService.class), mock(MarketDayPackingService.class),
                 mock(MorningBriefingService.class), mock(DayCloseoutService.class),
-                mock(CustomerStatementService.class), gate, session);
+                mock(CustomerStatementService.class), mock(KnowledgeService.class), gate, session);
     }
 
     private static JMenuItem menuItem(JMenuBar menuBar, String text) {

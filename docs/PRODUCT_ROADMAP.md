@@ -22,6 +22,11 @@ app, reopen it, upgrade it, and restore a backup without losing its records.
 
 ## 1.2 — Farm Knowledge Log
 
+**Private-preview slice implemented.** Growers can record, edit, remove, tag,
+follow up, link, and search farm lessons from the desktop or REST API. Search
+recognizes ordinary words and month names while keeping the result grounded in
+records the farm entered; it does not invent or summarize advice.
+
 The first knowledge release should let a grower record:
 
 - what happened;

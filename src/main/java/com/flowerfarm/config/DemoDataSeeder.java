@@ -3,9 +3,13 @@ package com.flowerfarm.config;
 import com.flowerfarm.model.Customer;
 import com.flowerfarm.model.CustomerOrder;
 import com.flowerfarm.model.HarvestEntry;
+import com.flowerfarm.model.KnowledgeConfidence;
+import com.flowerfarm.model.KnowledgeEntry;
+import com.flowerfarm.model.KnowledgeKind;
 import com.flowerfarm.model.OrderLine;
 import com.flowerfarm.service.CustomerService;
 import com.flowerfarm.service.HarvestService;
+import com.flowerfarm.service.KnowledgeService;
 import com.flowerfarm.service.OrderService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -17,6 +21,8 @@ import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;
+import java.time.Month;
+import java.time.YearMonth;
 import java.time.ZoneId;
 import java.util.List;
 
@@ -38,13 +44,16 @@ public class DemoDataSeeder implements ApplicationRunner {
     private final CustomerService customerService;
     private final HarvestService harvestService;
     private final OrderService orderService;
+    private final KnowledgeService knowledgeService;
 
     public DemoDataSeeder(CustomerService customerService,
                           HarvestService harvestService,
-                          OrderService orderService) {
+                          OrderService orderService,
+                          KnowledgeService knowledgeService) {
         this.customerService = customerService;
         this.harvestService = harvestService;
         this.orderService = orderService;
+        this.knowledgeService = knowledgeService;
     }
 
     @Override
@@ -53,13 +62,14 @@ public class DemoDataSeeder implements ApplicationRunner {
         int customers = seedCustomersIfEmpty();
         int harvests = seedHarvestsIfEmpty(today);
         int orders = seedOrdersIfEmpty(today);
-        log.info("Demo seed complete — customers+{}, harvests+{}, orders+{} (today={})",
-                customers, harvests, orders, today);
-        if (customers + harvests + orders == 0) {
-            log.info("Demo seed: nothing to add (CRM/harvest/orders already populated). "
+        int knowledge = seedKnowledgeIfEmpty(today);
+        log.info("Demo seed complete — customers+{}, harvests+{}, orders+{}, knowledge+{} (today={})",
+                customers, harvests, orders, knowledge, today);
+        if (customers + harvests + orders + knowledge == 0) {
+            log.info("Demo seed: nothing to add (CRM/harvest/orders/knowledge already populated). "
                     + "Use a fresh ./data folder for a clean demo.");
         } else {
-            log.info("Demo ready: open Market Day, Morning briefing, and Harvest → Bed production.");
+            log.info("Demo ready: open Market Day, Harvest, and the Farm Knowledge Log.");
         }
     }
 
@@ -142,6 +152,50 @@ public class DemoDataSeeder implements ApplicationRunner {
                 "demo — hold for confirm",
                 "DELIVERY",
                 List.of(new OrderLine("Nootka Rose", 20, "stems", 2.20)));
+        return 3;
+    }
+
+    private int seedKnowledgeIfEmpty(LocalDate today) {
+        if (!knowledgeService.search(KnowledgeService.SearchRequest.all()).isEmpty()) {
+            return 0;
+        }
+        YearMonth thisAugust = YearMonth.of(today.getYear(), Month.AUGUST);
+        int lastAugustYear = thisAugust.atEndOfMonth().isBefore(today)
+                ? today.getYear() : today.getYear() - 1;
+        LocalDate lastAugust = LocalDate.of(lastAugustYear, Month.AUGUST, 18);
+
+        knowledgeService.create(new KnowledgeEntry(
+                lastAugust,
+                "Powdery mildew slowed after earlier watering",
+                KnowledgeKind.PROBLEM,
+                "Nootka Rose", "", "Bed A", "Budding",
+                "White patches returned after warm nights and late overhead watering.",
+                "Removed affected leaves, increased spacing, and moved watering before 9 AM.",
+                "Field crew",
+                "No new patches appeared during the following seven-day check.",
+                lastAugust.plusDays(14), KnowledgeConfidence.PROMISING,
+                List.of("mildew", "irrigation", "timing")));
+        knowledgeService.create(new KnowledgeEntry(
+                today.minusDays(12),
+                "Cooler harvest timing improved vase life",
+                KnowledgeKind.PRACTICE,
+                "Dahlia mix", "", "Bed C", "Harvest",
+                "Afternoon cuts softened before market packing.",
+                "Moved the main cut to early morning and placed stems directly into clean water.",
+                "Harvest lead",
+                "The trial bunch stayed firm through market day and the next morning.",
+                today.plusDays(2), KnowledgeConfidence.EARLY_SIGNAL,
+                List.of("harvest", "timing", "quality")));
+        knowledgeService.create(new KnowledgeEntry(
+                today.minusDays(3),
+                "Saturday customers asked for mixed rose bunches",
+                KnowledgeKind.OPPORTUNITY,
+                "Rose", "Mixed", "Market", "Market feedback",
+                "Several customers wanted one ready-priced bunch with three rose colors.",
+                "Reserved enough stems for a six-bunch trial at the next market.",
+                "Market lead", "Trial is scheduled; sales result is not known yet.",
+                today, KnowledgeConfidence.NEEDS_REVIEW,
+                List.of("market", "customer-request", "trial")));
         return 3;
     }
 }

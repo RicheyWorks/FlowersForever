@@ -9,6 +9,7 @@ import com.flowerfarm.gui.tabs.InventoryTab;
 import com.flowerfarm.gui.tabs.InventoryWorkspaceTab;
 import com.flowerfarm.gui.tabs.IrrigationInfoTab;
 import com.flowerfarm.gui.tabs.MarketDayTab;
+import com.flowerfarm.gui.tabs.KnowledgeLogTab;
 import com.flowerfarm.gui.tabs.PricingInfoTab;
 import com.flowerfarm.gui.tabs.ReportsTab;
 import com.flowerfarm.gui.tabs.ReferenceTab;
@@ -24,6 +25,7 @@ import com.flowerfarm.service.HarvestService;
 import com.flowerfarm.service.InventoryService;
 import com.flowerfarm.service.IrrigationAdvisorService;
 import com.flowerfarm.service.MarketDayPackingService;
+import com.flowerfarm.service.KnowledgeService;
 import com.flowerfarm.service.MorningBriefingService;
 import com.flowerfarm.service.OrderService;
 import com.flowerfarm.service.ReportService;
@@ -49,6 +51,7 @@ public final class FarmTabCatalog {
     private final MorningBriefingService briefingService;
     private final DayCloseoutService closeoutService;
     private final CustomerStatementService statementService;
+    private final KnowledgeService knowledgeService;
 
     public FarmTabCatalog(InventoryService inventoryService, TrendService trendService,
                           HarvestService harvestService, SyncHistoryService syncHistoryService,
@@ -57,7 +60,8 @@ public final class FarmTabCatalog {
                           MarketDayPackingService marketDayService,
                           MorningBriefingService briefingService,
                           DayCloseoutService closeoutService,
-                          CustomerStatementService statementService) {
+                          CustomerStatementService statementService,
+                          KnowledgeService knowledgeService) {
         this.inventoryService = inventoryService;
         this.trendService = trendService;
         this.harvestService = harvestService;
@@ -70,6 +74,7 @@ public final class FarmTabCatalog {
         this.briefingService = briefingService;
         this.closeoutService = closeoutService;
         this.statementService = statementService;
+        this.knowledgeService = knowledgeService;
     }
 
     public Catalog create(TabHost host) {
@@ -95,6 +100,7 @@ public final class FarmTabCatalog {
                 harvestLog,
                 inventoryWorkspace,
                 irrigation,
+                new KnowledgeLogTab(knowledgeService, host),
                 crm,
                 new ReportsTab(reportService, host),
                 trend,

@@ -137,6 +137,7 @@ public final class FarmUi {
             case "Market Day" -> "MK";
             case "Trend Analysis" -> "TR";
             case "Activity History" -> "AC";
+            case "Knowledge Log" -> "KL";
             case "Reports" -> "RP";
             case "Rose Varieties" -> "RV";
             case "Rose Visualizer" -> "RO";
@@ -148,7 +149,7 @@ public final class FarmUi {
         Tone tone = switch (title) {
             case "Harvest Log", "Rose Varieties", "Rose Visualizer" -> Tone.DANGER;
             case "Market Day", "Pricing Info" -> Tone.WARNING;
-            case "Reference & Planning" -> Tone.INFO;
+            case "Reference & Planning", "Knowledge Log" -> Tone.INFO;
             case "Customers & Orders", "Irrigation & Care" -> Tone.INFO;
             case "Dashboard", "Inventory", "Add Item" -> Tone.SUCCESS;
             default -> Tone.NEUTRAL;

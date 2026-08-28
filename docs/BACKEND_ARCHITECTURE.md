@@ -6,7 +6,7 @@ transaction boundaries, and repositories isolate JPA persistence.
 
 Services depend on domain-oriented repository ports rather than Spring Data.
 `JpaCustomerRepository`, `JpaCustomerOrderRepository`, `JpaHarvestRepository`,
-`JpaInventoryRepository`, and `JpaSyncHistoryRepository` adapt those ports to
+`JpaInventoryRepository`, `JpaKnowledgeRepository`, and `JpaSyncHistoryRepository` adapt those ports to
 the low-level Spring Data interfaces. Pagination, query translation, and locking
 remain persistence concerns. The executable rules in `ArchitectureBoundaryTest`
 prevent adapter imports from leaking back into services.

@@ -12,7 +12,7 @@ cd FlowersForever
 mvn clean verify
 ```
 
-All tests green → development JAR under `target/flowerfarm-manager-1.1.0-SNAPSHOT.jar`.
+All tests green → development JAR under `target/flowerfarm-manager-1.2.0-SNAPSHOT.jar`.
 GitHub Actions runs the same command on every push to `main` (see CI badge in the README).  
 Approved stable tags publish only when the tag, POM, verified JAR, and both native installers agree on the exact version.
 
@@ -23,8 +23,8 @@ Approved stable tags publish only when the tag, POM, verified JAR, and both nati
 | Goal | Command |
 |------|---------|
 | Default GUI + REST + H2 | `mvn spring-boot:run` |
-| Same via JAR | `java -jar target/flowerfarm-manager-1.1.0-SNAPSHOT.jar` |
-| **Demo seed** (empty CRM/harvest) | `java -jar … --spring.profiles.active=demo` |
+| Same via JAR | `java -jar target/flowerfarm-manager-1.2.0-SNAPSHOT.jar` |
+| **Demo seed** (empty CRM/harvest/knowledge) | `java -jar … --spring.profiles.active=demo` |
 | SQLite file DB | `java -jar … --spring.profiles.active=sqlite` |
 | Barn multi-user | `java -jar … --spring.profiles.active=auth` |
 | Demo + auth | `java -jar … --spring.profiles.active=demo,auth` |
@@ -80,28 +80,34 @@ Narrate as Kitsap / Port Orchard grower:
    - Per-customer pack slips; export TXT / CSV / **PDF** for the van.  
    - After market → **Fulfill all CONFIRMED…** (batch inventory deduct + audit).
 
-6. **Day closeout** (Dashboard quick action)  
+6. **Farm Knowledge Log**
+   - Open **Knowledge Log** and select the seeded mildew lesson.
+   - Point out the separated observation, action, result, follow-up, and confidence.
+   - Search `What worked for mildew on this rose last August?`—no query syntax required.
+   - Filter the reusable `mildew` tag, then show **Record a lesson** and its farm-language prompts.
+
+7. **Day closeout** (Dashboard quick action)
    - End-of-day sheet: fulfilled orders + revenue, harvest today, open CONFIRMED leftover, low stock.  
    - Export PDF for the barn board; REST: `/api/closeout` and `/api/closeout/report.pdf`.
 
-7. **Sync History**  
+8. **Sync History**
    - Show HARVEST_LOG / ORDER_FULFILL / connector rows.  
    - Failures only filter; export audit CSV or **Export PDF…** (FAIL rows highlighted).
 
-8. **Reports**  
+9. **Reports**
    - Weekly PDF (GUI or `curl -o weekly.pdf http://localhost:8080/api/reports/weekly.pdf`).
 
-9. **Connectors (offline dual-mode)**  
+10. **Connectors (offline dual-mode)**
    - **Export Farmbrite** → `data/farmbrite-mirror.json`.  
    - **Sync Shopify** / **Export Square** with default local mirrors (no API keys).  
    - Same for Sheets / Airtable / Webhook dry-run payload file.
 
-10. **Irrigation & Care**  
+11. **Irrigation & Care**
    - **Refresh (try live weather)** → Open-Meteo for Port Orchard (or climatology offline).  
    - Priority badge + 7-day precip / ET when live; active beds from recent harvests.  
    - Dashboard may show a **WATER** alert in dry months.
 
-11. **Rose Visualizer**  
+12. **Rose Visualizer**
    - Grow L-System, mutate, save ruleset, optional PNG — “fun technical depth.”
 
 ---
@@ -109,7 +115,7 @@ Narrate as Kitsap / Port Orchard grower:
 ## 3. Auth demo (optional, ~2 min)
 
 ```bash
-java -jar target/flowerfarm-manager-1.1.0-SNAPSHOT.jar --spring.profiles.active=auth
+java -jar target/flowerfarm-manager-1.2.0-SNAPSHOT.jar --spring.profiles.active=auth
 ```
 
 | User | Password | Show |
@@ -143,6 +149,9 @@ Invoke-RestMethod http://localhost:8080/api/connectors | ConvertTo-Json -Depth 4
 
 # Audit (failures)
 Invoke-RestMethod "http://localhost:8080/api/connectors/history?success=false&limit=20"
+
+# Plain-language farm knowledge search
+Invoke-RestMethod "http://localhost:8080/api/knowledge?q=What%20worked%20for%20mildew%20on%20this%20rose%20last%20August"
 
 # Kitsap irrigation advice (climatology = no network)
 Invoke-RestMethod "http://localhost:8080/api/irrigation/advice?live=false" | ConvertTo-Json -Depth 4

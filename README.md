@@ -11,7 +11,7 @@ One calm desktop workspace for harvests, inventory, customers, orders, market pa
 **From first cut to final sale, FlowersForever keeps the details connected—so you can spend less time reconciling records and more time growing, selling, and serving customers.**
 
 [![Private pilot](https://img.shields.io/badge/Access-Private%20Pilot-256c46?style=for-the-badge)](docs/PILOT_ACCESS.md)
-[![1.1 hardening](https://img.shields.io/badge/Release-1.1%20Hardening-c99a45?style=for-the-badge)](#project-status)
+[![1.2 private preview](https://img.shields.io/badge/Release-1.2%20Private%20Preview-c99a45?style=for-the-badge)](#project-status)
 
 [![CI](https://github.com/RicheyWorks/FlowersForever/actions/workflows/ci.yml/badge.svg)](https://github.com/RicheyWorks/FlowersForever/actions/workflows/ci.yml)
 ![Proprietary — All Rights Reserved](https://img.shields.io/badge/License-Proprietary%20%E2%80%94%20All%20Rights%20Reserved-6e2f45)
@@ -22,7 +22,7 @@ One calm desktop workspace for harvests, inventory, customers, orders, market pa
 
 A flower farm should not need five spreadsheets and a stack of notes to answer one simple question: **What needs to happen next?**
 
-FlowersForever gives small and growing farms a practical operating hub. Log a harvest and stock goes up. Complete an order and stock goes down. Prepare for market, print the paperwork, and see the next priority without rebuilding the same information in several places.
+FlowersForever gives small and growing farms a practical operating hub. Log a harvest and stock goes up. Complete an order and stock goes down. Prepare for market, print the paperwork, and save what the farm learned so next season does not start from memory.
 
 The result is a farm day that feels more visible, repeatable, and ready to grow. FlowersForever was shaped around real cut-flower work in Port Orchard and Kitsap County, Washington—but its core workflow fits small growers anywhere.
 
@@ -41,6 +41,7 @@ FlowersForever replaces scattered information with one dependable flow from the 
 | Customer details hide in messages and notebooks | Contacts, notes, orders, invoices, and statements stay connected |
 | The day starts by hunting for answers | The **Today** dashboard surfaces priorities, shortages, sales, and ready-to-pack work |
 | Paperwork waits until late at night | Farm-ready PDFs turn current records into useful paperwork in a few clicks |
+| A hard-won fix leaves with a notebook or crew member | The Knowledge Log keeps observations, actions, results, and confidence searchable on the farm |
 
 **Know what you have. Know what is promised. Know what comes next.**
 
@@ -134,6 +135,16 @@ For a guided first visit, follow the [plain-language desktop user guide](docs/US
 - **Activity history:** a searchable record of imports, exports, harvests, and orders.
 - **Reports:** printable PDFs for the farm office, crew, market table, or customer.
 
+### Keep hard-won farm knowledge on the farm
+
+- Record what happened, where it happened, what the crew tried, and what changed.
+- Tag lessons with familiar words such as mildew, irrigation, pests, timing, harvest, or market.
+- Search in ordinary language—for example, “What worked for mildew on this rose last August?”
+- Mark a lesson as needs review, an early signal, promising, or proven on this farm.
+- Add a follow-up date and optionally connect the lesson to a saved harvest, product, order, or customer.
+
+**Keep the lessons in the ground. Less waste. More control.**
+
 ## A simple, safer workflow
 
 ```text
@@ -162,6 +173,7 @@ FlowersForever keeps those steps linked. It also pauses destructive or inventory
 | **Avoids surprise stock changes** | Confirming an order does not deduct stock; completion does. |
 | **Connects when you are ready** | CSV, Excel, Airtable, Google Sheets, Shopify, Square, Farmbrite, Floranext, and webhooks are available. |
 | **Explains the next step** | Status messages, validation highlights, and dashboard priorities use direct farm language. |
+| **Protects farm know-how** | Searchable lessons keep observations, actions, outcomes, and honest confidence with the farm. |
 
 ## Is it a fit for your farm?
 
@@ -218,10 +230,10 @@ mvn clean verify
 mvn spring-boot:run
 
 # Or run the packaged JAR
-java -jar target/flowerfarm-manager-1.1.0-SNAPSHOT.jar
+java -jar target/flowerfarm-manager-1.2.0-SNAPSHOT.jar
 
 # Interactive command-line mode
-java -jar target/flowerfarm-manager-1.1.0-SNAPSHOT.jar --cli
+java -jar target/flowerfarm-manager-1.2.0-SNAPSHOT.jar --cli
 ```
 
 ### Runtime profiles
@@ -236,11 +248,11 @@ java -jar target/flowerfarm-manager-1.1.0-SNAPSHOT.jar --cli
 | `container` | Headless external bind with mandatory, non-demo HTTP Basic credentials |
 
 ```bash
-java -jar target/flowerfarm-manager-1.1.0-SNAPSHOT.jar --spring.profiles.active=sqlite
-java -jar target/flowerfarm-manager-1.1.0-SNAPSHOT.jar --spring.profiles.active=demo
+java -jar target/flowerfarm-manager-1.2.0-SNAPSHOT.jar --spring.profiles.active=sqlite
+java -jar target/flowerfarm-manager-1.2.0-SNAPSHOT.jar --spring.profiles.active=demo
 
 FLOWERFARM_AUTH_USERS='owner:replace-with-a-long-password:OWNER' \
-  java -jar target/flowerfarm-manager-1.1.0-SNAPSHOT.jar --spring.profiles.active=auth
+  java -jar target/flowerfarm-manager-1.2.0-SNAPSHOT.jar --spring.profiles.active=auth
 ```
 
 Empty databases seed from `farm_inventory.csv` when it is present, otherwise from sample PNW inventory. The portable JAR stores H2 data under `./data`; the packaged Windows app uses `%LOCALAPPDATA%\\FlowersForever\\data`. `FLOWERFARM_DATA_DIR` overrides the data directory.
@@ -298,6 +310,8 @@ Full setup details: [connector sandbox guide](docs/CONNECTORS_SANDBOX.md).
 | `GET/POST` | `/api/inventory` | Inventory list and changes |
 | `GET/POST` | `/api/harvest` | Harvest records |
 | `POST` | `/api/harvest/batch` | Batch harvest logging |
+| `GET/POST` | `/api/knowledge` | Search or record farm observations and lessons |
+| `GET` | `/api/knowledge/tags` | Reusable farm-knowledge tags |
 | `GET/POST` | `/api/customers` | Customer records |
 | `GET/POST` | `/api/orders` | Order records |
 | `POST` | `/api/orders/{id}/confirm` | Move a Draft order to Confirmed |
@@ -319,8 +333,8 @@ FlowersForever is a Spring Boot 3.5.16 application with a modular Swing desktop 
 ```text
 com.flowerfarm
 ├── auth/           roles, desktop session, and user directory
-├── model/          inventory, harvest, customer, order, and activity records
-├── service/        farm rules, reports, market day, briefing, and closeout
+├── model/          inventory, harvest, customer, order, activity, and knowledge records
+├── service/        farm rules, knowledge search, reports, market day, briefing, and closeout
 ├── connector/      offline mirrors, live adapters, and connector registry
 ├── controller/     REST API
 ├── gui/            desktop shell, tabs, presenters, and shared UI components
@@ -341,11 +355,11 @@ Read the [system architecture](docs/ARCHITECTURE.md), [backend boundaries](docs/
 
 ## Project status
 
-Current status: **v1.1.0 proprietary pilot hardening.** The previous v1.0.19 artifacts are retired and must not be distributed to customers.
+Current status: **v1.2.0 proprietary private preview.** The previous v1.0.19 artifacts are retired and must not be distributed to customers.
 
-The current product includes the complete harvest → inventory → order → market-day → printable closeout loop, offline-first connectors, optional farm roles, native desktop installers, container deployment, and automated quality and security checks.
+The current product includes the complete harvest → inventory → order → market-day → printable closeout loop, the first Farm Knowledge Log, offline-first connectors, optional farm roles, native desktop installers, container deployment, and automated quality and security checks.
 
-The next product milestone is the Farm Knowledge Log: practical, searchable lessons tied to crops, beds, seasons, problems, actions, and results. See the [product roadmap](docs/PRODUCT_ROADMAP.md).
+The Knowledge Log records practical, searchable lessons tied to crops, beds, dates, problems, actions, results, follow-ups, and confidence. Seasonal comparisons and crew-ready playbooks come next; see the [product roadmap](docs/PRODUCT_ROADMAP.md).
 
 ## Made for growers
 

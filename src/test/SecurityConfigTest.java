@@ -62,10 +62,16 @@ class SecurityConfigTest {
 
         mvc.perform(get("/api/test").with(httpBasic("viewer", "view")))
                 .andExpect(status().isOk());
+        mvc.perform(get("/api/knowledge").with(httpBasic("viewer", "view")))
+                .andExpect(status().isOk());
         mvc.perform(post("/api/test").with(httpBasic("viewer", "view")))
+                .andExpect(status().isForbidden());
+        mvc.perform(post("/api/knowledge").with(httpBasic("viewer", "view")))
                 .andExpect(status().isForbidden());
 
         mvc.perform(post("/api/test").with(httpBasic("hand", "harvest")))
+                .andExpect(status().isOk());
+        mvc.perform(post("/api/knowledge").with(httpBasic("hand", "harvest")))
                 .andExpect(status().isOk());
         mvc.perform(delete("/api/connectors/history").with(httpBasic("hand", "harvest")))
                 .andExpect(status().isForbidden());
@@ -127,12 +133,12 @@ class SecurityConfigTest {
     @RestController
     static class TestEndpoints {
 
-        @GetMapping({"/api/test", "/actuator/health", "/api/auth/accounts"})
+        @GetMapping({"/api/test", "/api/knowledge", "/actuator/health", "/api/auth/accounts"})
         Map<String, Boolean> read() {
             return Map.of("ok", true);
         }
 
-        @PostMapping("/api/test")
+        @PostMapping({"/api/test", "/api/knowledge"})
         Map<String, Boolean> write() {
             return Map.of("ok", true);
         }

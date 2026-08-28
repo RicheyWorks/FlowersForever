@@ -3,6 +3,9 @@ package com.flowerfarm.repository;
 import com.flowerfarm.model.Customer;
 import com.flowerfarm.model.CustomerOrder;
 import com.flowerfarm.model.HarvestEntry;
+import com.flowerfarm.model.KnowledgeConfidence;
+import com.flowerfarm.model.KnowledgeEntry;
+import com.flowerfarm.model.KnowledgeKind;
 import com.flowerfarm.model.SyncHistoryEntry;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -74,5 +77,22 @@ class RepositoryAdapterTest {
         assertThat(repository.findRecent(25)).containsExactly(entry);
         verify(jpa).findAllByOrderByOccurredAtDesc(
                 org.mockito.ArgumentMatchers.argThat(page -> page.getPageSize() == 25));
+    }
+
+    @Test
+    @DisplayName("knowledge adapter owns newest-first and locking queries")
+    void knowledgeAdapter() {
+        KnowledgeJpaRepository jpa = mock(KnowledgeJpaRepository.class);
+        KnowledgeEntry entry = new KnowledgeEntry(
+                LocalDate.of(2026, 8, 20), "Mildew lesson", KnowledgeKind.PROBLEM,
+                "Rose", "", "Bed A", "Vegetative", "Mildew appeared", "",
+                "", "", null, KnowledgeConfidence.NEEDS_REVIEW, List.of("mildew"));
+        when(jpa.findAllByOrderByObservedOnDescIdDesc()).thenReturn(List.of(entry));
+
+        KnowledgeRepository repository = new JpaKnowledgeRepository(jpa);
+
+        assertThat(repository.findAllNewestFirst()).containsExactly(entry);
+        repository.findByIdForUpdate(9L);
+        verify(jpa).findByIdForUpdate(9L);
     }
 }

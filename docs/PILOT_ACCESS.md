@@ -20,11 +20,11 @@ Repository access alone does not grant a license to use or redistribute it.
 3. Verify its SHA-256 value against `SHA256SUMS.txt`:
 
    ```powershell
-   Get-FileHash .\FlowersForever-1.1.0.msi -Algorithm SHA256
+   Get-FileHash .\FlowersForever-1.2.0.msi -Algorithm SHA256
    ```
 
    ```bash
-   shasum -a 256 FlowersForever-1.1.0.dmg
+   shasum -a 256 FlowersForever-1.2.0.dmg
    ```
 
 4. Because pilot installers are not yet code-signed, the operating system may

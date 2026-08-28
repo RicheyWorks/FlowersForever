@@ -36,6 +36,7 @@ com.flowerfarm.gui
     ├── DashboardTab.java       # KPIs, low-stock alerts, quick harvest-forecast action
     ├── InventoryTab.java       # Live search, sortable columns, color-coded stock, edit/delete, CSV export
     ├── HarvestLogTab.java      # History, filters, single/batch entry, and production totals
+    ├── KnowledgeLogTab.java    # Searchable observations, actions, results, and follow-ups
     ├── CrmTab.java             # Customer and order workspaces with role-aware actions
     ├── MarketDayTab.java       # Packing-plan scope, exports, and fulfillment
     ├── SyncHistoryTab.java     # Searchable connector audit timeline and exports

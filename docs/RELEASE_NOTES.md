@@ -1,7 +1,23 @@
-# FlowersForever 1.1.0 private-pilot notes
+# FlowersForever private-preview notes
 
-Version 1.1.0 is in proprietary pilot hardening and is not yet approved for
-customer distribution. The previous 1.0.19 artifacts are retired.
+## 1.2.0 — Farm Knowledge Log preview
+
+- Adds a desktop Knowledge Log for observations, problems, opportunities,
+  actions, action owners, results, follow-up dates, confidence, and reusable tags.
+- Adds grounded plain-language search that recognizes ordinary farm terms and
+  month names without generating diagnoses or advice.
+- Lets a lesson optionally link to a saved harvest, inventory item, order, or
+  customer while preserving the lesson if the operational record is removed.
+- Adds role-aware `/api/knowledge` CRUD/search routes and `/api/knowledge/tags`.
+- Adds Flyway V3 so fresh and existing H2 pilot databases receive the knowledge
+  tables without replacing existing farm records.
+- Extends the demo profile with three realistic lessons for mildew, harvest
+  timing, and market demand.
+
+## 1.1.0 — Private-pilot hardening
+
+The 1.1 hardening work remains part of the 1.2 private preview. No current build
+is approved for customer distribution. The previous 1.0.19 artifacts are retired.
 
 ## Release safety
 

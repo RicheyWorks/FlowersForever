@@ -82,6 +82,12 @@ The CLI uses `CliCommandRouter` for its stable 22-command catalog and dispatches
 printable workflows through `CliReportCommands`. Both desktop adapters still
 enter the same application-service transaction boundaries as REST.
 
+The Farm Knowledge Log is another shared workflow: Swing and `/api/knowledge`
+call `KnowledgeService`, which owns validation, grounded plain-language search,
+record-link checks, and mutation auditing. The first search layer tokenizes
+ordinary farm language, removes conversational filler, recognizes month names,
+and matches only farm-entered facts; it does not generate recommendations.
+
 Controllers use `DownloadResponse` for consistent media type, content length,
 attachment headers, and filename validation. REST filesystem exports resolve
 beneath the configured export root through `ExportPathResolver`.
@@ -90,7 +96,8 @@ beneath the configured export root through `ExportPathResolver`.
 
 Services define application transaction boundaries; repository adapters own
 Spring Data details. The ports are `InventoryRepository`, `HarvestRepository`,
-`CustomerRepository`, `CustomerOrderRepository`, and `SyncHistoryRepository`.
+`CustomerRepository`, `CustomerOrderRepository`, `KnowledgeRepository`, and
+`SyncHistoryRepository`.
 Their `Jpa*Repository` adapters delegate to the low-level Spring Data
 interfaces.
 
@@ -100,6 +107,7 @@ interfaces.
 | inventory mutation | required | pessimistic item lock |
 | harvest edit/delete | required | harvest and affected inventory locks |
 | customer/order mutation | required | affected aggregate lock |
+| knowledge mutation | required | locked lesson; linked record ids validated |
 | one order fulfillment | `REQUIRES_NEW` | locked order; idempotent terminal state |
 | market-day batch | orchestration plus one transaction per order | one failure does not undo prior successes |
 | sync audit record/clear | required | repository-owned ordering/pagination |
@@ -108,9 +116,11 @@ H2 is the supported persistent desktop store. Flyway owns its versioned schema
 and runs before Hibernate validates the entity mapping; Hibernate never mutates
 the customer schema automatically. A non-empty pre-1.1 database is baselined at
 V1 and then upgraded in place. SQLite remains a developer-preview compatibility
-profile, uses a one-connection pool, and is not approved for customer data in
-1.1. `spring.jpa.open-in-view=false` keeps lazy database access out of
-presentation adapters.
+profile, uses a one-connection pool, and is not approved for customer data.
+V3 adds the Knowledge Log and tag tables; optional links use `ON DELETE SET
+NULL` so operational cleanup cannot erase a lesson.
+`spring.jpa.open-in-view=false` keeps lazy database access out of presentation
+adapters.
 
 ## Security and failure handling
 

@@ -49,6 +49,8 @@ Get-Json "/api/orders"
 Get-Json "/api/harvest/beds?week=true"
 
 Get-Json "/api/harvest/log?week=true"
+Get-Json "/api/knowledge?q=What%20worked%20for%20mildew%20on%20this%20rose%20last%20August"
+Get-Json "/api/knowledge/tags"
 
 $auditPdf = Join-Path (Get-Location) "audit-history-demo.pdf"
 Write-Host "`n=== GET /api/connectors/history/report.pdf → $auditPdf ===" -ForegroundColor Yellow
