@@ -133,4 +133,21 @@ class ReleaseContractTest {
         assertThat(Path.of("src", "main", "resources", "db", "migration", "h2",
                 "V3__farm_knowledge_log.sql")).isRegularFile();
     }
+
+    @Test
+    @DisplayName("authenticated demo instructions never depend on built-in weak passwords")
+    void authenticatedDemoUsesGeneratedCredentials() throws Exception {
+        String demo = Files.readString(Path.of("docs", "DEMO.md"));
+
+        assertThat(demo).contains(
+                "FLOWERFARM_AUTH_USERS",
+                "RandomNumberGenerator]::GetBytes(18)",
+                "--server.address=127.0.0.1",
+                "owner:$ownerPassword");
+        assertThat(demo).doesNotContain(
+                "farm:kitsap",
+                "`kitsap`",
+                "`harvest`",
+                "FLOWERFARM_ALLOW_DEMO_CREDENTIALS");
+    }
 }

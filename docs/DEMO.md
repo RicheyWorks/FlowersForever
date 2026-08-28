@@ -26,9 +26,9 @@ Approved stable tags publish only when the tag, POM, verified JAR, and both nati
 | Same via JAR | `java -jar target/flowerfarm-manager-1.2.0-SNAPSHOT.jar` |
 | **Demo seed** (empty CRM/harvest/knowledge) | `java -jar … --spring.profiles.active=demo` |
 | SQLite file DB | `java -jar … --spring.profiles.active=sqlite` |
-| Barn multi-user | `java -jar … --spring.profiles.active=auth` |
-| Demo + auth | `java -jar … --spring.profiles.active=demo,auth` |
-| Auth + SQLite | `java -jar … --spring.profiles.active=auth,sqlite` |
+| Barn multi-user | Set `FLOWERFARM_AUTH_USERS`, then use `--spring.profiles.active=auth` |
+| Demo + auth | Set `FLOWERFARM_AUTH_USERS`, then use `--spring.profiles.active=demo,auth` |
+| Auth + SQLite | Set `FLOWERFARM_AUTH_USERS`, then use `--spring.profiles.active=auth,sqlite` |
 | CLI only | `java -jar … --cli` (menu includes Kitsap irrigation advice) |
 
 **Demo profile:** if customers/harvests/orders for the week are empty, seeds Kitsap Blooms, Saturday Market Stall, bed harvests (Bed A / Tunnel 1), and **today’s CONFIRMED** orders so Market Day + Morning briefing work immediately. Does not wipe existing data — use a fresh `./data` folder for a clean run.
@@ -114,18 +114,44 @@ Narrate as Kitsap / Port Orchard grower:
 
 ## 3. Auth demo (optional, ~2 min)
 
-```bash
-java -jar target/flowerfarm-manager-1.2.0-SNAPSHOT.jar --spring.profiles.active=auth
+The authenticated profile intentionally has no built-in passwords. In PowerShell,
+generate temporary credentials for this run and keep the demo bound to this
+workstation:
+
+```powershell
+$ownerPassword = [Convert]::ToBase64String(
+  [Security.Cryptography.RandomNumberGenerator]::GetBytes(18))
+$handPassword = [Convert]::ToBase64String(
+  [Security.Cryptography.RandomNumberGenerator]::GetBytes(18))
+$viewerPassword = [Convert]::ToBase64String(
+  [Security.Cryptography.RandomNumberGenerator]::GetBytes(18))
+$env:FLOWERFARM_AUTH_USERS = "owner:$ownerPassword:OWNER,hand:$handPassword:HAND,viewer:$viewerPassword:VIEWER"
+
+Write-Host "owner password:  $ownerPassword"
+Write-Host "hand password:   $handPassword"
+Write-Host "viewer password: $viewerPassword"
+
+java -jar target/flowerfarm-manager-1.2.0-SNAPSHOT.jar `
+  --spring.profiles.active=demo,auth `
+  --server.address=127.0.0.1
 ```
 
 | User | Password | Show |
 |------|----------|------|
-| `farm` | `kitsap` | OWNER — full; clear audit allowed |
-| `hand` | `harvest` | HAND — write ops; cannot clear history |
-| `viewer` | `view` | VIEWER — connectors + harvest/CRM/inventory writes blocked |
+| `owner` | Value printed for `$ownerPassword` | OWNER — full; clear audit allowed |
+| `hand` | Value printed for `$handPassword` | HAND — write ops; cannot clear history |
+| `viewer` | Value printed for `$viewerPassword` | VIEWER — connectors + harvest/CRM/inventory writes blocked |
 
 **Account → Who am I?** / **Switch user…**  
-REST: `curl -u farm:kitsap http://localhost:8080/api/auth/me`
+REST from the same PowerShell session:
+
+```powershell
+$pair = "owner:$ownerPassword"
+$b64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($pair))
+Invoke-RestMethod http://localhost:8080/api/auth/me -Headers @{
+  Authorization = "Basic $b64"
+}
+```
 
 ---
 
@@ -173,11 +199,11 @@ Invoke-WebRequest "http://localhost:8080/api/briefing/report.pdf" -OutFile morni
 Invoke-WebRequest http://localhost:8080/api/reports/weekly.pdf -OutFile weekly.pdf
 ```
 
-With auth:
+With auth, reuse the generated owner password from section 3:
 
 ```powershell
-$pair = "farm:kitsap"
-$b64 = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes($pair))
+$pair = "owner:$ownerPassword"
+$b64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($pair))
 Invoke-RestMethod http://localhost:8080/api/auth/me -Headers @{ Authorization = "Basic $b64" }
 ```
 

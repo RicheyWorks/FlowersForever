@@ -7,6 +7,7 @@ import com.flowerfarm.gui.tabs.HarvestLogTab;
 import com.flowerfarm.gui.tabs.InventoryTab;
 import com.flowerfarm.gui.tabs.InventoryWorkspaceTab;
 import com.flowerfarm.gui.tabs.IrrigationInfoTab;
+import com.flowerfarm.gui.tabs.KnowledgeLogTab;
 import com.flowerfarm.gui.tabs.MarketDayTab;
 import com.flowerfarm.gui.tabs.PricingInfoTab;
 import com.flowerfarm.gui.tabs.ReportsTab;
@@ -20,12 +21,16 @@ import com.flowerfarm.model.Customer;
 import com.flowerfarm.model.CustomerOrder;
 import com.flowerfarm.model.HarvestEntry;
 import com.flowerfarm.model.Item;
+import com.flowerfarm.model.KnowledgeConfidence;
+import com.flowerfarm.model.KnowledgeEntry;
+import com.flowerfarm.model.KnowledgeKind;
 import com.flowerfarm.model.OrderLine;
 import com.flowerfarm.model.SyncHistoryEntry;
 import com.flowerfarm.service.CustomerService;
 import com.flowerfarm.service.HarvestService;
 import com.flowerfarm.service.InventoryService;
 import com.flowerfarm.service.IrrigationAdvisorService;
+import com.flowerfarm.service.KnowledgeService;
 import com.flowerfarm.service.MarketDayPackingService;
 import com.flowerfarm.service.OrderService;
 import com.flowerfarm.service.ReportService;
@@ -91,6 +96,7 @@ class DataEntryVisualContractTest {
         HarvestService harvest = mock(HarvestService.class);
         MarketDayPackingService marketDay = mock(MarketDayPackingService.class);
         SyncHistoryService history = mock(SyncHistoryService.class);
+        KnowledgeService knowledge = mock(KnowledgeService.class);
         Customer customer = new Customer(7L, "Kitsap Blooms", "Sam Rivera",
                 "sam@kitsapblooms.example", "360-555-0184", "FLORIST",
                 "Thursday pickup");
@@ -170,6 +176,33 @@ class DataEntryVisualContractTest {
                 new SyncHistoryService.HistoryStats(2, 1, 1));
         when(history.distinctConnectors(anyInt())).thenReturn(List.of("square", "airtable"));
         when(history.distinctOperations(anyInt())).thenReturn(List.of("IMPORT", "SYNC"));
+        KnowledgeEntry mildewLesson = new KnowledgeEntry(
+                LocalDate.now().minusYears(1),
+                "Powdery mildew slowed after earlier watering",
+                KnowledgeKind.PROBLEM,
+                "Nootka Rose", "", "Bed A", "Budding",
+                "White patches returned after warm nights and late overhead watering.",
+                "Removed affected leaves, increased spacing, and moved watering before 9 AM.",
+                "Field crew",
+                "No new patches appeared during the following seven-day check.",
+                LocalDate.now().minusYears(1).plusDays(14),
+                KnowledgeConfidence.PROMISING,
+                List.of("mildew", "irrigation", "timing"));
+        mildewLesson.setId(51L);
+        KnowledgeEntry marketLesson = new KnowledgeEntry(
+                LocalDate.now().minusDays(3),
+                "Saturday customers asked for mixed rose bunches",
+                KnowledgeKind.OPPORTUNITY,
+                "Rose", "Mixed", "Market", "Market feedback",
+                "Several customers wanted one ready-priced bunch with three rose colors.",
+                "Reserved enough stems for a six-bunch trial at the next market.",
+                "Market lead", "Trial is scheduled; sales result is not known yet.",
+                LocalDate.now(), KnowledgeConfidence.NEEDS_REVIEW,
+                List.of("market", "customer-request", "trial"));
+        marketLesson.setId(52L);
+        when(knowledge.search(any())).thenReturn(List.of(marketLesson, mildewLesson));
+        when(knowledge.distinctTags()).thenReturn(List.of(
+                "customer-request", "irrigation", "market", "mildew", "timing", "trial"));
 
         AddItemTab addItem = new AddItemTab(inventory, new Host());
         CrmTab crm = new CrmTab(customers, orders, null, new Host());
@@ -181,6 +214,7 @@ class DataEntryVisualContractTest {
         ReportsTab reports = new ReportsTab(mock(ReportService.class), new Host());
         SyncHistoryTab activity = new SyncHistoryTab(history, new Host());
         SyncHistoryTab activityViewer = new SyncHistoryTab(history, new ReadOnlyHost());
+        KnowledgeLogTab knowledgeLog = new KnowledgeLogTab(knowledge, new Host());
         TrendService trendService = mock(TrendService.class);
         when(trendService.analyzeQuantityTrend()).thenReturn(new TrendService.TrendResult(
                 82.4,
@@ -229,6 +263,9 @@ class DataEntryVisualContractTest {
         activityViewer.initialize();
         awaitButtonEnabled(activityViewer.getUIComponent(), "Refresh");
         activityViewer.applyRolePermissions(false);
+        knowledgeLog.getUIComponent();
+        knowledgeLog.initialize();
+        awaitButtonEnabled(knowledgeLog.getUIComponent(), "Search lessons");
         roseVisualizer.getUIComponent();
         roseVisualizer.initialize();
         awaitLabel(roseVisualizer.getUIComponent(), "3 linkable products ready");
@@ -289,6 +326,12 @@ class DataEntryVisualContractTest {
         render("activity-history", activity.getUIComponent(), new Dimension(1120, 720));
         render("activity-history-viewer", activityViewer.getUIComponent(),
                 new Dimension(1050, 700));
+        render("knowledge-log", knowledgeLog.getUIComponent(), new Dimension(1120, 720));
+        assertThat(findNamed(knowledgeLog.getUIComponent(), "knowledge.table").getHeight())
+                .as("visible farm lessons at laptop height")
+                .isGreaterThanOrEqualTo(80);
+        render("knowledge-log-compact", knowledgeLog.getUIComponent(),
+                new Dimension(1050, 700));
         render("trend-analysis", trends.getUIComponent(), new Dimension(1050, 700));
         render("irrigation", irrigation.getUIComponent(), new Dimension(1050, 700));
         render("irrigation-error", irrigationError.getUIComponent(),
@@ -346,6 +389,7 @@ class DataEntryVisualContractTest {
         assertInteractiveControlsFit(marketDayTab.getUIComponent());
         assertInteractiveControlsFit(reports.getUIComponent());
         assertInteractiveControlsFit(activity.getUIComponent());
+        assertInteractiveControlsFit(knowledgeLog.getUIComponent());
         assertInteractiveControlsFit(trends.getUIComponent());
         assertInteractiveControlsFit(irrigation.getUIComponent());
         assertInteractiveControlsFit(irrigationError.getUIComponent());
@@ -359,6 +403,7 @@ class DataEntryVisualContractTest {
         assertAccessibleControls(marketDayTab.getUIComponent());
         assertAccessibleControls(reports.getUIComponent());
         assertAccessibleControls(activity.getUIComponent());
+        assertAccessibleControls(knowledgeLog.getUIComponent());
         assertAccessibleControls(trends.getUIComponent());
         assertAccessibleControls(irrigation.getUIComponent());
         assertAccessibleControls(roseGuide.getUIComponent());
@@ -369,7 +414,7 @@ class DataEntryVisualContractTest {
         navigation.setTabLayoutPolicy(JTabbedPane.SCROLL_TAB_LAYOUT);
         new FarmTabNavigator(navigation, List.of(
                 dashboard, marketDayTab, harvestLog, inventoryWorkspace,
-                irrigation, crm, reports, trends, activity,
+                irrigation, crm, knowledgeLog, reports, trends, activity,
                 reference)).populate();
         JPanel shell = new JPanel(new BorderLayout());
         shell.add(FarmUi.brandHeader("PORT ORCHARD, WA", "Monday · August 24"),
@@ -397,6 +442,8 @@ class DataEntryVisualContractTest {
         assertThat(OUTPUT.resolve("reports.png")).isRegularFile();
         assertThat(OUTPUT.resolve("activity-history.png")).isRegularFile();
         assertThat(OUTPUT.resolve("activity-history-viewer.png")).isRegularFile();
+        assertThat(OUTPUT.resolve("knowledge-log.png")).isRegularFile();
+        assertThat(OUTPUT.resolve("knowledge-log-compact.png")).isRegularFile();
         assertThat(OUTPUT.resolve("trend-analysis.png")).isRegularFile();
         assertThat(OUTPUT.resolve("irrigation.png")).isRegularFile();
         assertThat(OUTPUT.resolve("irrigation-error.png")).isRegularFile();

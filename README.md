@@ -95,6 +95,13 @@ For a guided first visit, follow the [plain-language desktop user guide](docs/US
       Turn confirmed demand into a clear load-out plan, catch stock gaps before departure, and keep every customer handoff visible.
     </td>
   </tr>
+  <tr>
+    <td colspan="2">
+      <img src="docs/images/app-knowledge-log.png" alt="FlowersForever Farm Knowledge Log showing plain-language search, reusable tags, saved lessons, and selected observation details">
+      <br><strong>Keep hard-won farm knowledge on the farm.</strong><br>
+      Save observations, actions, results, follow-ups, and honest confidence in one searchable record—so a useful lesson can be found and repeated next season.
+    </td>
+  </tr>
 </table>
 
 ## What FlowersForever helps you do

@@ -8,6 +8,8 @@ import com.flowerfarm.model.KnowledgeKind;
 import com.flowerfarm.service.KnowledgeService;
 
 import javax.swing.BorderFactory;
+import javax.swing.Box;
+import javax.swing.BoxLayout;
 import javax.swing.DefaultComboBoxModel;
 import javax.swing.DefaultListCellRenderer;
 import javax.swing.JButton;
@@ -169,9 +171,19 @@ public class KnowledgeLogTab implements FlowerFarmTab {
         searchButton.setName("knowledge.searchButton");
         clearButton = FarmUi.secondaryButton("Clear");
         clearButton.setName("knowledge.clearSearch");
-        JPanel controls = FarmUi.toolbar(
-                new JLabel("Ask or search:"), searchField,
+        JPanel queryRow = FarmUi.toolbar(new JLabel("Ask or search:"), searchField);
+        queryRow.setName("knowledge.queryRow");
+        queryRow.setAlignmentX(Component.LEFT_ALIGNMENT);
+        JPanel filterRow = FarmUi.toolbar(
                 new JLabel("Tag:"), tagFilter, dueOnly, searchButton, clearButton);
+        filterRow.setName("knowledge.filterRow");
+        filterRow.setAlignmentX(Component.LEFT_ALIGNMENT);
+        JPanel controls = new JPanel();
+        controls.setOpaque(false);
+        controls.setLayout(new BoxLayout(controls, BoxLayout.Y_AXIS));
+        controls.add(queryRow);
+        controls.add(Box.createVerticalStrut(FarmUi.CONTROL_GAP));
+        controls.add(filterRow);
         return FarmUi.section(
                 "Find what the farm already learned",
                 "Use ordinary words, crop names, months, beds, actions, results, or tags.",
@@ -203,6 +215,7 @@ public class KnowledgeLogTab implements FlowerFarmTab {
 
         detailArea = FarmUi.displayArea(18, 42);
         detailArea.setName("knowledge.detail");
+        detailArea.getAccessibleContext().setAccessibleName("Selected farm lesson details");
         detailArea.setText("Select a saved lesson to see the observation, action, result, and follow-up.");
         editButton = FarmUi.secondaryButton("Edit selected");
         editButton.setName("knowledge.edit");
