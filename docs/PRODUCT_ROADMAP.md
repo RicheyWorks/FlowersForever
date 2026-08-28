@@ -51,10 +51,12 @@ the full harvest window. Recorded stem harvests are allocated to one exact
 crop-and-bed block so overlapping successions cannot inflate actual production.
 The planner shows actual progress, pace against the expected amount to date,
 bed overlaps, week-long harvest gaps, and harvests that need cleaner matching.
+Its weekly view distributes every block's expected yield across its harvest
+window and compares that plan line with matched actual stem harvests.
 
 Next planning increments:
 
-- Add week-by-week planned-versus-actual trend charts and forward projections.
+- Extend the implemented week-by-week planned-versus-actual chart with forward projections.
 - Turn overlap and succession-gap warnings into guided corrective actions.
 - Add reusable crop timing templates without hiding or inventing farm inputs.
 - Turn selected planting windows into crew-ready task lists and reminders.

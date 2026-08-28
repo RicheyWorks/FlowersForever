@@ -108,6 +108,14 @@ or to edit or remove the selected block. Pace compares actual stems with the
 amount expected by today, while percent of plan compares with the full-season
 target. Removing a plan never removes a harvest log.
 
+Open **Weekly pace** to see matched actual stems as green bars against the gold
+planned-pace line. The planner spreads each block's expected stems evenly over
+its own harvest window, then combines overlapping crops into one weekly target.
+The message below the chart compares recorded stems with the amount expected by
+today, so you can distinguish an unfinished season from one that is genuinely
+behind pace. Unmatched harvests and units other than stems are not added to the
+green bars.
+
 ## Record a harvest
 
 Open **Harvest Log**. For one cut, complete the date, crop, quantity, unit, and

@@ -10,9 +10,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
+import java.time.DayOfWeek;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
+import java.time.temporal.TemporalAdjusters;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.IdentityHashMap;
@@ -21,6 +23,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 
 /** Transactional seasonal planning workflows and dashboard-ready summaries. */
 @Service
@@ -79,7 +82,7 @@ public class SeasonPlanService {
         List<SeasonPlanEntry> entries = List.copyOf(repository.findBySeasonYear(seasonYear));
         SeasonSummary summary = summarizeEntries(entries);
         if (entries.isEmpty()) {
-            return new SeasonAnalysis(entries, summary, List.of(), List.of(), List.of(),
+            return new SeasonAnalysis(entries, summary, List.of(), List.of(), List.of(), List.of(),
                     0, 0, 0);
         }
         LocalDate seasonStart = earlier(LocalDate.of(seasonYear, 1, 1),
@@ -95,7 +98,8 @@ public class SeasonPlanService {
         double totalActual = performance.stream()
                 .mapToDouble(PlanPerformance::actualStems).sum();
         return new SeasonAnalysis(entries, summary, performance,
-                findBedConflicts(entries), findHarvestGaps(entries), totalActual,
+                findBedConflicts(entries), findHarvestGaps(entries),
+                weeklyProduction(entries, summary, allocation.actualByWeek()), totalActual,
                 allocation.unmatchedStems(), allocation.unmatchedHarvestCount());
     }
 
@@ -125,6 +129,7 @@ public class SeasonPlanService {
     private Allocation allocateHarvests(List<SeasonPlanEntry> entries,
                                         List<HarvestEntry> harvests) {
         Map<SeasonPlanEntry, Double> actualByPlan = new IdentityHashMap<>();
+        Map<LocalDate, Double> actualByWeek = new TreeMap<>();
         double unmatchedStems = 0;
         int unmatchedHarvestCount = 0;
         for (HarvestEntry harvest : harvests == null ? List.<HarvestEntry>of() : harvests) {
@@ -147,9 +152,47 @@ public class SeasonPlanService {
             } else {
                 SeasonPlanEntry best = candidates.get(0);
                 actualByPlan.merge(best, harvest.getQuantity(), Double::sum);
+                actualByWeek.merge(weekStart(harvest.getHarvestDate()),
+                        harvest.getQuantity(), Double::sum);
             }
         }
-        return new Allocation(actualByPlan, unmatchedStems, unmatchedHarvestCount);
+        return new Allocation(actualByPlan, actualByWeek,
+                unmatchedStems, unmatchedHarvestCount);
+    }
+
+    /**
+     * Spreads each block's expected stems evenly across its inclusive harvest
+     * window, then aligns the planned pace with matched stem harvests by week.
+     */
+    private static List<WeeklyProduction> weeklyProduction(
+            List<SeasonPlanEntry> entries, SeasonSummary summary,
+            Map<LocalDate, Double> actualByWeek) {
+        if (summary.firstHarvest() == null || summary.lastHarvest() == null) {
+            return List.of();
+        }
+        Map<LocalDate, Double> plannedByWeek = new TreeMap<>();
+        for (SeasonPlanEntry entry : entries) {
+            LocalDate harvestStart = entry.getHarvestStart();
+            LocalDate harvestEnd = entry.getHarvestEnd();
+            long windowDays = ChronoUnit.DAYS.between(harvestStart, harvestEnd) + 1;
+            for (LocalDate week = weekStart(harvestStart);
+                 !week.isAfter(weekStart(harvestEnd)); week = week.plusWeeks(1)) {
+                LocalDate overlapStart = later(week, harvestStart);
+                LocalDate overlapEnd = earlier(week.plusDays(6), harvestEnd);
+                long overlapDays = ChronoUnit.DAYS.between(overlapStart, overlapEnd) + 1;
+                double plannedStems = entry.getExpectedStems()
+                        * overlapDays / (double) windowDays;
+                plannedByWeek.merge(week, plannedStems, Double::sum);
+            }
+        }
+        List<WeeklyProduction> series = new ArrayList<>();
+        for (LocalDate week = weekStart(summary.firstHarvest());
+             !week.isAfter(weekStart(summary.lastHarvest())); week = week.plusWeeks(1)) {
+            double planned = plannedByWeek.getOrDefault(week, 0d);
+            double actual = actualByWeek.getOrDefault(week, 0d);
+            series.add(new WeeklyProduction(week, planned, actual, actual - planned));
+        }
+        return List.copyOf(series);
     }
 
     private PlanPerformance performance(SeasonPlanEntry entry, double actualStems) {
@@ -237,6 +280,10 @@ public class SeasonPlanService {
 
     private static boolean within(LocalDate date, LocalDate from, LocalDate to) {
         return !date.isBefore(from) && !date.isAfter(to);
+    }
+
+    private static LocalDate weekStart(LocalDate date) {
+        return date.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
     }
 
     private static LocalDate occupancyStart(SeasonPlanEntry entry) {
@@ -330,6 +377,7 @@ public class SeasonPlanService {
                                  List<PlanPerformance> performance,
                                  List<BedConflict> bedConflicts,
                                  List<HarvestGap> harvestGaps,
+                                 List<WeeklyProduction> weeklyProduction,
                                  double actualStems, double unmatchedStems,
                                  int unmatchedHarvestCount) {
         public SeasonAnalysis {
@@ -337,6 +385,7 @@ public class SeasonPlanService {
             performance = List.copyOf(performance);
             bedConflicts = List.copyOf(bedConflicts);
             harvestGaps = List.copyOf(harvestGaps);
+            weeklyProduction = List.copyOf(weeklyProduction);
         }
     }
 
@@ -350,6 +399,10 @@ public class SeasonPlanService {
     }
 
     public record HarvestGap(LocalDate from, LocalDate to, int days) {
+    }
+
+    public record WeeklyProduction(LocalDate weekStart, double plannedStems,
+                                   double actualStems, double varianceStems) {
     }
 
     public enum PlanPace {
@@ -370,6 +423,7 @@ public class SeasonPlanService {
     }
 
     private record Allocation(Map<SeasonPlanEntry, Double> actualByPlan,
+                              Map<LocalDate, Double> actualByWeek,
                               double unmatchedStems, int unmatchedHarvestCount) {
     }
 }

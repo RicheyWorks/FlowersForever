@@ -131,6 +131,16 @@ class SeasonPlanServiceTest {
                 SeasonPlanService.PlanPerformance::pace)
                 .containsExactly(SeasonPlanService.PlanPace.BEHIND,
                         SeasonPlanService.PlanPace.AHEAD);
+        assertThat(analysis.weeklyProduction())
+                .extracting(SeasonPlanService.WeeklyProduction::actualStems)
+                .filteredOn(value -> value > 0)
+                .containsExactly(100d, 60d);
+        assertThat(analysis.weeklyProduction().stream()
+                .mapToDouble(SeasonPlanService.WeeklyProduction::plannedStems).sum())
+                .isCloseTo(760d, org.assertj.core.data.Offset.offset(0.0001));
+        assertThat(analysis.weeklyProduction().stream()
+                .mapToDouble(SeasonPlanService.WeeklyProduction::actualStems).sum())
+                .isEqualTo(160d);
         assertThat(analysis.bedConflicts()).singleElement().satisfies(conflict -> {
             assertThat(conflict.first()).isSameAs(early);
             assertThat(conflict.second()).isSameAs(succession);

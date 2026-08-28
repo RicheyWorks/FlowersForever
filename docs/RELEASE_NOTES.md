@@ -13,6 +13,8 @@
   harvest from being counted twice when expected windows overlap.
 - Shows actual stems, full-plan completion, expected-to-date pace, bed overlap
   warnings, week-long harvest gaps, and harvest records that need matching.
+- Adds a scrollable weekly harvest-pace chart with actual stem bars, a planned
+  production line, a current-week marker, and an expected-by-today summary.
 
 ## 1.2.0 — Farm Knowledge Log preview
 

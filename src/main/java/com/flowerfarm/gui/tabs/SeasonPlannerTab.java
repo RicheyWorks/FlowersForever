@@ -37,12 +37,15 @@ import java.awt.GridBagLayout;
 import java.awt.GridLayout;
 import java.awt.Insets;
 import java.awt.RenderingHints;
+import java.awt.geom.Path2D;
+import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.Month;
 import java.time.YearMonth;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.time.temporal.ChronoUnit;
+import java.time.temporal.TemporalAdjusters;
 import java.util.List;
 import java.util.Collections;
 import java.util.IdentityHashMap;
@@ -77,6 +80,8 @@ public class SeasonPlannerTab implements FlowerFarmTab {
     private JLabel harvestDetail;
     private JLabel statusBadge;
     private SeasonTimeline timeline;
+    private WeeklyPaceChart weeklyChart;
+    private JLabel weeklyStatus;
     private JTable table;
     private DefaultTableModel tableModel;
     private List<SeasonPlanEntry> lastView = List.of();
@@ -247,11 +252,35 @@ public class SeasonPlannerTab implements FlowerFarmTab {
                 "Sort the details, select a row, and update the plan without re-entering it.",
                 tableContent);
 
+        weeklyChart = new WeeklyPaceChart();
+        weeklyChart.setName("seasonPlanner.weeklyChart");
+        JScrollPane weeklyScroll = new JScrollPane(weeklyChart);
+        weeklyScroll.setBorder(BorderFactory.createEmptyBorder());
+        weeklyScroll.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_NEVER);
+        weeklyScroll.getViewport().setBackground(FarmUi.surfaceColor());
+        weeklyScroll.getAccessibleContext().setAccessibleName("Weekly production chart scroll area");
+        weeklyStatus = FarmUi.statusBadge("Add a planting block to see weekly pace",
+                FarmUi.Tone.NEUTRAL);
+        weeklyStatus.setName("seasonPlanner.weeklyStatus");
+        JPanel paceHeader = FarmUi.toolbar(
+                legend("Actual stems", FarmUi.Tone.SUCCESS),
+                legend("Planned pace", FarmUi.Tone.WARNING));
+        JPanel paceContent = new JPanel(new BorderLayout(0, FarmUi.CONTROL_GAP));
+        paceContent.setOpaque(false);
+        paceContent.add(paceHeader, BorderLayout.NORTH);
+        paceContent.add(weeklyScroll, BorderLayout.CENTER);
+        paceContent.add(weeklyStatus, BorderLayout.SOUTH);
+        JPanel paceSection = FarmUi.section(
+                "Weekly harvest pace",
+                "Green bars are matched stem harvests; the gold line spreads each block's target across its harvest window.",
+                paceContent);
+
         JTabbedPane workspace = new JTabbedPane();
         workspace.setName("seasonPlanner.workspace");
         workspace.getAccessibleContext().setAccessibleName("Season planner views");
         workspace.addTab("Visual timeline", timelineSection);
         workspace.addTab("Plan records", recordsSection);
+        workspace.addTab("Weekly pace", paceSection);
         return workspace;
     }
 
@@ -318,6 +347,8 @@ public class SeasonPlannerTab implements FlowerFarmTab {
         }
         Set<SeasonPlanEntry> conflictEntries = conflictEntries(analysis.bedConflicts());
         timeline.setSeason(selectedYear, lastView, lastPerformance, conflictEntries);
+        weeklyChart.setSeries(selectedYear, analysis.weeklyProduction());
+        updateWeeklyStatus(analysis);
         updateMetrics(analysis);
         boolean restored = restoreSelection(selectedId);
         requestedSelectionId = null;
@@ -367,6 +398,33 @@ public class SeasonPlannerTab implements FlowerFarmTab {
             harvestDetail.setText("through " + SHORT_DATE.format(summary.lastHarvest())
                     + " · " + countLabel(analysis.harvestGaps().size(), "gap", "gaps"));
         }
+    }
+
+    private void updateWeeklyStatus(SeasonPlanService.SeasonAnalysis analysis) {
+        if (analysis.entries().isEmpty()) {
+            FarmUi.updateStatusBadge(weeklyStatus,
+                    "Add a planting block to see weekly pace", FarmUi.Tone.NEUTRAL);
+            return;
+        }
+        double expectedToDate = analysis.performance().stream()
+                .mapToDouble(SeasonPlanService.PlanPerformance::expectedToDate).sum();
+        if (expectedToDate <= 0) {
+            FarmUi.updateStatusBadge(weeklyStatus,
+                    "Harvest has not started · the planned line shows what is coming",
+                    FarmUi.Tone.INFO);
+            return;
+        }
+        double variancePercent = (analysis.actualStems() - expectedToDate)
+                * 100d / expectedToDate;
+        String direction = Math.abs(variancePercent) < 0.5 ? "on planned pace"
+                : formatNumber(Math.abs(variancePercent)) + "% "
+                        + (variancePercent > 0 ? "ahead of pace" : "behind pace");
+        FarmUi.Tone tone = variancePercent >= 10 ? FarmUi.Tone.SUCCESS
+                : variancePercent < -20 ? FarmUi.Tone.DANGER : FarmUi.Tone.INFO;
+        FarmUi.updateStatusBadge(weeklyStatus,
+                formatNumber(analysis.actualStems()) + " actual stems · "
+                        + formatNumber(expectedToDate) + " expected by today · " + direction,
+                tone);
     }
 
     private Object[] row(SeasonPlanEntry entry, SeasonPlanService.PlanPerformance performance) {
@@ -799,6 +857,229 @@ public class SeasonPlannerTab implements FlowerFarmTab {
             } catch (NumberFormatException exception) {
                 throw new IllegalArgumentException(label + " must be a whole number.");
             }
+        }
+    }
+
+    private static final class WeeklyPaceChart extends JComponent {
+        private static final int LEFT_INSET = 62;
+        private static final int RIGHT_INSET = 24;
+        private static final int TOP_INSET = 30;
+        private static final int BOTTOM_INSET = 46;
+        private static final int CHART_HEIGHT = 278;
+        private int seasonYear = LocalDate.now().getYear();
+        private List<SeasonPlanService.WeeklyProduction> series = List.of();
+
+        private WeeklyPaceChart() {
+            setOpaque(true);
+            setBackground(FarmUi.surfaceColor());
+            setPreferredSize(new Dimension(920, CHART_HEIGHT));
+            setToolTipText("Green bars show matched actual stems; the gold line shows planned weekly stems.");
+            getAccessibleContext().setAccessibleName("Weekly planned versus actual harvest chart");
+            getAccessibleContext().setAccessibleDescription(
+                    "No weekly production is available until a planting block is added.");
+        }
+
+        @Override
+        public AccessibleContext getAccessibleContext() {
+            if (accessibleContext == null) {
+                accessibleContext = new AccessibleWeeklyPaceChart();
+            }
+            return accessibleContext;
+        }
+
+        protected class AccessibleWeeklyPaceChart extends AccessibleJComponent {
+            private static final long serialVersionUID = 1L;
+        }
+
+        private void setSeries(int seasonYear,
+                               List<SeasonPlanService.WeeklyProduction> series) {
+            this.seasonYear = seasonYear;
+            this.series = series == null ? List.of() : List.copyOf(series);
+            double planned = this.series.stream()
+                    .mapToDouble(SeasonPlanService.WeeklyProduction::plannedStems).sum();
+            double actual = this.series.stream()
+                    .mapToDouble(SeasonPlanService.WeeklyProduction::actualStems).sum();
+            getAccessibleContext().setAccessibleDescription(this.series.isEmpty()
+                    ? "No weekly production is available until a planting block is added."
+                    : this.series.size() + " weeks of planned and actual production; "
+                            + Math.round(planned) + " planned stems and "
+                            + Math.round(actual) + " actual stems.");
+            int width = Math.max(920, LEFT_INSET + RIGHT_INSET
+                    + Math.max(1, this.series.size()) * 38);
+            setPreferredSize(new Dimension(width, CHART_HEIGHT));
+            revalidate();
+            repaint();
+        }
+
+        @Override protected void paintComponent(Graphics graphics) {
+            super.paintComponent(graphics);
+            Graphics2D copy = (Graphics2D) graphics.create();
+            try {
+                copy.setRenderingHint(RenderingHints.KEY_ANTIALIASING,
+                        RenderingHints.VALUE_ANTIALIAS_ON);
+                int width = Math.max(getWidth(), getPreferredSize().width);
+                if (series.isEmpty()) {
+                    paintEmptyState(copy, width);
+                    return;
+                }
+                int plotWidth = Math.max(200, width - LEFT_INSET - RIGHT_INSET);
+                int plotHeight = Math.max(100, getHeight() - TOP_INSET - BOTTOM_INSET);
+                double maxValue = series.stream()
+                        .mapToDouble(item -> Math.max(item.plannedStems(), item.actualStems()))
+                        .max().orElse(1d);
+                double scaleMax = niceCeiling(maxValue);
+                paintCurrentWeek(copy, plotWidth, plotHeight);
+                paintGrid(copy, plotWidth, plotHeight, scaleMax);
+                paintActualBars(copy, plotWidth, plotHeight, scaleMax);
+                paintPlannedLine(copy, plotWidth, plotHeight, scaleMax);
+                paintWeekLabels(copy, plotWidth, plotHeight);
+            } finally {
+                copy.dispose();
+            }
+        }
+
+        private void paintGrid(Graphics2D graphics, int plotWidth, int plotHeight,
+                               double scaleMax) {
+            graphics.setFont(getFont().deriveFont(Font.PLAIN, 10f));
+            for (int step = 0; step <= 4; step++) {
+                double value = scaleMax * step / 4d;
+                int y = TOP_INSET + plotHeight - (int) Math.round(plotHeight * step / 4d);
+                graphics.setColor(FarmUi.borderColor());
+                graphics.drawLine(LEFT_INSET, y, LEFT_INSET + plotWidth, y);
+                graphics.setColor(FarmUi.mutedColor());
+                String label = formatNumber(value);
+                graphics.drawString(label,
+                        LEFT_INSET - graphics.getFontMetrics().stringWidth(label) - 9, y + 4);
+            }
+            graphics.setColor(FarmUi.mutedColor());
+            graphics.setFont(getFont().deriveFont(Font.BOLD, 9f));
+            graphics.drawString("STEMS", 12, TOP_INSET - 9);
+        }
+
+        private void paintActualBars(Graphics2D graphics, int plotWidth, int plotHeight,
+                                     double scaleMax) {
+            double spacing = plotWidth / (double) series.size();
+            int barWidth = Math.max(8, Math.min(20, (int) Math.round(spacing * 0.48)));
+            Color fill = FarmUi.toneForegroundColor(FarmUi.Tone.SUCCESS);
+            Color shadow = FarmUi.toneBackgroundColor(FarmUi.Tone.SUCCESS);
+            for (int index = 0; index < series.size(); index++) {
+                SeasonPlanService.WeeklyProduction item = series.get(index);
+                int center = xFor(index, plotWidth);
+                int height = (int) Math.round(item.actualStems() / scaleMax * plotHeight);
+                if (height <= 0) {
+                    continue;
+                }
+                int y = TOP_INSET + plotHeight - height;
+                graphics.setColor(shadow);
+                graphics.fillRoundRect(center - barWidth / 2 - 2, y - 2,
+                        barWidth + 4, height + 2, 7, 7);
+                graphics.setColor(fill);
+                graphics.fillRoundRect(center - barWidth / 2, y,
+                        barWidth, height, 6, 6);
+            }
+        }
+
+        private void paintPlannedLine(Graphics2D graphics, int plotWidth, int plotHeight,
+                                      double scaleMax) {
+            Path2D.Double path = new Path2D.Double();
+            for (int index = 0; index < series.size(); index++) {
+                SeasonPlanService.WeeklyProduction item = series.get(index);
+                int x = xFor(index, plotWidth);
+                int y = TOP_INSET + plotHeight
+                        - (int) Math.round(item.plannedStems() / scaleMax * plotHeight);
+                if (index == 0) {
+                    path.moveTo(x, y);
+                } else {
+                    path.lineTo(x, y);
+                }
+            }
+            Color planned = FarmUi.toneForegroundColor(FarmUi.Tone.WARNING);
+            graphics.setColor(planned);
+            graphics.setStroke(new BasicStroke(2.4f, BasicStroke.CAP_ROUND,
+                    BasicStroke.JOIN_ROUND));
+            graphics.draw(path);
+            for (int index = 0; index < series.size(); index++) {
+                SeasonPlanService.WeeklyProduction item = series.get(index);
+                int x = xFor(index, plotWidth);
+                int y = TOP_INSET + plotHeight
+                        - (int) Math.round(item.plannedStems() / scaleMax * plotHeight);
+                graphics.fillOval(x - 3, y - 3, 6, 6);
+            }
+        }
+
+        private void paintWeekLabels(Graphics2D graphics, int plotWidth, int plotHeight) {
+            graphics.setFont(getFont().deriveFont(Font.PLAIN, 10f));
+            int baseline = TOP_INSET + plotHeight + 22;
+            int every = Math.max(1, (int) Math.ceil(series.size() / 10d));
+            for (int index = 0; index < series.size(); index++) {
+                LocalDate week = series.get(index).weekStart();
+                boolean monthChange = index == 0
+                        || week.getMonth() != series.get(index - 1).weekStart().getMonth();
+                if (index % every != 0 && !monthChange && index != series.size() - 1) {
+                    continue;
+                }
+                int x = xFor(index, plotWidth);
+                String label = SHORT_DATE.format(week);
+                graphics.setColor(monthChange ? FarmUi.accentColor() : FarmUi.mutedColor());
+                graphics.setFont(getFont().deriveFont(
+                        monthChange ? Font.BOLD : Font.PLAIN, 10f));
+                graphics.drawString(label,
+                        x - graphics.getFontMetrics().stringWidth(label) / 2, baseline);
+            }
+        }
+
+        private void paintCurrentWeek(Graphics2D graphics, int plotWidth, int plotHeight) {
+            LocalDate today = LocalDate.now();
+            if (today.getYear() != seasonYear) {
+                return;
+            }
+            LocalDate currentWeek = today.with(
+                    TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
+            for (int index = 0; index < series.size(); index++) {
+                if (!series.get(index).weekStart().equals(currentWeek)) {
+                    continue;
+                }
+                double spacing = plotWidth / (double) series.size();
+                int x = xFor(index, plotWidth);
+                Color color = FarmUi.toneBackgroundColor(FarmUi.Tone.INFO);
+                graphics.setColor(new Color(color.getRed(), color.getGreen(),
+                        color.getBlue(), 110));
+                graphics.fillRoundRect((int) Math.round(x - spacing / 2), TOP_INSET,
+                        Math.max(8, (int) Math.round(spacing)), plotHeight, 8, 8);
+                graphics.setColor(FarmUi.toneForegroundColor(FarmUi.Tone.INFO));
+                graphics.setFont(getFont().deriveFont(Font.BOLD, 9f));
+                graphics.drawString("THIS WEEK", Math.max(LEFT_INSET, x - 27), 18);
+                return;
+            }
+        }
+
+        private void paintEmptyState(Graphics2D graphics, int width) {
+            graphics.setColor(FarmUi.accentColor());
+            graphics.setFont(getFont().deriveFont(Font.BOLD, 17f));
+            String title = "Your weekly harvest pace will appear here";
+            int titleWidth = graphics.getFontMetrics().stringWidth(title);
+            graphics.drawString(title, Math.max(18, (width - titleWidth) / 2), 126);
+            graphics.setColor(FarmUi.mutedColor());
+            graphics.setFont(getFont().deriveFont(Font.PLAIN, 12f));
+            String help = "Add expected stems and a harvest window to create the plan line.";
+            int helpWidth = graphics.getFontMetrics().stringWidth(help);
+            graphics.drawString(help, Math.max(18, (width - helpWidth) / 2), 151);
+        }
+
+        private int xFor(int index, int plotWidth) {
+            double spacing = plotWidth / (double) series.size();
+            return LEFT_INSET + (int) Math.round((index + 0.5) * spacing);
+        }
+
+        private static double niceCeiling(double value) {
+            if (value <= 0) {
+                return 100;
+            }
+            double magnitude = Math.pow(10, Math.floor(Math.log10(value)));
+            double normalized = value / magnitude;
+            double nice = normalized <= 1 ? 1 : normalized <= 2 ? 2
+                    : normalized <= 5 ? 5 : 10;
+            return nice * magnitude;
         }
     }
 

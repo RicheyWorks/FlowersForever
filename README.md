@@ -42,7 +42,7 @@ FlowersForever replaces scattered information with one dependable flow from the 
 | The day starts by hunting for answers | The **Today** dashboard surfaces priorities, shortages, sales, and ready-to-pack work |
 | Paperwork waits until late at night | Farm-ready PDFs turn current records into useful paperwork in a few clicks |
 | A hard-won fix leaves with a notebook or crew member | The Knowledge Log keeps observations, actions, results, and confidence searchable on the farm |
-| Crop dates and bed capacity live in a dense spreadsheet | The Season Planner maps sowing, growing, and harvest windows while keeping bed feet and expected stems visible |
+| Crop dates and bed capacity live in a dense spreadsheet | The Season Planner maps each bed, compares weekly actual harvests with planned pace, and keeps expected stems visible |
 
 **Know what you have. Know what is promised. Know what comes next.**
 
@@ -116,6 +116,12 @@ For a guided first visit, follow the [plain-language desktop user guide](docs/US
   Map sowing, growing, and harvest timing by bed, compare recorded stems with the plan, and see overlaps or production gaps before they become surprises.
 </p>
 
+<p align="center">
+  <img src="docs/images/app-season-planner-weekly.png" width="92%" alt="FlowersForever weekly harvest pace chart comparing actual stem bars with the planned production line">
+  <br><strong>See whether harvest output is keeping pace.</strong><br>
+  Compare weekly actual stems with the plan, find the current week instantly, and separate expected-to-date pace from the full-season target.
+</p>
+
 ## What FlowersForever helps you do
 
 ### Keep growing work connected
@@ -123,8 +129,9 @@ For a guided first visit, follow the [plain-language desktop user guide](docs/US
 - Build a visual season timeline from sowing through each expected harvest window.
 - Track bed allocations, bed feet, crop varieties, status, and expected stems in one record.
 - Compare actual stem harvests with each crop-and-bed plan without double-counting overlapping blocks.
+- See weekly actual stems against a planned harvest-pace line, including a clear expected-by-today summary.
 - Flag overlapping bed allocations, week-long harvest gaps, and harvests that need a crop or bed match.
-- Switch between the at-a-glance timeline and a sortable plan table without re-entering data.
+- Switch among the at-a-glance timeline, weekly pace chart, and sortable plan table without re-entering data.
 - Log, edit, batch, search, and filter harvests.
 - Track production by bed or field.
 - Increase inventory automatically when flowers are harvested.

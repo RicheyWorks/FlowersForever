@@ -35,8 +35,13 @@ class SeasonPlannerTabTest {
                 LocalDate.of(2026, 6, 20), LocalDate.of(2026, 9, 10));
         SeasonPlanService.PlanPerformance performance = new SeasonPlanService.PlanPerformance(
                 rose, 320, 300, 20, 50, SeasonPlanService.PlanPace.ON_TRACK);
+        List<SeasonPlanService.WeeklyProduction> weekly = List.of(
+                new SeasonPlanService.WeeklyProduction(
+                        LocalDate.of(2026, 6, 15), 300, 140, -160),
+                new SeasonPlanService.WeeklyProduction(
+                        LocalDate.of(2026, 6, 22), 340, 180, -160));
         when(service.analyze(2026)).thenReturn(new SeasonPlanService.SeasonAnalysis(
-                List.of(rose), summary, List.of(performance), List.of(), List.of(),
+                List.of(rose), summary, List.of(performance), List.of(), List.of(), weekly,
                 320, 0, 0));
         when(service.availableSeasons()).thenReturn(List.of(2026));
         SeasonPlannerTab tab = new SeasonPlannerTab(service, new TestHost());
@@ -62,6 +67,11 @@ class SeasonPlannerTabTest {
                         "320 actual · 50% of plan");
         assertThat(named(root[0], "seasonPlanner.timeline").getAccessibleContext()
                 .getAccessibleDescription()).contains("sowing", "harvest");
+        assertThat(named(root[0], "seasonPlanner.weeklyChart").getAccessibleContext()
+                .getAccessibleDescription()).contains("2 weeks", "640 planned stems",
+                        "320 actual stems");
+        assertThat(((JLabel) named(root[0], "seasonPlanner.weeklyStatus")).getText())
+                .isEqualTo("320 actual stems · 300 expected by today · 6.7% ahead of pace");
 
         SwingUtilities.invokeAndWait(() -> tab.applyRolePermissions(false));
         assertThat(((JButton) named(root[0], "seasonPlanner.add")).isEnabled()).isFalse();

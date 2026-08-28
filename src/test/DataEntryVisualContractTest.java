@@ -239,7 +239,7 @@ class DataEntryVisualContractTest {
                 LocalDate.of(seasonYear, 6, 2), LocalDate.of(seasonYear, 9, 5));
         when(seasonPlan.analyze(anyInt())).thenReturn(new SeasonPlanService.SeasonAnalysis(
                 plantingBlocks, planSummary, planPerformance, List.of(bedConflict), List.of(),
-                1_102, 24, 1));
+                weeklyProduction(seasonYear), 1_102, 24, 1));
         when(seasonPlan.availableSeasons()).thenReturn(List.of(seasonYear));
 
         AddItemTab addItem = new AddItemTab(inventory, new Host());
@@ -393,6 +393,9 @@ class DataEntryVisualContractTest {
         seasonWorkspace.setSelectedIndex(1);
         render("season-planner-records", seasonPlanner.getUIComponent(),
                 new Dimension(1120, 720));
+        seasonWorkspace.setSelectedIndex(2);
+        render("season-planner-weekly", seasonPlanner.getUIComponent(),
+                new Dimension(1120, 720));
         seasonWorkspace.setSelectedIndex(0);
         render("trend-analysis", trends.getUIComponent(), new Dimension(1050, 700));
         render("irrigation", irrigation.getUIComponent(), new Dimension(1050, 700));
@@ -513,6 +516,7 @@ class DataEntryVisualContractTest {
         assertThat(OUTPUT.resolve("season-planner.png")).isRegularFile();
         assertThat(OUTPUT.resolve("season-planner-compact.png")).isRegularFile();
         assertThat(OUTPUT.resolve("season-planner-records.png")).isRegularFile();
+        assertThat(OUTPUT.resolve("season-planner-weekly.png")).isRegularFile();
         assertThat(OUTPUT.resolve("trend-analysis.png")).isRegularFile();
         assertThat(OUTPUT.resolve("irrigation.png")).isRegularFile();
         assertThat(OUTPUT.resolve("irrigation-error.png")).isRegularFile();
@@ -553,6 +557,20 @@ class DataEntryVisualContractTest {
         double completion = actual * 100d / entry.getExpectedStems();
         return new SeasonPlanService.PlanPerformance(
                 entry, actual, expectedToDate, actual - expectedToDate, completion, pace);
+    }
+
+    private static List<SeasonPlanService.WeeklyProduction> weeklyProduction(int year) {
+        double[] planned = {20, 60, 80, 100, 120, 130, 140, 145, 150, 150, 145, 145,
+                140, 130, 125, 120, 110, 100, 90, 75, 60, 45, 0};
+        double[] actual = {30, 50, 65, 90, 100, 110, 125, 140, 120, 90, 80, 65, 37,
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+        List<SeasonPlanService.WeeklyProduction> result = new java.util.ArrayList<>();
+        LocalDate firstWeek = LocalDate.of(year, 5, 4);
+        for (int index = 0; index < planned.length; index++) {
+            result.add(new SeasonPlanService.WeeklyProduction(firstWeek.plusWeeks(index),
+                    planned[index], actual[index], actual[index] - planned[index]));
+        }
+        return List.copyOf(result);
     }
 
     private static void render(String name, JComponent component, Dimension size)
