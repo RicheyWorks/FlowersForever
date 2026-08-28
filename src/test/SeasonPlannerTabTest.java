@@ -72,10 +72,12 @@ class SeasonPlannerTabTest {
                         "320 actual stems");
         assertThat(((JLabel) named(root[0], "seasonPlanner.weeklyStatus")).getText())
                 .isEqualTo("320 actual stems · 300 expected by today · 6.7% ahead of pace");
+        assertThat(((JButton) named(root[0], "seasonPlanner.succession")).isEnabled()).isTrue();
 
         SwingUtilities.invokeAndWait(() -> tab.applyRolePermissions(false));
         assertThat(((JButton) named(root[0], "seasonPlanner.add")).isEnabled()).isFalse();
         assertThat(((JButton) named(root[0], "seasonPlanner.edit")).isEnabled()).isFalse();
+        assertThat(((JButton) named(root[0], "seasonPlanner.succession")).isEnabled()).isFalse();
         assertThat(((JButton) named(root[0], "seasonPlanner.delete")).isEnabled()).isFalse();
         assertThat(((JButton) named(root[0], "seasonPlanner.refresh")).isEnabled()).isTrue();
     }

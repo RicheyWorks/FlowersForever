@@ -30,6 +30,7 @@ import java.util.TreeMap;
 public class SeasonPlanService {
 
     private static final int MIN_HARVEST_GAP_DAYS = 7;
+    private static final int MAX_SUCCESSION_SHIFT_DAYS = 365;
 
     private final SeasonPlanRepository repository;
     private final HarvestRepository harvestRepository;
@@ -298,6 +299,41 @@ public class SeasonPlanService {
     private static String normalized(String value) {
         return value == null ? "" : value.trim().toLowerCase(Locale.ROOT)
                 .replaceAll("\\s+", " ");
+    }
+
+    /**
+     * Prepares an unsaved copy of a planting block for the next succession.
+     * All schedule dates move together so the grower can review one grounded draft.
+     */
+    public SeasonPlanEntry draftSuccession(SeasonPlanEntry source, int shiftDays) {
+        requireEntry(source);
+        if (shiftDays < 1 || shiftDays > MAX_SUCCESSION_SHIFT_DAYS) {
+            throw new IllegalArgumentException("Succession shift must be between 1 and 365 days.");
+        }
+
+        LocalDate sowDate = source.getSowDate().plusDays(shiftDays);
+        LocalDate transplantDate = source.getTransplantDate() == null ? null
+                : source.getTransplantDate().plusDays(shiftDays);
+        LocalDate harvestStart = source.getHarvestStart().plusDays(shiftDays);
+        LocalDate harvestEnd = source.getHarvestEnd().plusDays(shiftDays);
+        int earliestYear = Math.min(sowDate.getYear(), harvestStart.getYear());
+        int latestYear = Math.max(harvestStart.getYear(), harvestEnd.getYear());
+        int seasonYear = Math.max(earliestYear,
+                Math.min(source.getSeasonYear(), latestYear));
+
+        return new SeasonPlanEntry(
+                seasonYear,
+                source.getCropName(),
+                source.getVariety(),
+                source.getBedOrField(),
+                sowDate,
+                transplantDate,
+                harvestStart,
+                harvestEnd,
+                source.getBedFeet(),
+                source.getExpectedStems(),
+                SeasonPlanStatus.PLANNED,
+                source.getNotes());
     }
 
     @Transactional

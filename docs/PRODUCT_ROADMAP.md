@@ -52,7 +52,9 @@ crop-and-bed block so overlapping successions cannot inflate actual production.
 The planner shows actual progress, pace against the expected amount to date,
 bed overlaps, week-long harvest gaps, and harvests that need cleaner matching.
 Its weekly view distributes every block's expected yield across its harvest
-window and compares that plan line with matched actual stem harvests.
+window and compares that plan line with matched actual stem harvests. A selected
+block can also become a reviewable next-succession draft with its crop, bed,
+capacity, and notes carried forward and every date shifted together.
 
 Next planning increments:
 

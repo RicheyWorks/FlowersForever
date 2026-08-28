@@ -90,6 +90,35 @@ class SeasonPlanServiceTest {
     }
 
     @Test
+    @DisplayName("drafts a grounded succession without changing the source block")
+    void draftsSuccession() {
+        SeasonPlanEntry source = new SeasonPlanEntry(
+                2026, "Sunflower", "ProCut Plum", "Bed B",
+                LocalDate.of(2026, 12, 20), null,
+                LocalDate.of(2026, 12, 27), LocalDate.of(2026, 12, 31),
+                100, 900, SeasonPlanStatus.HARVESTING, "Market succession.");
+        source.setId(64L);
+
+        SeasonPlanEntry draft = service.draftSuccession(source, 14);
+
+        assertThat(draft.getId()).isNull();
+        assertThat(draft.getSeasonYear()).isEqualTo(2027);
+        assertThat(draft.getCropName()).isEqualTo("Sunflower");
+        assertThat(draft.getVariety()).isEqualTo("ProCut Plum");
+        assertThat(draft.getBedOrField()).isEqualTo("Bed B");
+        assertThat(draft.getSowDate()).isEqualTo(LocalDate.of(2027, 1, 3));
+        assertThat(draft.getTransplantDate()).isNull();
+        assertThat(draft.getHarvestStart()).isEqualTo(LocalDate.of(2027, 1, 10));
+        assertThat(draft.getHarvestEnd()).isEqualTo(LocalDate.of(2027, 1, 14));
+        assertThat(draft.getBedFeet()).isEqualTo(100);
+        assertThat(draft.getExpectedStems()).isEqualTo(900);
+        assertThat(draft.getStatus()).isEqualTo(SeasonPlanStatus.PLANNED);
+        assertThat(draft.getNotes()).isEqualTo("Market succession.");
+        assertThat(source.getSowDate()).isEqualTo(LocalDate.of(2026, 12, 20));
+        assertThat(source.getStatus()).isEqualTo(SeasonPlanStatus.HARVESTING);
+    }
+
+    @Test
     @DisplayName("always includes the current season in the year selector")
     void includesCurrentSeason() {
         when(repository.findDistinctSeasonYears()).thenReturn(List.of(2025, 2024));

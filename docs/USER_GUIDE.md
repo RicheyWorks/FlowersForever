@@ -104,7 +104,12 @@ guessing where it belongs.
 The cards above it summarize active blocks, beds and bed feet, expected stems,
 actual stems and percent of plan, and the first-to-last harvest dates. Open
 **Plan records** to compare Expected, Actual, percent of plan, and current Pace,
-or to edit or remove the selected block. Pace compares actual stems with the
+or to edit or remove the selected block. To schedule a repeat planting, select
+its block and choose **Plan succession**. FlowersForever copies the crop,
+variety, bed, capacity, expected stems, and notes into a new unsaved draft,
+moves every schedule date forward 14 days, and resets the status to Planned.
+Review any bed or timing changes in the form before saving; the original block
+is never changed. Pace compares actual stems with the
 amount expected by today, while percent of plan compares with the full-season
 target. Removing a plan never removes a harvest log.
 

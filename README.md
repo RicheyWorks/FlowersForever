@@ -131,6 +131,7 @@ For a guided first visit, follow the [plain-language desktop user guide](docs/US
 - Compare actual stem harvests with each crop-and-bed plan without double-counting overlapping blocks.
 - See weekly actual stems against a planned harvest-pace line, including a clear expected-by-today summary.
 - Flag overlapping bed allocations, week-long harvest gaps, and harvests that need a crop or bed match.
+- Draft the next succession from a saved block with every date shifted together for review.
 - Switch among the at-a-glance timeline, weekly pace chart, and sortable plan table without re-entering data.
 - Log, edit, batch, search, and filter harvests.
 - Track production by bed or field.

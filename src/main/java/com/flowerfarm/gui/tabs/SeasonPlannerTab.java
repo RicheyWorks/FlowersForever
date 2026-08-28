@@ -56,6 +56,7 @@ import java.util.Set;
 public class SeasonPlannerTab implements FlowerFarmTab {
 
     private static final DateTimeFormatter SHORT_DATE = DateTimeFormatter.ofPattern("MMM d");
+    private static final int SUCCESSION_SHIFT_DAYS = 14;
     private static final String[] COLUMNS = {
             "Bed / field", "Crop / variety", "Sow", "Transplant", "Harvest window",
             "Bed ft", "Expected", "Actual", "% plan", "Pace", "Status"
@@ -69,6 +70,7 @@ public class SeasonPlannerTab implements FlowerFarmTab {
     private JButton addButton;
     private JButton refreshButton;
     private JButton editButton;
+    private JButton successionButton;
     private JButton deleteButton;
     private JLabel blocksValue;
     private JLabel bedsValue;
@@ -167,6 +169,7 @@ public class SeasonPlannerTab implements FlowerFarmTab {
         refreshButton.addActionListener(event -> startRefresh());
         addButton.addActionListener(event -> addPlanting());
         editButton.addActionListener(event -> editSelected());
+        successionButton.addActionListener(event -> planSuccession());
         deleteButton.addActionListener(event -> deleteSelected());
         updateActions();
     }
@@ -241,15 +244,20 @@ public class SeasonPlannerTab implements FlowerFarmTab {
         });
         editButton = FarmUi.secondaryButton("Edit selected");
         editButton.setName("seasonPlanner.edit");
+        successionButton = FarmUi.secondaryButton("Plan succession");
+        successionButton.setName("seasonPlanner.succession");
+        successionButton.getAccessibleContext().setAccessibleDescription(
+                "Create the next planting from the selected block with dates shifted 14 days");
         deleteButton = FarmUi.dangerButton("Remove selected");
         deleteButton.setName("seasonPlanner.delete");
         JPanel tableContent = new JPanel(new BorderLayout(0, FarmUi.CONTROL_GAP));
         tableContent.setOpaque(false);
         tableContent.add(FarmUi.tableScroll(table), BorderLayout.CENTER);
-        tableContent.add(FarmUi.toolbar(editButton, deleteButton), BorderLayout.SOUTH);
+        tableContent.add(FarmUi.toolbar(editButton, successionButton, deleteButton),
+                BorderLayout.SOUTH);
         JPanel recordsSection = FarmUi.section(
                 "Planting records",
-                "Sort the details, select a row, and update the plan without re-entering it.",
+                "Sort, edit, or turn a selected block into the next succession without retyping it.",
                 tableContent);
 
         weeklyChart = new WeeklyPaceChart();
@@ -513,15 +521,39 @@ public class SeasonPlannerTab implements FlowerFarmTab {
         if (selected == null) {
             return;
         }
-        SeasonPlanEntry entry = showForm(selected);
+        SeasonPlanEntry entry = showForm(selected, false);
         if (entry != null) {
             startSave(selected.getId(), entry);
         }
     }
 
     private SeasonPlanEntry showForm(SeasonPlanEntry existing) {
-        PlantingForm form = new PlantingForm(existing, selectedSeason());
-        String title = existing == null ? "Add planting block" : "Edit planting block";
+        return showForm(existing, false);
+    }
+
+    private void planSuccession() {
+        if (!GuiPermissions.requireWrite(host, panel, "plan a succession")) {
+            return;
+        }
+        SeasonPlanEntry selected = selectedEntry();
+        if (selected == null) {
+            return;
+        }
+        SeasonPlanEntry draft = seasonPlanService.draftSuccession(
+                selected, SUCCESSION_SHIFT_DAYS);
+        SeasonPlanEntry entry = showForm(draft, true);
+        if (entry != null) {
+            startSave(null, entry);
+        }
+    }
+
+    private SeasonPlanEntry showForm(SeasonPlanEntry existing, boolean succession) {
+        String guidance = succession
+                ? "Copied from the selected block · all dates moved 14 days · review before saving"
+                : null;
+        PlantingForm form = new PlantingForm(existing, selectedSeason(), guidance);
+        String title = succession ? "Plan next succession"
+                : existing == null ? "Add planting block" : "Edit planting block";
         while (true) {
             int choice = JOptionPane.showConfirmDialog(panel, form.panel(), title,
                     JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
@@ -669,7 +701,7 @@ public class SeasonPlannerTab implements FlowerFarmTab {
         boolean ready = !loading && !saving;
         GuiPermissions.setWritable(canWrite && ready, addButton);
         GuiPermissions.setWritable(canWrite && ready && selectedEntry() != null,
-                editButton, deleteButton);
+                editButton, successionButton, deleteButton);
         if (refreshButton != null) {
             refreshButton.setEnabled(ready);
         }
@@ -709,12 +741,12 @@ public class SeasonPlannerTab implements FlowerFarmTab {
         private final JTextArea notes = new JTextArea(3, 28);
         private final int seasonYear;
 
-        private PlantingForm(SeasonPlanEntry existing, int selectedYear) {
+        private PlantingForm(SeasonPlanEntry existing, int selectedYear, String guidance) {
             seasonYear = existing == null ? selectedYear : existing.getSeasonYear();
-            build(existing);
+            build(existing, guidance);
         }
 
-        private void build(SeasonPlanEntry existing) {
+        private void build(SeasonPlanEntry existing, String guidance) {
             panel.setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
             notes.setLineWrap(true);
             notes.setWrapStyleWord(true);
@@ -746,6 +778,14 @@ public class SeasonPlannerTab implements FlowerFarmTab {
             }
 
             int row = 0;
+            if (guidance != null) {
+                JLabel guidanceBadge = FarmUi.statusBadge(guidance, FarmUi.Tone.INFO);
+                guidanceBadge.setName("seasonPlanner.successionGuidance");
+                GridBagConstraints guidanceConstraints = constraints(0, row++, 4);
+                guidanceConstraints.insets = new Insets(0, 0, 10, 0);
+                guidanceConstraints.fill = GridBagConstraints.HORIZONTAL;
+                panel.add(guidanceBadge, guidanceConstraints);
+            }
             addHeading("Crop and placement", row++);
             addRow("Crop *", crop, "Variety", variety, row++);
             addRow("Bed / field *", bed, "Status", status, row++);
@@ -764,7 +804,7 @@ public class SeasonPlannerTab implements FlowerFarmTab {
             noteConstraints.fill = GridBagConstraints.BOTH;
             noteConstraints.weighty = 1;
             panel.add(new JScrollPane(notes), noteConstraints);
-            panel.setPreferredSize(new Dimension(690, 500));
+            panel.setPreferredSize(new Dimension(690, guidance == null ? 500 : 530));
         }
 
         private void addHeading(String text, int row) {

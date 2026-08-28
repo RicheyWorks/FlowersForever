@@ -18,6 +18,8 @@
   warnings, week-long harvest gaps, and harvest records that need matching.
 - Adds a scrollable weekly harvest-pace chart with actual stem bars, a planned
   production line, a current-week marker, and an expected-by-today summary.
+- Adds **Plan succession** to turn a selected planting block into a reviewable
+  unsaved draft with its dates shifted forward 14 days and farm data preserved.
 
 ## 1.2.0 — Farm Knowledge Log preview
 
