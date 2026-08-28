@@ -43,16 +43,19 @@ language.
 
 ## 1.3 — Visual season and bed planning
 
-**Foundation implemented.** Growers can add a planting block once and see its
+**Planning and actual-performance slice implemented.** Growers can add a planting block once and see its
 sowing, growing, and harvest stages across a full-year timeline. The same saved
 record tracks crop, variety, bed or field, bed feet, expected stems, status, and
 notes, with summary cards for active blocks, occupied beds, planned yield, and
-the full harvest window.
+the full harvest window. Recorded stem harvests are allocated to one exact
+crop-and-bed block so overlapping successions cannot inflate actual production.
+The planner shows actual progress, pace against the expected amount to date,
+bed overlaps, week-long harvest gaps, and harvests that need cleaner matching.
 
 Next planning increments:
 
-- Compare planned stems with actual harvests by crop, bed, and week.
-- Flag bed overlaps, missing succession weeks, and likely capacity shortfalls.
+- Add week-by-week planned-versus-actual trend charts and forward projections.
+- Turn overlap and succession-gap warnings into guided corrective actions.
 - Add reusable crop timing templates without hiding or inventing farm inputs.
 - Turn selected planting windows into crew-ready task lists and reminders.
 

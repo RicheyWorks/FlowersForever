@@ -44,7 +44,10 @@ import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.Collections;
+import java.util.IdentityHashMap;
 import java.util.Locale;
+import java.util.Set;
 
 /** Visual season and bed planning from first sow through final harvest. */
 public class SeasonPlannerTab implements FlowerFarmTab {
@@ -52,7 +55,7 @@ public class SeasonPlannerTab implements FlowerFarmTab {
     private static final DateTimeFormatter SHORT_DATE = DateTimeFormatter.ofPattern("MMM d");
     private static final String[] COLUMNS = {
             "Bed / field", "Crop / variety", "Sow", "Transplant", "Harvest window",
-            "Bed ft", "Expected stems", "Status"
+            "Bed ft", "Expected", "Actual", "% plan", "Pace", "Status"
     };
 
     private final SeasonPlanService seasonPlanService;
@@ -77,6 +80,7 @@ public class SeasonPlannerTab implements FlowerFarmTab {
     private JTable table;
     private DefaultTableModel tableModel;
     private List<SeasonPlanEntry> lastView = List.of();
+    private List<SeasonPlanService.PlanPerformance> lastPerformance = List.of();
     private Long requestedSelectionId;
     private boolean canWrite = true;
     private boolean loading;
@@ -197,14 +201,14 @@ public class SeasonPlannerTab implements FlowerFarmTab {
         JPanel legend = FarmUi.toolbar(
                 legend("Sow / propagation", FarmUi.Tone.WARNING),
                 legend("Growing", FarmUi.Tone.INFO),
-                legend("Harvest", FarmUi.Tone.SUCCESS));
+                legend("Harvest plan / actual fill", FarmUi.Tone.SUCCESS));
         JPanel timelineContent = new JPanel(new BorderLayout(0, FarmUi.CONTROL_GAP));
         timelineContent.setOpaque(false);
         timelineContent.add(legend, BorderLayout.NORTH);
         timelineContent.add(timelineScroll, BorderLayout.CENTER);
         JPanel timelineSection = FarmUi.section(
                 "Season timeline",
-                "Each row is one bed allocation. Month markers make overlaps and harvest gaps easy to spot.",
+                "Outlined harvest bars are planned; solid green shows recorded stems. Red beds overlap.",
                 timelineContent);
 
         tableModel = new DefaultTableModel(COLUMNS, 0) {
@@ -215,7 +219,8 @@ public class SeasonPlannerTab implements FlowerFarmTab {
             @Override public Class<?> getColumnClass(int columnIndex) {
                 return switch (columnIndex) {
                     case 5 -> Double.class;
-                    case 6 -> Integer.class;
+                    case 6, 7 -> Integer.class;
+                    case 8 -> Double.class;
                     default -> String.class;
                 };
             }
@@ -281,8 +286,7 @@ public class SeasonPlannerTab implements FlowerFarmTab {
         new SwingWorker<SeasonSnapshot, Void>() {
             @Override protected SeasonSnapshot doInBackground() {
                 return new SeasonSnapshot(
-                        seasonPlanService.listForSeason(seasonYear),
-                        seasonPlanService.summarize(seasonYear),
+                        seasonPlanService.analyze(seasonYear),
                         seasonPlanService.availableSeasons());
             }
 
@@ -304,25 +308,24 @@ public class SeasonPlannerTab implements FlowerFarmTab {
     }
 
     private void applySnapshot(SeasonSnapshot snapshot, Long selectedId, int selectedYear) {
-        lastView = List.copyOf(snapshot.entries());
+        SeasonPlanService.SeasonAnalysis analysis = snapshot.analysis();
+        lastView = List.copyOf(analysis.entries());
+        lastPerformance = List.copyOf(analysis.performance());
         updateSeasonChoices(snapshot.seasons(), selectedYear);
         tableModel.setRowCount(0);
         for (SeasonPlanEntry entry : lastView) {
-            tableModel.addRow(row(entry));
+            tableModel.addRow(row(entry, performanceFor(entry)));
         }
-        timeline.setSeason(selectedYear, lastView);
-        updateMetrics(snapshot.summary());
+        Set<SeasonPlanEntry> conflictEntries = conflictEntries(analysis.bedConflicts());
+        timeline.setSeason(selectedYear, lastView, lastPerformance, conflictEntries);
+        updateMetrics(analysis);
         boolean restored = restoreSelection(selectedId);
         requestedSelectionId = null;
         if (!restored && !lastView.isEmpty()) {
             table.setRowSelectionInterval(0, 0);
         }
-        String message = lastView.isEmpty()
-                ? "No planting blocks for " + selectedYear + " — add the first one"
-                : lastView.size() + (lastView.size() == 1 ? " planting block" : " planting blocks")
-                        + " mapped for " + selectedYear;
-        FarmUi.updateStatusBadge(statusBadge, message,
-                lastView.isEmpty() ? FarmUi.Tone.NEUTRAL : FarmUi.Tone.SUCCESS);
+        String message = analysisMessage(analysis, selectedYear);
+        FarmUi.updateStatusBadge(statusBadge, message, analysisTone(analysis));
         if (host != null) {
             host.setStatus(message + ".");
         }
@@ -342,32 +345,96 @@ public class SeasonPlannerTab implements FlowerFarmTab {
         updatingSeasons = false;
     }
 
-    private void updateMetrics(SeasonPlanService.SeasonSummary summary) {
+    private void updateMetrics(SeasonPlanService.SeasonAnalysis analysis) {
+        SeasonPlanService.SeasonSummary summary = analysis.summary();
+        long behind = analysis.performance().stream()
+                .filter(item -> item.pace() == SeasonPlanService.PlanPace.BEHIND).count();
         blocksValue.setText(Integer.toString(summary.plantingBlocks()));
         blocksDetail.setText(summary.activeBlocks() + " active · "
-                + summary.cropCount() + " crops");
+                + (behind == 0 ? summary.cropCount() + " crops" : behind + " behind pace"));
         bedsValue.setText(Integer.toString(summary.bedCount()));
-        bedsDetail.setText(formatNumber(summary.bedFeet()) + " total bed ft");
+        bedsDetail.setText(formatNumber(summary.bedFeet()) + " bed ft · "
+                + countLabel(analysis.bedConflicts().size(), "overlap", "overlaps"));
         stemsValue.setText(String.format(Locale.US, "%,d", summary.expectedStems()));
         stemsDetail.setText(summary.plantingBlocks() == 0 ? "No yield estimate yet"
-                : "Planned across " + formatNumber(summary.bedFeet()) + " bed ft");
+                : formatNumber(analysis.actualStems()) + " actual · "
+                        + percent(analysis.actualStems(), summary.expectedStems()) + "% of plan");
         if (summary.firstHarvest() == null) {
             harvestValue.setText("—");
             harvestDetail.setText("Add a block to set timing");
         } else {
             harvestValue.setText(SHORT_DATE.format(summary.firstHarvest()));
-            harvestDetail.setText("through " + SHORT_DATE.format(summary.lastHarvest()));
+            harvestDetail.setText("through " + SHORT_DATE.format(summary.lastHarvest())
+                    + " · " + countLabel(analysis.harvestGaps().size(), "gap", "gaps"));
         }
     }
 
-    private Object[] row(SeasonPlanEntry entry) {
+    private Object[] row(SeasonPlanEntry entry, SeasonPlanService.PlanPerformance performance) {
         return new Object[]{
                 entry.getBedOrField(), cropLabel(entry), entry.getSowDate().toString(),
                 entry.getTransplantDate() == null ? "—" : entry.getTransplantDate().toString(),
                 SHORT_DATE.format(entry.getHarvestStart()) + " – "
                         + SHORT_DATE.format(entry.getHarvestEnd()),
-                entry.getBedFeet(), entry.getExpectedStems(), entry.getStatus().getLabel()
+                entry.getBedFeet(), entry.getExpectedStems(),
+                performance == null ? 0 : (int) Math.round(performance.actualStems()),
+                performance == null ? 0d : rounded(performance.completionPercent()),
+                performance == null ? "Not started" : performance.pace().getLabel(),
+                entry.getStatus().getLabel()
         };
+    }
+
+    private SeasonPlanService.PlanPerformance performanceFor(SeasonPlanEntry entry) {
+        return lastPerformance.stream()
+                .filter(item -> item.entry() == entry)
+                .findFirst().orElse(null);
+    }
+
+    private static Set<SeasonPlanEntry> conflictEntries(
+            List<SeasonPlanService.BedConflict> conflicts) {
+        Set<SeasonPlanEntry> entries = Collections.newSetFromMap(new IdentityHashMap<>());
+        for (SeasonPlanService.BedConflict conflict : conflicts) {
+            entries.add(conflict.first());
+            entries.add(conflict.second());
+        }
+        return entries;
+    }
+
+    private static String analysisMessage(SeasonPlanService.SeasonAnalysis analysis, int year) {
+        if (analysis.entries().isEmpty()) {
+            return "No planting blocks for " + year + " — add the first one";
+        }
+        String message = formatNumber(analysis.actualStems()) + " actual / "
+                + String.format(Locale.US, "%,d", analysis.summary().expectedStems())
+                + " planned stems · "
+                + countLabel(analysis.bedConflicts().size(), "bed overlap", "bed overlaps")
+                + " · "
+                + countLabel(analysis.harvestGaps().size(), "harvest gap", "harvest gaps");
+        if (analysis.unmatchedHarvestCount() > 0) {
+            message += " · " + analysis.unmatchedHarvestCount() + " harvest "
+                    + (analysis.unmatchedHarvestCount() == 1 ? "needs" : "need") + " matching";
+        }
+        return message;
+    }
+
+    private static FarmUi.Tone analysisTone(SeasonPlanService.SeasonAnalysis analysis) {
+        boolean behind = analysis.performance().stream()
+                .anyMatch(item -> item.pace() == SeasonPlanService.PlanPace.BEHIND);
+        return analysis.entries().isEmpty() ? FarmUi.Tone.NEUTRAL
+                : (!analysis.bedConflicts().isEmpty() || !analysis.harvestGaps().isEmpty()
+                || analysis.unmatchedHarvestCount() > 0 || behind)
+                ? FarmUi.Tone.WARNING : FarmUi.Tone.SUCCESS;
+    }
+
+    private static String countLabel(int count, String singular, String plural) {
+        return count + " " + (count == 1 ? singular : plural);
+    }
+
+    private static int percent(double actual, long expected) {
+        return expected <= 0 ? 0 : (int) Math.round(actual * 100d / expected);
+    }
+
+    private static double rounded(double value) {
+        return Math.round(value * 10d) / 10d;
     }
 
     private void addPlanting() {
@@ -564,8 +631,7 @@ public class SeasonPlannerTab implements FlowerFarmTab {
                 : String.format(Locale.US, "%,.1f", value);
     }
 
-    private record SeasonSnapshot(List<SeasonPlanEntry> entries,
-                                  SeasonPlanService.SeasonSummary summary,
+    private record SeasonSnapshot(SeasonPlanService.SeasonAnalysis analysis,
                                   List<Integer> seasons) {
     }
 
@@ -743,6 +809,8 @@ public class SeasonPlannerTab implements FlowerFarmTab {
         private static final int RIGHT_INSET = 18;
         private int seasonYear = LocalDate.now().getYear();
         private List<SeasonPlanEntry> entries = List.of();
+        private List<SeasonPlanService.PlanPerformance> performance = List.of();
+        private Set<SeasonPlanEntry> conflictEntries = Set.of();
 
         private SeasonTimeline() {
             setOpaque(true);
@@ -750,7 +818,8 @@ public class SeasonPlannerTab implements FlowerFarmTab {
             setPreferredSize(new Dimension(920, 260));
             getAccessibleContext().setAccessibleName("Visual season timeline");
             getAccessibleContext().setAccessibleDescription(
-                    "Planting rows show sowing, growing, and expected harvest periods by month.");
+                    "Planting rows show sowing, growing, and expected harvest periods by month. "
+                            + "Solid green inside an outlined harvest bar shows actual progress.");
         }
 
         @Override
@@ -765,9 +834,18 @@ public class SeasonPlannerTab implements FlowerFarmTab {
             private static final long serialVersionUID = 1L;
         }
 
-        private void setSeason(int seasonYear, List<SeasonPlanEntry> entries) {
+        private void setSeason(int seasonYear, List<SeasonPlanEntry> entries,
+                               List<SeasonPlanService.PlanPerformance> performance,
+                               Set<SeasonPlanEntry> conflictEntries) {
             this.seasonYear = seasonYear;
             this.entries = entries == null ? List.of() : List.copyOf(entries);
+            this.performance = performance == null ? List.of() : List.copyOf(performance);
+            this.conflictEntries = conflictEntries == null ? Set.of() : conflictEntries;
+            long actual = this.performance.stream()
+                    .mapToLong(item -> Math.round(item.actualStems())).sum();
+            getAccessibleContext().setAccessibleDescription(
+                    "Planting rows show sowing, growing, and expected harvest periods by month; "
+                            + actual + " actual stems are allocated to this plan.");
             int height = Math.max(235, HEADER_HEIGHT + this.entries.size() * ROW_HEIGHT + 16);
             setPreferredSize(new Dimension(920, height));
             revalidate();
@@ -835,7 +913,12 @@ public class SeasonPlannerTab implements FlowerFarmTab {
             }
             graphics.setColor(FarmUi.accentColor());
             graphics.setFont(getFont().deriveFont(Font.BOLD, 12f));
-            graphics.drawString(trim(entry.getBedOrField(), 24), 14, y + 19);
+            if (conflictEntries.contains(entry)) {
+                graphics.setColor(FarmUi.toneForegroundColor(FarmUi.Tone.DANGER));
+            }
+            String bedLabel = conflictEntries.contains(entry)
+                    ? entry.getBedOrField() + " · OVERLAP" : entry.getBedOrField();
+            graphics.drawString(trim(bedLabel, 24), 14, y + 19);
             graphics.setColor(FarmUi.mutedColor());
             graphics.setFont(getFont().deriveFont(Font.PLAIN, 11f));
             graphics.drawString(trim(cropLabel(entry), 30), 14, y + 36);
@@ -848,8 +931,8 @@ public class SeasonPlannerTab implements FlowerFarmTab {
                     FarmUi.Tone.WARNING, yearStart, days, timelineWidth, 5);
             drawSegment(graphics, transplant, entry.getHarvestStart(), y,
                     FarmUi.Tone.INFO, yearStart, days, timelineWidth, 5);
-            drawSegment(graphics, entry.getHarvestStart(), entry.getHarvestEnd(), y,
-                    FarmUi.Tone.SUCCESS, yearStart, days, timelineWidth, 9);
+            drawHarvestProgress(graphics, entry, performanceFor(entry), y,
+                    yearStart, days, timelineWidth);
             graphics.setColor(FarmUi.borderColor());
             graphics.drawLine(0, y + ROW_HEIGHT - 1, width, y + ROW_HEIGHT - 1);
         }
@@ -868,6 +951,40 @@ public class SeasonPlannerTab implements FlowerFarmTab {
             int y = rowY + (ROW_HEIGHT - height) / 2;
             graphics.setColor(FarmUi.toneForegroundColor(tone));
             graphics.fillRoundRect(x, y, Math.max(5, end - x), height, height, height);
+        }
+
+        private void drawHarvestProgress(Graphics2D graphics, SeasonPlanEntry entry,
+                                         SeasonPlanService.PlanPerformance planPerformance,
+                                         int rowY, LocalDate yearStart, int days,
+                                         int timelineWidth) {
+            LocalDate yearEnd = yearStart.plusYears(1).minusDays(1);
+            LocalDate from = entry.getHarvestStart().isBefore(yearStart)
+                    ? yearStart : entry.getHarvestStart();
+            LocalDate to = entry.getHarvestEnd().isAfter(yearEnd)
+                    ? yearEnd : entry.getHarvestEnd();
+            if (to.isBefore(from)) {
+                return;
+            }
+            int x = xFor(from, yearStart, days, timelineWidth);
+            int end = xFor(to.plusDays(1), yearStart, days, timelineWidth);
+            int width = Math.max(5, end - x);
+            int height = 11;
+            int y = rowY + (ROW_HEIGHT - height) / 2;
+            graphics.setColor(FarmUi.toneBackgroundColor(FarmUi.Tone.SUCCESS));
+            graphics.fillRoundRect(x, y, width, height, height, height);
+            graphics.setColor(FarmUi.toneForegroundColor(FarmUi.Tone.SUCCESS));
+            graphics.drawRoundRect(x, y, width, height, height, height);
+            double completion = planPerformance == null ? 0
+                    : Math.max(0, Math.min(100, planPerformance.completionPercent()));
+            int completedWidth = (int) Math.round(width * completion / 100d);
+            if (completedWidth > 0) {
+                graphics.fillRoundRect(x, y, completedWidth, height, height, height);
+            }
+        }
+
+        private SeasonPlanService.PlanPerformance performanceFor(SeasonPlanEntry entry) {
+            return performance.stream().filter(item -> item.entry() == entry)
+                    .findFirst().orElse(null);
         }
 
         private void paintToday(Graphics2D graphics, int timelineWidth) {

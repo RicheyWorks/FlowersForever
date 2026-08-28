@@ -90,10 +90,23 @@ window, bed length, and expected stems. Direct-sown crops can leave the
 transplant date blank.
 
 The **Visual timeline** shows every saved block across the year: gold for sowing
-or propagation, blue for growing, and green for the expected harvest window.
+or propagation, blue for growing, and an outlined green harvest plan. Solid
+green fills that outline as matching stem harvests are recorded. A harvest only
+counts when its crop, bed or field, unit, and date match a saved planting block;
+when two blocks could match, it is assigned to the closest harvest start so it
+is never counted twice.
+
+Beds shown in red overlap another allocation. The planning signal below the
+timeline also calls out week-long harvest gaps and stem harvests that could not
+be matched. Correct the crop or bed on the harvest or the plan instead of
+guessing where it belongs.
+
 The cards above it summarize active blocks, beds and bed feet, expected stems,
-and the first-to-last harvest dates. Open **Plan records** to sort details or to
-edit or remove the selected block. Removing a plan never removes a harvest log.
+actual stems and percent of plan, and the first-to-last harvest dates. Open
+**Plan records** to compare Expected, Actual, percent of plan, and current Pace,
+or to edit or remove the selected block. Pace compares actual stems with the
+amount expected by today, while percent of plan compares with the full-season
+target. Removing a plan never removes a harvest log.
 
 ## Record a harvest
 

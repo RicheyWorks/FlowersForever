@@ -30,10 +30,14 @@ class SeasonPlannerTabTest {
     void rendersPlanAndPermissions() throws Exception {
         SeasonPlanService service = mock(SeasonPlanService.class);
         SeasonPlanEntry rose = entry();
-        when(service.listForSeason(2026)).thenReturn(List.of(rose));
-        when(service.summarize(2026)).thenReturn(new SeasonPlanService.SeasonSummary(
+        SeasonPlanService.SeasonSummary summary = new SeasonPlanService.SeasonSummary(
                 1, 1, 1, 1, 80, 640,
-                LocalDate.of(2026, 6, 20), LocalDate.of(2026, 9, 10)));
+                LocalDate.of(2026, 6, 20), LocalDate.of(2026, 9, 10));
+        SeasonPlanService.PlanPerformance performance = new SeasonPlanService.PlanPerformance(
+                rose, 320, 300, 20, 50, SeasonPlanService.PlanPace.ON_TRACK);
+        when(service.analyze(2026)).thenReturn(new SeasonPlanService.SeasonAnalysis(
+                List.of(rose), summary, List.of(performance), List.of(), List.of(),
+                320, 0, 0));
         when(service.availableSeasons()).thenReturn(List.of(2026));
         SeasonPlannerTab tab = new SeasonPlannerTab(service, new TestHost());
         JComponent[] root = new JComponent[1];
@@ -44,15 +48,18 @@ class SeasonPlannerTabTest {
                     .setSelectedItem(2026);
             tab.initialize();
         });
-        awaitStatus(root[0], "1 planting block");
+        awaitStatus(root[0], "320 actual / 640 planned stems");
 
         JTable table = (JTable) named(root[0], "seasonPlanner.table");
         assertThat(table.getRowCount()).isEqualTo(1);
         assertThat(table.getValueAt(0, 0)).isEqualTo("Bed A");
         assertThat(table.getValueAt(0, 1)).isEqualTo("Nootka Rose · Schoener's Nutkana");
+        assertThat(table.getValueAt(0, 7)).isEqualTo(320);
+        assertThat(table.getValueAt(0, 9)).isEqualTo("On track");
         assertThat(descendants(root[0], JLabel.class))
                 .extracting(JLabel::getText)
-                .contains("640", "Jun 20", "80 total bed ft");
+                .contains("640", "Jun 20", "80 bed ft · 0 overlaps",
+                        "320 actual · 50% of plan");
         assertThat(named(root[0], "seasonPlanner.timeline").getAccessibleContext()
                 .getAccessibleDescription()).contains("sowing", "harvest");
 

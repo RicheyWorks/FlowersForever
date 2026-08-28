@@ -111,9 +111,9 @@ For a guided first visit, follow the [plain-language desktop user guide](docs/US
 </table>
 
 <p align="center">
-  <img src="docs/images/app-season-planner.png" width="92%" alt="FlowersForever Season and Bed Planner showing crop timelines, occupied beds, expected stems, and the harvest window">
+  <img src="docs/images/app-season-planner.png" width="92%" alt="FlowersForever Season and Bed Planner comparing actual stems with planned harvest bars and flagging a bed overlap">
   <br><strong>See the whole growing season before the gaps become surprises.</strong><br>
-  Map sowing, growing, and harvest timing by bed while capacity and expected stems stay visible above the plan.
+  Map sowing, growing, and harvest timing by bed, compare recorded stems with the plan, and see overlaps or production gaps before they become surprises.
 </p>
 
 ## What FlowersForever helps you do
@@ -122,6 +122,8 @@ For a guided first visit, follow the [plain-language desktop user guide](docs/US
 
 - Build a visual season timeline from sowing through each expected harvest window.
 - Track bed allocations, bed feet, crop varieties, status, and expected stems in one record.
+- Compare actual stem harvests with each crop-and-bed plan without double-counting overlapping blocks.
+- Flag overlapping bed allocations, week-long harvest gaps, and harvests that need a crop or bed match.
 - Switch between the at-a-glance timeline and a sortable plan table without re-entering data.
 - Log, edit, batch, search, and filter harvests.
 - Track production by bed or field.

@@ -1,7 +1,9 @@
 package com.flowerfarm.service;
 
+import com.flowerfarm.model.HarvestEntry;
 import com.flowerfarm.model.SeasonPlanEntry;
 import com.flowerfarm.model.SeasonPlanStatus;
+import com.flowerfarm.repository.HarvestRepository;
 import com.flowerfarm.repository.SeasonPlanRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -31,13 +33,15 @@ class SeasonPlanServiceTest {
             Instant.parse("2026-08-28T17:00:00Z"), ZoneOffset.UTC);
 
     @Mock SeasonPlanRepository repository;
+    @Mock HarvestRepository harvestRepository;
     @Mock SyncHistoryService syncHistoryService;
 
     private SeasonPlanService service;
 
     @BeforeEach
     void setUp() {
-        service = new SeasonPlanService(repository, syncHistoryService, CLOCK);
+        service = new SeasonPlanService(
+                repository, harvestRepository, syncHistoryService, CLOCK);
     }
 
     @Test
@@ -93,6 +97,68 @@ class SeasonPlanServiceTest {
         assertThat(service.availableSeasons()).containsExactly(2026, 2025, 2024);
     }
 
+    @Test
+    @DisplayName("allocates each stem harvest to one best crop and bed block")
+    void analyzesActualProductionWithoutDoubleCounting() {
+        SeasonPlanEntry early = entry("Nootka Rose", "Bed A", 80, 640,
+                LocalDate.of(2026, 6, 20), LocalDate.of(2026, 8, 20));
+        early.setId(1L);
+        SeasonPlanEntry succession = entry("Nootka Rose", "Bed A", 20, 120,
+                LocalDate.of(2026, 8, 1), LocalDate.of(2026, 10, 10));
+        succession.setId(2L);
+        when(repository.findBySeasonYear(2026)).thenReturn(List.of(early, succession));
+        when(harvestRepository.findBetween(
+                LocalDate.of(2026, 1, 1), LocalDate.of(2026, 12, 31)))
+                .thenReturn(List.of(
+                        harvest(LocalDate.of(2026, 7, 1), "Nootka Rose", 100,
+                                "stems", "Bed A"),
+                        harvest(LocalDate.of(2026, 8, 15), "Nootka Rose", 60,
+                                "stem", "Bed A"),
+                        harvest(LocalDate.of(2026, 8, 16), "Nootka Rose", 3,
+                                "bunches", "Bed A"),
+                        harvest(LocalDate.of(2026, 8, 17), "Other crop", 20,
+                                "stems", "Bed A")));
+
+        SeasonPlanService.SeasonAnalysis analysis = service.analyze(2026);
+
+        assertThat(analysis.actualStems()).isEqualTo(160);
+        assertThat(analysis.unmatchedStems()).isEqualTo(20);
+        assertThat(analysis.unmatchedHarvestCount()).isEqualTo(1);
+        assertThat(analysis.performance()).extracting(
+                SeasonPlanService.PlanPerformance::actualStems)
+                .containsExactly(100d, 60d);
+        assertThat(analysis.performance()).extracting(
+                SeasonPlanService.PlanPerformance::pace)
+                .containsExactly(SeasonPlanService.PlanPace.BEHIND,
+                        SeasonPlanService.PlanPace.AHEAD);
+        assertThat(analysis.bedConflicts()).singleElement().satisfies(conflict -> {
+            assertThat(conflict.first()).isSameAs(early);
+            assertThat(conflict.second()).isSameAs(succession);
+            assertThat(conflict.overlapStart()).isEqualTo(LocalDate.of(2026, 4, 12));
+        });
+    }
+
+    @Test
+    @DisplayName("finds a week-or-long gap between expected harvest windows")
+    void findsHarvestGaps() {
+        SeasonPlanEntry first = entry("Rose", "A", 20, 100,
+                LocalDate.of(2026, 6, 1), LocalDate.of(2026, 6, 30));
+        SeasonPlanEntry next = entry("Dahlia", "B", 20, 100,
+                LocalDate.of(2026, 7, 10), LocalDate.of(2026, 8, 20));
+        when(repository.findBySeasonYear(2026)).thenReturn(List.of(first, next));
+        when(harvestRepository.findBetween(
+                LocalDate.of(2026, 1, 1), LocalDate.of(2026, 12, 31)))
+                .thenReturn(List.of());
+
+        SeasonPlanService.SeasonAnalysis analysis = service.analyze(2026);
+
+        assertThat(analysis.harvestGaps()).singleElement().satisfies(gap -> {
+            assertThat(gap.from()).isEqualTo(LocalDate.of(2026, 7, 1));
+            assertThat(gap.to()).isEqualTo(LocalDate.of(2026, 7, 9));
+            assertThat(gap.days()).isEqualTo(9);
+        });
+    }
+
     private static SeasonPlanEntry entry(String crop, String bed, double bedFeet,
                                          int stems, LocalDate harvestStart,
                                          LocalDate harvestEnd) {
@@ -100,5 +166,10 @@ class SeasonPlanServiceTest {
                 2026, crop, "", bed, LocalDate.of(2026, 3, 1),
                 LocalDate.of(2026, 4, 12), harvestStart, harvestEnd,
                 bedFeet, stems, SeasonPlanStatus.PLANTED, "");
+    }
+
+    private static HarvestEntry harvest(LocalDate date, String crop, double quantity,
+                                         String unit, String bed) {
+        return new HarvestEntry(date, crop, quantity, unit, bed, "");
     }
 }

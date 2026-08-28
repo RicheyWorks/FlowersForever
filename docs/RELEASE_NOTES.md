@@ -9,6 +9,10 @@
   the season's harvest window.
 - Adds sortable plan records, viewer-safe permissions, demo planting data,
   a versioned database migration, and visual regression coverage.
+- Connects stem-unit harvests to one exact crop-and-bed block, preventing a
+  harvest from being counted twice when expected windows overlap.
+- Shows actual stems, full-plan completion, expected-to-date pace, bed overlap
+  warnings, week-long harvest gaps, and harvest records that need matching.
 
 ## 1.2.0 — Farm Knowledge Log preview
 

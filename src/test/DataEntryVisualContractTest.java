@@ -219,13 +219,27 @@ class DataEntryVisualContractTest {
                 planting(63L, seasonYear, "Sweet Pea", "Spencer Mix", "Tunnel 2",
                         1, 20, 3, 1, 5, 10, 7, 15, 45, 360,
                         SeasonPlanStatus.COMPLETE),
-                planting(64L, seasonYear, "Sunflower", "ProCut Plum", "Field C",
+                planting(64L, seasonYear, "Sunflower", "ProCut Plum", "Bed B",
                         5, 18, 6, 2, 7, 28, 9, 5, 100, 900,
                         SeasonPlanStatus.SOWN));
-        when(seasonPlan.listForSeason(anyInt())).thenReturn(plantingBlocks);
-        when(seasonPlan.summarize(anyInt())).thenReturn(new SeasonPlanService.SeasonSummary(
-                4, 3, 4, 4, 285, 2_380,
-                LocalDate.of(seasonYear, 5, 10), LocalDate.of(seasonYear, 10, 10)));
+        SeasonPlanService.SeasonSummary planSummary = new SeasonPlanService.SeasonSummary(
+                4, 3, 3, 4, 285, 2_380,
+                LocalDate.of(seasonYear, 5, 10), LocalDate.of(seasonYear, 10, 10));
+        List<SeasonPlanService.PlanPerformance> planPerformance = List.of(
+                performance(plantingBlocks.get(0), 410, 390,
+                        SeasonPlanService.PlanPace.ON_TRACK),
+                performance(plantingBlocks.get(1), 180, 220,
+                        SeasonPlanService.PlanPace.ON_TRACK),
+                performance(plantingBlocks.get(2), 372, 360,
+                        SeasonPlanService.PlanPace.ON_TRACK),
+                performance(plantingBlocks.get(3), 140, 240,
+                        SeasonPlanService.PlanPace.BEHIND));
+        SeasonPlanService.BedConflict bedConflict = new SeasonPlanService.BedConflict(
+                plantingBlocks.get(1), plantingBlocks.get(3),
+                LocalDate.of(seasonYear, 6, 2), LocalDate.of(seasonYear, 9, 5));
+        when(seasonPlan.analyze(anyInt())).thenReturn(new SeasonPlanService.SeasonAnalysis(
+                plantingBlocks, planSummary, planPerformance, List.of(bedConflict), List.of(),
+                1_102, 24, 1));
         when(seasonPlan.availableSeasons()).thenReturn(List.of(seasonYear));
 
         AddItemTab addItem = new AddItemTab(inventory, new Host());
@@ -303,7 +317,7 @@ class DataEntryVisualContractTest {
         seasonPlanner.getUIComponent();
         seasonPlanner.initialize();
         awaitNamedLabelPrefix(seasonPlanner.getUIComponent(),
-                "seasonPlanner.status", "4 planting blocks");
+                "seasonPlanner.status", "1,102 actual / 2,380 planned stems");
         roseVisualizer.getUIComponent();
         roseVisualizer.initialize();
         awaitLabel(roseVisualizer.getUIComponent(), "3 linkable products ready");
@@ -374,6 +388,12 @@ class DataEntryVisualContractTest {
                 new Dimension(1120, 720));
         render("season-planner-compact", seasonPlanner.getUIComponent(),
                 new Dimension(1050, 700));
+        JTabbedPane seasonWorkspace = (JTabbedPane) findNamed(
+                seasonPlanner.getUIComponent(), "seasonPlanner.workspace");
+        seasonWorkspace.setSelectedIndex(1);
+        render("season-planner-records", seasonPlanner.getUIComponent(),
+                new Dimension(1120, 720));
+        seasonWorkspace.setSelectedIndex(0);
         render("trend-analysis", trends.getUIComponent(), new Dimension(1050, 700));
         render("irrigation", irrigation.getUIComponent(), new Dimension(1050, 700));
         render("irrigation-error", irrigationError.getUIComponent(),
@@ -492,6 +512,7 @@ class DataEntryVisualContractTest {
         assertThat(OUTPUT.resolve("knowledge-log-compact.png")).isRegularFile();
         assertThat(OUTPUT.resolve("season-planner.png")).isRegularFile();
         assertThat(OUTPUT.resolve("season-planner-compact.png")).isRegularFile();
+        assertThat(OUTPUT.resolve("season-planner-records.png")).isRegularFile();
         assertThat(OUTPUT.resolve("trend-analysis.png")).isRegularFile();
         assertThat(OUTPUT.resolve("irrigation.png")).isRegularFile();
         assertThat(OUTPUT.resolve("irrigation-error.png")).isRegularFile();
@@ -524,6 +545,14 @@ class DataEntryVisualContractTest {
                 bedFeet, stems, status, "Visual contract planning block");
         entry.setId(id);
         return entry;
+    }
+
+    private static SeasonPlanService.PlanPerformance performance(
+            SeasonPlanEntry entry, double actual, double expectedToDate,
+            SeasonPlanService.PlanPace pace) {
+        double completion = actual * 100d / entry.getExpectedStems();
+        return new SeasonPlanService.PlanPerformance(
+                entry, actual, expectedToDate, actual - expectedToDate, completion, pace);
     }
 
     private static void render(String name, JComponent component, Dimension size)
