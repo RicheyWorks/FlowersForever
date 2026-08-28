@@ -1560,7 +1560,6 @@ public class DashboardTab implements FlowerFarmTab {
         Color cardBg = FarmUi.surfaceColor();
         Color valueFg = FarmUi.accentColor();
         Color mutedFg = FarmUi.mutedColor();
-        Color border = FarmUi.borderColor();
 
         styleChart(inventoryValueChart);
         styleChart(stockQuantityChart);
