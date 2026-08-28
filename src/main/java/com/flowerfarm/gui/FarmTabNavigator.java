@@ -102,7 +102,8 @@ public final class FarmTabNavigator {
     private static String groupFor(String title) {
         return switch (title) {
             case "Dashboard", "Market Day" -> "Today";
-            case "Harvest Log", "Inventory", "Add Item", "Irrigation & Care" -> "Grow & stock";
+            case "Season Planner", "Harvest Log", "Inventory", "Add Item", "Irrigation & Care" ->
+                    "Grow & stock";
             case "Knowledge Log" -> "Learn & improve";
             case "Customers & Orders" -> "Sales & fulfillment";
             case "Reports", "Trend Analysis", "Activity History" -> "Reports & admin";
@@ -116,6 +117,7 @@ public final class FarmTabNavigator {
             case "Dashboard" -> 'D';
             case "Market Day" -> 'M';
             case "Harvest Log" -> 'H';
+            case "Season Planner" -> 'E';
             case "Inventory" -> 'I';
             case "Add Item" -> 'A';
             case "Customers & Orders" -> 'C';

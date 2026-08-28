@@ -1,5 +1,15 @@
 # FlowersForever private-preview notes
 
+## Next — Visual Season & Bed Planner foundation
+
+- Adds a persistent Season Planner with fast planting-block entry, edit, and
+  removal while preserving existing harvest records.
+- Maps sowing, growing, and expected harvest stages on a full-year bed timeline.
+- Summarizes active blocks, occupied beds, total bed feet, expected stems, and
+  the season's harvest window.
+- Adds sortable plan records, viewer-safe permissions, demo planting data,
+  a versioned database migration, and visual regression coverage.
+
 ## 1.2.0 — Farm Knowledge Log preview
 
 - Adds a desktop Knowledge Log for observations, problems, opportunities,

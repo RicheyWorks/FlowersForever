@@ -41,7 +41,22 @@ customers, and dates. Search must answer practical questions such as “What
 worked for mildew on this rose last August?” without requiring technical query
 language.
 
-## 1.3 — Seasonal learning
+## 1.3 — Visual season and bed planning
+
+**Foundation implemented.** Growers can add a planting block once and see its
+sowing, growing, and harvest stages across a full-year timeline. The same saved
+record tracks crop, variety, bed or field, bed feet, expected stems, status, and
+notes, with summary cards for active blocks, occupied beds, planned yield, and
+the full harvest window.
+
+Next planning increments:
+
+- Compare planned stems with actual harvests by crop, bed, and week.
+- Flag bed overlaps, missing succession weeks, and likely capacity shortfalls.
+- Add reusable crop timing templates without hiding or inventing farm inputs.
+- Turn selected planting windows into crew-ready task lists and reminders.
+
+## 1.4 — Seasonal learning
 
 - Compare recurring problems and successful actions by crop, bed, and season.
 - Turn selected lessons into farm playbooks and crew-ready checklists.

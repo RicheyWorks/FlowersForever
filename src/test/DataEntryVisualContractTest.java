@@ -15,6 +15,7 @@ import com.flowerfarm.gui.tabs.ReferenceTab;
 import com.flowerfarm.gui.tabs.RoseVarietiesTab;
 import com.flowerfarm.gui.tabs.RoseVisualizerTab;
 import com.flowerfarm.gui.tabs.SyncHistoryTab;
+import com.flowerfarm.gui.tabs.SeasonPlannerTab;
 import com.flowerfarm.gui.tabs.TabHost;
 import com.flowerfarm.gui.tabs.TrendAnalysisTab;
 import com.flowerfarm.model.Customer;
@@ -26,6 +27,8 @@ import com.flowerfarm.model.KnowledgeEntry;
 import com.flowerfarm.model.KnowledgeKind;
 import com.flowerfarm.model.OrderLine;
 import com.flowerfarm.model.SyncHistoryEntry;
+import com.flowerfarm.model.SeasonPlanEntry;
+import com.flowerfarm.model.SeasonPlanStatus;
 import com.flowerfarm.service.CustomerService;
 import com.flowerfarm.service.HarvestService;
 import com.flowerfarm.service.InventoryService;
@@ -36,6 +39,7 @@ import com.flowerfarm.service.OrderService;
 import com.flowerfarm.service.ReportService;
 import com.flowerfarm.service.SyncHistoryService;
 import com.flowerfarm.service.TrendService;
+import com.flowerfarm.service.SeasonPlanService;
 import com.formdev.flatlaf.FlatLightLaf;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
@@ -97,6 +101,7 @@ class DataEntryVisualContractTest {
         MarketDayPackingService marketDay = mock(MarketDayPackingService.class);
         SyncHistoryService history = mock(SyncHistoryService.class);
         KnowledgeService knowledge = mock(KnowledgeService.class);
+        SeasonPlanService seasonPlan = mock(SeasonPlanService.class);
         Customer customer = new Customer(7L, "Kitsap Blooms", "Sam Rivera",
                 "sam@kitsapblooms.example", "360-555-0184", "FLORIST",
                 "Thursday pickup");
@@ -203,6 +208,25 @@ class DataEntryVisualContractTest {
         when(knowledge.search(any())).thenReturn(List.of(marketLesson, mildewLesson));
         when(knowledge.distinctTags()).thenReturn(List.of(
                 "customer-request", "irrigation", "market", "mildew", "timing", "trial"));
+        int seasonYear = LocalDate.now().getYear();
+        List<SeasonPlanEntry> plantingBlocks = List.of(
+                planting(61L, seasonYear, "Nootka Rose", "Schoener's Nutkana", "Bed A",
+                        2, 12, 4, 1, 6, 15, 9, 20, 80, 640,
+                        SeasonPlanStatus.HARVESTING),
+                planting(62L, seasonYear, "Dahlia", "Cafe au Lait", "Bed B",
+                        3, 5, 5, 12, 7, 20, 10, 10, 60, 480,
+                        SeasonPlanStatus.PLANTED),
+                planting(63L, seasonYear, "Sweet Pea", "Spencer Mix", "Tunnel 2",
+                        1, 20, 3, 1, 5, 10, 7, 15, 45, 360,
+                        SeasonPlanStatus.COMPLETE),
+                planting(64L, seasonYear, "Sunflower", "ProCut Plum", "Field C",
+                        5, 18, 6, 2, 7, 28, 9, 5, 100, 900,
+                        SeasonPlanStatus.SOWN));
+        when(seasonPlan.listForSeason(anyInt())).thenReturn(plantingBlocks);
+        when(seasonPlan.summarize(anyInt())).thenReturn(new SeasonPlanService.SeasonSummary(
+                4, 3, 4, 4, 285, 2_380,
+                LocalDate.of(seasonYear, 5, 10), LocalDate.of(seasonYear, 10, 10)));
+        when(seasonPlan.availableSeasons()).thenReturn(List.of(seasonYear));
 
         AddItemTab addItem = new AddItemTab(inventory, new Host());
         CrmTab crm = new CrmTab(customers, orders, null, new Host());
@@ -215,6 +239,7 @@ class DataEntryVisualContractTest {
         SyncHistoryTab activity = new SyncHistoryTab(history, new Host());
         SyncHistoryTab activityViewer = new SyncHistoryTab(history, new ReadOnlyHost());
         KnowledgeLogTab knowledgeLog = new KnowledgeLogTab(knowledge, new Host());
+        SeasonPlannerTab seasonPlanner = new SeasonPlannerTab(seasonPlan, new Host());
         TrendService trendService = mock(TrendService.class);
         when(trendService.analyzeQuantityTrend()).thenReturn(new TrendService.TrendResult(
                 82.4,
@@ -275,6 +300,10 @@ class DataEntryVisualContractTest {
         knowledgeLog.getUIComponent();
         knowledgeLog.initialize();
         awaitButtonEnabled(knowledgeLog.getUIComponent(), "Search lessons");
+        seasonPlanner.getUIComponent();
+        seasonPlanner.initialize();
+        awaitNamedLabelPrefix(seasonPlanner.getUIComponent(),
+                "seasonPlanner.status", "4 planting blocks");
         roseVisualizer.getUIComponent();
         roseVisualizer.initialize();
         awaitLabel(roseVisualizer.getUIComponent(), "3 linkable products ready");
@@ -341,6 +370,10 @@ class DataEntryVisualContractTest {
                 .isGreaterThanOrEqualTo(80);
         render("knowledge-log-compact", knowledgeLog.getUIComponent(),
                 new Dimension(1050, 700));
+        render("season-planner", seasonPlanner.getUIComponent(),
+                new Dimension(1120, 720));
+        render("season-planner-compact", seasonPlanner.getUIComponent(),
+                new Dimension(1050, 700));
         render("trend-analysis", trends.getUIComponent(), new Dimension(1050, 700));
         render("irrigation", irrigation.getUIComponent(), new Dimension(1050, 700));
         render("irrigation-error", irrigationError.getUIComponent(),
@@ -399,6 +432,7 @@ class DataEntryVisualContractTest {
         assertInteractiveControlsFit(reports.getUIComponent());
         assertInteractiveControlsFit(activity.getUIComponent());
         assertInteractiveControlsFit(knowledgeLog.getUIComponent());
+        assertInteractiveControlsFit(seasonPlanner.getUIComponent());
         assertInteractiveControlsFit(trends.getUIComponent());
         assertInteractiveControlsFit(irrigation.getUIComponent());
         assertInteractiveControlsFit(irrigationError.getUIComponent());
@@ -413,6 +447,7 @@ class DataEntryVisualContractTest {
         assertAccessibleControls(reports.getUIComponent());
         assertAccessibleControls(activity.getUIComponent());
         assertAccessibleControls(knowledgeLog.getUIComponent());
+        assertAccessibleControls(seasonPlanner.getUIComponent());
         assertAccessibleControls(trends.getUIComponent());
         assertAccessibleControls(irrigation.getUIComponent());
         assertAccessibleControls(roseGuide.getUIComponent());
@@ -422,7 +457,7 @@ class DataEntryVisualContractTest {
         JTabbedPane navigation = new JTabbedPane(JTabbedPane.LEFT);
         navigation.setTabLayoutPolicy(JTabbedPane.SCROLL_TAB_LAYOUT);
         new FarmTabNavigator(navigation, List.of(
-                dashboard, marketDayTab, harvestLog, inventoryWorkspace,
+                dashboard, marketDayTab, seasonPlanner, harvestLog, inventoryWorkspace,
                 irrigation, crm, knowledgeLog, reports, trends, activity,
                 reference)).populate();
         JPanel shell = new JPanel(new BorderLayout());
@@ -455,6 +490,8 @@ class DataEntryVisualContractTest {
         assertThat(OUTPUT.resolve("activity-history-viewer.png")).isRegularFile();
         assertThat(OUTPUT.resolve("knowledge-log.png")).isRegularFile();
         assertThat(OUTPUT.resolve("knowledge-log-compact.png")).isRegularFile();
+        assertThat(OUTPUT.resolve("season-planner.png")).isRegularFile();
+        assertThat(OUTPUT.resolve("season-planner-compact.png")).isRegularFile();
         assertThat(OUTPUT.resolve("trend-analysis.png")).isRegularFile();
         assertThat(OUTPUT.resolve("irrigation.png")).isRegularFile();
         assertThat(OUTPUT.resolve("irrigation-error.png")).isRegularFile();
@@ -470,6 +507,23 @@ class DataEntryVisualContractTest {
         assertThat(OUTPUT.resolve("reference-workspace-visualizer.png")).isRegularFile();
         assertThat(OUTPUT.resolve("reference-workspace-visualizer-compact.png"))
                 .isRegularFile();
+    }
+
+    private static SeasonPlanEntry planting(Long id, int year, String crop, String variety,
+                                             String bed, int sowMonth, int sowDay,
+                                             int transplantMonth, int transplantDay,
+                                             int harvestMonth, int harvestDay,
+                                             int harvestEndMonth, int harvestEndDay,
+                                             double bedFeet, int stems,
+                                             SeasonPlanStatus status) {
+        SeasonPlanEntry entry = new SeasonPlanEntry(
+                year, crop, variety, bed, LocalDate.of(year, sowMonth, sowDay),
+                LocalDate.of(year, transplantMonth, transplantDay),
+                LocalDate.of(year, harvestMonth, harvestDay),
+                LocalDate.of(year, harvestEndMonth, harvestEndDay),
+                bedFeet, stems, status, "Visual contract planning block");
+        entry.setId(id);
+        return entry;
     }
 
     private static void render(String name, JComponent component, Dimension size)

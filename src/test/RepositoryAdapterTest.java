@@ -7,6 +7,8 @@ import com.flowerfarm.model.KnowledgeConfidence;
 import com.flowerfarm.model.KnowledgeEntry;
 import com.flowerfarm.model.KnowledgeKind;
 import com.flowerfarm.model.SyncHistoryEntry;
+import com.flowerfarm.model.SeasonPlanEntry;
+import com.flowerfarm.model.SeasonPlanStatus;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.domain.Pageable;
@@ -94,5 +96,23 @@ class RepositoryAdapterTest {
         assertThat(repository.findAllNewestFirst()).containsExactly(entry);
         repository.findByIdForUpdate(9L);
         verify(jpa).findByIdForUpdate(9L);
+    }
+
+    @Test
+    @DisplayName("season-plan adapter owns sorted year and locking queries")
+    void seasonPlanAdapter() {
+        SeasonPlanJpaRepository jpa = mock(SeasonPlanJpaRepository.class);
+        SeasonPlanEntry entry = new SeasonPlanEntry(
+                2026, "Rose", "", "Bed A", LocalDate.of(2026, 3, 1),
+                LocalDate.of(2026, 4, 12), LocalDate.of(2026, 6, 20),
+                LocalDate.of(2026, 9, 10), 80, 640, SeasonPlanStatus.PLANTED, "");
+        when(jpa.findBySeasonYearOrderBySowDateAscBedOrFieldAscCropNameAsc(2026))
+                .thenReturn(List.of(entry));
+
+        SeasonPlanRepository repository = new JpaSeasonPlanRepository(jpa);
+
+        assertThat(repository.findBySeasonYear(2026)).containsExactly(entry);
+        repository.findByIdForUpdate(17L);
+        verify(jpa).findByIdForUpdate(17L);
     }
 }

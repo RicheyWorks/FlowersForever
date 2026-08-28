@@ -28,7 +28,7 @@ The result is a farm day that feels more visible, repeatable, and ready to grow.
 
 | Start the day | Grow and track | Sell and fulfill | Finish with confidence |
 |---|---|---|---|
-| See priorities, low stock, harvest totals, and sales | Log single or batch harvests and review bed production | Manage customers, orders, pickup, delivery, and market handoffs | Print invoices, packing lists, reports, briefings, and closeouts |
+| See priorities, low stock, harvest totals, and sales | Plan beds visually, estimate stems, and log single or batch harvests | Manage customers, orders, pickup, delivery, and market handoffs | Print invoices, packing lists, reports, briefings, and closeouts |
 
 ## Less daily friction. More room to grow.
 
@@ -42,6 +42,7 @@ FlowersForever replaces scattered information with one dependable flow from the 
 | The day starts by hunting for answers | The **Today** dashboard surfaces priorities, shortages, sales, and ready-to-pack work |
 | Paperwork waits until late at night | Farm-ready PDFs turn current records into useful paperwork in a few clicks |
 | A hard-won fix leaves with a notebook or crew member | The Knowledge Log keeps observations, actions, results, and confidence searchable on the farm |
+| Crop dates and bed capacity live in a dense spreadsheet | The Season Planner maps sowing, growing, and harvest windows while keeping bed feet and expected stems visible |
 
 **Know what you have. Know what is promised. Know what comes next.**
 
@@ -109,10 +110,19 @@ For a guided first visit, follow the [plain-language desktop user guide](docs/US
   </tr>
 </table>
 
+<p align="center">
+  <img src="docs/images/app-season-planner.png" width="92%" alt="FlowersForever Season and Bed Planner showing crop timelines, occupied beds, expected stems, and the harvest window">
+  <br><strong>See the whole growing season before the gaps become surprises.</strong><br>
+  Map sowing, growing, and harvest timing by bed while capacity and expected stems stay visible above the plan.
+</p>
+
 ## What FlowersForever helps you do
 
 ### Keep growing work connected
 
+- Build a visual season timeline from sowing through each expected harvest window.
+- Track bed allocations, bed feet, crop varieties, status, and expected stems in one record.
+- Switch between the at-a-glance timeline and a sortable plan table without re-entering data.
 - Log, edit, batch, search, and filter harvests.
 - Track production by bed or field.
 - Increase inventory automatically when flowers are harvested.

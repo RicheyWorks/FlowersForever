@@ -17,6 +17,7 @@ import com.flowerfarm.service.OrderService;
 import com.flowerfarm.service.ReportService;
 import com.flowerfarm.service.SyncHistoryService;
 import com.flowerfarm.service.TrendService;
+import com.flowerfarm.service.SeasonPlanService;
 import com.formdev.flatlaf.FlatDarkLaf;
 import com.formdev.flatlaf.FlatLightLaf;
 import org.springframework.boot.ApplicationArguments;
@@ -107,13 +108,15 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
                          DayCloseoutService dayCloseoutService,
                          CustomerStatementService customerStatementService,
                          KnowledgeService knowledgeService,
+                         SeasonPlanService seasonPlanService,
                          GuiLoginGate loginGate,
                          DesktopSession session) {
         // No AWT calls here — Spring safe to construct this bean at any time.
         this.tabCatalog = new FarmTabCatalog(inventoryService, trendService, harvestService,
                 syncHistoryService, customerService, orderService, reportService,
                 irrigationAdvisorService, marketDayPackingService, morningBriefingService,
-                dayCloseoutService, customerStatementService, knowledgeService);
+                dayCloseoutService, customerStatementService, knowledgeService,
+                seasonPlanService);
         this.connectorActions = new ConnectorActionPresenter(inventoryService, connectorRegistry);
         this.loginGate = loginGate;
         this.session = session;

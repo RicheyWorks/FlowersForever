@@ -25,13 +25,14 @@ class DatabaseMigrationTest {
 
         MigrateResult result = configuredFlyway(url).migrate();
 
-        assertThat(result.migrationsExecuted).isEqualTo(3);
+        assertThat(result.migrationsExecuted).isEqualTo(4);
         try (Connection connection = DriverManager.getConnection(url, "sa", "")) {
             assertThat(tableExists(connection, "INVENTORY_ITEMS")).isTrue();
             assertThat(tableExists(connection, "CUSTOMER_ORDERS")).isTrue();
             assertThat(columnExists(connection, "CUSTOMER_ORDERS", "HANDOFF_TYPE")).isTrue();
             assertThat(tableExists(connection, "KNOWLEDGE_ENTRIES")).isTrue();
             assertThat(tableExists(connection, "KNOWLEDGE_ENTRY_TAGS")).isTrue();
+            assertThat(tableExists(connection, "SEASON_PLAN_ENTRIES")).isTrue();
         }
     }
 
@@ -89,7 +90,7 @@ class DatabaseMigrationTest {
 
         MigrateResult result = configuredFlyway(url).migrate();
 
-        assertThat(result.migrationsExecuted).isEqualTo(2);
+        assertThat(result.migrationsExecuted).isEqualTo(3);
         try (Connection connection = DriverManager.getConnection(url, "sa", "");
              Statement statement = connection.createStatement();
              ResultSet rows = statement.executeQuery(
@@ -102,6 +103,7 @@ class DatabaseMigrationTest {
         try (Connection connection = DriverManager.getConnection(url, "sa", "")) {
             assertThat(tableExists(connection, "KNOWLEDGE_ENTRIES")).isTrue();
             assertThat(tableExists(connection, "KNOWLEDGE_ENTRY_TAGS")).isTrue();
+            assertThat(tableExists(connection, "SEASON_PLAN_ENTRIES")).isTrue();
         }
     }
 

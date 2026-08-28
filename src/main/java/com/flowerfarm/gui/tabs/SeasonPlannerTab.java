@@ -1,0 +1,914 @@
+package com.flowerfarm.gui.tabs;
+
+import com.flowerfarm.gui.FarmUi;
+import com.flowerfarm.gui.GuiPermissions;
+import com.flowerfarm.model.SeasonPlanEntry;
+import com.flowerfarm.model.SeasonPlanStatus;
+import com.flowerfarm.service.SeasonPlanService;
+
+import javax.swing.BorderFactory;
+import javax.swing.Box;
+import javax.swing.BoxLayout;
+import javax.swing.DefaultComboBoxModel;
+import javax.swing.JButton;
+import javax.swing.JComboBox;
+import javax.swing.JComponent;
+import javax.swing.JLabel;
+import javax.swing.JOptionPane;
+import javax.swing.JPanel;
+import javax.swing.JScrollPane;
+import javax.swing.JTabbedPane;
+import javax.swing.JTable;
+import javax.swing.JTextArea;
+import javax.swing.JTextField;
+import javax.swing.SwingWorker;
+import javax.swing.table.DefaultTableModel;
+import javax.swing.table.TableRowSorter;
+import javax.accessibility.AccessibleContext;
+import java.awt.BasicStroke;
+import java.awt.BorderLayout;
+import java.awt.Color;
+import java.awt.Dimension;
+import java.awt.Font;
+import java.awt.Graphics;
+import java.awt.Graphics2D;
+import java.awt.GridBagConstraints;
+import java.awt.GridBagLayout;
+import java.awt.GridLayout;
+import java.awt.Insets;
+import java.awt.RenderingHints;
+import java.time.LocalDate;
+import java.time.Month;
+import java.time.YearMonth;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
+import java.time.temporal.ChronoUnit;
+import java.util.List;
+import java.util.Locale;
+
+/** Visual season and bed planning from first sow through final harvest. */
+public class SeasonPlannerTab implements FlowerFarmTab {
+
+    private static final DateTimeFormatter SHORT_DATE = DateTimeFormatter.ofPattern("MMM d");
+    private static final String[] COLUMNS = {
+            "Bed / field", "Crop / variety", "Sow", "Transplant", "Harvest window",
+            "Bed ft", "Expected stems", "Status"
+    };
+
+    private final SeasonPlanService seasonPlanService;
+    private final TabHost host;
+
+    private JPanel panel;
+    private JComboBox<Integer> seasonPicker;
+    private JButton addButton;
+    private JButton refreshButton;
+    private JButton editButton;
+    private JButton deleteButton;
+    private JLabel blocksValue;
+    private JLabel bedsValue;
+    private JLabel stemsValue;
+    private JLabel harvestValue;
+    private JLabel blocksDetail;
+    private JLabel bedsDetail;
+    private JLabel stemsDetail;
+    private JLabel harvestDetail;
+    private JLabel statusBadge;
+    private SeasonTimeline timeline;
+    private JTable table;
+    private DefaultTableModel tableModel;
+    private List<SeasonPlanEntry> lastView = List.of();
+    private Long requestedSelectionId;
+    private boolean canWrite = true;
+    private boolean loading;
+    private boolean saving;
+    private boolean updatingSeasons;
+
+    public SeasonPlannerTab(SeasonPlanService seasonPlanService, TabHost host) {
+        this.seasonPlanService = seasonPlanService;
+        this.host = host;
+    }
+
+    @Override
+    public String getTabTitle() {
+        return "Season Planner";
+    }
+
+    @Override
+    public String getDescription() {
+        return "Plan crop timing, bed use, expected stems, and harvest windows in one view";
+    }
+
+    @Override
+    public JComponent getUIComponent() {
+        if (panel == null) {
+            buildUi();
+        }
+        return panel;
+    }
+
+    @Override
+    public void initialize() {
+        refreshData();
+    }
+
+    @Override
+    public void refreshData() {
+        if (tableModel != null && !saving) {
+            startRefresh();
+        }
+    }
+
+    @Override
+    public void applyRolePermissions(boolean canWrite) {
+        this.canWrite = canWrite;
+        updateActions();
+    }
+
+    private void buildUi() {
+        panel = FarmUi.page();
+        panel.setName("seasonPlanner.page");
+
+        seasonPicker = new JComboBox<>(new Integer[]{LocalDate.now().getYear()});
+        seasonPicker.setName("seasonPlanner.season");
+        seasonPicker.getAccessibleContext().setAccessibleName("Season year");
+        addButton = FarmUi.primaryButton("Add planting");
+        addButton.setName("seasonPlanner.add");
+        refreshButton = FarmUi.secondaryButton("Refresh");
+        refreshButton.setName("seasonPlanner.refresh");
+        panel.add(FarmUi.pageHeader(
+                "Season & Bed Planner",
+                "Enter each planting block once, then see timing, bed capacity, and expected stems together.",
+                FarmUi.toolbar(new JLabel("Season:"), seasonPicker, refreshButton, addButton)),
+                BorderLayout.NORTH);
+
+        JPanel content = new JPanel(new BorderLayout(0, FarmUi.SECTION_GAP));
+        content.setOpaque(false);
+        content.add(buildMetrics(), BorderLayout.NORTH);
+        content.add(buildWorkspace(), BorderLayout.CENTER);
+        statusBadge = FarmUi.statusBadge("Ready to plan the season", FarmUi.Tone.NEUTRAL);
+        statusBadge.setName("seasonPlanner.status");
+        content.add(statusBadge, BorderLayout.SOUTH);
+        panel.add(content, BorderLayout.CENTER);
+
+        seasonPicker.addActionListener(event -> {
+            if (!updatingSeasons) {
+                startRefresh();
+            }
+        });
+        refreshButton.addActionListener(event -> startRefresh());
+        addButton.addActionListener(event -> addPlanting());
+        editButton.addActionListener(event -> editSelected());
+        deleteButton.addActionListener(event -> deleteSelected());
+        updateActions();
+    }
+
+    private JPanel buildMetrics() {
+        blocksValue = metricValue("0");
+        bedsValue = metricValue("0");
+        stemsValue = metricValue("0");
+        harvestValue = metricValue("—");
+        blocksDetail = FarmUi.mutedLabel("No planting blocks yet");
+        bedsDetail = FarmUi.mutedLabel("0 crops assigned");
+        stemsDetail = FarmUi.mutedLabel("Across 0 bed ft");
+        harvestDetail = FarmUi.mutedLabel("Add a block to set timing");
+
+        JPanel metrics = new JPanel(new GridLayout(1, 4, FarmUi.CONTROL_GAP, 0));
+        metrics.setName("seasonPlanner.metrics");
+        metrics.setOpaque(false);
+        metrics.add(FarmUi.metricCard("Planting blocks", blocksValue, blocksDetail,
+                FarmUi.Tone.SUCCESS));
+        metrics.add(FarmUi.metricCard("Beds in use", bedsValue, bedsDetail,
+                FarmUi.Tone.INFO));
+        metrics.add(FarmUi.metricCard("Expected stems", stemsValue, stemsDetail,
+                FarmUi.Tone.WARNING));
+        metrics.add(FarmUi.metricCard("Harvest window", harvestValue, harvestDetail,
+                FarmUi.Tone.DANGER));
+        return metrics;
+    }
+
+    private JComponent buildWorkspace() {
+        timeline = new SeasonTimeline();
+        timeline.setName("seasonPlanner.timeline");
+        JScrollPane timelineScroll = new JScrollPane(timeline);
+        timelineScroll.setBorder(BorderFactory.createEmptyBorder());
+        timelineScroll.getViewport().setBackground(FarmUi.surfaceColor());
+        timelineScroll.getAccessibleContext().setAccessibleName("Season timeline scroll area");
+
+        JPanel legend = FarmUi.toolbar(
+                legend("Sow / propagation", FarmUi.Tone.WARNING),
+                legend("Growing", FarmUi.Tone.INFO),
+                legend("Harvest", FarmUi.Tone.SUCCESS));
+        JPanel timelineContent = new JPanel(new BorderLayout(0, FarmUi.CONTROL_GAP));
+        timelineContent.setOpaque(false);
+        timelineContent.add(legend, BorderLayout.NORTH);
+        timelineContent.add(timelineScroll, BorderLayout.CENTER);
+        JPanel timelineSection = FarmUi.section(
+                "Season timeline",
+                "Each row is one bed allocation. Month markers make overlaps and harvest gaps easy to spot.",
+                timelineContent);
+
+        tableModel = new DefaultTableModel(COLUMNS, 0) {
+            @Override public boolean isCellEditable(int row, int column) {
+                return false;
+            }
+
+            @Override public Class<?> getColumnClass(int columnIndex) {
+                return switch (columnIndex) {
+                    case 5 -> Double.class;
+                    case 6 -> Integer.class;
+                    default -> String.class;
+                };
+            }
+        };
+        table = new JTable(tableModel);
+        table.setName("seasonPlanner.table");
+        table.setRowSorter(new TableRowSorter<>(tableModel));
+        FarmUi.configureTable(table, "Season planting plan table");
+        table.getSelectionModel().addListSelectionListener(event -> {
+            if (!event.getValueIsAdjusting()) {
+                updateActions();
+            }
+        });
+        editButton = FarmUi.secondaryButton("Edit selected");
+        editButton.setName("seasonPlanner.edit");
+        deleteButton = FarmUi.dangerButton("Remove selected");
+        deleteButton.setName("seasonPlanner.delete");
+        JPanel tableContent = new JPanel(new BorderLayout(0, FarmUi.CONTROL_GAP));
+        tableContent.setOpaque(false);
+        tableContent.add(FarmUi.tableScroll(table), BorderLayout.CENTER);
+        tableContent.add(FarmUi.toolbar(editButton, deleteButton), BorderLayout.SOUTH);
+        JPanel recordsSection = FarmUi.section(
+                "Planting records",
+                "Sort the details, select a row, and update the plan without re-entering it.",
+                tableContent);
+
+        JTabbedPane workspace = new JTabbedPane();
+        workspace.setName("seasonPlanner.workspace");
+        workspace.getAccessibleContext().setAccessibleName("Season planner views");
+        workspace.addTab("Visual timeline", timelineSection);
+        workspace.addTab("Plan records", recordsSection);
+        return workspace;
+    }
+
+    private JLabel legend(String text, FarmUi.Tone tone) {
+        JLabel label = FarmUi.statusBadge(text, tone);
+        label.setFont(label.getFont().deriveFont(Font.PLAIN, 11f));
+        return label;
+    }
+
+    private static JLabel metricValue(String text) {
+        JLabel label = new JLabel(text);
+        label.setName("seasonPlanner.metricValue");
+        return label;
+    }
+
+    private int selectedSeason() {
+        Object selected = seasonPicker == null ? null : seasonPicker.getSelectedItem();
+        return selected instanceof Integer year ? year : LocalDate.now().getYear();
+    }
+
+    private void startRefresh() {
+        if (loading || tableModel == null) {
+            return;
+        }
+        int seasonYear = selectedSeason();
+        Long selectedId = selectedEntry() == null ? requestedSelectionId : selectedEntry().getId();
+        loading = true;
+        updateActions();
+        FarmUi.updateStatusBadge(statusBadge, "Building the " + seasonYear + " plan…",
+                FarmUi.Tone.INFO);
+
+        new SwingWorker<SeasonSnapshot, Void>() {
+            @Override protected SeasonSnapshot doInBackground() {
+                return new SeasonSnapshot(
+                        seasonPlanService.listForSeason(seasonYear),
+                        seasonPlanService.summarize(seasonYear),
+                        seasonPlanService.availableSeasons());
+            }
+
+            @Override protected void done() {
+                try {
+                    applySnapshot(get(), selectedId, seasonYear);
+                } catch (InterruptedException exception) {
+                    Thread.currentThread().interrupt();
+                    showFailure("Loading the season plan", exception);
+                } catch (java.util.concurrent.ExecutionException exception) {
+                    showFailure("Loading the season plan",
+                            exception.getCause() == null ? exception : exception.getCause());
+                } finally {
+                    loading = false;
+                    updateActions();
+                }
+            }
+        }.execute();
+    }
+
+    private void applySnapshot(SeasonSnapshot snapshot, Long selectedId, int selectedYear) {
+        lastView = List.copyOf(snapshot.entries());
+        updateSeasonChoices(snapshot.seasons(), selectedYear);
+        tableModel.setRowCount(0);
+        for (SeasonPlanEntry entry : lastView) {
+            tableModel.addRow(row(entry));
+        }
+        timeline.setSeason(selectedYear, lastView);
+        updateMetrics(snapshot.summary());
+        boolean restored = restoreSelection(selectedId);
+        requestedSelectionId = null;
+        if (!restored && !lastView.isEmpty()) {
+            table.setRowSelectionInterval(0, 0);
+        }
+        String message = lastView.isEmpty()
+                ? "No planting blocks for " + selectedYear + " — add the first one"
+                : lastView.size() + (lastView.size() == 1 ? " planting block" : " planting blocks")
+                        + " mapped for " + selectedYear;
+        FarmUi.updateStatusBadge(statusBadge, message,
+                lastView.isEmpty() ? FarmUi.Tone.NEUTRAL : FarmUi.Tone.SUCCESS);
+        if (host != null) {
+            host.setStatus(message + ".");
+        }
+    }
+
+    private void updateSeasonChoices(List<Integer> years, int selectedYear) {
+        updatingSeasons = true;
+        DefaultComboBoxModel<Integer> model = new DefaultComboBoxModel<>();
+        model.addElement(selectedYear);
+        for (Integer year : years) {
+            if (year != null && year != selectedYear) {
+                model.addElement(year);
+            }
+        }
+        seasonPicker.setModel(model);
+        seasonPicker.setSelectedItem(selectedYear);
+        updatingSeasons = false;
+    }
+
+    private void updateMetrics(SeasonPlanService.SeasonSummary summary) {
+        blocksValue.setText(Integer.toString(summary.plantingBlocks()));
+        blocksDetail.setText(summary.activeBlocks() + " active · "
+                + summary.cropCount() + " crops");
+        bedsValue.setText(Integer.toString(summary.bedCount()));
+        bedsDetail.setText(formatNumber(summary.bedFeet()) + " total bed ft");
+        stemsValue.setText(String.format(Locale.US, "%,d", summary.expectedStems()));
+        stemsDetail.setText(summary.plantingBlocks() == 0 ? "No yield estimate yet"
+                : "Planned across " + formatNumber(summary.bedFeet()) + " bed ft");
+        if (summary.firstHarvest() == null) {
+            harvestValue.setText("—");
+            harvestDetail.setText("Add a block to set timing");
+        } else {
+            harvestValue.setText(SHORT_DATE.format(summary.firstHarvest()));
+            harvestDetail.setText("through " + SHORT_DATE.format(summary.lastHarvest()));
+        }
+    }
+
+    private Object[] row(SeasonPlanEntry entry) {
+        return new Object[]{
+                entry.getBedOrField(), cropLabel(entry), entry.getSowDate().toString(),
+                entry.getTransplantDate() == null ? "—" : entry.getTransplantDate().toString(),
+                SHORT_DATE.format(entry.getHarvestStart()) + " – "
+                        + SHORT_DATE.format(entry.getHarvestEnd()),
+                entry.getBedFeet(), entry.getExpectedStems(), entry.getStatus().getLabel()
+        };
+    }
+
+    private void addPlanting() {
+        if (!GuiPermissions.requireWrite(host, panel, "add a planting block")) {
+            return;
+        }
+        SeasonPlanEntry entry = showForm(null);
+        if (entry != null) {
+            startSave(null, entry);
+        }
+    }
+
+    private void editSelected() {
+        if (!GuiPermissions.requireWrite(host, panel, "edit a planting block")) {
+            return;
+        }
+        SeasonPlanEntry selected = selectedEntry();
+        if (selected == null) {
+            return;
+        }
+        SeasonPlanEntry entry = showForm(selected);
+        if (entry != null) {
+            startSave(selected.getId(), entry);
+        }
+    }
+
+    private SeasonPlanEntry showForm(SeasonPlanEntry existing) {
+        PlantingForm form = new PlantingForm(existing, selectedSeason());
+        String title = existing == null ? "Add planting block" : "Edit planting block";
+        while (true) {
+            int choice = JOptionPane.showConfirmDialog(panel, form.panel(), title,
+                    JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+            if (choice != JOptionPane.OK_OPTION) {
+                return null;
+            }
+            try {
+                return form.read();
+            } catch (IllegalArgumentException exception) {
+                JOptionPane.showMessageDialog(panel, exception.getMessage(),
+                        "Check the planting block", JOptionPane.WARNING_MESSAGE);
+            }
+        }
+    }
+
+    private void startSave(Long id, SeasonPlanEntry entry) {
+        if (saving) {
+            return;
+        }
+        saving = true;
+        updateActions();
+        FarmUi.updateStatusBadge(statusBadge,
+                id == null ? "Adding planting block…" : "Updating planting block…",
+                FarmUi.Tone.INFO);
+        new SwingWorker<SeasonPlanEntry, Void>() {
+            @Override protected SeasonPlanEntry doInBackground() {
+                return id == null ? seasonPlanService.create(entry)
+                        : seasonPlanService.update(id, entry);
+            }
+
+            @Override protected void done() {
+                try {
+                    SeasonPlanEntry saved = get();
+                    requestedSelectionId = saved.getId();
+                    updatingSeasons = true;
+                    seasonPicker.setSelectedItem(saved.getSeasonYear());
+                    updatingSeasons = false;
+                    if (host != null) {
+                        saving = false;
+                        host.setStatus("Planting block saved: " + cropLabel(saved) + ".");
+                        host.refreshAll();
+                    } else {
+                        saving = false;
+                        startRefresh();
+                    }
+                } catch (InterruptedException exception) {
+                    Thread.currentThread().interrupt();
+                    showFailure("Saving the planting block", exception);
+                } catch (java.util.concurrent.ExecutionException exception) {
+                    showFailure("Saving the planting block",
+                            exception.getCause() == null ? exception : exception.getCause());
+                } finally {
+                    saving = false;
+                    updateActions();
+                }
+            }
+        }.execute();
+    }
+
+    private void deleteSelected() {
+        if (!GuiPermissions.requireWrite(host, panel, "remove a planting block")) {
+            return;
+        }
+        SeasonPlanEntry selected = selectedEntry();
+        if (selected == null) {
+            return;
+        }
+        int answer = JOptionPane.showConfirmDialog(panel,
+                FarmUi.confirmationPanel(
+                        "Remove this planting block?",
+                        cropLabel(selected) + " in " + selected.getBedOrField()
+                                + " will be removed from the season plan. Harvest records are unchanged.",
+                        FarmUi.Tone.WARNING),
+                "Remove planting block", JOptionPane.OK_CANCEL_OPTION,
+                JOptionPane.WARNING_MESSAGE);
+        if (answer != JOptionPane.OK_OPTION) {
+            return;
+        }
+        saving = true;
+        updateActions();
+        new SwingWorker<Void, Void>() {
+            @Override protected Void doInBackground() {
+                seasonPlanService.delete(selected.getId());
+                return null;
+            }
+
+            @Override protected void done() {
+                try {
+                    get();
+                    if (host != null) {
+                        saving = false;
+                        host.setStatus("Planting block removed; harvest records were unchanged.");
+                        host.refreshAll();
+                    } else {
+                        saving = false;
+                        startRefresh();
+                    }
+                } catch (InterruptedException exception) {
+                    Thread.currentThread().interrupt();
+                    showFailure("Removing the planting block", exception);
+                } catch (java.util.concurrent.ExecutionException exception) {
+                    showFailure("Removing the planting block",
+                            exception.getCause() == null ? exception : exception.getCause());
+                } finally {
+                    saving = false;
+                    updateActions();
+                }
+            }
+        }.execute();
+    }
+
+    private SeasonPlanEntry selectedEntry() {
+        if (table == null || table.getSelectedRow() < 0) {
+            return null;
+        }
+        int modelRow = table.convertRowIndexToModel(table.getSelectedRow());
+        return modelRow >= 0 && modelRow < lastView.size() ? lastView.get(modelRow) : null;
+    }
+
+    private boolean restoreSelection(Long id) {
+        if (id == null) {
+            return false;
+        }
+        for (int modelRow = 0; modelRow < lastView.size(); modelRow++) {
+            if (id.equals(lastView.get(modelRow).getId())) {
+                int viewRow = table.convertRowIndexToView(modelRow);
+                if (viewRow >= 0) {
+                    table.setRowSelectionInterval(viewRow, viewRow);
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private void showFailure(String action, Throwable failure) {
+        String message = FarmUi.actionableError(action, failure);
+        FarmUi.updateStatusBadge(statusBadge, message, FarmUi.Tone.DANGER);
+        if (host != null) {
+            host.setStatus(message);
+        }
+    }
+
+    private void updateActions() {
+        boolean ready = !loading && !saving;
+        GuiPermissions.setWritable(canWrite && ready, addButton);
+        GuiPermissions.setWritable(canWrite && ready && selectedEntry() != null,
+                editButton, deleteButton);
+        if (refreshButton != null) {
+            refreshButton.setEnabled(ready);
+        }
+        if (seasonPicker != null) {
+            seasonPicker.setEnabled(ready);
+        }
+    }
+
+    private static String cropLabel(SeasonPlanEntry entry) {
+        return entry.getVariety().isBlank() ? entry.getCropName()
+                : entry.getCropName() + " · " + entry.getVariety();
+    }
+
+    private static String formatNumber(double value) {
+        return value == Math.rint(value)
+                ? String.format(Locale.US, "%,.0f", value)
+                : String.format(Locale.US, "%,.1f", value);
+    }
+
+    private record SeasonSnapshot(List<SeasonPlanEntry> entries,
+                                  SeasonPlanService.SeasonSummary summary,
+                                  List<Integer> seasons) {
+    }
+
+    private static final class PlantingForm {
+        private final JPanel panel = new JPanel(new GridBagLayout());
+        private final JTextField crop = field("Crop", 22);
+        private final JTextField variety = field("Variety", 22);
+        private final JTextField bed = field("Bed or field", 22);
+        private final JTextField sow = field("Sow date", 12);
+        private final JTextField transplant = field("Transplant date", 12);
+        private final JTextField harvestStart = field("Harvest start", 12);
+        private final JTextField harvestEnd = field("Harvest end", 12);
+        private final JTextField bedFeet = field("Bed length in feet", 10);
+        private final JTextField expectedStems = field("Expected stems", 10);
+        private final JComboBox<SeasonPlanStatus> status =
+                new JComboBox<>(SeasonPlanStatus.values());
+        private final JTextArea notes = new JTextArea(3, 28);
+        private final int seasonYear;
+
+        private PlantingForm(SeasonPlanEntry existing, int selectedYear) {
+            seasonYear = existing == null ? selectedYear : existing.getSeasonYear();
+            build(existing);
+        }
+
+        private void build(SeasonPlanEntry existing) {
+            panel.setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
+            notes.setLineWrap(true);
+            notes.setWrapStyleWord(true);
+            notes.getAccessibleContext().setAccessibleName("Planning notes");
+            status.getAccessibleContext().setAccessibleName("Planting status");
+
+            LocalDate defaultSow = LocalDate.now().getYear() == seasonYear
+                    ? LocalDate.now() : LocalDate.of(seasonYear, Month.MARCH, 1);
+            if (existing == null) {
+                sow.setText(defaultSow.toString());
+                transplant.setText(defaultSow.plusWeeks(6).toString());
+                harvestStart.setText(defaultSow.plusWeeks(14).toString());
+                harvestEnd.setText(defaultSow.plusWeeks(20).toString());
+                bedFeet.setText("50");
+                expectedStems.setText("250");
+            } else {
+                crop.setText(existing.getCropName());
+                variety.setText(existing.getVariety());
+                bed.setText(existing.getBedOrField());
+                sow.setText(existing.getSowDate().toString());
+                transplant.setText(existing.getTransplantDate() == null ? ""
+                        : existing.getTransplantDate().toString());
+                harvestStart.setText(existing.getHarvestStart().toString());
+                harvestEnd.setText(existing.getHarvestEnd().toString());
+                bedFeet.setText(Double.toString(existing.getBedFeet()));
+                expectedStems.setText(Integer.toString(existing.getExpectedStems()));
+                status.setSelectedItem(existing.getStatus());
+                notes.setText(existing.getNotes());
+            }
+
+            int row = 0;
+            addHeading("Crop and placement", row++);
+            addRow("Crop *", crop, "Variety", variety, row++);
+            addRow("Bed / field *", bed, "Status", status, row++);
+            addHeading("Season timing", row++);
+            addRow("Sow *", sow, "Transplant", transplant, row++);
+            addRow("Harvest start *", harvestStart, "Harvest end *", harvestEnd, row++);
+            JLabel dateHelp = FarmUi.mutedLabel(
+                    "Use YYYY-MM-DD. Leave transplant blank for direct-sown crops.");
+            GridBagConstraints help = constraints(0, row++, 4);
+            help.insets = new Insets(0, 0, 10, 0);
+            panel.add(dateHelp, help);
+            addHeading("Capacity and yield", row++);
+            addRow("Bed length (ft) *", bedFeet, "Expected stems *", expectedStems, row++);
+            addLabel("Notes", row++);
+            GridBagConstraints noteConstraints = constraints(0, row, 4);
+            noteConstraints.fill = GridBagConstraints.BOTH;
+            noteConstraints.weighty = 1;
+            panel.add(new JScrollPane(notes), noteConstraints);
+            panel.setPreferredSize(new Dimension(690, 500));
+        }
+
+        private void addHeading(String text, int row) {
+            JLabel heading = FarmUi.eyebrowLabel(text, FarmUi.Tone.SUCCESS);
+            GridBagConstraints constraints = constraints(0, row, 4);
+            constraints.insets = new Insets(row == 0 ? 0 : 12, 0, 6, 0);
+            panel.add(heading, constraints);
+        }
+
+        private void addRow(String firstLabel, JComponent first, String secondLabel,
+                            JComponent second, int row) {
+            GridBagConstraints labelOne = constraints(0, row, 1);
+            labelOne.insets = new Insets(4, 0, 4, 6);
+            panel.add(new JLabel(firstLabel), labelOne);
+            GridBagConstraints fieldOne = constraints(1, row, 1);
+            fieldOne.fill = GridBagConstraints.HORIZONTAL;
+            fieldOne.weightx = 1;
+            fieldOne.insets = new Insets(4, 0, 4, 14);
+            panel.add(first, fieldOne);
+            GridBagConstraints labelTwo = constraints(2, row, 1);
+            labelTwo.insets = new Insets(4, 0, 4, 6);
+            panel.add(new JLabel(secondLabel), labelTwo);
+            GridBagConstraints fieldTwo = constraints(3, row, 1);
+            fieldTwo.fill = GridBagConstraints.HORIZONTAL;
+            fieldTwo.weightx = 1;
+            fieldTwo.insets = new Insets(4, 0, 4, 0);
+            panel.add(second, fieldTwo);
+        }
+
+        private void addLabel(String text, int row) {
+            GridBagConstraints constraints = constraints(0, row, 4);
+            constraints.insets = new Insets(7, 0, 4, 0);
+            panel.add(new JLabel(text), constraints);
+        }
+
+        private static GridBagConstraints constraints(int x, int y, int width) {
+            GridBagConstraints constraints = new GridBagConstraints();
+            constraints.gridx = x;
+            constraints.gridy = y;
+            constraints.gridwidth = width;
+            constraints.anchor = GridBagConstraints.WEST;
+            return constraints;
+        }
+
+        private static JTextField field(String accessibleName, int columns) {
+            JTextField field = new JTextField(columns);
+            field.getAccessibleContext().setAccessibleName(accessibleName);
+            return field;
+        }
+
+        private JPanel panel() {
+            return panel;
+        }
+
+        private SeasonPlanEntry read() {
+            return new SeasonPlanEntry(
+                    seasonYear, crop.getText(), variety.getText(), bed.getText(),
+                    date(sow, "Sow date"), optionalDate(transplant, "Transplant date"),
+                    date(harvestStart, "Harvest start"), date(harvestEnd, "Harvest end"),
+                    decimal(bedFeet, "Bed length"), wholeNumber(expectedStems, "Expected stems"),
+                    (SeasonPlanStatus) status.getSelectedItem(), notes.getText());
+        }
+
+        private static LocalDate date(JTextField field, String label) {
+            if (field.getText().isBlank()) {
+                throw new IllegalArgumentException(label + " is required.");
+            }
+            try {
+                return LocalDate.parse(field.getText().trim());
+            } catch (DateTimeParseException exception) {
+                throw new IllegalArgumentException(label + " must use YYYY-MM-DD.");
+            }
+        }
+
+        private static LocalDate optionalDate(JTextField field, String label) {
+            return field.getText().isBlank() ? null : date(field, label);
+        }
+
+        private static double decimal(JTextField field, String label) {
+            try {
+                return Double.parseDouble(field.getText().trim());
+            } catch (NumberFormatException exception) {
+                throw new IllegalArgumentException(label + " must be a number.");
+            }
+        }
+
+        private static int wholeNumber(JTextField field, String label) {
+            try {
+                return Integer.parseInt(field.getText().trim());
+            } catch (NumberFormatException exception) {
+                throw new IllegalArgumentException(label + " must be a whole number.");
+            }
+        }
+    }
+
+    private static final class SeasonTimeline extends JComponent {
+        private static final int LABEL_WIDTH = 230;
+        private static final int HEADER_HEIGHT = 54;
+        private static final int ROW_HEIGHT = 48;
+        private static final int RIGHT_INSET = 18;
+        private int seasonYear = LocalDate.now().getYear();
+        private List<SeasonPlanEntry> entries = List.of();
+
+        private SeasonTimeline() {
+            setOpaque(true);
+            setBackground(FarmUi.surfaceColor());
+            setPreferredSize(new Dimension(920, 260));
+            getAccessibleContext().setAccessibleName("Visual season timeline");
+            getAccessibleContext().setAccessibleDescription(
+                    "Planting rows show sowing, growing, and expected harvest periods by month.");
+        }
+
+        @Override
+        public AccessibleContext getAccessibleContext() {
+            if (accessibleContext == null) {
+                accessibleContext = new AccessibleSeasonTimeline();
+            }
+            return accessibleContext;
+        }
+
+        protected class AccessibleSeasonTimeline extends AccessibleJComponent {
+            private static final long serialVersionUID = 1L;
+        }
+
+        private void setSeason(int seasonYear, List<SeasonPlanEntry> entries) {
+            this.seasonYear = seasonYear;
+            this.entries = entries == null ? List.of() : List.copyOf(entries);
+            int height = Math.max(235, HEADER_HEIGHT + this.entries.size() * ROW_HEIGHT + 16);
+            setPreferredSize(new Dimension(920, height));
+            revalidate();
+            repaint();
+        }
+
+        @Override protected void paintComponent(Graphics graphics) {
+            super.paintComponent(graphics);
+            Graphics2D copy = (Graphics2D) graphics.create();
+            try {
+                copy.setRenderingHint(RenderingHints.KEY_ANTIALIASING,
+                        RenderingHints.VALUE_ANTIALIAS_ON);
+                int width = Math.max(getWidth(), getPreferredSize().width);
+                int timelineWidth = Math.max(300, width - LABEL_WIDTH - RIGHT_INSET);
+                paintMonths(copy, timelineWidth);
+                if (entries.isEmpty()) {
+                    paintEmptyState(copy, width);
+                    return;
+                }
+                for (int index = 0; index < entries.size(); index++) {
+                    paintRow(copy, entries.get(index), index, timelineWidth, width);
+                }
+                paintToday(copy, timelineWidth);
+            } finally {
+                copy.dispose();
+            }
+        }
+
+        private void paintMonths(Graphics2D graphics, int timelineWidth) {
+            LocalDate yearStart = LocalDate.of(seasonYear, 1, 1);
+            int days = yearStart.lengthOfYear();
+            graphics.setColor(FarmUi.mutedColor());
+            graphics.setFont(getFont().deriveFont(Font.BOLD, 10f));
+            for (Month month : Month.values()) {
+                LocalDate first = LocalDate.of(seasonYear, month, 1);
+                int x = xFor(first, yearStart, days, timelineWidth);
+                int nextX = month == Month.DECEMBER
+                        ? LABEL_WIDTH + timelineWidth
+                        : xFor(first.plusMonths(1), yearStart, days, timelineWidth);
+                if (month.getValue() % 2 == 0) {
+                    graphics.setColor(new Color(FarmUi.toneBackgroundColor(
+                            FarmUi.Tone.NEUTRAL).getRGB() & 0x00ffffff | 0x1f000000, true));
+                    graphics.fillRect(x, HEADER_HEIGHT - 18, nextX - x,
+                            Math.max(1, getHeight() - HEADER_HEIGHT + 18));
+                }
+                graphics.setColor(FarmUi.mutedColor());
+                graphics.drawString(month.name().substring(0, 3), x + 4, 22);
+                graphics.setColor(FarmUi.borderColor());
+                graphics.drawLine(x, 31, x, getHeight() - 8);
+            }
+            graphics.setColor(FarmUi.accentColor());
+            graphics.setFont(getFont().deriveFont(Font.BOLD, 12f));
+            graphics.drawString(Integer.toString(seasonYear), 14, 23);
+            graphics.setColor(FarmUi.borderColor());
+            graphics.drawLine(0, HEADER_HEIGHT - 1, getWidth(), HEADER_HEIGHT - 1);
+        }
+
+        private void paintRow(Graphics2D graphics, SeasonPlanEntry entry, int index,
+                              int timelineWidth, int width) {
+            int y = HEADER_HEIGHT + index * ROW_HEIGHT;
+            if (index % 2 == 0) {
+                Color stripe = FarmUi.toneBackgroundColor(FarmUi.Tone.NEUTRAL);
+                graphics.setColor(new Color(stripe.getRed(), stripe.getGreen(), stripe.getBlue(), 45));
+                graphics.fillRect(0, y, width, ROW_HEIGHT);
+            }
+            graphics.setColor(FarmUi.accentColor());
+            graphics.setFont(getFont().deriveFont(Font.BOLD, 12f));
+            graphics.drawString(trim(entry.getBedOrField(), 24), 14, y + 19);
+            graphics.setColor(FarmUi.mutedColor());
+            graphics.setFont(getFont().deriveFont(Font.PLAIN, 11f));
+            graphics.drawString(trim(cropLabel(entry), 30), 14, y + 36);
+
+            LocalDate yearStart = LocalDate.of(seasonYear, 1, 1);
+            int days = yearStart.lengthOfYear();
+            LocalDate transplant = entry.getTransplantDate() == null
+                    ? entry.getSowDate() : entry.getTransplantDate();
+            drawSegment(graphics, entry.getSowDate(), transplant, y,
+                    FarmUi.Tone.WARNING, yearStart, days, timelineWidth, 5);
+            drawSegment(graphics, transplant, entry.getHarvestStart(), y,
+                    FarmUi.Tone.INFO, yearStart, days, timelineWidth, 5);
+            drawSegment(graphics, entry.getHarvestStart(), entry.getHarvestEnd(), y,
+                    FarmUi.Tone.SUCCESS, yearStart, days, timelineWidth, 9);
+            graphics.setColor(FarmUi.borderColor());
+            graphics.drawLine(0, y + ROW_HEIGHT - 1, width, y + ROW_HEIGHT - 1);
+        }
+
+        private void drawSegment(Graphics2D graphics, LocalDate from, LocalDate to, int rowY,
+                                 FarmUi.Tone tone, LocalDate yearStart, int days,
+                                 int timelineWidth, int height) {
+            LocalDate clampedFrom = from.isBefore(yearStart) ? yearStart : from;
+            LocalDate yearEnd = yearStart.plusYears(1).minusDays(1);
+            LocalDate clampedTo = to.isAfter(yearEnd) ? yearEnd : to;
+            if (clampedTo.isBefore(clampedFrom)) {
+                return;
+            }
+            int x = xFor(clampedFrom, yearStart, days, timelineWidth);
+            int end = xFor(clampedTo.plusDays(1), yearStart, days, timelineWidth);
+            int y = rowY + (ROW_HEIGHT - height) / 2;
+            graphics.setColor(FarmUi.toneForegroundColor(tone));
+            graphics.fillRoundRect(x, y, Math.max(5, end - x), height, height, height);
+        }
+
+        private void paintToday(Graphics2D graphics, int timelineWidth) {
+            LocalDate today = LocalDate.now();
+            if (today.getYear() != seasonYear) {
+                return;
+            }
+            LocalDate yearStart = LocalDate.of(seasonYear, 1, 1);
+            int x = xFor(today, yearStart, yearStart.lengthOfYear(), timelineWidth);
+            graphics.setColor(FarmUi.toneForegroundColor(FarmUi.Tone.DANGER));
+            graphics.setStroke(new BasicStroke(1.5f));
+            graphics.drawLine(x, 32, x, getHeight() - 8);
+            graphics.setFont(getFont().deriveFont(Font.BOLD, 9f));
+            graphics.drawString("TODAY", Math.max(LABEL_WIDTH, x - 15), 43);
+        }
+
+        private void paintEmptyState(Graphics2D graphics, int width) {
+            graphics.setColor(FarmUi.accentColor());
+            graphics.setFont(getFont().deriveFont(Font.BOLD, 17f));
+            String title = "Build your first planting block";
+            int titleWidth = graphics.getFontMetrics().stringWidth(title);
+            graphics.drawString(title, Math.max(18, (width - titleWidth) / 2), 150);
+            graphics.setColor(FarmUi.mutedColor());
+            graphics.setFont(getFont().deriveFont(Font.PLAIN, 12f));
+            String help = "Add a crop, bed, dates, bed feet, and expected stems to map the season.";
+            int helpWidth = graphics.getFontMetrics().stringWidth(help);
+            graphics.drawString(help, Math.max(18, (width - helpWidth) / 2), 174);
+        }
+
+        private static int xFor(LocalDate date, LocalDate yearStart, int days,
+                                int timelineWidth) {
+            long offset = ChronoUnit.DAYS.between(yearStart, date);
+            double fraction = Math.max(0, Math.min(days, offset)) / (double) days;
+            return LABEL_WIDTH + (int) Math.round(fraction * timelineWidth);
+        }
+
+        private static String trim(String value, int max) {
+            if (value == null || value.length() <= max) {
+                return value == null ? "" : value;
+            }
+            return value.substring(0, Math.max(1, max - 1)) + "…";
+        }
+    }
+}

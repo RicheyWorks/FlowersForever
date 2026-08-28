@@ -5,10 +5,13 @@ import com.flowerfarm.model.CustomerOrder;
 import com.flowerfarm.model.HarvestEntry;
 import com.flowerfarm.model.KnowledgeEntry;
 import com.flowerfarm.model.OrderLine;
+import com.flowerfarm.model.SeasonPlanEntry;
+import com.flowerfarm.model.SeasonPlanStatus;
 import com.flowerfarm.service.CustomerService;
 import com.flowerfarm.service.HarvestService;
 import com.flowerfarm.service.KnowledgeService;
 import com.flowerfarm.service.OrderService;
+import com.flowerfarm.service.SeasonPlanService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -34,21 +37,26 @@ class DemoDataSeederTest {
     @Mock HarvestService harvestService;
     @Mock OrderService orderService;
     @Mock KnowledgeService knowledgeService;
+    @Mock SeasonPlanService seasonPlanService;
 
     DemoDataSeeder seeder;
     List<Customer> customers = new ArrayList<>();
     List<HarvestEntry> harvests = new ArrayList<>();
     List<CustomerOrder> orders = new ArrayList<>();
     List<KnowledgeEntry> knowledge = new ArrayList<>();
+    List<SeasonPlanEntry> seasonPlans = new ArrayList<>();
 
     @BeforeEach
     void setUp() {
         seeder = new DemoDataSeeder(
-                customerService, harvestService, orderService, knowledgeService);
+                customerService, harvestService, orderService, knowledgeService,
+                seasonPlanService);
         when(customerService.getAll()).thenAnswer(inv -> new ArrayList<>(customers));
         when(harvestService.getAll()).thenAnswer(inv -> new ArrayList<>(harvests));
         when(orderService.findBetween(any(), any())).thenAnswer(inv -> new ArrayList<>(orders));
         when(knowledgeService.search(any())).thenAnswer(inv -> new ArrayList<>(knowledge));
+        when(seasonPlanService.listForSeason(anyInt()))
+                .thenAnswer(inv -> new ArrayList<>(seasonPlans));
 
         lenient().when(customerService.add(any())).thenAnswer(inv -> {
             Customer c = inv.getArgument(0);
@@ -84,10 +92,16 @@ class DemoDataSeederTest {
             knowledge.add(entry);
             return entry;
         });
+        lenient().when(seasonPlanService.create(any())).thenAnswer(inv -> {
+            SeasonPlanEntry entry = inv.getArgument(0);
+            entry.setId((long) (seasonPlans.size() + 1));
+            seasonPlans.add(entry);
+            return entry;
+        });
     }
 
     @Test
-    @DisplayName("empty DB seeds customers, harvests, orders, and practical farm lessons")
+    @DisplayName("empty DB seeds customers, harvests, orders, lessons, and season plans")
     void seedsWhenEmpty() {
         seeder.run(new DefaultApplicationArguments(new String[]{}));
 
@@ -95,6 +109,7 @@ class DemoDataSeederTest {
         assertThat(harvests).hasSize(5);
         assertThat(orders).hasSize(3);
         assertThat(knowledge).hasSize(3);
+        assertThat(seasonPlans).hasSize(4);
         assertThat(orders.stream().filter(o -> "CONFIRMED".equals(o.getStatus())).count()).isEqualTo(2);
         assertThat(orders.stream().anyMatch(o -> "DRAFT".equals(o.getStatus()))).isTrue();
         assertThat(orders).extracting(CustomerOrder::getHandoffType)
@@ -117,6 +132,11 @@ class DemoDataSeederTest {
                 LocalDate.now(), "Existing lesson", com.flowerfarm.model.KnowledgeKind.PRACTICE,
                 "Rose", "", "A", "Harvest", "Existing observation", "", "", "",
                 null, com.flowerfarm.model.KnowledgeConfidence.NEEDS_REVIEW, List.of()));
+        seasonPlans.add(new SeasonPlanEntry(
+                LocalDate.now().getYear(), "Existing crop", "", "Bed A",
+                LocalDate.now().minusMonths(2), LocalDate.now().minusMonths(1),
+                LocalDate.now(), LocalDate.now().plusMonths(1),
+                50, 200, SeasonPlanStatus.HARVESTING, ""));
 
         seeder.run(new DefaultApplicationArguments(new String[]{}));
 
@@ -125,5 +145,6 @@ class DemoDataSeederTest {
         verify(orderService, never()).create(
                 anyLong(), any(), any(), any(), anyString(), anyList());
         verify(knowledgeService, never()).create(any());
+        verify(seasonPlanService, never()).create(any());
     }
 }

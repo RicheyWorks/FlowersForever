@@ -7,10 +7,13 @@ import com.flowerfarm.model.KnowledgeConfidence;
 import com.flowerfarm.model.KnowledgeEntry;
 import com.flowerfarm.model.KnowledgeKind;
 import com.flowerfarm.model.OrderLine;
+import com.flowerfarm.model.SeasonPlanEntry;
+import com.flowerfarm.model.SeasonPlanStatus;
 import com.flowerfarm.service.CustomerService;
 import com.flowerfarm.service.HarvestService;
 import com.flowerfarm.service.KnowledgeService;
 import com.flowerfarm.service.OrderService;
+import com.flowerfarm.service.SeasonPlanService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.ApplicationArguments;
@@ -45,15 +48,18 @@ public class DemoDataSeeder implements ApplicationRunner {
     private final HarvestService harvestService;
     private final OrderService orderService;
     private final KnowledgeService knowledgeService;
+    private final SeasonPlanService seasonPlanService;
 
     public DemoDataSeeder(CustomerService customerService,
                           HarvestService harvestService,
                           OrderService orderService,
-                          KnowledgeService knowledgeService) {
+                          KnowledgeService knowledgeService,
+                          SeasonPlanService seasonPlanService) {
         this.customerService = customerService;
         this.harvestService = harvestService;
         this.orderService = orderService;
         this.knowledgeService = knowledgeService;
+        this.seasonPlanService = seasonPlanService;
     }
 
     @Override
@@ -63,13 +69,15 @@ public class DemoDataSeeder implements ApplicationRunner {
         int harvests = seedHarvestsIfEmpty(today);
         int orders = seedOrdersIfEmpty(today);
         int knowledge = seedKnowledgeIfEmpty(today);
-        log.info("Demo seed complete — customers+{}, harvests+{}, orders+{}, knowledge+{} (today={})",
-                customers, harvests, orders, knowledge, today);
-        if (customers + harvests + orders + knowledge == 0) {
-            log.info("Demo seed: nothing to add (CRM/harvest/orders/knowledge already populated). "
+        int seasonPlans = seedSeasonPlanIfEmpty(today);
+        log.info("Demo seed complete — customers+{}, harvests+{}, orders+{}, knowledge+{}, "
+                        + "season plans+{} (today={})",
+                customers, harvests, orders, knowledge, seasonPlans, today);
+        if (customers + harvests + orders + knowledge + seasonPlans == 0) {
+            log.info("Demo seed: nothing to add (farm workflows already populated). "
                     + "Use a fresh ./data folder for a clean demo.");
         } else {
-            log.info("Demo ready: open Market Day, Harvest, and the Farm Knowledge Log.");
+            log.info("Demo ready: open Market Day, Season Planner, Harvest, and Knowledge Log.");
         }
     }
 
@@ -197,5 +205,39 @@ public class DemoDataSeeder implements ApplicationRunner {
                 today, KnowledgeConfidence.NEEDS_REVIEW,
                 List.of("market", "customer-request", "trial")));
         return 3;
+    }
+
+    private int seedSeasonPlanIfEmpty(LocalDate today) {
+        int year = today.getYear();
+        if (!seasonPlanService.listForSeason(year).isEmpty()) {
+            return 0;
+        }
+        seasonPlanService.create(plan(year, "Nootka Rose", "Schoener's Nutkana", "Bed A",
+                Month.FEBRUARY, 12, Month.APRIL, 1, Month.JUNE, 15,
+                Month.SEPTEMBER, 20, 80, 640, SeasonPlanStatus.HARVESTING));
+        seasonPlanService.create(plan(year, "Dahlia", "Cafe au Lait", "Bed C",
+                Month.MARCH, 5, Month.MAY, 12, Month.JULY, 20,
+                Month.OCTOBER, 10, 60, 480, SeasonPlanStatus.PLANTED));
+        seasonPlanService.create(plan(year, "Sweet Pea", "Spencer Mix", "Tunnel 2",
+                Month.JANUARY, 20, Month.MARCH, 1, Month.MAY, 10,
+                Month.JULY, 15, 45, 360, SeasonPlanStatus.COMPLETE));
+        seasonPlanService.create(plan(year, "Sunflower", "ProCut Plum", "Field C",
+                Month.MAY, 18, Month.JUNE, 2, Month.JULY, 28,
+                Month.SEPTEMBER, 5, 100, 900, SeasonPlanStatus.SOWN));
+        return 4;
+    }
+
+    private static SeasonPlanEntry plan(int year, String crop, String variety, String bed,
+                                        Month sowMonth, int sowDay,
+                                        Month transplantMonth, int transplantDay,
+                                        Month harvestMonth, int harvestDay,
+                                        Month harvestEndMonth, int harvestEndDay,
+                                        double bedFeet, int stems, SeasonPlanStatus status) {
+        return new SeasonPlanEntry(
+                year, crop, variety, bed, LocalDate.of(year, sowMonth, sowDay),
+                LocalDate.of(year, transplantMonth, transplantDay),
+                LocalDate.of(year, harvestMonth, harvestDay),
+                LocalDate.of(year, harvestEndMonth, harvestEndDay),
+                bedFeet, stems, status, "Demo seasonal planting block");
     }
 }

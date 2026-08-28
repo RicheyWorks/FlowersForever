@@ -132,6 +132,8 @@ class ReleaseContractTest {
                 "V2__add_order_handoff_type.sql")).isRegularFile();
         assertThat(Path.of("src", "main", "resources", "db", "migration", "h2",
                 "V3__farm_knowledge_log.sql")).isRegularFile();
+        assertThat(Path.of("src", "main", "resources", "db", "migration", "h2",
+                "V4__season_plan.sql")).isRegularFile();
     }
 
     @Test

@@ -17,6 +17,7 @@ import com.flowerfarm.service.OrderService;
 import com.flowerfarm.service.ReportService;
 import com.flowerfarm.service.SyncHistoryService;
 import com.flowerfarm.service.TrendService;
+import com.flowerfarm.service.SeasonPlanService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -95,7 +96,8 @@ class ProductionReadinessUiTest {
                 mock(OrderService.class), mock(ReportService.class),
                 mock(IrrigationAdvisorService.class), mock(MarketDayPackingService.class),
                 mock(MorningBriefingService.class), mock(DayCloseoutService.class),
-                mock(CustomerStatementService.class), mock(KnowledgeService.class), gate, session);
+                mock(CustomerStatementService.class), mock(KnowledgeService.class),
+                mock(SeasonPlanService.class), gate, session);
     }
 
     private static JMenuItem menuItem(JMenuBar menuBar, String text) {

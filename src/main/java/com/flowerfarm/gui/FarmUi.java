@@ -135,6 +135,7 @@ public final class FarmUi {
             case "Inventory" -> "ST";
             case "Add Item" -> "+";
             case "Harvest Log" -> "HV";
+            case "Season Planner" -> "SP";
             case "Customers & Orders" -> "CO";
             case "Market Day" -> "MK";
             case "Trend Analysis" -> "TR";
@@ -153,7 +154,7 @@ public final class FarmUi {
             case "Market Day", "Pricing Info" -> Tone.WARNING;
             case "Reference & Planning", "Knowledge Log" -> Tone.INFO;
             case "Customers & Orders", "Irrigation & Care" -> Tone.INFO;
-            case "Dashboard", "Inventory", "Add Item" -> Tone.SUCCESS;
+            case "Dashboard", "Inventory", "Add Item", "Season Planner" -> Tone.SUCCESS;
             default -> Tone.NEUTRAL;
         };
         return new NavigationIcon(code, toneBackgroundColor(tone), toneForegroundColor(tone));

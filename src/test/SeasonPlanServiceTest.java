@@ -1,0 +1,104 @@
+package com.flowerfarm.service;
+
+import com.flowerfarm.model.SeasonPlanEntry;
+import com.flowerfarm.model.SeasonPlanStatus;
+import com.flowerfarm.repository.SeasonPlanRepository;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import java.time.Clock;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
+import java.util.List;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.contains;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+@ExtendWith(MockitoExtension.class)
+@DisplayName("Season Planner service")
+class SeasonPlanServiceTest {
+
+    private static final Clock CLOCK = Clock.fixed(
+            Instant.parse("2026-08-28T17:00:00Z"), ZoneOffset.UTC);
+
+    @Mock SeasonPlanRepository repository;
+    @Mock SyncHistoryService syncHistoryService;
+
+    private SeasonPlanService service;
+
+    @BeforeEach
+    void setUp() {
+        service = new SeasonPlanService(repository, syncHistoryService, CLOCK);
+    }
+
+    @Test
+    @DisplayName("summarizes beds, crops, capacity, stems, and the harvest window")
+    void summarizesSeason() {
+        SeasonPlanEntry rose = entry("Nootka Rose", "Bed A", 80, 640,
+                LocalDate.of(2026, 6, 20), LocalDate.of(2026, 9, 10));
+        SeasonPlanEntry dahlia = entry("Dahlia", "Bed B", 50, 400,
+                LocalDate.of(2026, 7, 5), LocalDate.of(2026, 10, 2));
+        SeasonPlanEntry secondRose = entry("Nootka Rose", "Bed A", 20, 120,
+                LocalDate.of(2026, 8, 1), LocalDate.of(2026, 10, 10));
+        secondRose.setStatus(SeasonPlanStatus.COMPLETE);
+        when(repository.findBySeasonYear(2026))
+                .thenReturn(List.of(rose, dahlia, secondRose));
+
+        SeasonPlanService.SeasonSummary summary = service.summarize(2026);
+
+        assertThat(summary.plantingBlocks()).isEqualTo(3);
+        assertThat(summary.activeBlocks()).isEqualTo(2);
+        assertThat(summary.bedCount()).isEqualTo(2);
+        assertThat(summary.cropCount()).isEqualTo(2);
+        assertThat(summary.bedFeet()).isEqualTo(150);
+        assertThat(summary.expectedStems()).isEqualTo(1_160);
+        assertThat(summary.firstHarvest()).isEqualTo(LocalDate.of(2026, 6, 20));
+        assertThat(summary.lastHarvest()).isEqualTo(LocalDate.of(2026, 10, 10));
+    }
+
+    @Test
+    @DisplayName("creates a planting block with timestamps and an activity record")
+    void createsPlan() {
+        SeasonPlanEntry entry = entry("Nootka Rose", "Bed A", 80, 640,
+                LocalDate.of(2026, 6, 20), LocalDate.of(2026, 9, 10));
+        when(repository.save(any())).thenAnswer(invocation -> {
+            SeasonPlanEntry saved = invocation.getArgument(0);
+            saved.setId(17L);
+            return saved;
+        });
+
+        SeasonPlanEntry saved = service.create(entry);
+
+        assertThat(saved.getId()).isEqualTo(17L);
+        assertThat(saved.getCreatedAt()).isEqualTo(Instant.now(CLOCK));
+        verify(syncHistoryService).record(
+                eq("season-planner"), eq("SEASON_PLAN_CREATE"), eq(true),
+                contains("Nootka Rose in Bed A"), contains("seasonPlanId=17"), eq(1));
+    }
+
+    @Test
+    @DisplayName("always includes the current season in the year selector")
+    void includesCurrentSeason() {
+        when(repository.findDistinctSeasonYears()).thenReturn(List.of(2025, 2024));
+
+        assertThat(service.availableSeasons()).containsExactly(2026, 2025, 2024);
+    }
+
+    private static SeasonPlanEntry entry(String crop, String bed, double bedFeet,
+                                         int stems, LocalDate harvestStart,
+                                         LocalDate harvestEnd) {
+        return new SeasonPlanEntry(
+                2026, crop, "", bed, LocalDate.of(2026, 3, 1),
+                LocalDate.of(2026, 4, 12), harvestStart, harvestEnd,
+                bedFeet, stems, SeasonPlanStatus.PLANTED, "");
+    }
+}

@@ -81,6 +81,20 @@ what history is missing. Use the projected output and planning guidance with
 weather, bed conditions, crop maturity, committed orders, and the Market Day
 packing plan—not as an automatic production decision.
 
+### Plan the season and beds
+
+Open **Season Planner** to map crop timing before the work becomes a pile of
+calendar notes. Choose the season, then select **Add planting**. Enter the crop,
+variety, bed or field, sow and optional transplant dates, expected harvest
+window, bed length, and expected stems. Direct-sown crops can leave the
+transplant date blank.
+
+The **Visual timeline** shows every saved block across the year: gold for sowing
+or propagation, blue for growing, and green for the expected harvest window.
+The cards above it summarize active blocks, beds and bed feet, expected stems,
+and the first-to-last harvest dates. Open **Plan records** to sort details or to
+edit or remove the selected block. Removing a plan never removes a harvest log.
+
 ## Record a harvest
 
 Open **Harvest Log**. For one cut, complete the date, crop, quantity, unit, and

@@ -16,6 +16,7 @@ import com.flowerfarm.gui.tabs.ReferenceTab;
 import com.flowerfarm.gui.tabs.RoseVarietiesTab;
 import com.flowerfarm.gui.tabs.RoseVisualizerTab;
 import com.flowerfarm.gui.tabs.SyncHistoryTab;
+import com.flowerfarm.gui.tabs.SeasonPlannerTab;
 import com.flowerfarm.gui.tabs.TabHost;
 import com.flowerfarm.gui.tabs.TrendAnalysisTab;
 import com.flowerfarm.service.CustomerService;
@@ -30,6 +31,7 @@ import com.flowerfarm.service.MorningBriefingService;
 import com.flowerfarm.service.OrderService;
 import com.flowerfarm.service.ReportService;
 import com.flowerfarm.service.SyncHistoryService;
+import com.flowerfarm.service.SeasonPlanService;
 import com.flowerfarm.service.TrendService;
 
 import java.util.List;
@@ -52,6 +54,7 @@ public final class FarmTabCatalog {
     private final DayCloseoutService closeoutService;
     private final CustomerStatementService statementService;
     private final KnowledgeService knowledgeService;
+    private final SeasonPlanService seasonPlanService;
 
     public FarmTabCatalog(InventoryService inventoryService, TrendService trendService,
                           HarvestService harvestService, SyncHistoryService syncHistoryService,
@@ -61,7 +64,8 @@ public final class FarmTabCatalog {
                           MorningBriefingService briefingService,
                           DayCloseoutService closeoutService,
                           CustomerStatementService statementService,
-                          KnowledgeService knowledgeService) {
+                          KnowledgeService knowledgeService,
+                          SeasonPlanService seasonPlanService) {
         this.inventoryService = inventoryService;
         this.trendService = trendService;
         this.harvestService = harvestService;
@@ -75,6 +79,7 @@ public final class FarmTabCatalog {
         this.closeoutService = closeoutService;
         this.statementService = statementService;
         this.knowledgeService = knowledgeService;
+        this.seasonPlanService = seasonPlanService;
     }
 
     public Catalog create(TabHost host) {
@@ -97,6 +102,7 @@ public final class FarmTabCatalog {
         List<FlowerFarmTab> tabs = List.of(
                 dashboard,
                 marketDay,
+                new SeasonPlannerTab(seasonPlanService, host),
                 harvestLog,
                 inventoryWorkspace,
                 irrigation,
