@@ -177,6 +177,7 @@ public class CrmTab implements FlowerFarmTab {
     private JButton clearOrderFilterBtn;
     private JButton readyToFulfillBtn;
     private JButton needsHandoffReviewBtn;
+    private JButton focusNewOrderBtn;
     private JComboBox<String> orderTools;
     private JButton runOrderToolBtn;
     private JButton refreshCrmBtn;
@@ -187,6 +188,8 @@ public class CrmTab implements FlowerFarmTab {
     private JPanel customerState;
     private CardLayout orderCardLayout;
     private JPanel orderState;
+    private JPanel newOrderSetupPanel;
+    private JPanel selectedOrderReviewPanel;
     private JLabel orderEmptyTitle;
     private JLabel orderEmptyGuidance;
     private JButton orderEmptyShowAllBtn;
@@ -1050,6 +1053,13 @@ public class CrmTab implements FlowerFarmTab {
         needsHandoffReviewBtn.getAccessibleContext().setAccessibleDescription(
                 needsHandoffReviewBtn.getToolTipText());
         needsHandoffReviewBtn.addActionListener(event -> showNeedsHandoffReview());
+        focusNewOrderBtn = FarmUi.primaryButton("New order");
+        focusNewOrderBtn.setName("crm.focusNewOrder");
+        focusNewOrderBtn.setToolTipText(
+                "Open a clean new-order workspace without losing unfinished work on a selected order.");
+        focusNewOrderBtn.getAccessibleContext().setAccessibleDescription(
+                focusNewOrderBtn.getToolTipText());
+        focusNewOrderBtn.addActionListener(event -> focusNewOrderEntry());
         JPanel filterCriteria = FarmUi.toolbar(
                 fieldLabel("Status", filterStatus, '\0'), filterStatus,
                 fieldLabel("Handoff", filterHandoff, '\0'), filterHandoff,
@@ -1058,7 +1068,7 @@ public class CrmTab implements FlowerFarmTab {
                 fieldLabel("From", filterFrom, '\0'), filterFrom,
                 fieldLabel("To", filterTo, '\0'), filterTo);
         JPanel filterActions = FarmUi.toolbar(
-                applyOrderFilterBtn, clearOrderFilterBtn, readyToFulfillBtn,
+                focusNewOrderBtn, applyOrderFilterBtn, clearOrderFilterBtn, readyToFulfillBtn,
                 needsHandoffReviewBtn,
                 orderStatusLabel, fulfillmentStatusLabel);
         JPanel filterBar = new JPanel();
@@ -1103,10 +1113,10 @@ public class CrmTab implements FlowerFarmTab {
         JPanel form = new JPanel();
         form.setOpaque(false);
         form.setLayout(new BoxLayout(form, BoxLayout.Y_AXIS));
-        JPanel identityForm = new JPanel(new GridLayout(0, 4, 6, 4));
+        JPanel identityForm = new JPanel(new GridLayout(0, 2, 6, 4));
         identityForm.setOpaque(false);
         identityForm.setName("crm.newOrderDetails");
-        JPanel productForm = new JPanel(new GridLayout(0, 4, 6, 4));
+        JPanel productForm = new JPanel(new GridLayout(0, 2, 6, 4));
         productForm.setOpaque(false);
         productForm.setName("crm.productEntry");
         orderCustomer = new JComboBox<>();
@@ -1117,7 +1127,7 @@ public class CrmTab implements FlowerFarmTab {
                 updateOrderActions();
             }
         });
-        newOrderCustomerContext = FarmUi.displayArea(3, 42);
+        newOrderCustomerContext = FarmUi.displayArea(2, 42);
         newOrderCustomerContext.setName("crm.newOrderCustomerContext");
         newOrderCustomerContext.setText(
                 "Add or select a customer to verify contact and delivery context.");
@@ -1186,25 +1196,28 @@ public class CrmTab implements FlowerFarmTab {
         addFormField(productForm, "Unit", orderUnit, '\0');
         addFormField(productForm, "Unit price $", orderPrice, '\0');
         JPanel identitySection = FarmUi.section(
-                "New order details",
+                "1 · Order basics",
                 "New orders start as Draft. Review the saved products, customer, date, and instructions before confirmation.",
                 identityForm);
         JPanel productSection = FarmUi.section(
-                "Product entry",
-                "Creates the first product in new-order mode or adds a product to the selected order.",
+                "2 · Product and quantity",
+                "Choose an inventory product when possible, then confirm quantity, unit, and selling price.",
                 productForm);
-        form.add(identitySection);
-        form.add(Box.createVerticalStrut(FarmUi.CONTROL_GAP));
         JPanel newOrderCustomerContextPanel = new JPanel(new BorderLayout(6, 6));
         newOrderCustomerContextPanel.setOpaque(false);
         newOrderCustomerContextPanel.add(newOrderCustomerContext, BorderLayout.CENTER);
         newOrderCustomerContextPanel.add(openNewOrderCustomerBtn, BorderLayout.EAST);
-        form.add(FarmUi.section(
+        JPanel customerContextSection = FarmUi.section(
                 "Customer & delivery context",
                 "Delivery readiness updates from customer contact, account notes, and order instructions; Draft creation remains available.",
-                newOrderCustomerContextPanel));
-        form.add(Box.createVerticalStrut(FarmUi.CONTROL_GAP));
-        form.add(productSection);
+                newOrderCustomerContextPanel);
+        newOrderSetupPanel = new JPanel();
+        newOrderSetupPanel.setName("crm.newOrderSetup");
+        newOrderSetupPanel.setOpaque(false);
+        newOrderSetupPanel.setLayout(new BoxLayout(newOrderSetupPanel, BoxLayout.Y_AXIS));
+        newOrderSetupPanel.add(identitySection);
+        newOrderSetupPanel.add(Box.createVerticalStrut(FarmUi.CONTROL_GAP));
+        newOrderSetupPanel.add(customerContextSection);
 
         createOrderBtn = FarmUi.primaryButton("Create & select order");
         createOrderBtn.setToolTipText(
@@ -1245,7 +1258,7 @@ public class CrmTab implements FlowerFarmTab {
                 FarmUi.Tone.NEUTRAL);
         selectedOrderLabel.setName("crm.selectedOrder");
         selectedOrderLabel.getAccessibleContext().setAccessibleName("Active order entry target");
-        selectedOrderCustomerContext = FarmUi.displayArea(3, 42);
+        selectedOrderCustomerContext = FarmUi.displayArea(2, 42);
         selectedOrderCustomerContext.setName("crm.selectedOrderCustomer");
         selectedOrderCustomerContext.setText(
                 "Select an order to see its customer contact and account context.");
@@ -1432,14 +1445,9 @@ public class CrmTab implements FlowerFarmTab {
         orderPrice.getDocument().addDocumentListener(linePreviewListener);
         updateOrderLinePreview();
         updateOrderActions();
-        JPanel lifecycle = new JPanel(new GridLayout(2, 2,
-                FarmUi.CONTROL_GAP, FarmUi.CONTROL_GAP));
+        JPanel lifecycle = FarmUi.toolbar(
+                createOrderBtn, addOrderLineBtn, confirmOrderBtn, fulfillOrderBtn);
         lifecycle.setName("crm.orderLifecycleActions");
-        lifecycle.setOpaque(false);
-        lifecycle.add(createOrderBtn);
-        lifecycle.add(addOrderLineBtn);
-        lifecycle.add(confirmOrderBtn);
-        lifecycle.add(fulfillOrderBtn);
 
         orderTools = new JComboBox<>();
         setOrderToolChoices(true);
@@ -1448,50 +1456,89 @@ public class CrmTab implements FlowerFarmTab {
         orderTools.addActionListener(event -> updateOrderActions());
         runOrderToolBtn = FarmUi.secondaryButton("Run action");
         runOrderToolBtn.addActionListener(e -> runOrderTool((String) orderTools.getSelectedItem()));
-        JPanel secondaryActions = FarmUi.toolbar(
-                startAnotherOrderBtn, resetNewOrderDetailsBtn,
-                controlLabel("More order actions", orderTools), orderTools, runOrderToolBtn);
+        JPanel secondaryActions = new JPanel();
+        secondaryActions.setOpaque(false);
+        secondaryActions.setLayout(new BoxLayout(secondaryActions, BoxLayout.Y_AXIS));
+        secondaryActions.add(FarmUi.toolbar(
+                startAnotherOrderBtn, resetNewOrderDetailsBtn));
+        secondaryActions.add(Box.createVerticalStrut(FarmUi.CONTROL_GAP));
+        secondaryActions.add(FarmUi.toolbar(
+                controlLabel("More order actions", orderTools), orderTools, runOrderToolBtn));
         updateOrderActions();
 
-        JPanel south = new JPanel(new BorderLayout(0, FarmUi.CONTROL_GAP));
-        south.add(form, BorderLayout.CENTER);
-        JPanel orderActions = new JPanel();
-        orderActions.setOpaque(false);
-        orderActions.setLayout(new BoxLayout(orderActions, BoxLayout.Y_AXIS));
-        orderActions.add(selectedOrderLabel);
-        orderActions.add(Box.createVerticalStrut(FarmUi.CONTROL_GAP));
+        JPanel south = new JPanel(new BorderLayout());
+        JPanel selectedReviewBody = new JPanel();
+        selectedReviewBody.setOpaque(false);
+        selectedReviewBody.setLayout(
+                new BoxLayout(selectedReviewBody, BoxLayout.Y_AXIS));
         JPanel customerContext = new JPanel(new BorderLayout(FarmUi.CONTROL_GAP, 0));
         customerContext.setOpaque(false);
         customerContext.add(selectedOrderCustomerContext, BorderLayout.CENTER);
         customerContext.add(reviewOrderCustomerBtn, BorderLayout.EAST);
-        orderActions.add(customerContext);
-        orderActions.add(Box.createVerticalStrut(FarmUi.CONTROL_GAP));
-        orderActions.add(FarmUi.toolbar(selectedOrderStockLabel, resolveOrderStockBtn));
-        orderActions.add(Box.createVerticalStrut(FarmUi.CONTROL_GAP));
-        orderActions.add(FarmUi.toolbar(
+        selectedReviewBody.add(customerContext);
+        selectedReviewBody.add(Box.createVerticalStrut(FarmUi.CONTROL_GAP));
+        selectedReviewBody.add(FarmUi.toolbar(
+                selectedOrderStockLabel, resolveOrderStockBtn));
+        selectedReviewBody.add(Box.createVerticalStrut(FarmUi.CONTROL_GAP));
+        JPanel correctionGrid = new JPanel(new GridLayout(
+                2, 1, FarmUi.CONTROL_GAP, FarmUi.CONTROL_GAP));
+        correctionGrid.setOpaque(false);
+        correctionGrid.add(FarmUi.toolbar(
                 controlLabel("Selected order date", selectedOrderDate),
                 selectedOrderDate, saveOrderDateBtn));
-        orderActions.add(Box.createVerticalStrut(FarmUi.CONTROL_GAP));
-        orderActions.add(FarmUi.toolbar(
+        correctionGrid.add(FarmUi.toolbar(
                 controlLabel("Selected handoff type", selectedOrderHandoffType),
                 selectedOrderHandoffType, saveOrderHandoffBtn));
-        orderActions.add(Box.createVerticalStrut(FarmUi.CONTROL_GAP));
-        orderActions.add(FarmUi.toolbar(
+        selectedReviewBody.add(correctionGrid);
+        selectedReviewBody.add(Box.createVerticalStrut(FarmUi.CONTROL_GAP));
+        selectedReviewBody.add(FarmUi.toolbar(
                 controlLabel("Pickup / packing instructions", selectedOrderNotes),
                 selectedOrderNotes, saveOrderNotesBtn));
-        orderActions.add(Box.createVerticalStrut(FarmUi.CONTROL_GAP));
-        orderActions.add(FarmUi.toolbar(
+        selectedReviewBody.add(Box.createVerticalStrut(FarmUi.CONTROL_GAP));
+        selectedReviewBody.add(FarmUi.toolbar(
                 controlLabel("Saved products", selectedOrderLine), selectedOrderLine));
-        orderActions.add(Box.createVerticalStrut(FarmUi.CONTROL_GAP));
-        orderActions.add(FarmUi.toolbar(
+        selectedReviewBody.add(Box.createVerticalStrut(FarmUi.CONTROL_GAP));
+        selectedReviewBody.add(FarmUi.toolbar(
                 editOrderLineBtn, cancelOrderLineEditBtn, removeOrderLineBtn));
-        orderActions.add(Box.createVerticalStrut(FarmUi.CONTROL_GAP));
-        orderActions.add(orderLinePreviewLabel);
-        orderActions.add(Box.createVerticalStrut(FarmUi.CONTROL_GAP));
-        orderActions.add(lifecycle);
-        orderActions.add(Box.createVerticalStrut(FarmUi.CONTROL_GAP));
-        orderActions.add(secondaryActions);
-        south.add(orderActions, BorderLayout.SOUTH);
+        selectedOrderReviewPanel = FarmUi.section(
+                "Selected order readiness",
+                "Review the customer, delivery details, stock, and saved products for this order only.",
+                selectedReviewBody);
+        selectedOrderReviewPanel.setName("crm.selectedOrderReview");
+        selectedOrderReviewPanel.setVisible(false);
+
+        JPanel contextColumn = new JPanel();
+        contextColumn.setName("crm.orderContextColumn");
+        contextColumn.setOpaque(false);
+        contextColumn.setLayout(new BoxLayout(contextColumn, BoxLayout.Y_AXIS));
+        contextColumn.add(newOrderSetupPanel);
+        contextColumn.add(selectedOrderReviewPanel);
+
+        JPanel productColumn = new JPanel();
+        productColumn.setName("crm.orderProductColumn");
+        productColumn.setOpaque(false);
+        productColumn.setLayout(new BoxLayout(productColumn, BoxLayout.Y_AXIS));
+        productColumn.add(productSection);
+        productColumn.add(Box.createVerticalStrut(FarmUi.CONTROL_GAP));
+        productColumn.add(orderLinePreviewLabel);
+        productColumn.add(Box.createVerticalStrut(FarmUi.CONTROL_GAP));
+        productColumn.add(FarmUi.section(
+                "3 · Save the next step",
+                "Create a Draft, add another product, confirm it for packing, or complete the physical handoff.",
+                lifecycle));
+        productColumn.add(Box.createVerticalStrut(FarmUi.CONTROL_GAP));
+        productColumn.add(secondaryActions);
+
+        JPanel entryColumns = new JPanel(new GridLayout(
+                1, 2, 12, 0));
+        entryColumns.setName("crm.orderEntryColumns");
+        entryColumns.setOpaque(false);
+        entryColumns.add(contextColumn);
+        entryColumns.add(productColumn);
+        form.add(selectedOrderLabel);
+        form.add(Box.createVerticalStrut(FarmUi.CONTROL_GAP));
+        form.add(entryColumns);
+        south.add(form, BorderLayout.CENTER);
         Dimension entryPreferred = south.getPreferredSize();
         south.setPreferredSize(new Dimension(0, entryPreferred.height));
 
@@ -2263,6 +2310,52 @@ public class CrmTab implements FlowerFarmTab {
         applyPendingProductWriteGuidance();
         applyPendingDestructiveSuccessGuidance();
         applyPendingCorrectionSuccessGuidance();
+        updateOrderModePresentation(row, unavailableTarget, orderWriteEnabled);
+    }
+
+    /** Shows only the controls that belong to the active new- or saved-order workflow. */
+    private void updateOrderModePresentation(int selectedRow, boolean unavailableTarget,
+                                             boolean orderWriteEnabled) {
+        boolean newOrderMode = selectedRow < 0;
+        boolean presentationChanged = false;
+        if (newOrderSetupPanel != null) {
+            presentationChanged |= newOrderSetupPanel.isVisible() != newOrderMode;
+            newOrderSetupPanel.setVisible(newOrderMode);
+        }
+        if (selectedOrderReviewPanel != null) {
+            presentationChanged |= selectedOrderReviewPanel.isVisible() == newOrderMode;
+            selectedOrderReviewPanel.setVisible(!newOrderMode);
+        }
+        presentationChanged |= setOrderModeVisible(createOrderBtn, newOrderMode);
+        presentationChanged |= setOrderModeVisible(resetNewOrderDetailsBtn, newOrderMode);
+        presentationChanged |= setOrderModeVisible(addOrderLineBtn, !newOrderMode);
+        presentationChanged |= setOrderModeVisible(confirmOrderBtn, !newOrderMode);
+        presentationChanged |= setOrderModeVisible(fulfillOrderBtn, !newOrderMode);
+        presentationChanged |= setOrderModeVisible(
+                startAnotherOrderBtn, !newOrderMode || unavailableTarget);
+        if (focusNewOrderBtn != null) {
+            focusNewOrderBtn.setText(newOrderMode ? "New order open" : "New order");
+            focusNewOrderBtn.setEnabled(orderWriteEnabled
+                    && (!newOrderMode || unavailableTarget));
+            String guidance = newOrderMode && !unavailableTarget
+                    ? "The new-order workspace is already open below."
+                    : "Pause selected-order entry safely and open the separate new-order workspace.";
+            focusNewOrderBtn.setToolTipText(guidance);
+            focusNewOrderBtn.getAccessibleContext().setAccessibleDescription(guidance);
+        }
+        if (presentationChanged && panel != null) {
+            panel.revalidate();
+            panel.repaint();
+        }
+    }
+
+    private static boolean setOrderModeVisible(JComponent component, boolean visible) {
+        if (component == null) {
+            return false;
+        }
+        boolean changed = component.isVisible() != visible;
+        component.setVisible(visible);
+        return changed;
     }
 
     private void applyPendingCreatedOrderGuidance(int selectedRow) {
@@ -3653,6 +3746,16 @@ public class CrmTab implements FlowerFarmTab {
         } catch (RuntimeException exception) {
             return 0.0;
         }
+    }
+
+    private void focusNewOrderEntry() {
+        if (orderTable != null && (orderTable.getSelectedRow() >= 0
+                || unavailableProductDraftOrderId != null)) {
+            startAnotherOrder();
+            return;
+        }
+        FarmUi.revealAndFocus(orderCustomer);
+        status("New order mode is open. Choose the customer and delivery details, then add the first product.");
     }
 
     private void startAnotherOrder() {

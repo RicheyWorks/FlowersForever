@@ -37,6 +37,7 @@ import javax.swing.JTextField;
 import javax.swing.SwingUtilities;
 import java.awt.Component;
 import java.awt.Container;
+import java.awt.FlowLayout;
 import java.awt.GridLayout;
 import java.io.File;
 import java.nio.file.Files;
@@ -4681,13 +4682,18 @@ class PriorityTabsUiTest {
                     .isEqualTo(java.awt.event.KeyEvent.VK_F);
             JComponent lifecycle = (JComponent) findNamed(
                     root[0], "crm.orderLifecycleActions").get(0);
-            assertThat(lifecycle.getLayout()).isInstanceOf(GridLayout.class);
-            GridLayout lifecycleLayout = (GridLayout) lifecycle.getLayout();
-            assertThat(lifecycleLayout.getRows()).isEqualTo(2);
-            assertThat(lifecycleLayout.getColumns()).isEqualTo(2);
+            assertThat(lifecycle.getLayout()).isInstanceOf(FlowLayout.class);
+            FlowLayout lifecycleLayout = (FlowLayout) lifecycle.getLayout();
+            assertThat(lifecycleLayout.getAlignment()).isEqualTo(FlowLayout.LEFT);
             assertThat(find(lifecycle, JButton.class)).extracting(JButton::getText)
                     .containsExactly("Create & select order", "Add product to selected order",
                             "Confirm order", "Complete order");
+            assertThat(findNamed(root[0], "crm.newOrderSetup").get(0).isVisible()).isTrue();
+            assertThat(findNamed(root[0], "crm.selectedOrderReview").get(0).isVisible())
+                    .isFalse();
+            assertThat(create.isVisible()).isTrue();
+            assertThat(button(root[0], "Add product to selected order").isVisible()).isFalse();
+            assertThat(button(root[0], "New order open").isEnabled()).isFalse();
             JComponent orderPanel = (JComponent) findNamed(root[0], "crm.orderPanel").get(0);
             assertThat(find(orderPanel, JButton.class).stream()
                     .filter(button -> button.getMnemonic() == java.awt.event.KeyEvent.VK_V))
@@ -4738,6 +4744,13 @@ class PriorityTabsUiTest {
         });
         release.countDown();
         awaitLabel(root[0], "Selected #42 · Kitsap Blooms · Draft · Delivery · 1 product · $3.50");
+        SwingUtilities.invokeAndWait(() -> {
+            assertThat(findNamed(root[0], "crm.newOrderSetup").get(0).isVisible()).isFalse();
+            assertThat(findNamed(root[0], "crm.selectedOrderReview").get(0).isVisible())
+                    .isTrue();
+            assertThat(button(root[0], "Add product to selected order").isVisible()).isTrue();
+            assertThat(button(root[0], "New order").isEnabled()).isTrue();
+        });
 
         assertThat(calledOnUiThread).isFalse();
         verify(orders, times(1)).createReviewed(any(), eq(LocalDate.of(2026, 9, 12)), eq("DRAFT"),
