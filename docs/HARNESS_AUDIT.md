@@ -555,7 +555,8 @@ set and SBOM contain Tomcat core, EL, and WebSocket **10.1.59**.
 | Checkstyle | 0 violations |
 | CycloneDX | XML and JSON generated and validated; 94 components |
 | Windows app-image creation | JDK 17.0.20.1 image built; final payload SHA-256 verified |
-| Windows native launcher execution | Blocked on this host: all 63 JVM threads reported suspended |
+| Windows native launcher execution | Passed on JDK 17: doctor ready, schema 21, 33 farm tools, stdio ping |
+| Java 17 executable-JAR process checks | 2 passed against the final patched JAR |
 
 A live, isolated browser run saved a field note, restored an unfinished draft,
 queued a note while the server was stopped, reloaded the page, and recovered
@@ -565,11 +566,14 @@ overflow and primary inputs and buttons were at least 44px tall. Current
 desktop Add Item light/dark renders and the compact Harvest Log were inspected;
 essential fields remain visible while optional fields scroll.
 
-One JDK 22 native stdio request succeeded during diagnosis, but subsequent
-fresh JDK 22 and supported JDK 17 images stalled. Windows reported every JVM
-thread suspended while the launcher wrapper waited. The pausing mechanism
-was not identified or overridden. This is not evidence of a Java-level
-deadlock, and a complete native smoke remains unverified on this host.
+Earlier fresh JDK 22 and supported JDK 17 images stalled while Windows
+reported every JVM thread suspended and the launcher wrapper waited. The
+pausing mechanism was not identified or overridden. A later bounded run of
+the final JDK 17 image completed the readiness doctor, stdio ping, and clean
+EOF shutdown successfully. It used the production smoke assertions with
+timestamp-only progress logging and a 300-second per-phase limit; the result
+reports schema 21 and all 33 farm tools enabled. A host suspension should be
+investigated before treating a startup timeout as an application deadlock.
 The native AI configurations select `-Djdk.console=java.base` for ordinary
 stdio console behavior, as described by the
 [OpenJDK Quality Group](https://inside.java/2023/07/31/quality-heads-up/);
@@ -586,8 +590,9 @@ recalculation can delay subsequent uploads; the PR carries current CI status.
 
 Local application validation used JDK 22.0.2 with Java 17 compilation targets.
 The final full build is `target/farmer-patched-verify.log`; native build and
-execution evidence is in `target/farmer-native17-build.log` and
-`target/farmer-native17-final.log`. Earlier focused evidence is in
+execution evidence is in `target/farmer-native17-build.log`,
+`target/farmer-native17-observed.log`, and `target/farmer-jdk17-jar-smoke.log`.
+Earlier focused evidence is in
 `target/farmer-release-contract.log` and `target/farmer-sbom.log`.
 Detailed process reports are under `target/surefire-reports` and
 `target/failsafe-reports`; Node checks run with
