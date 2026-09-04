@@ -49,6 +49,8 @@ public class TrendAnalysisTab implements FlowerFarmTab {
     private JLabel coverageDetailLabel;
     private JLabel reliabilityLabel;
     private JLabel reliabilityDetailLabel;
+    private JLabel freshnessLabel;
+    private JLabel freshnessDetailLabel;
     private JLabel contextLabel;
     private JLabel guidanceLabel;
     private JLabel evidenceLabel;
@@ -57,6 +59,10 @@ public class TrendAnalysisTab implements FlowerFarmTab {
     private JLabel seriesHintLabel;
     private JTable weeklyTable;
     private DefaultTableModel weeklyModel;
+    private boolean analyzing;
+    private boolean analysisQueued;
+    private boolean updatingSeriesOptions;
+    private AnalysisRequest activeAnalysisRequest;
 
     private final TimeSeries actualSeries = new TimeSeries("Actual harvest");
     private final TimeSeries fittedSeries = new TimeSeries("Fitted trend");
@@ -113,6 +119,8 @@ public class TrendAnalysisTab implements FlowerFarmTab {
         coverageDetailLabel = detailLabel("Three separate weeks required");
         reliabilityLabel = metricLabel("trend.reliability", "Not ready");
         reliabilityDetailLabel = detailLabel("Model fit appears after analysis");
+        freshnessLabel = metricLabel("trend.freshness", "Not checked");
+        freshnessDetailLabel = detailLabel("Latest recorded week appears after analysis");
 
         seriesSelector = new JComboBox<>(new SeriesChoice[]{SeriesChoice.autoChoice()});
         seriesSelector.setName("trend.seriesSelector");
@@ -120,8 +128,8 @@ public class TrendAnalysisTab implements FlowerFarmTab {
         seriesSelector.setPreferredSize(new Dimension(310, 34));
         seriesSelector.getAccessibleContext().setAccessibleName("Harvest crop and unit series");
         seriesSelector.getAccessibleContext().setAccessibleDescription(
-                "Choose one recorded crop and unit or let Flowers Forever use the strongest history.");
-        seriesSelector.addActionListener(event -> updateSeriesHint());
+                "Choose one recorded crop and unit or let FlowersForever use the strongest history.");
+        seriesSelector.addActionListener(event -> analysisSelectionChanged());
 
         windowSelector = new JComboBox<>(AnalysisWindow.values());
         windowSelector.setName("trend.windowSelector");
@@ -129,7 +137,7 @@ public class TrendAnalysisTab implements FlowerFarmTab {
         windowSelector.getAccessibleContext().setAccessibleName("Trend analysis window");
         windowSelector.getAccessibleContext().setAccessibleDescription(
                 "Choose how many recent recorded weeks to include in the model.");
-        windowSelector.addActionListener(event -> updateSeriesHint());
+        windowSelector.addActionListener(event -> analysisSelectionChanged());
 
         seriesHintLabel = FarmUi.formHint(
                 "Loading recorded crop series… Automatic uses the history with the most weeks.");
@@ -137,7 +145,7 @@ public class TrendAnalysisTab implements FlowerFarmTab {
         JPanel filterControls = FarmUi.toolbar(
                 filterLabel("Crop & unit", seriesSelector), seriesSelector,
                 filterLabel("History", windowSelector), windowSelector);
-        JPanel filterBar = new JPanel(new BorderLayout(10, 0));
+        JPanel filterBar = new JPanel(new BorderLayout(10, 5));
         filterBar.setName("trend.filters");
         filterBar.setOpaque(true);
         filterBar.setBackground(FarmUi.surfaceColor());
@@ -145,12 +153,12 @@ public class TrendAnalysisTab implements FlowerFarmTab {
                 BorderFactory.createLineBorder(FarmUi.borderColor()),
                 BorderFactory.createEmptyBorder(4, 9, 4, 9)));
         filterBar.add(filterControls, BorderLayout.CENTER);
-        filterBar.add(seriesHintLabel, BorderLayout.EAST);
-        filterBar.setMinimumSize(new Dimension(0, 44));
-        filterBar.setPreferredSize(new Dimension(0, 44));
-        filterBar.setMaximumSize(new Dimension(Integer.MAX_VALUE, 44));
+        filterBar.add(seriesHintLabel, BorderLayout.SOUTH);
+        int filterHeight = filterBar.getPreferredSize().height;
+        filterBar.setMinimumSize(new Dimension(0, filterHeight));
+        filterBar.setMaximumSize(new Dimension(Integer.MAX_VALUE, filterHeight));
 
-        JPanel metrics = new JPanel(new GridLayout(1, 4, 12, 0));
+        JPanel metrics = new JPanel(new GridLayout(1, 5, 10, 0));
         metrics.setOpaque(false);
         metrics.setName("trend.metrics");
         metrics.add(FarmUi.metricCard(
@@ -161,6 +169,8 @@ public class TrendAnalysisTab implements FlowerFarmTab {
                 "Data coverage", coverageLabel, coverageDetailLabel, FarmUi.Tone.NEUTRAL));
         metrics.add(FarmUi.metricCard(
                 "Signal quality", reliabilityLabel, reliabilityDetailLabel, FarmUi.Tone.WARNING));
+        metrics.add(FarmUi.metricCard(
+                "Data freshness", freshnessLabel, freshnessDetailLabel, FarmUi.Tone.DANGER));
 
         trendDataset.addSeries(actualSeries);
         trendDataset.addSeries(fittedSeries);
@@ -267,18 +277,25 @@ public class TrendAnalysisTab implements FlowerFarmTab {
     /** Runs the forecast off the Event Dispatch Thread and renders the result. */
     public void runAnalysis() {
         getUIComponent();
-        SeriesChoice selectedSeries = (SeriesChoice) seriesSelector.getSelectedItem();
-        AnalysisWindow selectedWindow = (AnalysisWindow) windowSelector.getSelectedItem();
-        String subject = selectedSeries == null || selectedSeries.isAutomatic()
-                ? "best-supported series" : selectedSeries.summary().cropName();
+        AnalysisRequest request = currentAnalysisRequest();
+        if (analyzing) {
+            analysisQueued = !request.equals(activeAnalysisRequest);
+            showQueuedAnalysisState();
+            return;
+        }
+        analyzing = true;
+        analysisQueued = false;
+        activeAnalysisRequest = request;
         analyzeButton.setEnabled(false);
         analyzeButton.setText("Analyzing…");
-        seriesSelector.setEnabled(false);
-        windowSelector.setEnabled(false);
-        FarmUi.updateStatusBadge(analysisStatus, "Analyzing " + subject, FarmUi.Tone.INFO);
+        seriesSelector.setEnabled(!updatingSeriesOptions);
+        windowSelector.setEnabled(true);
+        FarmUi.updateStatusBadge(
+                analysisStatus, "Analyzing " + request.subject(), FarmUi.Tone.INFO);
         updateMetric(forecastLabel, "Analyzing…");
         updateMetric(changeLabel, "—");
         updateMetric(reliabilityLabel, "Checking");
+        updateMetric(freshnessLabel, "Checking");
         updateInsight(contextLabel, "Grouping matching crops and units into recorded weeks.");
         updateInsight(evidenceLabel, "Reading real Harvest Log entries in the background.");
         updateInsight(guidanceLabel, "The rest of the farm app remains available while this runs.");
@@ -287,57 +304,105 @@ public class TrendAnalysisTab implements FlowerFarmTab {
         SwingWorker<TrendService.TrendResult, Void> worker = new SwingWorker<>() {
             @Override
             protected TrendService.TrendResult doInBackground() {
-                if (selectedSeries == null || selectedSeries.isAutomatic()) {
-                    return selectedWindow == null || selectedWindow.recentWeeks() == 0
-                            ? trendService.analyzeQuantityTrend()
-                            : trendService.analyzeQuantityTrend(
-                                    null, null, selectedWindow.recentWeeks());
-                }
-                return trendService.analyzeQuantityTrend(
-                        selectedSeries.summary().cropName(),
-                        selectedSeries.summary().unit(),
-                        selectedWindow == null ? 0 : selectedWindow.recentWeeks());
+                return request.analyze(trendService);
             }
 
             @Override
             protected void done() {
+                boolean superseded = !request.equals(currentAnalysisRequest());
                 try {
                     TrendService.TrendResult result = get();
-                    if (result.isSuccess()) {
-                        applyResult(result);
-                    } else {
-                        applyUnavailable(result);
+                    if (!superseded) {
+                        if (result.isSuccess()) {
+                            applyResult(result);
+                        } else {
+                            applyUnavailable(result);
+                        }
+                        FarmUi.updateStatusBadge(analysisStatus,
+                                result.isSuccess()
+                                        ? "Forecast ready" : "Analysis needs attention",
+                                result.isSuccess()
+                                        ? FarmUi.Tone.SUCCESS : FarmUi.Tone.DANGER);
                     }
-                    FarmUi.updateStatusBadge(analysisStatus,
-                            result.isSuccess() ? "Forecast ready" : "Analysis needs attention",
-                            result.isSuccess() ? FarmUi.Tone.SUCCESS : FarmUi.Tone.DANGER);
                 } catch (Exception ex) {
-                    String message = FarmUi.actionableError("Analyzing harvest trends", ex);
-                    updateMetric(forecastLabel, "Unavailable");
-                    updateMetric(reliabilityLabel, "Not ready");
-                    updateInsight(contextLabel, "The analysis could not be completed.");
-                    updateInsight(evidenceLabel, "No forecast was displayed because the analysis failed.");
-                    updateInsight(guidanceLabel, "Review the error below, then try again.");
-                    trendText.setText(message);
-                    FarmUi.updateStatusBadge(
-                            analysisStatus, "Analysis needs attention", FarmUi.Tone.DANGER);
-                    if (host != null) {
-                        host.setStatus("Harvest trend analysis failed.");
+                    if (!superseded) {
+                        String message = FarmUi.actionableError("Analyzing harvest trends", ex);
+                        updateMetric(forecastLabel, "Unavailable");
+                        updateMetric(reliabilityLabel, "Not ready");
+                        updateMetric(freshnessLabel, "Unavailable");
+                        freshnessDetailLabel.setText(
+                                "Latest recorded week could not be checked");
+                        updateInsight(contextLabel, "The analysis could not be completed.");
+                        updateInsight(evidenceLabel,
+                                "No forecast was displayed because the analysis failed.");
+                        updateInsight(guidanceLabel, "Review the error below, then try again.");
+                        trendText.setText(message);
+                        FarmUi.updateStatusBadge(
+                                analysisStatus, "Analysis needs attention", FarmUi.Tone.DANGER);
+                        if (host != null) {
+                            host.setStatus("Harvest trend analysis failed.");
+                        }
                     }
                 }
-                trendText.setCaretPosition(0);
+                if (!superseded) {
+                    trendText.setCaretPosition(0);
+                }
+                analyzing = false;
+                activeAnalysisRequest = null;
                 analyzeButton.setEnabled(true);
                 analyzeButton.setText("Analyze trends");
-                seriesSelector.setEnabled(true);
+                seriesSelector.setEnabled(!updatingSeriesOptions);
                 windowSelector.setEnabled(true);
+                if (superseded || analysisQueued) {
+                    analysisQueued = false;
+                    SwingUtilities.invokeLater(TrendAnalysisTab.this::runAnalysis);
+                } else {
+                    analysisQueued = false;
+                }
             }
         };
         worker.execute();
     }
 
+    private AnalysisRequest currentAnalysisRequest() {
+        SeriesChoice selectedSeries = (SeriesChoice) seriesSelector.getSelectedItem();
+        AnalysisWindow selectedWindow = (AnalysisWindow) windowSelector.getSelectedItem();
+        int recentWeeks = selectedWindow == null ? 0 : selectedWindow.recentWeeks();
+        if (selectedSeries == null || selectedSeries.isAutomatic()) {
+            return new AnalysisRequest(true, null, null, recentWeeks);
+        }
+        return new AnalysisRequest(false, selectedSeries.summary().cropName(),
+                selectedSeries.summary().unit(), recentWeeks);
+    }
+
+    private void analysisSelectionChanged() {
+        updateSeriesHint();
+        if (!analyzing || updatingSeriesOptions) {
+            return;
+        }
+        analysisQueued = !currentAnalysisRequest().equals(activeAnalysisRequest);
+        showQueuedAnalysisState();
+    }
+
+    private void showQueuedAnalysisState() {
+        if (analysisQueued) {
+            FarmUi.updateStatusBadge(
+                    analysisStatus, "Selection changed · latest analysis queued",
+                    FarmUi.Tone.INFO);
+            updateInsight(guidanceLabel,
+                    "The active result will be discarded; the latest crop and history window run next.");
+        } else if (activeAnalysisRequest != null) {
+            FarmUi.updateStatusBadge(analysisStatus,
+                    "Analyzing " + activeAnalysisRequest.subject(), FarmUi.Tone.INFO);
+            updateInsight(guidanceLabel,
+                    "The rest of the farm app remains available while this runs.");
+        }
+    }
+
     private void loadSeriesOptions() {
         SeriesChoice previous = seriesSelector == null
                 ? null : (SeriesChoice) seriesSelector.getSelectedItem();
+        updatingSeriesOptions = true;
         if (seriesSelector != null) {
             seriesSelector.setEnabled(false);
         }
@@ -358,15 +423,24 @@ public class TrendAnalysisTab implements FlowerFarmTab {
                         seriesSelector.addItem(SeriesChoice.recorded(summary));
                     }
                     selectPreviousSeries(previous);
-                    seriesSelector.setEnabled(analyzeButton == null || analyzeButton.isEnabled());
+                    updatingSeriesOptions = false;
+                    seriesSelector.setEnabled(true);
                     updateSeriesHint();
-                } catch (Exception ex) {
-                    seriesSelector.setEnabled(analyzeButton == null || analyzeButton.isEnabled());
-                    seriesHintLabel.setText(
-                            "Recorded series could not be listed; automatic analysis is still available.");
-                    seriesHintLabel.getAccessibleContext().setAccessibleDescription(
-                            seriesHintLabel.getText());
+                } catch (InterruptedException ex) {
+                    Thread.currentThread().interrupt();
+                    showSeriesLoadFailure();
+                } catch (java.util.concurrent.ExecutionException ex) {
+                    showSeriesLoadFailure();
                 }
+            }
+
+            private void showSeriesLoadFailure() {
+                updatingSeriesOptions = false;
+                seriesSelector.setEnabled(true);
+                seriesHintLabel.setText(
+                        "Recorded series could not be listed; automatic analysis is still available.");
+                seriesHintLabel.getAccessibleContext().setAccessibleDescription(
+                        seriesHintLabel.getText());
             }
         };
         worker.execute();
@@ -437,6 +511,7 @@ public class TrendAnalysisTab implements FlowerFarmTab {
                 ? String.format(Locale.ROOT, "R² %.2f · %s",
                 result.rSquared(), reliabilityDetail(result.rSquared()))
                 : "Model diagnostics available below");
+        updateFreshness(result);
 
         String latestPeriod = result.latestWeekStart() == null ? ""
                 : " · latest week " + result.latestWeekStart();
@@ -469,6 +544,7 @@ public class TrendAnalysisTab implements FlowerFarmTab {
         coverageDetailLabel.setText("Record the same crop and unit in another week");
         updateMetric(reliabilityLabel, "Not ready");
         reliabilityDetailLabel.setText("At least three separate weeks are required");
+        updateFreshness(result);
         String subject = result.cropName() == null || result.cropName().isBlank()
                 ? "No crop series recorded"
                 : result.cropName() + " · " + result.observedWeeks() + " recorded weeks";
@@ -610,6 +686,39 @@ public class TrendAnalysisTab implements FlowerFarmTab {
         return first.format(SHORT_DATE) + " – " + last.format(SHORT_DATE);
     }
 
+    private void updateFreshness(TrendService.TrendResult result) {
+        LocalDate latest = latestRecordedWeek(result);
+        if (latest == null) {
+            updateMetric(freshnessLabel, "No history");
+            freshnessDetailLabel.setText("Log a harvest to start tracking freshness");
+            return;
+        }
+        long staleWeeks;
+        if (result.forecastWeekStart() != null) {
+            staleWeeks = Math.max(0,
+                    ChronoUnit.WEEKS.between(latest, result.forecastWeekStart()) - 1);
+        } else {
+            LocalDate currentWeek = LocalDate.now()
+                    .with(java.time.temporal.TemporalAdjusters.previousOrSame(
+                            java.time.DayOfWeek.MONDAY));
+            staleWeeks = Math.max(0, ChronoUnit.WEEKS.between(latest, currentWeek));
+        }
+        String value = staleWeeks == 0 ? "Current"
+                : staleWeeks == 1 ? "1 week old" : staleWeeks + " weeks old";
+        updateMetric(freshnessLabel, value);
+        freshnessDetailLabel.setText("Latest week " + latest.format(SHORT_DATE));
+        freshnessDetailLabel.getAccessibleContext().setAccessibleName(
+                value + " · latest recorded week " + latest);
+    }
+
+    private static LocalDate latestRecordedWeek(TrendService.TrendResult result) {
+        if (result.latestWeekStart() != null) {
+            return result.latestWeekStart();
+        }
+        List<TrendService.TrendPoint> points = result.weeklyPoints();
+        return points.isEmpty() ? null : points.get(points.size() - 1).weekStart();
+    }
+
     private static String reliabilityName(double rSquared) {
         if (!Double.isFinite(rSquared)) return "Available";
         if (rSquared >= 0.80) return "Strong";
@@ -740,6 +849,22 @@ public class TrendAnalysisTab implements FlowerFarmTab {
         @Override
         public String toString() {
             return label;
+        }
+    }
+
+    private record AnalysisRequest(boolean automatic, String cropName,
+                                   String unit, int recentWeeks) {
+        private TrendService.TrendResult analyze(TrendService service) {
+            if (automatic) {
+                return recentWeeks == 0
+                        ? service.analyzeQuantityTrend()
+                        : service.analyzeQuantityTrend(null, null, recentWeeks);
+            }
+            return service.analyzeQuantityTrend(cropName, unit, recentWeeks);
+        }
+
+        private String subject() {
+            return automatic ? "best-supported series" : cropName;
         }
     }
 

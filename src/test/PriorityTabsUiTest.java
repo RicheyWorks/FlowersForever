@@ -1,6 +1,8 @@
 package com.flowerfarm.gui.tabs;
 
 import com.flowerfarm.gui.FarmUi;
+import com.flowerfarm.gui.harness.SwingDialogHarness;
+import com.flowerfarm.gui.harness.SwingFileHarness;
 import com.flowerfarm.gui.presenter.CrmPresenter;
 import com.flowerfarm.model.Customer;
 import com.flowerfarm.model.CustomerOrder;
@@ -758,6 +760,67 @@ class PriorityTabsUiTest {
     }
 
     @Test
+    @DisplayName("dashboard daily sheets cancel safely and protect an existing PDF")
+    void dashboardDailySheetSaveChoicesAreSafe() throws Exception {
+        MorningBriefingService morning = mock(MorningBriefingService.class);
+        DayCloseoutService closeoutService = mock(DayCloseoutService.class);
+        LocalDate day = LocalDate.now();
+        MorningBriefingService.MorningBriefing briefing =
+                new MorningBriefingService.MorningBriefing(
+                        day, "06:00", "Kitsap", 40, 80, 0,
+                        new MarketDayPackingService.MarketDayPlan(
+                                day, day, day, "CONFIRMED", 0, 0,
+                                List.of(), List.of(), 0, "Packing"),
+                        null, null, List.of(), 10, List.of(), "Briefing");
+        DayCloseoutService.DayCloseout closeout = new DayCloseoutService.DayCloseout(
+                day, "17:00", "Kitsap", 1, 80, List.of(),
+                0, 0, 0, 24, 1, 40, 80, 0, 500,
+                10, List.of(), List.of(), "Closeout");
+        Path directory = Files.createTempDirectory("dashboard-sheet-choice");
+        Path existing = directory.resolve("reviewed-closeout.pdf");
+        byte[] original = "keep reviewed closeout".getBytes(
+                java.nio.charset.StandardCharsets.UTF_8);
+        Files.write(existing, original);
+        SwingFileHarness files = new SwingFileHarness()
+                .cancelSave("Save morning briefing PDF",
+                        "morning-briefing-" + day + ".pdf")
+                .saveAs("Save day closeout PDF",
+                        "day-closeout-" + day + ".pdf", existing.toFile());
+        SwingDialogHarness dialogs = new SwingDialogHarness()
+                .confirmForm("Replace existing day closeout?", false, form -> form
+                        .expectText("reviewed-closeout.pdf")
+                        .expectText("Replace it?"));
+        TrackingHost host = new TrackingHost();
+        DashboardTab tab = new DashboardTab(
+                null, null, null, null, null, morning, closeoutService, host,
+                dialogs, files);
+        JComponent[] root = new JComponent[1];
+
+        try {
+            SwingUtilities.invokeAndWait(() -> {
+                root[0] = tab.getUIComponent();
+                tab.chooseMorningBriefingExport(briefing);
+            });
+            awaitLabel(root[0], "Morning briefing ready · save cancelled");
+            assertThat(host.status).isEqualTo(
+                    "Morning briefing save cancelled. No file was changed.");
+
+            SwingUtilities.invokeAndWait(() -> tab.chooseDayCloseoutExport(closeout));
+            awaitLabel(root[0], "Day closeout not saved · existing file kept");
+            assertThat(Files.readAllBytes(existing)).isEqualTo(original);
+            assertThat(host.status).isEqualTo(
+                    "Day closeout was not saved. The existing file was kept.");
+            verify(morning, never()).generatePdf(any());
+            verify(closeoutService, never()).generatePdf(any());
+            files.assertComplete();
+            dialogs.assertComplete();
+        } finally {
+            Files.deleteIfExists(existing);
+            Files.deleteIfExists(directory);
+        }
+    }
+
+    @Test
     @DisplayName("add-item form uses safe defaults, guidance, and explicit viewer access")
     void addItemFormIsGuidedAndRoleAware() throws Exception {
         AddItemTab tab = new AddItemTab(mock(InventoryService.class), new TestHost());
@@ -769,16 +832,48 @@ class PriorityTabsUiTest {
         });
 
         assertThat(root[0].getName()).isEqualTo("farm.page");
-        assertThat(findNamed(root[0], "farm.formHint")).hasSize(3);
+        assertThat(findNamed(root[0], "farm.formHint"))
+                .extracting(component -> ((JLabel) component).getText())
+                .anyMatch(text -> text.contains("prices stay intact"))
+                .anyMatch(text -> text.contains("shared setup"));
         assertThat(findNamed(root[0], "farm.statusBadge")).hasSize(2);
         assertThat(button(root[0], "Add item to inventory").isEnabled()).isFalse();
-        assertThat(button(root[0], "Apply preset").isEnabled()).isFalse();
+        assertThat(button(root[0], "Use starter").isEnabled()).isFalse();
         assertThat(findNamed(root[0], "inventory.keepSetup"))
                 .singleElement()
                 .satisfies(component -> assertThat(component.isEnabled()).isFalse());
         assertThat(find(root[0], javax.swing.JTextField.class))
                 .extracting(javax.swing.JTextField::getText)
                 .contains("0.00", "0");
+    }
+
+    @Test
+    @DisplayName("add-item form previews margin and opening inventory value as workers type")
+    void addItemPreviewsUnitEconomics() throws Exception {
+        AddItemTab tab = new AddItemTab(mock(InventoryService.class), new TestHost());
+        JComponent[] root = new JComponent[1];
+
+        SwingUtilities.invokeAndWait(() -> {
+            root[0] = tab.getUIComponent();
+            textField(root[0], "Selling price").setText("4.75");
+            textField(root[0], "Cost per unit").setText("1.40");
+            textField(root[0], "Inventory quantity").setText("28");
+        });
+
+        assertThat(((JLabel) findNamed(root[0], "inventory.unitProfit").get(0)).getText())
+                .isEqualTo("$3.35");
+        assertThat(((JLabel) findNamed(root[0], "inventory.marginRate").get(0)).getText())
+                .isEqualTo("71%");
+        assertThat(((JLabel) findNamed(root[0], "inventory.openingValue").get(0)).getText())
+                .isEqualTo("$133.00");
+
+        SwingUtilities.invokeAndWait(() ->
+                textField(root[0], "Cost per unit").setText("6.00"));
+
+        assertThat(((JLabel) findNamed(root[0], "inventory.unitProfit").get(0)).getText())
+                .isEqualTo("−$1.25");
+        assertThat(((JLabel) findNamed(root[0], "inventory.marginRate").get(0)).getText())
+                .isEqualTo("-26%");
     }
 
     @Test
@@ -1415,6 +1510,28 @@ class PriorityTabsUiTest {
     }
 
     @Test
+    @DisplayName("new harvest batches start empty and load sample stock only on request")
+    void harvestBatchStartsEmptyUntilFarmerAddsLines() throws Exception {
+        HarvestService service = emptyHarvestService();
+        HarvestLogTab tab = new HarvestLogTab(service, new TestHost());
+
+        SwingUtilities.invokeAndWait(() -> {
+            JComponent root = tab.getUIComponent();
+            JTextArea lines = textArea(root, "Batch harvest lines");
+            JButton submit = button(root, "Log batch harvest");
+            assertThat(lines.getText()).isEmpty();
+            assertThat(submit.isEnabled()).isFalse();
+            submit.doClick();
+
+            button(root, "Use sample lines").doClick();
+            assertThat(lines.getText()).contains("Nootka Rose,40", "Dahlia mix,15");
+            assertThat(submit.isEnabled()).isTrue();
+        });
+
+        verify(service, never()).addBatch(anyList());
+    }
+
+    @Test
     @DisplayName("batch harvest previews exact decimal inventory impact before logging")
     void harvestBatchPreviewsRoundedInventoryImpact() throws Exception {
         HarvestLogTab tab = new HarvestLogTab(emptyHarvestService(), new TestHost());
@@ -1662,7 +1779,7 @@ class PriorityTabsUiTest {
                 .singleElement()
                 .isInstanceOf(JComboBox.class)
                 .satisfies(component -> assertThat(comboItems((JComboBox<?>) component))
-                        .containsExactly("Refresh history"));
+                        .containsExactly("Refresh history", "Export selected lot label"));
         assertThat(button(root[0], "Log batch harvest").isEnabled()).isFalse();
         assertThat(button(root[0], "Apply filters").isEnabled()).isTrue();
         assertThat(button(root[0], "Create report").isEnabled()).isTrue();
@@ -1674,7 +1791,7 @@ class PriorityTabsUiTest {
         JComboBox<?> entryTools = (JComboBox<?>) findNamed(root[0], "harvest.entryTools").get(0);
         assertThat(comboItems(entryTools)).containsExactly(
                 "Clear form", "Duplicate selected as today",
-                "Refresh history", "Delete selected harvest");
+                "Export selected lot label", "Refresh history", "Delete selected harvest");
     }
 
     @Test
@@ -2139,8 +2256,11 @@ class PriorityTabsUiTest {
     void crmEmptyFilteredOrdersRecoverWithoutClearingEntry() throws Exception {
         CustomerService customers = mock(CustomerService.class);
         OrderService orders = mock(OrderService.class);
-        when(customers.search(anyString())).thenReturn(List.of());
-        when(customers.getAll()).thenReturn(List.of());
+        Customer existingCustomer = new Customer(
+                401L, "Existing Florist", "Morgan", "orders@existing.example",
+                "360-555-0140", "FLORIST", "Established account");
+        when(customers.search(anyString())).thenReturn(List.of(existingCustomer));
+        when(customers.getAll()).thenReturn(List.of(existingCustomer));
         when(orders.filter(anyString(), anyString(), nullable(LocalDate.class),
                 nullable(LocalDate.class))).thenReturn(List.of());
         TrackingHost host = new TrackingHost();
@@ -3372,8 +3492,13 @@ class PriorityTabsUiTest {
         assertThat(table.getSelectedRow()).isZero();
         assertThat(textField(root[0], "Customer search").getText()).isEqualTo("Kitsap");
         assertThat(button(root[0], "Load selected").isEnabled()).isTrue();
+        assertThat(button(root[0], "Add customer").isEnabled()).isFalse();
+        assertThat(button(root[0], "Delete selected").isEnabled()).isFalse();
+        assertThat(status.getText()).contains("previous snapshot shown");
+        assertThat(status.getText()).contains("Customers unavailable");
         assertThat(status.getAccessibleContext().getAccessibleDescription())
-                .contains("customer database unavailable", "Existing rows", "retry");
+                .contains("Customers could not be loaded", "partial refresh response was discarded",
+                        "customer database unavailable", "Existing rows", "retry");
         assertThat(host.status).contains("failed", "Existing work was kept", "retry");
     }
 
@@ -5044,7 +5169,8 @@ class PriorityTabsUiTest {
             textField(root[0], "Order unit price").setText("18.00");
             button(root[0], "Create & select order").doClick();
         });
-        awaitLabel(root[0], "CRM refresh failed · retry");
+        awaitLabel(root[0],
+                "CRM refresh failed · Orders unavailable · previous snapshot shown · retry");
         awaitLabel(root[0], "Order #65 saved once · exact-order reload failed");
 
         assertThat(((JLabel) findNamed(root[0], "crm.refreshStatus").get(0)).getText())
@@ -10702,8 +10828,13 @@ class PriorityTabsUiTest {
         assertThat(packed.isEnabled()).isTrue();
         assertThat(textArea(root[0], "Market day packing list").getText())
                 .isEqualTo(plan.plainText());
-        assertThat(button(root[0], "Complete confirmed orders…").isEnabled()).isTrue();
+        assertThat(button(root[0], "Complete confirmed orders…").isEnabled()).isFalse();
         assertThat(button(root[0], "Export file…").isEnabled()).isTrue();
+        assertThat(status.getText()).contains("previous plan shown");
+        assertThat(((JLabel) findNamed(root[0], "marketDay.fulfillmentStatus").get(0)).getText())
+                .isEqualTo("Refresh failed · previous plan shown · completion locked");
+        assertThat(button(root[0], "Complete confirmed orders…").getToolTipText())
+                .contains("Rebuild it successfully", "deducting inventory");
         assertThat(status.getAccessibleContext().getAccessibleDescription())
                 .contains("packing database unavailable", "Existing plan", "retry");
         assertThat(host.status).contains("failed", "Existing packing work was kept", "retry");
@@ -11610,7 +11741,18 @@ class PriorityTabsUiTest {
     @Test
     @DisplayName("reports presents one clear primary action and an accessible range workspace")
     void reportsHierarchy() throws Exception {
-        ReportsTab tab = new ReportsTab(mock(ReportService.class), new TestHost());
+        ReportService service = mock(ReportService.class);
+        when(service.preview(any(LocalDate.class), any(LocalDate.class))).thenAnswer(invocation -> {
+            LocalDate from = invocation.getArgument(0);
+            LocalDate to = invocation.getArgument(1);
+            return new ReportService.ReportPreview(
+                    from, to, 12, 5, 2, 2, 875.50, 510.00,
+                    List.of(new ReportService.ProductPerformance(
+                            "Dahlia", "stems", 80, 3, 420, 260, 5.25)),
+                    List.of(new ReportService.CustomerPerformance(
+                            "Stem & Vine", 3, 420, 260, 140)));
+        });
+        ReportsTab tab = new ReportsTab(service, new TestHost());
         JComponent[] root = new JComponent[1];
 
         SwingUtilities.invokeAndWait(() -> root[0] = tab.getUIComponent());
@@ -11625,6 +11767,7 @@ class PriorityTabsUiTest {
         assertThat(button(root[0], "Last 7 days").isEnabled()).isTrue();
         assertThat(button(root[0], "This month").isEnabled()).isTrue();
         assertThat(findNamed(root[0], "reports.summary")).hasSize(1);
+        assertThat(findNamed(root[0], "farm.metricCard")).hasSize(4);
         assertThat(((JLabel) findNamed(root[0], "reports.rangePreview").get(0)).getText())
                 .contains("7 days selected", "harvest", "orders", "revenue");
 
@@ -11637,6 +11780,29 @@ class PriorityTabsUiTest {
         assertThat(button(root[0], "Create selected report…").isEnabled()).isTrue();
         assertThat(((JLabel) findNamed(root[0], "reports.rangePreview").get(0)).getText())
                 .startsWith("7 days selected");
+
+        SwingUtilities.invokeAndWait(() -> button(root[0], "Preview range").doClick());
+        awaitLabel(root[0], "Range preview ready");
+        assertThat(((JLabel) findNamed(root[0], "reports.preview.harvest").get(0)).getText())
+                .isEqualTo("12 logs");
+        assertThat(((JLabel) findNamed(root[0], "reports.preview.orders").get(0)).getText())
+                .isEqualTo("5 orders");
+        assertThat(((JLabel) findNamed(
+                root[0], "reports.preview.committedRevenue").get(0)).getText())
+                .isEqualTo("$875.50");
+        assertThat(((JLabel) findNamed(
+                root[0], "reports.preview.fulfilledRevenue").get(0)).getText())
+                .isEqualTo("$510.00");
+        JTable products = (JTable) findNamed(
+                root[0], "reports.productPerformance").get(0);
+        JTable customers = (JTable) findNamed(
+                root[0], "reports.customerPerformance").get(0);
+        assertThat(products.getRowCount()).isEqualTo(1);
+        assertThat(products.getValueAt(0, 0)).isEqualTo("Dahlia");
+        assertThat(products.getValueAt(0, 4)).isEqualTo("$5.25");
+        assertThat(customers.getRowCount()).isEqualTo(1);
+        assertThat(customers.getValueAt(0, 0)).isEqualTo("Stem & Vine");
+        assertThat(customers.getValueAt(0, 2)).isEqualTo("$140.00");
     }
 
     @Test
@@ -11991,7 +12157,7 @@ class PriorityTabsUiTest {
         assertThat(findNamed(root[0], "farm.section")).hasSize(1);
         assertThat(button(root[0], "Analyze trends").isEnabled()).isTrue();
         assertThat(findNamed(root[0], "trend.analysis.output")).hasSize(1);
-        assertThat(findNamed(root[0], "farm.metricCard")).hasSize(4);
+        assertThat(findNamed(root[0], "farm.metricCard")).hasSize(5);
         assertThat(findNamed(root[0], "trend.chart")).hasSize(1);
         assertThat(((JTable) findNamed(root[0], "trend.weeklyTable").get(0)).getRowCount())
                 .isEqualTo(6);
@@ -12001,6 +12167,8 @@ class PriorityTabsUiTest {
                 .isEqualTo("+33%");
         assertThat(((JLabel) findNamed(root[0], "trend.reliability").get(0)).getText())
                 .isEqualTo("Strong");
+        assertThat(((JLabel) findNamed(root[0], "trend.freshness").get(0)).getText())
+                .isEqualTo("4 weeks old");
         JLabel context = (JLabel) findNamed(root[0], "trend.context").get(0);
         assertThat(context.getText())
                 .contains("Nootka Rose", "5 weeks", "latest Jul 27: 90 stems",

@@ -20,6 +20,9 @@ import java.util.Map;
  * <pre>
  * GET    /api/harvest              list all (newest first)
  * GET    /api/harvest/{id}         get one
+ * GET    /api/harvest/lots/{lotCode}  exact traceability lookup
+ * GET    /api/harvest/lot?code=     exact lookup for codes containing '/'
+ * GET    /api/harvest/{id}/label.pdf  printable QR lot label
  * GET    /api/harvest/range?from=&amp;to=  filter by date
  * GET    /api/harvest/search?crop=     search crop name
  * GET    /api/harvest/totals           quantity totals by crop
@@ -191,6 +194,33 @@ public class HarvestController {
                 .orElseThrow(() -> new IndexOutOfBoundsException(
                         "No harvest entry with id=" + id));
         return ResponseEntity.ok(entry);
+    }
+
+    @GetMapping("/lots/{lotCode}")
+    public ResponseEntity<?> getByLotCode(@PathVariable String lotCode) {
+        HarvestEntry entry = harvestService.findByLotCode(lotCode)
+                .orElseThrow(() -> new IndexOutOfBoundsException(
+                        "No harvest lot with code=" + lotCode));
+        return ResponseEntity.ok(entry);
+    }
+
+    @GetMapping("/lot")
+    public ResponseEntity<?> getByLotCodeQuery(@RequestParam("code") String lotCode) {
+        return getByLotCode(lotCode);
+    }
+
+    @GetMapping(value = "/{id}/label.pdf", produces = MediaType.APPLICATION_PDF_VALUE)
+    public ResponseEntity<?> lotLabel(@PathVariable Long id) {
+        HarvestEntry entry = harvestService.findById(id)
+                .orElseThrow(() -> new IndexOutOfBoundsException(
+                        "No harvest entry with id=" + id));
+        return DownloadResponse.pdf(
+                harvestService.generateLotLabelPdf(id),
+                "harvest-lot-" + labelFilenameCode(entry.getLotCode()) + ".pdf");
+    }
+
+    private static String labelFilenameCode(String lotCode) {
+        return lotCode.replace('/', '-');
     }
 
     @PostMapping

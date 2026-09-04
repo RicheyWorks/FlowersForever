@@ -1,5 +1,7 @@
 package com.flowerfarm.gui.tabs;
 
+import com.flowerfarm.gui.FarmDialogs;
+import com.flowerfarm.gui.FarmFileChooser;
 import com.flowerfarm.gui.FarmUi;
 import com.flowerfarm.gui.GuiPermissions;
 import com.flowerfarm.lsystem.LSystem;
@@ -15,8 +17,12 @@ import javax.swing.*;
 import javax.swing.event.ChangeListener;
 import java.awt.*;
 import java.awt.image.BufferedImage;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.nio.file.AtomicMoveNotSupportedException;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -30,6 +36,8 @@ public class RoseVisualizerTab implements FlowerFarmTab {
 
     private final TabHost host;
     private final InventoryService inventoryService;
+    private final FarmDialogs dialogs;
+    private final FarmFileChooser files;
     private final LSystemLibrary library = new LSystemLibrary();
     private final Random rng = new Random();
 
@@ -65,8 +73,15 @@ public class RoseVisualizerTab implements FlowerFarmTab {
     private int animateTarget;
 
     public RoseVisualizerTab(InventoryService inventoryService, TabHost host) {
+        this(inventoryService, host, FarmDialogs.swing(), FarmFileChooser.swing());
+    }
+
+    public RoseVisualizerTab(InventoryService inventoryService, TabHost host,
+                             FarmDialogs dialogs, FarmFileChooser files) {
         this.inventoryService = inventoryService;
         this.host = host;
+        this.dialogs = java.util.Objects.requireNonNull(dialogs, "dialogs");
+        this.files = java.util.Objects.requireNonNull(files, "files");
     }
 
     @Override public String getTabTitle() { return "Rose Visualizer"; }
@@ -180,10 +195,11 @@ public class RoseVisualizerTab implements FlowerFarmTab {
         seasonBox.getAccessibleContext().setAccessibleName("Rose season color palette");
         seasonBox.addActionListener(e -> growImmediate());
 
-        depthSlider = slider(1, LSystem.MAX_DEPTH, 4);
-        angleSlider = slider(8, 55, 25);
-        stepSlider = slider(4, 28, 8);
-        branchSlider = slider(0, 100, 40);
+        depthSlider = slider(1, LSystem.MAX_DEPTH, 4,
+                "Rose growth recursion depth");
+        angleSlider = slider(8, 55, 25, "Rose branch angle");
+        stepSlider = slider(4, 28, 8, "Rose stem segment length");
+        branchSlider = slider(0, 100, 40, "Rose branching bias");
 
         depthLabel = new JLabel();
         angleLabel = new JLabel();
@@ -604,7 +620,8 @@ public class RoseVisualizerTab implements FlowerFarmTab {
             return;
         }
         if (currentSystem == null) {
-            JOptionPane.showMessageDialog(panel, "Nothing to save yet.", "Save", JOptionPane.WARNING_MESSAGE);
+            dialogs.showMessage(panel, "Nothing to save yet.", "Save",
+                    JOptionPane.WARNING_MESSAGE);
             return;
         }
         JTextField nameField = new JTextField(currentSystem.getName(), 28);
@@ -615,7 +632,7 @@ public class RoseVisualizerTab implements FlowerFarmTab {
         nameForm.add(nameField, BorderLayout.CENTER);
         String name = null;
         while (name == null) {
-            int choice = JOptionPane.showConfirmDialog(panel, nameForm, "Save L-System ruleset",
+            int choice = dialogs.showConfirm(panel, nameForm, "Save L-System ruleset",
                     JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
             if (choice != JOptionPane.OK_OPTION) {
                 if (host != null) {
@@ -651,10 +668,10 @@ public class RoseVisualizerTab implements FlowerFarmTab {
             if (host != null) {
                 host.setStatus("Saved L-System ruleset → " + file.getFileName());
             }
-            JOptionPane.showMessageDialog(panel, "Saved to:\n" + file.toAbsolutePath(),
+            dialogs.showMessage(panel, "Saved to:\n" + file.toAbsolutePath(),
                     "Saved", JOptionPane.INFORMATION_MESSAGE);
         } catch (Exception ex) {
-            JOptionPane.showMessageDialog(panel, ex.getMessage(), "Save failed", JOptionPane.ERROR_MESSAGE);
+            dialogs.showMessage(panel, ex.getMessage(), "Save failed", JOptionPane.ERROR_MESSAGE);
         }
     }
 
@@ -662,7 +679,7 @@ public class RoseVisualizerTab implements FlowerFarmTab {
         try {
             List<Path> files = library.listFiles();
             if (files.isEmpty()) {
-                JOptionPane.showMessageDialog(panel,
+                dialogs.showMessage(panel,
                         "No saved rulesets in " + library.getDirectory().toAbsolutePath()
                                 + "\nSave one first.",
                         "Load", JOptionPane.INFORMATION_MESSAGE);
@@ -674,7 +691,7 @@ public class RoseVisualizerTab implements FlowerFarmTab {
             JPanel loadForm = new JPanel(new BorderLayout(0, FarmUi.CONTROL_GAP));
             loadForm.add(new JLabel("Choose a saved ruleset:"), BorderLayout.NORTH);
             loadForm.add(rulesetBox, BorderLayout.CENTER);
-            int choice = JOptionPane.showConfirmDialog(panel, loadForm, "Load L-System",
+            int choice = dialogs.showConfirm(panel, loadForm, "Load L-System",
                     JOptionPane.OK_CANCEL_OPTION, JOptionPane.QUESTION_MESSAGE);
             if (choice != JOptionPane.OK_OPTION) {
                 return;
@@ -694,42 +711,93 @@ public class RoseVisualizerTab implements FlowerFarmTab {
                 host.setStatus("Loaded ruleset: " + def.getName());
             }
         } catch (Exception ex) {
-            JOptionPane.showMessageDialog(panel, ex.getMessage(), "Load failed", JOptionPane.ERROR_MESSAGE);
+            dialogs.showMessage(panel, ex.getMessage(), "Load failed", JOptionPane.ERROR_MESSAGE);
         }
     }
 
     private void exportPng() {
         try {
-            if (host != null) {
-                host.setStatus("⏳ Exporting rose PNG…");
-            }
-            BufferedImage img = canvas.toImage();
-            JFileChooser chooser = new JFileChooser();
             String base = currentSystem == null ? "rose" : currentSystem.getName().replaceAll("\\W+", "_");
-            chooser.setSelectedFile(new File(base + "-lsystem.png"));
-            chooser.setDialogTitle("Export L-System rose as PNG");
-            if (chooser.showSaveDialog(panel) != JFileChooser.APPROVE_OPTION) {
+            var selected = files.chooseSave(panel, "Export L-System rose as PNG",
+                    new File(base + "-lsystem.png"));
+            if (selected.isEmpty()) {
+                FarmUi.updateStatusBadge(infoLabel, "PNG export cancelled", FarmUi.Tone.NEUTRAL);
                 if (host != null) {
-                    host.setStatus("PNG export cancelled.");
+                    host.setStatus("PNG export cancelled. No file was changed.");
                 }
                 return;
             }
-            File file = chooser.getSelectedFile();
-            ImageIO.write(img, "png", file);
+            File file = ensurePngExtension(selected.get());
+            if (file.exists() && dialogs.showConfirm(panel,
+                    "A file named " + file.getName() + " already exists. Replace it?",
+                    "Replace existing PNG?", JOptionPane.YES_NO_OPTION,
+                    JOptionPane.WARNING_MESSAGE) != JOptionPane.YES_OPTION) {
+                FarmUi.updateStatusBadge(
+                        infoLabel, "PNG not saved · existing file kept", FarmUi.Tone.NEUTRAL);
+                if (host != null) {
+                    host.setStatus("PNG export cancelled. Existing file was kept.");
+                }
+                return;
+            }
+            if (host != null) {
+                host.setStatus("⏳ Exporting rose PNG…");
+            }
+            writePngAtomically(file.toPath(), canvas.toImage());
+            FarmUi.updateStatusBadge(infoLabel, "PNG saved · " + file.getName(),
+                    FarmUi.Tone.SUCCESS);
             if (host != null) {
                 host.setStatus("Exported rose visualizer PNG → " + file.getName());
             }
-            JOptionPane.showMessageDialog(panel,
-                    "Saved:\n" + file.getAbsolutePath(),
-                    "Export complete", JOptionPane.INFORMATION_MESSAGE);
+            if (panel.isShowing()) {
+                dialogs.showMessage(panel,
+                        "Saved:\n" + file.getAbsolutePath(),
+                        "Export complete", JOptionPane.INFORMATION_MESSAGE);
+            }
         } catch (Exception ex) {
-            JOptionPane.showMessageDialog(panel, ex.getMessage(), "Export failed", JOptionPane.ERROR_MESSAGE);
+            FarmUi.updateStatusBadge(infoLabel, "PNG export failed · retry", FarmUi.Tone.DANGER);
+            if (host != null) {
+                host.setStatus("Rose PNG export failed. Review the destination and retry.");
+            }
+            if (panel.isShowing()) {
+                dialogs.showMessage(panel, ex.getMessage(), "Export failed",
+                        JOptionPane.ERROR_MESSAGE);
+            }
+        }
+    }
+
+    private static File ensurePngExtension(File file) {
+        return file.getName().toLowerCase(Locale.ROOT).endsWith(".png")
+                ? file : new File(file.getParentFile(), file.getName() + ".png");
+    }
+
+    private static void writePngAtomically(Path destination, BufferedImage image)
+            throws Exception {
+        Path target = destination.toAbsolutePath().normalize();
+        Path parent = target.getParent();
+        if (parent == null || !Files.isDirectory(parent)) {
+            throw new IllegalArgumentException("Choose an existing destination folder.");
+        }
+        ByteArrayOutputStream encoded = new ByteArrayOutputStream();
+        if (!ImageIO.write(image, "png", encoded) || encoded.size() == 0) {
+            throw new IllegalStateException("The generated PNG was empty.");
+        }
+        Path temporary = Files.createTempFile(parent, ".rose-export-", ".tmp");
+        try {
+            Files.write(temporary, encoded.toByteArray());
+            try {
+                Files.move(temporary, target, StandardCopyOption.ATOMIC_MOVE,
+                        StandardCopyOption.REPLACE_EXISTING);
+            } catch (AtomicMoveNotSupportedException exception) {
+                Files.move(temporary, target, StandardCopyOption.REPLACE_EXISTING);
+            }
+        } finally {
+            Files.deleteIfExists(temporary);
         }
     }
 
     private boolean ensureCanEdit() {
         if (host != null && !host.canMutateData()) {
-            JOptionPane.showMessageDialog(panel,
+            dialogs.showMessage(panel,
                     "VIEWER role cannot mutate or save rulesets.\nLog in as HAND or OWNER.",
                     "Permission denied", JOptionPane.WARNING_MESSAGE);
             return false;
@@ -750,11 +818,12 @@ public class RoseVisualizerTab implements FlowerFarmTab {
         return b;
     }
 
-    private static JSlider slider(int min, int max, int value) {
+    private static JSlider slider(int min, int max, int value, String accessibleName) {
         JSlider s = new JSlider(min, max, value);
         s.setMajorTickSpacing(Math.max(1, (max - min) / 4));
         s.setPaintTicks(true);
         s.setAlignmentX(Component.LEFT_ALIGNMENT);
+        s.getAccessibleContext().setAccessibleName(accessibleName);
         return s;
     }
 
@@ -769,6 +838,7 @@ public class RoseVisualizerTab implements FlowerFarmTab {
         JPanel p = new JPanel(new BorderLayout(2, 2));
         p.setAlignmentX(Component.LEFT_ALIGNMENT);
         p.setMaximumSize(new Dimension(Integer.MAX_VALUE, 56));
+        label.setLabelFor(slider);
         p.add(label, BorderLayout.NORTH);
         p.add(slider, BorderLayout.CENTER);
         return p;

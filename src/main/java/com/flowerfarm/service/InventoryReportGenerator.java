@@ -1,5 +1,6 @@
 package com.flowerfarm.service;
 
+import com.flowerfarm.model.FarmProfile;
 import com.flowerfarm.service.InventoryService.LowStockReport;
 import com.flowerfarm.service.InventoryService.LowStockLine;
 import com.flowerfarm.service.InventoryService.PriceListLine;
@@ -30,6 +31,11 @@ import java.util.Locale;
 public class InventoryReportGenerator {
 
     private static final Logger log = LoggerFactory.getLogger(InventoryReportGenerator.class);
+    private final FarmProfile farmProfile;
+
+    public InventoryReportGenerator(FarmProfile farmProfile) {
+        this.farmProfile = farmProfile;
+    }
 
     public byte[] generateLowStockPdf(LowStockReport report) {
         if (report == null) {
@@ -53,7 +59,7 @@ public class InventoryReportGenerator {
             PdfPTable bannerTable = new PdfPTable(1);
             bannerTable.setWidthPercentage(100);
             PdfPCell bannerCell = new PdfPCell(new Phrase(
-                    "FlowersForever  ·  Port Orchard / Kitsap  ·  Low-Stock Reorder",
+                    farmProfile.documentBanner("Low-Stock Reorder"),
                     banner));
             bannerCell.setBackgroundColor(brandGreen);
             bannerCell.setPadding(10);
@@ -117,7 +123,7 @@ public class InventoryReportGenerator {
                             + "Zero-qty rows are highlighted for harvest priority.",
                     small));
             doc.add(new Paragraph(
-                    "FlowersForever · practical tools for PNW flower growers", small));
+                    farmProfile.softwareFooter(), small));
 
             doc.close();
             log.info("Generated low-stock reorder PDF (threshold={}, lines={})",
@@ -150,7 +156,7 @@ public class InventoryReportGenerator {
             PdfPTable bannerTable = new PdfPTable(1);
             bannerTable.setWidthPercentage(100);
             PdfPCell bannerCell = new PdfPCell(new Phrase(
-                    "FlowersForever  ·  Port Orchard / Kitsap  ·  Price List",
+                    farmProfile.documentBanner("Price List"),
                     banner));
             bannerCell.setBackgroundColor(brandGreen);
             bannerCell.setPadding(10);
@@ -216,7 +222,7 @@ public class InventoryReportGenerator {
                             + "Low-stock reorder is a separate PDF.",
                     small));
             doc.add(new Paragraph(
-                    "FlowersForever · practical tools for PNW flower growers", small));
+                    farmProfile.softwareFooter(), small));
 
             doc.close();
             log.info("Generated price list PDF (skus={}, inStockOnly={})",

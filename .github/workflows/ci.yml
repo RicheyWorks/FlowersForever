@@ -12,6 +12,21 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  worker:
+    name: Field entry and offline replay
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          package-manager-cache: false
+      - name: Test field forms and durable device queue
+        run: node --test scripts/worker-ui.test.mjs
+
   verify:
     name: mvn clean verify (JDK ${{ matrix.java }})
     runs-on: ubuntu-latest
@@ -59,6 +74,14 @@ jobs:
         with:
           name: surefire-reports-jdk${{ matrix.java }}
           path: target/surefire-reports/
+          if-no-files-found: ignore
+
+      - name: Upload packaged MCP reports on failure
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: packaged-mcp-reports-jdk${{ matrix.java }}
+          path: target/failsafe-reports/
           if-no-files-found: ignore
 
   quality:

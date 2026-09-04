@@ -1,5 +1,6 @@
 package com.flowerfarm.gui.tabs;
 
+import com.flowerfarm.model.FarmProfile;
 import com.flowerfarm.gui.FarmUi;
 import com.flowerfarm.gui.presenter.InventoryItemPresenter;
 import com.flowerfarm.model.Item;
@@ -896,8 +897,9 @@ class InventoryTabUiTest {
         return new InventoryService(
                 new InMemoryInventoryRepository(),
                 "target/no-inventory-tab-ui-seed.csv",
-                new InventoryReportGenerator(),
-                new InventoryCsvExporter());
+                new InventoryReportGenerator(new FarmProfile()),
+                new InventoryCsvExporter(),
+                new FarmProfile());
     }
 
     private static JButton button(Component root, String text) {

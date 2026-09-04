@@ -20,8 +20,8 @@ public class SyncHistoryEntry {
     @Column(nullable = false, length = 64)
     private String connectorName;
 
-    /** IMPORT, EXPORT, or SYNC */
-    @Column(nullable = false, length = 16)
+    /** Connector and farm-workflow operation identifier. */
+    @Column(nullable = false, length = 64)
     private String operation;
 
     @Column(nullable = false)

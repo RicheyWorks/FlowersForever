@@ -10,6 +10,10 @@ on:
       - ".github/workflows/release.yml"
       - "pom.xml"
       - "scripts/build-release.ps1"
+      - "scripts/test-mcp-launcher.ps1"
+      - "scripts/worker-ui.test.mjs"
+      - "src/main/resources/static/worker/**"
+      - "packaging/**"
   workflow_dispatch:
     inputs:
       version:
@@ -74,6 +78,15 @@ jobs:
       - name: Build and run every verification gate
         run: mvn -B clean verify
 
+      - name: Set up Node.js for field-entry checks
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          package-manager-cache: false
+
+      - name: Verify field forms and offline replay
+        run: node --test scripts/worker-ui.test.mjs
+
       - name: Require the exact release artifacts
         shell: bash
         run: |
@@ -119,14 +132,21 @@ jobs:
             label: Windows MSI
             type: msi
             extra: --win-menu --win-shortcut --win-dir-chooser
+            ai_config: packaging/FlowersForeverAI-windows.properties
+            ai_launcher: smoke-dist/FlowersForever/FlowersForeverAI.exe
             launcher: smoke-dist/FlowersForever/FlowersForever.exe
           - os: macos-latest
             label: macOS DMG
             type: dmg
             extra: ""
+            ai_config: packaging/FlowersForeverAI.properties
+            ai_launcher: smoke-dist/FlowersForever.app/Contents/MacOS/FlowersForeverAI
             launcher: smoke-dist/FlowersForever.app/Contents/MacOS/FlowersForever
 
     steps:
+      - name: Checkout verified launcher configuration and smoke scripts
+        uses: actions/checkout@v7
+
       - name: Set up JDK 17 packaging tools
         uses: actions/setup-java@v5
         with:
@@ -155,6 +175,7 @@ jobs:
             --description "Flower farm operations and knowledge, kept in one place" \
             --input target/jpackage-input \
             --main-jar "$JAR" \
+            --add-launcher FlowersForeverAI=${{ matrix.ai_config }} \
             --java-options "-Djava.awt.headless=false" \
             --java-options "-Dflowerfarm.packaged=true" \
             --dest dist \
@@ -176,11 +197,27 @@ jobs:
             --description "Flower farm operations and knowledge, kept in one place" \
             --input target/jpackage-input \
             --main-jar "$JAR" \
+            --add-launcher FlowersForeverAI=${{ matrix.ai_config }} \
             --java-options "-Djava.awt.headless=false" \
             --java-options "-Dflowerfarm.packaged=true" \
             --dest smoke-dist
           test -x "${{ matrix.launcher }}"
+          test -x "${{ matrix.ai_launcher }}"
           export FLOWERFARM_DATA_DIR="$SMOKE_DATA"
+          if test "${{ matrix.type }}" = "msi"; then
+            pwsh -File scripts/test-mcp-launcher.ps1 \
+              -Launcher "${{ matrix.ai_launcher }}" -DataDir "$SMOKE_DATA"
+          else
+            export FLOWERFARM_HARNESS_TOKEN="candidate-mcp-doctor-token-123456"
+            export FLOWERFARM_HARNESS_ALLOW_SENSITIVE_READ=true
+            export FLOWERFARM_HARNESS_ALLOW_MUTATIONS=true
+            "${{ matrix.ai_launcher }}" --mcp-doctor > target/mcp-doctor-${{ matrix.type }}.json
+            grep -q '"ready":true' target/mcp-doctor-${{ matrix.type }}.json
+            ! grep -Fq "$FLOWERFARM_HARNESS_TOKEN" target/mcp-doctor-${{ matrix.type }}.json
+            printf '%s\n' '{"jsonrpc":"2.0","id":"release-smoke","method":"ping","params":{"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28","io.modelcontextprotocol/clientCapabilities":{}}}}' \
+              | "${{ matrix.ai_launcher }}" > target/mcp-ping-${{ matrix.type }}.json
+            grep -q '"id":"release-smoke"' target/mcp-ping-${{ matrix.type }}.json
+          fi
           "${{ matrix.launcher }}" --release-smoke &
           for attempt in $(seq 1 90); do
             test -s "$SMOKE_DATA/release-smoke.ok" && break
@@ -209,6 +246,9 @@ jobs:
       id-token: write
 
     steps:
+      - name: Checkout verified launcher configuration and smoke scripts
+        uses: actions/checkout@v7
+
       - name: Require Windows signing configuration
         shell: pwsh
         env:
@@ -262,10 +302,12 @@ jobs:
             --description "Flower farm operations and knowledge, kept in one place" \
             --input target/jpackage-input \
             --main-jar "$JAR" \
+            --add-launcher FlowersForeverAI=packaging/FlowersForeverAI-windows.properties \
             --java-options "-Djava.awt.headless=false" \
             --java-options "-Dflowerfarm.packaged=true" \
             --dest signed-app-image
           test -f signed-app-image/FlowersForever/FlowersForever.exe
+          test -f signed-app-image/FlowersForever/FlowersForeverAI.exe
 
       - name: Log in to Azure with GitHub OIDC
         uses: azure/login@v3
@@ -274,28 +316,36 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Sign the FlowersForever launcher
+      - name: Sign the FlowersForever launchers
         uses: azure/artifact-signing-action@v2
         with:
           endpoint: ${{ vars.AZURE_ARTIFACT_SIGNING_ENDPOINT }}
           signing-account-name: ${{ vars.AZURE_ARTIFACT_SIGNING_ACCOUNT }}
           certificate-profile-name: ${{ vars.AZURE_ARTIFACT_SIGNING_PROFILE }}
-          files: ${{ github.workspace }}\signed-app-image\FlowersForever\FlowersForever.exe
+          files: |
+            ${{ github.workspace }}\signed-app-image\FlowersForever\FlowersForever.exe
+            ${{ github.workspace }}\signed-app-image\FlowersForever\FlowersForeverAI.exe
           file-digest: SHA256
           timestamp-rfc3161: http://timestamp.acs.microsoft.com
           timestamp-digest: SHA256
           description: FlowersForever
           description-url: https://github.com/${{ github.repository }}
 
-      - name: Require a valid launcher signature
+      - name: Require valid launcher signatures
         shell: pwsh
         run: |
-          $launcher = Join-Path $env:GITHUB_WORKSPACE 'signed-app-image\FlowersForever\FlowersForever.exe'
-          $signature = Get-AuthenticodeSignature -LiteralPath $launcher
-          if ($signature.Status -ne 'Valid' -or $null -eq $signature.SignerCertificate) {
-            throw "FlowersForever launcher signature is not valid: $($signature.Status)"
+          $launchers = @(
+            'signed-app-image\FlowersForever\FlowersForever.exe',
+            'signed-app-image\FlowersForever\FlowersForeverAI.exe'
+          )
+          foreach ($relative in $launchers) {
+            $launcher = Join-Path $env:GITHUB_WORKSPACE $relative
+            $signature = Get-AuthenticodeSignature -LiteralPath $launcher
+            if ($signature.Status -ne 'Valid' -or $null -eq $signature.SignerCertificate) {
+              throw "$relative signature is not valid: $($signature.Status)"
+            }
+            $signature.SignerCertificate | Format-List Subject, Issuer, NotBefore, NotAfter, Thumbprint
           }
-          $signature.SignerCertificate | Format-List Subject, Issuer, NotBefore, NotAfter, Thumbprint
 
       - name: Package the signed app image as MSI
         shell: bash
@@ -339,6 +389,8 @@ jobs:
           $smokeData = Join-Path $env:GITHUB_WORKSPACE 'target\release-smoke-data-msi'
           New-Item -ItemType Directory -Path $smokeData -Force | Out-Null
           $env:FLOWERFARM_DATA_DIR = $smokeData
+          $aiLauncher = Join-Path $env:GITHUB_WORKSPACE 'signed-app-image\FlowersForever\FlowersForeverAI.exe'
+          & scripts/test-mcp-launcher.ps1 -Launcher $aiLauncher -DataDir $smokeData
           $launcher = Join-Path $env:GITHUB_WORKSPACE 'signed-app-image\FlowersForever\FlowersForever.exe'
           Start-Process -FilePath $launcher -ArgumentList '--release-smoke' -WindowStyle Hidden
           $marker = Join-Path $smokeData 'release-smoke.ok'
@@ -369,6 +421,9 @@ jobs:
       contents: read
 
     steps:
+      - name: Checkout verified launcher configuration and smoke scripts
+        uses: actions/checkout@v7
+
       - name: Require Apple signing configuration
         shell: bash
         env:
@@ -444,6 +499,7 @@ jobs:
             --description "Flower farm operations and knowledge, kept in one place" \
             --input target/jpackage-input \
             --main-jar "$JAR" \
+            --add-launcher FlowersForeverAI=packaging/FlowersForeverAI.properties \
             --java-options "-Djava.awt.headless=false" \
             --java-options "-Dflowerfarm.packaged=true" \
             --mac-package-identifier com.richeyworks.flowersforever \
@@ -513,6 +569,17 @@ jobs:
           SMOKE_DATA="target/release-smoke-data-dmg"
           mkdir -p "$SMOKE_DATA"
           export FLOWERFARM_DATA_DIR="$SMOKE_DATA"
+          export FLOWERFARM_HARNESS_TOKEN="signed-mcp-doctor-token-123456"
+          export FLOWERFARM_HARNESS_ALLOW_SENSITIVE_READ=true
+          export FLOWERFARM_HARNESS_ALLOW_MUTATIONS=true
+          AI_LAUNCHER="$APP/Contents/MacOS/FlowersForeverAI"
+          test -x "$AI_LAUNCHER"
+          "$AI_LAUNCHER" --mcp-doctor > target/mcp-doctor-dmg.json
+          grep -q '"ready":true' target/mcp-doctor-dmg.json
+          ! grep -Fq "$FLOWERFARM_HARNESS_TOKEN" target/mcp-doctor-dmg.json
+          printf '%s\n' '{"jsonrpc":"2.0","id":"release-smoke","method":"ping","params":{"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28","io.modelcontextprotocol/clientCapabilities":{}}}}' \
+            | "$AI_LAUNCHER" > target/mcp-ping-dmg.json
+          grep -q '"id":"release-smoke"' target/mcp-ping-dmg.json
           "$APP/Contents/MacOS/FlowersForever" --release-smoke &
           for attempt in $(seq 1 90); do
             test -s "$SMOKE_DATA/release-smoke.ok" && break

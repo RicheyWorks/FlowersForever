@@ -1,5 +1,7 @@
 package com.flowerfarm.gui.tabs;
 
+import com.flowerfarm.model.PnwPlantProfile;
+
 import java.util.List;
 
 /**
@@ -88,6 +90,32 @@ public interface TabHost {
      */
     default void showOrder(long orderId, String returnTab, String returnLabel) {
         showOrder(orderId);
+    }
+
+    /**
+     * Open a new CRM order draft and prepare a non-stock event-services brief.
+     * Physical flowers and other goods remain separate inventory-tracked lines.
+     */
+    default boolean showEventOrderDraft(String occasion, String services, String brief) {
+        String safeOccasion = occasion == null || occasion.isBlank()
+                ? "event" : occasion.trim();
+        selectTab("Customers & Orders");
+        setStatus("Opened Customers & Orders for a " + safeOccasion + " service brief.");
+        return false;
+    }
+
+    /**
+     * Open Season Planner with a sourced plant profile prepared as an editable
+     * farm-specific planting draft. The bundled reference remains immutable.
+     */
+    default boolean showSeasonPlanDraft(PnwPlantProfile plant) {
+        if (plant == null) {
+            return false;
+        }
+        selectTab("Season Planner");
+        setStatus("Opened Season Planner for “" + plant.commonName()
+                + "”; confirm farm dates, bed space, and expected stems before saving.");
+        return false;
     }
 
     /**

@@ -1,5 +1,6 @@
 package com.flowerfarm.service;
 
+import com.flowerfarm.model.FarmProfile;
 import com.flowerfarm.model.Customer;
 import com.flowerfarm.model.CustomerOrder;
 import com.flowerfarm.model.Item;
@@ -45,7 +46,7 @@ class MorningBriefingServiceTest {
     void setUp() {
         service = new MorningBriefingService(
                 inventoryService, harvestService, orderService,
-                marketDayPackingService, irrigationAdvisorService);
+                marketDayPackingService, irrigationAdvisorService, new FarmProfile());
     }
 
     @Test

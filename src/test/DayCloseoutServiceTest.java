@@ -1,5 +1,6 @@
 package com.flowerfarm.service;
 
+import com.flowerfarm.model.FarmProfile;
 import com.flowerfarm.model.Customer;
 import com.flowerfarm.model.CustomerOrder;
 import com.flowerfarm.model.HarvestEntry;
@@ -39,7 +40,8 @@ class DayCloseoutServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new DayCloseoutService(inventoryService, harvestService, orderService);
+        service = new DayCloseoutService(
+                inventoryService, harvestService, orderService, new FarmProfile());
     }
 
     @Test

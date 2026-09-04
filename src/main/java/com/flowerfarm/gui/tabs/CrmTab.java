@@ -1,5 +1,7 @@
 package com.flowerfarm.gui.tabs;
 
+import com.flowerfarm.gui.FarmDialogs;
+import com.flowerfarm.gui.FarmFileChooser;
 import com.flowerfarm.gui.FarmUi;
 import com.flowerfarm.gui.GuiPermissions;
 import com.flowerfarm.gui.presenter.CrmPresenter;
@@ -30,6 +32,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.Supplier;
 
 /**
  * CRM — customers + wholesale/market orders: search, filter, confirm, fulfill, export.
@@ -38,6 +41,8 @@ public class CrmTab implements FlowerFarmTab {
 
     private final CrmPresenter presenter;
     private final TabHost host;
+    private final FarmDialogs dialogs;
+    private final FarmFileChooser files;
 
     private JPanel panel;
     private DefaultTableModel customerModel;
@@ -159,6 +164,7 @@ public class CrmTab implements FlowerFarmTab {
     private Map<Long, OrderStockAssessment> orderReadinessAssessments = Map.of();
     private Set<Long> reservationLimitedOrderIds = Set.of();
     private boolean canWrite = true;
+    private boolean crmHasCustomers;
 
     private JButton addCustomerBtn;
     private JButton loadCustomerBtn;
@@ -186,6 +192,7 @@ public class CrmTab implements FlowerFarmTab {
     private JButton returnFromOrderBtn;
     private CardLayout customerCardLayout;
     private JPanel customerState;
+    private FarmUi.EmptyStateView customerEmptyState;
     private CardLayout orderCardLayout;
     private JPanel orderState;
     private JPanel newOrderSetupPanel;
@@ -199,6 +206,7 @@ public class CrmTab implements FlowerFarmTab {
     private boolean crmRefreshQueued;
     private boolean runningDocument;
     private String crmRefreshFailure;
+    private String crmRefreshFailureSource;
     private Long pendingOrderSelectionId;
     private Long pendingCreatedOrderSelectionId;
     private String pendingCreatedOrderDescription;
@@ -236,20 +244,50 @@ public class CrmTab implements FlowerFarmTab {
     private String handoffOrderLineProduct;
 
     public CrmTab(CustomerService customerService, OrderService orderService, TabHost host) {
-        this(customerService, orderService, null, host);
+        this(customerService, orderService, null, null, host,
+                FarmDialogs.swing(), FarmFileChooser.swing());
+    }
+
+    public CrmTab(CustomerService customerService, OrderService orderService,
+                  TabHost host, FarmDialogs dialogs) {
+        this(customerService, orderService, null, null, host,
+                dialogs, FarmFileChooser.swing());
+    }
+
+    public CrmTab(CustomerService customerService, OrderService orderService,
+                  TabHost host, FarmDialogs dialogs, FarmFileChooser files) {
+        this(customerService, orderService, null, null, host, dialogs, files);
     }
 
     public CrmTab(CustomerService customerService, OrderService orderService,
                   CustomerStatementService customerStatementService, TabHost host) {
-        this(customerService, orderService, customerStatementService, null, host);
+        this(customerService, orderService, customerStatementService, null,
+                host, FarmDialogs.swing(), FarmFileChooser.swing());
     }
 
     public CrmTab(CustomerService customerService, OrderService orderService,
                   CustomerStatementService customerStatementService,
                   InventoryService inventoryService, TabHost host) {
+        this(customerService, orderService, customerStatementService, inventoryService,
+                host, FarmDialogs.swing(), FarmFileChooser.swing());
+    }
+
+    public CrmTab(CustomerService customerService, OrderService orderService,
+                  CustomerStatementService customerStatementService,
+                  InventoryService inventoryService, TabHost host, FarmDialogs dialogs) {
+        this(customerService, orderService, customerStatementService, inventoryService,
+                host, dialogs, FarmFileChooser.swing());
+    }
+
+    public CrmTab(CustomerService customerService, OrderService orderService,
+                  CustomerStatementService customerStatementService,
+                  InventoryService inventoryService, TabHost host, FarmDialogs dialogs,
+                  FarmFileChooser files) {
         this.presenter = new CrmPresenter(
                 customerService, orderService, customerStatementService, inventoryService);
         this.host = host;
+        this.dialogs = Objects.requireNonNull(dialogs, "dialogs");
+        this.files = Objects.requireNonNull(files, "files");
     }
 
     @Override public String getTabTitle() { return "Customers & Orders"; }
@@ -291,6 +329,7 @@ public class CrmTab implements FlowerFarmTab {
         CrmRefreshRequest request = currentCrmRefreshRequest();
         refreshingCrm = true;
         crmRefreshFailure = null;
+        crmRefreshFailureSource = null;
         refreshCrmBtn.setEnabled(false);
         updateCustomerFormMode();
         updateOrderActions();
@@ -304,18 +343,25 @@ public class CrmTab implements FlowerFarmTab {
         new SwingWorker<CrmRefreshSnapshot, Void>() {
             @Override
             protected CrmRefreshSnapshot doInBackground() {
-                CrmPresenter.OrderView baseView = presenter.filterOrders(
-                        request.orderStatus(), request.orderCustomer(),
-                        request.from(), request.to(), request.orderHandoff());
+                CrmPresenter.OrderView baseView = loadCrmSource("Orders", () ->
+                        presenter.filterOrders(
+                                request.orderStatus(), request.orderCustomer(),
+                                request.from(), request.to(), request.orderHandoff()));
                 List<CrmPresenter.InventoryChoice> inventoryChoices =
-                        List.copyOf(presenter.inventoryChoices());
+                        List.copyOf(loadCrmSource(
+                                "Inventory", presenter::inventoryChoices));
                 List<CustomerOrder> confirmedQueue =
-                        List.copyOf(presenter.confirmedCompletionQueue());
+                        List.copyOf(loadCrmSource(
+                                "Confirmed orders", presenter::confirmedCompletionQueue));
+                List<CrmPresenter.CustomerRow> customers = List.copyOf(loadCrmSource(
+                        "Customers", () -> presenter.searchCustomers(request.customerQuery())));
+                List<CrmPresenter.CustomerChoice> customerChoices = List.copyOf(loadCrmSource(
+                        "Customer choices", presenter::customerChoices));
                 return new CrmRefreshSnapshot(
-                        List.copyOf(presenter.searchCustomers(request.customerQuery())),
+                        customers,
                         filterOrderReadiness(baseView, inventoryChoices,
                                 request.orderReadiness(), confirmedQueue),
-                        List.copyOf(presenter.customerChoices()),
+                        customerChoices,
                         inventoryChoices, confirmedQueue);
             }
 
@@ -354,6 +400,17 @@ public class CrmTab implements FlowerFarmTab {
         }.execute();
     }
 
+    private static <T> T loadCrmSource(String source, Supplier<T> loader) {
+        try {
+            return Objects.requireNonNull(
+                    loader.get(), source + " returned no refresh response");
+        } catch (CrmPresenter.InputValidationException validation) {
+            throw validation;
+        } catch (RuntimeException failure) {
+            throw new CrmRefreshSourceException(source, failure);
+        }
+    }
+
     private CrmRefreshRequest currentCrmRefreshRequest() {
         String readiness = selectedReadinessFilter();
         String status = "ALL".equals(readiness) ? selectedStatusFilter() : "CONFIRMED";
@@ -380,6 +437,7 @@ public class CrmTab implements FlowerFarmTab {
         // started against the newer customer, date, handoff, or saved-product set.
         rememberCurrentProductDraft();
 
+        crmHasCustomers = !snapshot.customerChoices().isEmpty();
         confirmedCompletionQueueSnapshot = snapshot.confirmedCompletionQueue().isEmpty()
                 ? snapshot.orderReadiness().view().sourceOrders().stream()
                         .filter(order -> "CONFIRMED".equalsIgnoreCase(order.getStatus())).toList()
@@ -490,10 +548,24 @@ public class CrmTab implements FlowerFarmTab {
                             + "then refresh again.", FarmUi.Tone.WARNING);
             return;
         }
-        String detail = FarmUi.actionableError("Refreshing customers and orders", failure);
-        crmRefreshFailure = detail
-                + " Existing rows, filters, selection, and order-entry details were kept; retry when ready.";
-        showCrmRefreshState("CRM refresh failed · retry", crmRefreshFailure, FarmUi.Tone.DANGER);
+        Throwable detailFailure = failure;
+        if (failure instanceof CrmRefreshSourceException sourceFailure) {
+            crmRefreshFailureSource = sourceFailure.source();
+            if (sourceFailure.getCause() != null) {
+                detailFailure = sourceFailure.getCause();
+            }
+        }
+        String detail = FarmUi.actionableError("Refreshing customers and orders", detailFailure);
+        String sourceDetail = crmRefreshFailureSource == null
+                ? "The CRM snapshot could not be completed."
+                : crmRefreshFailureSource + " could not be loaded.";
+        crmRefreshFailure = sourceDetail
+                + " Any partial refresh response was discarded so customers, orders, and "
+                + "inventory cannot be mixed across snapshots. " + detail
+                + " Existing rows, filters, selection, and order-entry details were kept; "
+                + "retry when ready.";
+        showCrmRefreshState(crmRefreshFailureStatus(),
+                crmRefreshFailure, FarmUi.Tone.DANGER);
         if (pendingOpenCustomerRequest != null) {
             String recovery = "Could not reload customer “"
                     + pendingOpenCustomerRequest.customerName() + "” from "
@@ -535,8 +607,19 @@ public class CrmTab implements FlowerFarmTab {
                     : pendingCorrectionSuccess != null
                     ? correctionSuccessRecovery(pendingCorrectionSuccess,
                             "CRM could not reload the exact order. Retry Refresh CRM only")
-                    : "Customer and order refresh failed. Existing work was kept; review the status and retry.");
+                    : (crmRefreshFailureSource == null
+                    ? "Customer and order refresh failed."
+                    : "CRM refresh failed because " + crmRefreshFailureSource
+                            + " could not be loaded.")
+                            + " Existing work was kept; review the status and retry.");
         }
+    }
+
+    private String crmRefreshFailureStatus() {
+        return crmRefreshFailureSource == null
+                ? "CRM refresh failed · previous snapshot shown · retry"
+                : "CRM refresh failed · " + crmRefreshFailureSource
+                        + " unavailable · previous snapshot shown · retry";
     }
 
     private void finishCrmRefresh() {
@@ -692,7 +775,7 @@ public class CrmTab implements FlowerFarmTab {
             pendingOpenCustomerPresentation = null;
         }
         if (crmRefreshFailure != null) {
-            showCrmRefreshState("CRM refresh failed · retry",
+            showCrmRefreshState(crmRefreshFailureStatus(),
                     crmRefreshFailure, FarmUi.Tone.DANGER);
         }
         if (crmRefreshQueued) {
@@ -835,7 +918,7 @@ public class CrmTab implements FlowerFarmTab {
         refreshCrmBtn.addActionListener(event -> startCrmRefresh());
         panel.add(FarmUi.pageHeader(
                 "Customers and orders",
-                "Manage Kitsap market and florist relationships from inquiry through fulfillment.",
+                "Manage market and florist relationships from inquiry through fulfillment.",
                 FarmUi.toolbar(accessLabel, crmRefreshLabel,
                         documentStatusLabel, refreshCrmBtn)), BorderLayout.NORTH);
 
@@ -890,6 +973,7 @@ public class CrmTab implements FlowerFarmTab {
             @Override public boolean isCellEditable(int r, int c) { return false; }
         };
         customerTable = new JTable(customerModel);
+        customerTable.setName("crm.customers.table");
         FarmUi.configureTable(customerTable, "Customer accounts table");
         customerTable.getColumnModel().getColumn(0).setMaxWidth(54);
         customerTable.getSelectionModel().addListSelectionListener(event -> {
@@ -907,9 +991,10 @@ public class CrmTab implements FlowerFarmTab {
         customerCardLayout = new CardLayout();
         customerState = new JPanel(customerCardLayout);
         customerState.add(FarmUi.tableScroll(customerTable), "table");
-        customerState.add(FarmUi.emptyState(
-                "No customers match this search",
-                "Clear the search or add the first customer account below."), "empty");
+        customerEmptyState = FarmUi.emptyStateView(
+                "No customers yet",
+                "Add the first customer account below; it will be ready for order entry after save.");
+        customerState.add(customerEmptyState.component(), "empty");
         p.add(customerState, BorderLayout.CENTER);
 
         JPanel form = new JPanel(new GridLayout(0, 4, 6, 4));
@@ -995,6 +1080,7 @@ public class CrmTab implements FlowerFarmTab {
                 "Needs attention", "Completed", "Cancelled"});
         filterStatus.setPrototypeDisplayValue("All statuses");
         filterStatus.setName("crm.orderStatusFilter");
+        filterStatus.getAccessibleContext().setAccessibleName("Order status filter");
         filterHandoff = new JComboBox<>(new String[]{
                 "All handoffs", "Needs review", "Pickup", "Delivery", "Market"});
         filterHandoff.setName("crm.orderHandoffFilter");
@@ -1008,6 +1094,8 @@ public class CrmTab implements FlowerFarmTab {
         filterTo = new JTextField(LocalDate.now().toString(), 10);
         filterFrom.setName("crm.orderFilterFrom");
         filterTo.setName("crm.orderFilterTo");
+        filterFrom.getAccessibleContext().setAccessibleName("Order filter start date");
+        filterTo.getAccessibleContext().setAccessibleName("Order filter end date");
         orderStatusLabel = FarmUi.statusBadge("Orders not loaded", FarmUi.Tone.NEUTRAL);
         watchValidationCorrection(filterFrom, this::showOrderFilterCorrectionReady);
         watchValidationCorrection(filterTo, this::showOrderFilterCorrectionReady);
@@ -1749,12 +1837,31 @@ public class CrmTab implements FlowerFarmTab {
         boolean selected = customerTable != null && customerTable.getSelectedRow() >= 0;
         boolean current = !refreshingCrm && !savingCustomer && !deletingCustomer
                 && pendingCustomerWriteSuccess == null;
-        addCustomerBtn.setEnabled(canWrite && current && !editing);
-        saveCustomerBtn.setEnabled(canWrite && current && editing);
+        boolean authoritative = current && crmRefreshFailure == null;
+        addCustomerBtn.setEnabled(canWrite && authoritative && !editing);
+        saveCustomerBtn.setEnabled(canWrite && authoritative && editing);
         loadCustomerBtn.setEnabled(canWrite && current && selected);
         clearCustomerBtn.setEnabled(canWrite && current);
-        deleteCustomerBtn.setEnabled(canWrite && current && selected);
+        deleteCustomerBtn.setEnabled(canWrite && authoritative && selected);
         statementCustomerBtn.setEnabled(current && selected && !runningDocument);
+        if (crmRefreshFailure != null) {
+            String guidance = "Customer details are retained for review. Refresh CRM successfully "
+                    + "before adding, saving, or deleting an account.";
+            for (JButton action : List.of(addCustomerBtn, saveCustomerBtn, deleteCustomerBtn)) {
+                action.setToolTipText(guidance);
+                action.getAccessibleContext().setAccessibleDescription(guidance);
+            }
+        } else {
+            String addGuidance = "Create a new customer account from this form.";
+            String saveGuidance = "Update the loaded customer (double-click a row to load it).";
+            String deleteGuidance = "Delete the selected customer account after review.";
+            addCustomerBtn.setToolTipText(addGuidance);
+            addCustomerBtn.getAccessibleContext().setAccessibleDescription(addGuidance);
+            saveCustomerBtn.setToolTipText(saveGuidance);
+            saveCustomerBtn.getAccessibleContext().setAccessibleDescription(saveGuidance);
+            deleteCustomerBtn.setToolTipText(deleteGuidance);
+            deleteCustomerBtn.getAccessibleContext().setAccessibleDescription(deleteGuidance);
+        }
         boolean hasConflict = conflictingCustomerId != null;
         reviewCustomerConflictBtn.setVisible(hasConflict);
         reviewCustomerConflictBtn.setEnabled(hasConflict && current);
@@ -1964,7 +2071,8 @@ public class CrmTab implements FlowerFarmTab {
                 && !stockAssessment.gaps().isEmpty();
         boolean orderWriteEnabled = canWrite && !creatingOrder && !addingOrderLine
                 && !runningOrderMutation
-                && !fulfillingOrder && !refreshingCrm && !exactOrderReloadPending;
+                && !fulfillingOrder && !refreshingCrm && crmRefreshFailure == null
+                && !exactOrderReloadPending;
         if (reviewOrderCustomerBtn != null) {
             reviewOrderCustomerBtn.setEnabled(row >= 0 && !creatingOrder && !addingOrderLine
                     && !runningOrderMutation && !fulfillingOrder && !refreshingCrm);
@@ -4095,7 +4203,23 @@ public class CrmTab implements FlowerFarmTab {
             customerModel.addRow(customer.cells());
         }
         if (customerCardLayout != null && customerState != null) {
+            updateCustomerEmptyState();
             customerCardLayout.show(customerState, list.isEmpty() ? "empty" : "table");
+        }
+    }
+
+    private void updateCustomerEmptyState() {
+        if (customerEmptyState == null) {
+            return;
+        }
+        if (custSearch == null || custSearch.getText().isBlank()) {
+            customerEmptyState.updateCopy(
+                    "No customers yet",
+                    "Add the first customer account below; it will be ready for order entry after save.");
+        } else {
+            customerEmptyState.updateCopy(
+                    "No customers match this search",
+                    "Show all customers or add a new account below.");
         }
     }
 
@@ -4164,13 +4288,17 @@ public class CrmTab implements FlowerFarmTab {
             return;
         }
         boolean filtered = orderFiltersActive();
-        String title = filtered ? "No orders match these filters" : "No orders yet";
-        String guidance = filtered
+        boolean firstRun = !crmHasCustomers;
+        String title = firstRun || !filtered
+                ? "No orders yet" : "No orders match these filters";
+        String guidance = firstRun
+                ? "Add the first customer on the Customers tab, then create a draft order."
+                : filtered
                 ? "Show all orders; unfinished new-order and product entry will be kept."
                 : "Select or add a customer below, then create the first draft order.";
         orderEmptyTitle.setText(title);
         orderEmptyGuidance.setText(guidance);
-        orderEmptyShowAllBtn.setVisible(filtered);
+        orderEmptyShowAllBtn.setVisible(filtered && !firstRun);
         orderState.getAccessibleContext().setAccessibleName(title);
         orderState.getAccessibleContext().setAccessibleDescription(guidance);
     }
@@ -4217,6 +4345,41 @@ public class CrmTab implements FlowerFarmTab {
      */
     public void showOrdersByStatus(String status) {
         showOrdersByStatus(status, null, null);
+    }
+
+    /**
+     * Prepares sourced event-service instructions without overwriting another
+     * unfinished new-order brief or treating services as physical inventory.
+     */
+    public boolean prepareEventOrderBrief(String eventBrief) {
+        if (panel == null) {
+            getUIComponent();
+        }
+        String safeBrief = eventBrief == null ? "" : eventBrief.trim();
+        if (safeBrief.isBlank()) {
+            return false;
+        }
+        if (safeBrief.length() > 2000) {
+            safeBrief = safeBrief.substring(0, 1999) + "…";
+        }
+        if (orderTable != null && orderTable.getSelectedRow() >= 0) {
+            startAnotherOrder();
+        }
+        String current = orderNotes.getText().trim();
+        if (!current.isBlank() && !current.equals(safeBrief)) {
+            FarmUi.revealAndFocus(orderNotes);
+            status("The existing new-order instructions were kept. Copy the event brief after "
+                    + "saving or clearing that separate draft.");
+            return false;
+        }
+        orderNotes.setText(safeBrief);
+        FarmUi.clearFieldError(orderNotes);
+        updateNewOrderCustomerContext();
+        updateOrderActions();
+        FarmUi.revealAndFocus(orderNotes);
+        status("Event-service brief prepared in new-order instructions. Add the customer, date, "
+                + "handoff, and physical flower products before creating the draft order.");
+        return true;
     }
 
     /** Focus a lifecycle queue and retain a route back to its source workflow. */
@@ -4990,7 +5153,7 @@ public class CrmTab implements FlowerFarmTab {
                             FarmUi.Tone.SUCCESS,
                             "Statement: " + statement.orderCount() + " order(s) · $"
                                     + String.format("%.2f", statement.grandTotal()));
-                    if (panel.isShowing()) {
+                    if (panel.isShowing() || dialogs != FarmDialogs.swing()) {
                         presentCustomerStatement(statement,
                                 customerName == null ? statement.customerName() : customerName);
                     }
@@ -5006,27 +5169,24 @@ public class CrmTab implements FlowerFarmTab {
             CustomerStatementService.CustomerStatement statement, String customerName) {
         JTextArea area = documentArea(statement.plainText());
         Object[] options = {"Export PDF…", "Close"};
-        int choice = JOptionPane.showOptionDialog(panel, new JScrollPane(area),
+        int choice = dialogs.showOption(panel, new JScrollPane(area),
                 "Statement — " + customerName + " (" + statement.from()
                         + " → " + statement.to() + ")",
                 JOptionPane.DEFAULT_OPTION, JOptionPane.PLAIN_MESSAGE,
                 null, options, options[1]);
         if (choice == 0) {
-            JFileChooser chooser = new JFileChooser();
-            chooser.setSelectedFile(new File(
-                    "statement-customer-" + statement.customerId() + ".pdf"));
-            if (chooser.showSaveDialog(panel) == JFileChooser.APPROVE_OPTION) {
-                File file = chooser.getSelectedFile();
-                if (approveReplacement(file)
-                        && beginDocumentWork("Creating statement PDF…",
-                        "The reviewed customer statement is being rendered in the background.")) {
-                    startDocumentFileExport(file,
-                            () -> Files.write(file.toPath(), presenter.statementPdf(statement)),
-                            "Statement PDF saved · " + statement.orderCount() + " orders",
-                            "Statement PDF → " + file.getName()
-                                    + " (" + statement.orderCount() + " orders)",
-                            "Saving the customer statement PDF");
-                }
+            File file = files.chooseSave(panel, "Save customer statement PDF",
+                    new File("statement-customer-" + statement.customerId() + ".pdf"))
+                    .orElse(null);
+            if (file != null && approveReplacement(file)
+                    && beginDocumentWork("Creating statement PDF…",
+                    "The reviewed customer statement is being rendered in the background.")) {
+                startDocumentFileExport(file,
+                        () -> Files.write(file.toPath(), presenter.statementPdf(statement)),
+                        "Statement PDF saved · " + statement.orderCount() + " orders",
+                        "Statement PDF → " + file.getName()
+                                + " (" + statement.orderCount() + " orders)",
+                        "Saving the customer statement PDF");
             }
         }
     }
@@ -6582,12 +6742,11 @@ public class CrmTab implements FlowerFarmTab {
         OrderConfirmationReview review = orderConfirmationReview(
                 order, orderStockAssessment(id));
         OrderService.OrderReviewSnapshot reviewedSnapshot = presenter.reviewSnapshot(order);
-        int confirmation = panel.isShowing()
-                ? JOptionPane.showConfirmDialog(panel,
-                        orderConfirmationPanel(review),
+        int confirmation = !panel.isShowing() && dialogs == FarmDialogs.swing()
+                ? JOptionPane.YES_OPTION
+                : dialogs.showConfirm(panel, orderConfirmationPanel(review),
                         "Confirm order for packing", JOptionPane.YES_NO_OPTION,
-                        JOptionPane.WARNING_MESSAGE)
-                : JOptionPane.YES_OPTION;
+                        JOptionPane.WARNING_MESSAGE);
         if (confirmation != JOptionPane.YES_OPTION) {
             status("Confirmation cancelled for order #" + id
                     + ". It remains a draft and inventory was not changed.");
@@ -6892,11 +7051,11 @@ public class CrmTab implements FlowerFarmTab {
         overdueCompletionApproval = null;
         OrderCompletionReview review = orderCompletionReview(order, orderStockAssessment(id));
         OrderService.OrderReviewSnapshot reviewedSnapshot = presenter.reviewSnapshot(order);
-        int ok = panel.isShowing()
-                ? JOptionPane.showConfirmDialog(panel,
-                        orderCompletionPanel(review),
-                        "Complete order", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE)
-                : JOptionPane.YES_OPTION;
+        int ok = !panel.isShowing() && dialogs == FarmDialogs.swing()
+                ? JOptionPane.YES_OPTION
+                : dialogs.showConfirm(panel, orderCompletionPanel(review),
+                        "Complete order", JOptionPane.YES_NO_OPTION,
+                        JOptionPane.WARNING_MESSAGE);
         if (ok != JOptionPane.YES_OPTION) {
             return;
         }
@@ -7226,10 +7385,10 @@ public class CrmTab implements FlowerFarmTab {
         String description = selectedOrderDescription();
         OrderDestructiveReview review = orderDestructiveReview(order, false);
         OrderService.OrderReviewSnapshot reviewedSnapshot = presenter.reviewSnapshot(order);
-        int confirmation = panel.isShowing()
-                ? JOptionPane.showConfirmDialog(panel, orderDestructivePanel(review),
-                        "Cancel order", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE)
-                : JOptionPane.YES_OPTION;
+        int confirmation = !panel.isShowing() && dialogs == FarmDialogs.swing()
+                ? JOptionPane.YES_OPTION
+                : dialogs.showConfirm(panel, orderDestructivePanel(review), "Cancel order",
+                        JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
         if (confirmation != JOptionPane.YES_OPTION) {
             return;
         }
@@ -7311,10 +7470,11 @@ public class CrmTab implements FlowerFarmTab {
         String description = selectedOrderDescription();
         OrderDestructiveReview review = orderDestructiveReview(order, true);
         OrderService.OrderReviewSnapshot reviewedSnapshot = presenter.reviewSnapshot(order);
-        int ok = panel.isShowing()
-                ? JOptionPane.showConfirmDialog(panel, orderDestructivePanel(review),
-                        "Delete order", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE)
-                : JOptionPane.YES_OPTION;
+        int ok = !panel.isShowing() && dialogs == FarmDialogs.swing()
+                ? JOptionPane.YES_OPTION
+                : dialogs.showConfirm(panel, orderDestructivePanel(review),
+                        "Delete order", JOptionPane.YES_NO_OPTION,
+                        JOptionPane.WARNING_MESSAGE);
         if (ok != JOptionPane.YES_OPTION) {
             return;
         }
@@ -7797,11 +7957,10 @@ public class CrmTab implements FlowerFarmTab {
             error("Select an order to print an invoice.");
             return;
         }
-        JFileChooser chooser = new JFileChooser();
-        chooser.setSelectedFile(new File("invoice-order-" + id + ".pdf"));
-        if (chooser.showSaveDialog(panel) == JFileChooser.APPROVE_OPTION
-                && approveReplacement(chooser.getSelectedFile())) {
-            startInvoiceExport(id, chooser.getSelectedFile());
+        File file = files.chooseSave(panel, "Save order invoice PDF",
+                new File("invoice-order-" + id + ".pdf")).orElse(null);
+        if (file != null && approveReplacement(file)) {
+            startInvoiceExport(id, file);
         }
     }
 
@@ -7818,13 +7977,13 @@ public class CrmTab implements FlowerFarmTab {
     }
 
     private void exportOrdersCsv(boolean filteredOnly) {
-        JFileChooser chooser = new JFileChooser();
-        chooser.setSelectedFile(new File(filteredOnly ? "orders_filtered.csv" : "orders_export.csv"));
-        chooser.setDialogTitle(filteredOnly ? "Export filtered orders" : "Export all orders");
-        if (chooser.showSaveDialog(panel) != JFileChooser.APPROVE_OPTION) {
+        String title = filteredOnly ? "Export filtered orders" : "Export all orders";
+        File file = files.chooseSave(panel, title,
+                new File(filteredOnly ? "orders_filtered.csv" : "orders_export.csv"))
+                .orElse(null);
+        if (file == null) {
             return;
         }
-        File file = chooser.getSelectedFile();
         if (approveReplacement(file)) {
             startOrdersExport(file, filteredOnly);
         }
@@ -7933,7 +8092,7 @@ public class CrmTab implements FlowerFarmTab {
         if (file == null || !file.exists()) {
             return file != null;
         }
-        int choice = JOptionPane.showConfirmDialog(panel,
+        int choice = dialogs.showConfirm(panel,
                 FarmUi.confirmationPanel(
                         "Replace “" + file.getName() + "”?",
                         "The existing file will be overwritten only if you continue.",
@@ -7988,7 +8147,7 @@ public class CrmTab implements FlowerFarmTab {
     }
 
     private void error(String msg) {
-        JOptionPane.showMessageDialog(panel, msg, "Customers & Orders", JOptionPane.ERROR_MESSAGE);
+        dialogs.showMessage(panel, msg, "Customers & Orders", JOptionPane.ERROR_MESSAGE);
     }
 
     private String selectedStatusFilter() {
@@ -8105,6 +8264,19 @@ public class CrmTab implements FlowerFarmTab {
                                      String orderCustomer, String orderHandoff,
                                      String orderReadiness,
                                      String from, String to) {
+    }
+
+    private static final class CrmRefreshSourceException extends RuntimeException {
+        private final String source;
+
+        private CrmRefreshSourceException(String source, RuntimeException cause) {
+            super(source + " unavailable", cause);
+            this.source = source;
+        }
+
+        private String source() {
+            return source;
+        }
     }
 
     private record CustomerSaveRequest(Long customerId, CrmPresenter.CustomerDraft draft,

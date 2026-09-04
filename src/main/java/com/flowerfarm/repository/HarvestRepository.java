@@ -19,6 +19,8 @@ public interface HarvestRepository {
 
     Optional<HarvestEntry> findByIdForUpdate(Long id);
 
+    Optional<HarvestEntry> findByLotCodeIgnoreCase(String lotCode);
+
     HarvestEntry save(HarvestEntry entry);
 
     void deleteById(Long id);

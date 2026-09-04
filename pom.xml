@@ -89,6 +89,13 @@
             <version>1.3.39</version>
         </dependency>
 
+        <!-- Standards-based QR payloads for printable harvest-lot traceability labels -->
+        <dependency>
+            <groupId>com.google.zxing</groupId>
+            <artifactId>core</artifactId>
+            <version>3.5.3</version>
+        </dependency>
+
         <!-- Excel / XLSX support -->
         <dependency>
             <groupId>org.apache.poi</groupId>
@@ -148,6 +155,28 @@
                         <include>**/*IT.java</include>
                     </includes>
                 </configuration>
+            </plugin>
+
+            <!-- Exercise the repackaged JAR after package, including its Boot loader. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-failsafe-plugin</artifactId>
+                <configuration>
+                    <includes>
+                        <include>**/McpPackagedProcessSmokeIT.java</include>
+                    </includes>
+                    <systemPropertyVariables>
+                        <flowerfarm.mcp.executable-jar>${project.build.directory}/${project.build.finalName}.jar</flowerfarm.mcp.executable-jar>
+                    </systemPropertyVariables>
+                </configuration>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>integration-test</goal>
+                            <goal>verify</goal>
+                        </goals>
+                    </execution>
+                </executions>
             </plugin>
 
             <!-- JaCoCo — report plus meaningful line/branch regression floors (ADR-001) -->
@@ -322,6 +351,30 @@
                                 <goals><goal>check</goal></goals>
                             </execution>
                         </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+        <!--
+          Native pointer/keyboard smoke. This profile intentionally replaces
+          the normal Surefire includes so an operator opts into screen control
+          without also running hundreds of headless tests behind the window.
+        -->
+        <profile>
+            <id>installed-desktop-smoke</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-surefire-plugin</artifactId>
+                        <configuration>
+                            <includes combine.self="override">
+                                <include>**/InstalledDesktopSmoke.java</include>
+                            </includes>
+                            <systemPropertyVariables>
+                                <flowerfarm.installed-desktop-smoke>true</flowerfarm.installed-desktop-smoke>
+                            </systemPropertyVariables>
+                        </configuration>
                     </plugin>
                 </plugins>
             </build>

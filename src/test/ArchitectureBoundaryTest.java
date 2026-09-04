@@ -118,6 +118,7 @@ class ArchitectureBoundaryTest {
         String inventory = Files.readString(gui.resolve("tabs").resolve("InventoryTab.java"));
         String addItem = Files.readString(gui.resolve("tabs").resolve("AddItemTab.java"));
         String frame = Files.readString(gui.resolve("FlowerFarmGUI.java"));
+        String catalog = Files.readString(gui.resolve("FarmTabCatalog.java"));
         String cli = Files.readString(SOURCES.resolve("cli").resolve("FlowerFarmCLI.java"));
 
         assertThat(crm).doesNotContain("customerService.", "orderService.");
@@ -129,7 +130,27 @@ class ArchitectureBoundaryTest {
                 .doesNotContain("showInputDialog");
         assertThat(inventory).contains("InventoryItemFormView", "InventoryItemPresenter");
         assertThat(addItem).contains("InventoryItemFormView", "InventoryItemPresenter");
-        assertThat(frame).doesNotContain("connectorRegistry.run", "new DashboardTab");
+        assertThat(frame).doesNotContain("connectorRegistry.run", "new DashboardTab",
+                "JOptionPane.show", "new JFileChooser");
+        assertThat(frame).contains("FarmDialogs", "FarmFileChooser");
+        assertThat(catalog)
+                .contains("create(TabHost host, FarmDialogs dialogs, FarmFileChooser files)")
+                .doesNotContain("JOptionPane", "JFileChooser");
+        for (String workflow : List.of(
+                "DashboardTab.java", "InventoryTab.java", "MarketDayTab.java", "ReportsTab.java",
+                "RoseVisualizerTab.java", "SyncHistoryTab.java")) {
+            String source = Files.readString(gui.resolve("tabs").resolve(workflow));
+            assertThat(source).as(workflow + " file and dialog boundaries")
+                    .doesNotContain("new JFileChooser")
+                    .contains("FarmFileChooser", "Files.createTempFile", "ATOMIC_MOVE");
+        }
+        for (String workflow : List.of("DashboardTab.java", "RoseVisualizerTab.java")) {
+            assertThat(Files.readString(gui.resolve("tabs").resolve(workflow)))
+                    .as(workflow + " dialog boundary")
+                    .doesNotContain("JOptionPane.showMessageDialog",
+                            "JOptionPane.showConfirmDialog", "JOptionPane.showOptionDialog")
+                    .contains("FarmDialogs");
+        }
         assertThat(cli).doesNotContain("switch (choice)", "generatePriceListPdf",
                 "generateInvoicePdf", "generateAuditPdf");
         assertThat(cli).contains("CliCommandRouter", "CliReportCommands");

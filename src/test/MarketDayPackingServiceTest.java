@@ -1,5 +1,6 @@
 package com.flowerfarm.service;
 
+import com.flowerfarm.model.FarmProfile;
 import com.flowerfarm.model.Customer;
 import com.flowerfarm.model.CustomerOrder;
 import com.flowerfarm.model.Item;
@@ -41,7 +42,8 @@ class MarketDayPackingServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new MarketDayPackingService(orderService, inventoryService);
+        service = new MarketDayPackingService(orderService, inventoryService,
+                new FarmProfile());
     }
 
     @Test

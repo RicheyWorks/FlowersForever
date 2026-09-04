@@ -14,6 +14,7 @@ import javax.swing.JComponent;
 import javax.swing.JPanel;
 import javax.swing.JRootPane;
 import javax.swing.JTabbedPane;
+import javax.swing.JTextField;
 import javax.swing.SwingUtilities;
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
@@ -46,7 +47,9 @@ class InteractionRoutingTest {
                 .isEqualTo("Dashboard navigation item, shortcut Alt+1");
         assertThat(dashboard.initialized).isEqualTo(1);
         assertThat(navigator.select("Harvest Log")).isTrue();
+        flushEventQueue();
         assertThat(pane.getSelectedIndex()).isEqualTo(1);
+        assertThat(harvest.focus.requests).isPositive();
         navigator.refreshAll();
         assertThat(dashboard.refreshed).isEqualTo(1);
         assertThat(harvest.refreshed).isGreaterThanOrEqualTo(1);
@@ -58,6 +61,9 @@ class InteractionRoutingTest {
         refresh.actionPerformed(null);
         assertThat(refreshes).hasValue(1);
         assertThat(root.getActionMap().get("selectTab0")).isNotNull();
+        root.getActionMap().get("selectTab0").actionPerformed(null);
+        flushEventQueue();
+        assertThat(dashboard.focus.requests).isPositive();
         assertThat(pane.getMnemonicAt(0)).isEqualTo('D');
     }
 
@@ -65,10 +71,13 @@ class InteractionRoutingTest {
     @DisplayName("reference workspace preserves old deep links without sidebar clutter")
     void routesReferenceDeepLinks() {
         TestTab dashboard = new TestTab("Dashboard");
+        TestTab plantGuide = new TestTab("PNW Plant Guide");
+        TestTab eventServices = new TestTab("Event Services");
+        TestTab roseGuide = new TestTab("Rose Varieties");
+        TestTab pricing = new TestTab("Pricing Info");
+        TestTab visualizer = new TestTab("Rose Visualizer");
         ReferenceTab reference = new ReferenceTab(
-                new TestTab("Rose Varieties"),
-                new TestTab("Pricing Info"),
-                new TestTab("Rose Visualizer"));
+                plantGuide, eventServices, roseGuide, pricing, visualizer);
         JTabbedPane pane = new JTabbedPane();
         FarmTabNavigator navigator = new FarmTabNavigator(pane, List.of(dashboard, reference));
 
@@ -76,29 +85,38 @@ class InteractionRoutingTest {
 
         assertThat(pane.getTabCount()).isEqualTo(2);
         assertThat(navigator.select("Rose Visualizer")).isTrue();
+        flushEventQueue();
         assertThat(pane.getSelectedIndex()).isEqualTo(1);
         JTabbedPane referenceTabs = findTabbedPane(reference.getUIComponent());
-        assertThat(referenceTabs.getSelectedIndex()).isEqualTo(2);
-        assertThat(referenceTabs.getTitleAt(2)).isEqualTo("Growth visualizer");
-        assertThat(referenceTabs.getMnemonicAt(0)).isEqualTo('R');
-        assertThat(referenceTabs.getMnemonicAt(2)).isEqualTo('G');
+        assertThat(referenceTabs.getSelectedIndex()).isEqualTo(4);
+        assertThat(referenceTabs.getTitleAt(0)).isEqualTo("Plant guide");
+        assertThat(referenceTabs.getTitleAt(1)).isEqualTo("Event services");
+        assertThat(referenceTabs.getTitleAt(4)).isEqualTo("Growth visualizer");
+        assertThat(referenceTabs.getMnemonicAt(0)).isEqualTo('N');
+        assertThat(referenceTabs.getMnemonicAt(1)).isEqualTo('E');
+        assertThat(referenceTabs.getMnemonicAt(2)).isEqualTo('R');
+        assertThat(referenceTabs.getMnemonicAt(4)).isEqualTo('G');
+        assertThat(visualizer.focus.requests).isPositive();
     }
 
     @Test
     @DisplayName("inventory workspace preserves stock and add-item deep links")
     void routesInventoryDeepLinks() {
-        InventoryWorkspaceTab inventory = new InventoryWorkspaceTab(
-                new TestTab("Inventory"), new TestTab("Add Item"));
+        TestTab stock = new TestTab("Inventory");
+        TestTab addItem = new TestTab("Add Item");
+        InventoryWorkspaceTab inventory = new InventoryWorkspaceTab(stock, addItem);
         JTabbedPane pane = new JTabbedPane();
         FarmTabNavigator navigator = new FarmTabNavigator(pane, List.of(inventory));
 
         navigator.populate();
         assertThat(navigator.select("Add Item")).isTrue();
+        flushEventQueue();
         JTabbedPane inventoryTabs = findTabbedPane(inventory.getUIComponent());
         assertThat(inventoryTabs.getSelectedIndex()).isEqualTo(1);
         assertThat(inventoryTabs.getTitleAt(1)).isEqualTo("Add item");
         assertThat(inventoryTabs.getMnemonicAt(0)).isEqualTo('S');
         assertThat(inventoryTabs.getMnemonicAt(1)).isEqualTo('A');
+        assertThat(addItem.focus.requests).isPositive();
 
         assertThat(navigator.select("Inventory")).isTrue();
         assertThat(inventoryTabs.getSelectedIndex()).isZero();
@@ -155,11 +173,15 @@ class InteractionRoutingTest {
 
     private static final class TestTab implements FlowerFarmTab {
         private final String title;
+        private final JPanel panel = new JPanel();
+        private final FocusTrackingField focus = new FocusTrackingField();
         private int initialized;
         private int refreshed;
 
         private TestTab(String title) {
             this.title = title;
+            FarmUi.initialFocus(focus);
+            panel.add(focus);
         }
 
         @Override public String getTabTitle() {
@@ -167,7 +189,7 @@ class InteractionRoutingTest {
         }
 
         @Override public JComponent getUIComponent() {
-            return new JPanel();
+            return panel;
         }
 
         @Override public void initialize() {
@@ -176,6 +198,23 @@ class InteractionRoutingTest {
 
         @Override public void refreshData() {
             refreshed++;
+        }
+    }
+
+    private static final class FocusTrackingField extends JTextField {
+        private int requests;
+
+        @Override public boolean requestFocusInWindow() {
+            requests++;
+            return true;
+        }
+    }
+
+    private static void flushEventQueue() {
+        try {
+            SwingUtilities.invokeAndWait(() -> { });
+        } catch (Exception exception) {
+            throw new AssertionError(exception);
         }
     }
 

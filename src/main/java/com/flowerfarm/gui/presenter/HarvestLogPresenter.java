@@ -1,6 +1,7 @@
 package com.flowerfarm.gui.presenter;
 
 import com.flowerfarm.model.HarvestEntry;
+import com.flowerfarm.model.HarvestGrade;
 import com.flowerfarm.service.HarvestService;
 
 import java.time.LocalDate;
@@ -53,7 +54,10 @@ public final class HarvestLogPresenter {
         }
         try {
             return new HarvestEntry(date, crop, quantity, unit,
-                    trim(draft.bed()), trim(draft.notes()));
+                    trim(draft.bed()), trim(draft.notes()), trim(draft.lotCode()),
+                    parseGrade(draft.grade()), parseNonNegativeQuantity(
+                            draft.lossQuantity(), "lossQuantity", "Loss / culls"),
+                    trim(draft.storageLocation()));
         } catch (IllegalArgumentException exception) {
             throw new InputValidationException("form", exception.getMessage());
         }
@@ -233,6 +237,10 @@ public final class HarvestLogPresenter {
         return harvestService.generateHarvestLogPdf(report);
     }
 
+    public byte[] lotLabelPdf(long harvestId) {
+        return harvestService.generateLotLabelPdf(harvestId);
+    }
+
     public static LocalDate parseOptionalDate(String raw) {
         return raw == null || raw.isBlank() ? null : LocalDate.parse(raw.trim());
     }
@@ -295,11 +303,49 @@ public final class HarvestLogPresenter {
         return quantity;
     }
 
+    private static double parseNonNegativeQuantity(String raw, String field, String label) {
+        String normalized = trim(raw);
+        if (normalized.isEmpty()) {
+            return 0;
+        }
+        try {
+            double quantity = Double.parseDouble(normalized);
+            if (!Double.isFinite(quantity) || quantity < 0 || quantity > Integer.MAX_VALUE) {
+                throw new NumberFormatException();
+            }
+            return quantity;
+        } catch (NumberFormatException exception) {
+            throw new InputValidationException(field,
+                    label + " must be a finite number from zero through "
+                            + Integer.MAX_VALUE + ".");
+        }
+    }
+
+    private static HarvestGrade parseGrade(String raw) {
+        String normalized = trim(raw);
+        if (normalized.isEmpty()) {
+            return HarvestGrade.UNGRADED;
+        }
+        try {
+            return HarvestGrade.valueOf(normalized.toUpperCase(java.util.Locale.ROOT));
+        } catch (IllegalArgumentException exception) {
+            throw new InputValidationException("grade",
+                    "Choose Ungraded, Select, Standard, or Processing.");
+        }
+    }
+
     public record FilterDraft(String crop, String bed, String notes, String from, String to) {
     }
 
     public record EntryDraft(String date, String crop, String quantity,
-                             String unit, String bed, String notes) {
+                             String unit, String bed, String notes,
+                             String lotCode, String grade, String lossQuantity,
+                             String storageLocation) {
+        public EntryDraft(String date, String crop, String quantity,
+                          String unit, String bed, String notes) {
+            this(date, crop, quantity, unit, bed, notes,
+                    "", "UNGRADED", "0", "");
+        }
     }
 
     public record BatchDraft(String date, String defaultUnit, String defaultBed,
@@ -310,14 +356,19 @@ public final class HarvestLogPresenter {
     }
 
     public record HarvestRow(Long id, LocalDate date, String crop, double quantity,
-                             String unit, String bed, String notes) {
+                             String unit, String bed, String notes, String lotCode,
+                             HarvestGrade grade, double lossQuantity,
+                             String storageLocation) {
         private static HarvestRow from(HarvestEntry entry) {
             return new HarvestRow(entry.getId(), entry.getHarvestDate(), entry.getCropName(),
-                    entry.getQuantity(), entry.getUnit(), entry.getBedOrField(), entry.getNotes());
+                    entry.getQuantity(), entry.getUnit(), entry.getBedOrField(), entry.getNotes(),
+                    entry.getLotCode(), entry.getGrade(), entry.getLossQuantity(),
+                    entry.getStorageLocation());
         }
 
         public Object[] cells() {
-            return new Object[]{id, date, crop, quantity, unit, bed, notes};
+            return new Object[]{id, date, crop, quantity, unit, bed, notes,
+                    lotCode, grade, lossQuantity, storageLocation};
         }
     }
 

@@ -4,6 +4,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.time.LocalDate;
+import java.time.Instant;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
@@ -62,5 +63,23 @@ class BackendModelValidationTest {
         assertThatIllegalArgumentException()
                 .isThrownBy(() -> CustomerOrder.normalizeHandoffType("courier"))
                 .withMessageContainingAll("handoff", "PICKUP", "DELIVERY", "MARKET");
+    }
+
+    @Test
+    @DisplayName("bounds structured production task actuals")
+    void validatesProductionTaskActuals() {
+        ProductionTask task = new ProductionTask(1L, 1L, LocalDate.now(),
+                ProductionTaskType.SOW, ProductionTaskStatus.TODO,
+                "Rose", "Bed A", 1, true, "");
+
+        assertThatIllegalArgumentException().isThrownBy(() ->
+                task.recordActuals(-1, 0, "", Instant.now()))
+                .withMessageContaining("labor minutes");
+        assertThatIllegalArgumentException().isThrownBy(() ->
+                task.recordActuals(10, Double.NaN, "", Instant.now()))
+                .withMessageContaining("Input cost");
+        assertThatIllegalArgumentException().isThrownBy(() ->
+                task.recordActuals(10, 5, "x".repeat(1001), Instant.now()))
+                .withMessageContaining("Field observation");
     }
 }

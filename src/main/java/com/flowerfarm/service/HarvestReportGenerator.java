@@ -1,5 +1,6 @@
 package com.flowerfarm.service;
 
+import com.flowerfarm.model.FarmProfile;
 import com.flowerfarm.model.HarvestEntry;
 import com.flowerfarm.service.HarvestService.BedProduction;
 import com.flowerfarm.service.HarvestService.BedProductionReport;
@@ -17,21 +18,35 @@ import com.lowagie.text.Rectangle;
 import com.lowagie.text.pdf.PdfPCell;
 import com.lowagie.text.pdf.PdfPTable;
 import com.lowagie.text.pdf.PdfWriter;
+import com.google.zxing.BarcodeFormat;
+import com.google.zxing.EncodeHintType;
+import com.google.zxing.WriterException;
+import com.google.zxing.common.BitMatrix;
+import com.google.zxing.qrcode.QRCodeWriter;
+import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 import java.awt.Color;
+import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.time.LocalDate;
+import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
+import javax.imageio.ImageIO;
 
 /** Renders harvest report models as printable PDF and portable CSV documents. */
 @Component
 public class HarvestReportGenerator {
 
     private static final Logger log = LoggerFactory.getLogger(HarvestReportGenerator.class);
+    private final FarmProfile farmProfile;
+
+    public HarvestReportGenerator(FarmProfile farmProfile) {
+        this.farmProfile = farmProfile;
+    }
 
     public String exportBedProductionCsv(BedProductionReport report) {
         StringBuilder sb = new StringBuilder();
@@ -80,7 +95,7 @@ public class HarvestReportGenerator {
             PdfPTable bannerTable = new PdfPTable(1);
             bannerTable.setWidthPercentage(100);
             PdfPCell bannerCell = new PdfPCell(new Phrase(
-                    "FlowersForever  ·  Port Orchard / Kitsap County  ·  Bed Production",
+                    farmProfile.documentBanner("Bed Production"),
                     banner));
             bannerCell.setBackgroundColor(brandGreen);
             bannerCell.setPadding(10);
@@ -169,7 +184,7 @@ public class HarvestReportGenerator {
                     "Tip: consistent bed names (Bed A, Tunnel 1) make this report sharper.",
                     small));
             doc.add(new Paragraph(
-                    "FlowersForever · practical tools for PNW flower growers", small));
+                    farmProfile.softwareFooter(), small));
 
             doc.close();
             log.info("Generated bed production PDF {} → {} ({} beds, qty {})",
@@ -202,7 +217,7 @@ public class HarvestReportGenerator {
             PdfPTable bannerTable = new PdfPTable(1);
             bannerTable.setWidthPercentage(100);
             PdfPCell bannerCell = new PdfPCell(new Phrase(
-                    "FlowersForever  ·  Port Orchard / Kitsap  ·  Harvest Log",
+                    farmProfile.documentBanner("Harvest Log"),
                     banner));
             bannerCell.setBackgroundColor(brandGreen);
             bannerCell.setPadding(10);
@@ -218,13 +233,17 @@ public class HarvestReportGenerator {
                     small));
             doc.add(Chunk.NEWLINE);
 
-            PdfPTable summary = new PdfPTable(new float[]{1, 1, 1});
+            double totalLoss = report.entries().stream()
+                    .mapToDouble(HarvestEntry::getLossQuantity).sum();
+            PdfPTable summary = new PdfPTable(new float[]{1, 1, 1, 1});
             summary.setWidthPercentage(100);
             summary.addCell(summaryCell("Entries", String.valueOf(report.entryCount()), brandSoft));
             summary.addCell(summaryCell("Total qty",
                     String.format(Locale.US, "%,.1f", report.totalQuantity()), brandSoft));
             summary.addCell(summaryCell("Crops",
                     String.valueOf(report.byCrop().size()), brandSoft));
+            summary.addCell(summaryCell("Loss / culls",
+                    String.format(Locale.US, "%,.1f", totalLoss), brandSoft));
             doc.add(summary);
             doc.add(Chunk.NEWLINE);
 
@@ -250,22 +269,28 @@ public class HarvestReportGenerator {
             if (report.entries().isEmpty()) {
                 doc.add(new Paragraph("No rows — log cuts after morning harvest.", body));
             } else {
-                PdfPTable t = new PdfPTable(new float[]{1.3f, 2.2f, 1.0f, 1.0f, 1.4f, 2.0f});
+                PdfPTable t = new PdfPTable(
+                        new float[]{1.15f, 1.65f, 0.75f, 0.8f, 1.0f, 1.55f, 0.75f, 1.25f});
                 t.setWidthPercentage(100);
                 headerCell(t, "Date");
                 headerCell(t, "Crop");
                 headerCell(t, "Qty");
                 headerCell(t, "Unit");
-                headerCell(t, "Bed");
-                headerCell(t, "Notes");
+                headerCell(t, "Grade");
+                headerCell(t, "Lot");
+                headerCell(t, "Loss");
+                headerCell(t, "Storage");
                 for (HarvestEntry e : report.entries()) {
                     t.addCell(cell(e.getHarvestDate() == null ? "" : e.getHarvestDate().toString(), body));
                     t.addCell(cell(e.getCropName(), body));
                     t.addCell(cell(String.format(Locale.US, "%,.1f", e.getQuantity()), body));
                     t.addCell(cell(e.getUnit() == null ? "" : e.getUnit(), body));
-                    t.addCell(cell(e.getBedOrField() == null || e.getBedOrField().isBlank()
-                            ? "—" : e.getBedOrField(), body));
-                    t.addCell(cell(e.getNotes() == null ? "" : e.getNotes(), body));
+                    t.addCell(cell(String.valueOf(e.getGrade()), body));
+                    t.addCell(cell(e.getLotCode(), body));
+                    t.addCell(cell(String.format(Locale.US, "%,.1f", e.getLossQuantity()), body));
+                    t.addCell(cell(e.getStorageLocation() == null
+                            || e.getStorageLocation().isBlank()
+                            ? "—" : e.getStorageLocation(), body));
                 }
                 doc.add(t);
             }
@@ -274,7 +299,7 @@ public class HarvestReportGenerator {
                     "Tip: bed production PDF ranks fields; this sheet is the raw cut list for the cooler.",
                     small));
             doc.add(new Paragraph(
-                    "FlowersForever · practical tools for PNW flower growers", small));
+                    farmProfile.softwareFooter(), small));
 
             doc.close();
             log.info("Generated harvest log PDF {} → {} ({} entries, qty {})",
@@ -283,6 +308,85 @@ public class HarvestReportGenerator {
         } catch (DocumentException e) {
             throw new IllegalStateException("Failed to build harvest log PDF: " + e.getMessage(), e);
         }
+    }
+
+    /** Builds a printable 4 × 6 inch traceability label with machine-readable lot identity. */
+    public byte[] generateHarvestLotLabelPdf(HarvestEntry entry) {
+        if (entry == null || entry.getId() == null
+                || entry.getLotCode() == null || entry.getLotCode().isBlank()) {
+            throw new IllegalArgumentException("A saved harvest lot is required.");
+        }
+        try {
+            ByteArrayOutputStream output = new ByteArrayOutputStream();
+            Rectangle label = new Rectangle(288, 432);
+            Document document = new Document(label, 24, 24, 24, 24);
+            PdfWriter.getInstance(document, output);
+            document.open();
+
+            Color green = new Color(34, 100, 54);
+            Font title = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 17, green);
+            Font lot = FontFactory.getFont(FontFactory.COURIER_BOLD, 14, Color.BLACK);
+            Font detail = FontFactory.getFont(FontFactory.HELVETICA, 11, Color.DARK_GRAY);
+            Paragraph heading = new Paragraph(farmProfile.documentBanner("Harvest Lot"), title);
+            heading.setAlignment(Element.ALIGN_CENTER);
+            document.add(heading);
+            document.add(Chunk.NEWLINE);
+
+            com.lowagie.text.Image qr = com.lowagie.text.Image.getInstance(qrPng(entry));
+            qr.scaleAbsolute(180, 180);
+            qr.setAlignment(Element.ALIGN_CENTER);
+            document.add(qr);
+
+            Paragraph code = new Paragraph(entry.getLotCode(), lot);
+            code.setAlignment(Element.ALIGN_CENTER);
+            document.add(code);
+            document.add(Chunk.NEWLINE);
+            document.add(new Paragraph("Crop: " + entry.getCropName(), detail));
+            document.add(new Paragraph("Date: " + entry.getHarvestDate()
+                    + "    Grade: " + entry.getGrade(), detail));
+            document.add(new Paragraph("Marketable: "
+                    + String.format(Locale.US, "%,.1f %s", entry.getQuantity(), entry.getUnit())
+                    + "    Loss: " + String.format(Locale.US, "%,.1f", entry.getLossQuantity()),
+                    detail));
+            document.add(new Paragraph("Source: " + display(entry.getBedOrField())
+                    + "    Storage: " + display(entry.getStorageLocation()), detail));
+            document.add(Chunk.NEWLINE);
+            document.add(new Paragraph(
+                    "Scan, then use the lot code in FlowersForever or the AI lookup tool.", detail));
+            document.close();
+            return output.toByteArray();
+        } catch (DocumentException | java.io.IOException | WriterException exception) {
+            throw new IllegalStateException(
+                    "Failed to build harvest lot label: " + exception.getMessage(), exception);
+        }
+    }
+
+    private static byte[] qrPng(HarvestEntry entry)
+            throws WriterException, java.io.IOException {
+        String payload = "{\"schema\":\"flowersforever.harvest-lot.v1\",\"lotCode\":\""
+                + entry.getLotCode() + "\"}";
+        Map<EncodeHintType, Object> hints = new LinkedHashMap<>();
+        hints.put(EncodeHintType.CHARACTER_SET, "UTF-8");
+        hints.put(EncodeHintType.ERROR_CORRECTION, ErrorCorrectionLevel.M);
+        hints.put(EncodeHintType.MARGIN, 1);
+        BitMatrix matrix = new QRCodeWriter().encode(
+                payload, BarcodeFormat.QR_CODE, 480, 480, hints);
+        BufferedImage image = new BufferedImage(
+                matrix.getWidth(), matrix.getHeight(), BufferedImage.TYPE_BYTE_BINARY);
+        for (int y = 0; y < matrix.getHeight(); y++) {
+            for (int x = 0; x < matrix.getWidth(); x++) {
+                image.setRGB(x, y, matrix.get(x, y) ? Color.BLACK.getRGB() : Color.WHITE.getRGB());
+            }
+        }
+        ByteArrayOutputStream png = new ByteArrayOutputStream();
+        if (!ImageIO.write(image, "png", png)) {
+            throw new java.io.IOException("PNG writer is unavailable.");
+        }
+        return png.toByteArray();
+    }
+
+    private static String display(String value) {
+        return value == null || value.isBlank() ? "—" : value;
     }
 
 

@@ -43,6 +43,11 @@ public class JpaHarvestRepository implements HarvestRepository {
     }
 
     @Override
+    public Optional<HarvestEntry> findByLotCodeIgnoreCase(String lotCode) {
+        return jpa.findByLotCodeIgnoreCase(lotCode);
+    }
+
+    @Override
     public HarvestEntry save(HarvestEntry entry) {
         return jpa.save(entry);
     }

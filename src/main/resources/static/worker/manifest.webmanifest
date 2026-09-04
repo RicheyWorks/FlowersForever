@@ -1,0 +1,10 @@
+{
+  "name": "FlowersForever Field Work",
+  "short_name": "Field Work",
+  "description": "Complete farm work and log harvests from a phone or tablet.",
+  "start_url": "/worker/",
+  "scope": "/worker/",
+  "display": "standalone",
+  "background_color": "#fbf8f0",
+  "theme_color": "#245b42"
+}

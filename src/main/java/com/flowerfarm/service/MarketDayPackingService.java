@@ -1,5 +1,6 @@
 package com.flowerfarm.service;
 
+import com.flowerfarm.model.FarmProfile;
 import com.flowerfarm.model.CustomerOrder;
 import com.flowerfarm.model.Item;
 import com.flowerfarm.model.OrderLine;
@@ -50,10 +51,13 @@ public class MarketDayPackingService {
 
     private final OrderService orderService;
     private final InventoryService inventoryService;
+    private final FarmProfile farmProfile;
 
-    public MarketDayPackingService(OrderService orderService, InventoryService inventoryService) {
+    public MarketDayPackingService(OrderService orderService, InventoryService inventoryService,
+                                   FarmProfile farmProfile) {
         this.orderService = orderService;
         this.inventoryService = inventoryService;
+        this.farmProfile = farmProfile;
     }
 
     public record PackLine(
@@ -702,7 +706,7 @@ public class MarketDayPackingService {
             PdfPTable bannerTable = new PdfPTable(1);
             bannerTable.setWidthPercentage(100);
             PdfPCell bannerCell = new PdfPCell(new Phrase(
-                    "FlowersForever  ·  Port Orchard / Kitsap County  ·  Market Day Pack",
+                    farmProfile.documentBanner("Market Day Pack"),
                     banner));
             bannerCell.setBackgroundColor(brandGreen);
             bannerCell.setPadding(10);
@@ -829,7 +833,7 @@ public class MarketDayPackingService {
                     "Tip: Fulfill in CRM after the market to deduct inventory & record revenue.",
                     small));
             doc.add(new Paragraph(
-                    "FlowersForever · practical tools for PNW flower growers", small));
+                    farmProfile.softwareFooter(), small));
 
             doc.close();
             log.info("Generated market-day packing PDF for {} ({} orders, {} packing issues)",
@@ -937,12 +941,13 @@ public class MarketDayPackingService {
                 .sum();
     }
 
-    private static String formatPlainText(LocalDate marketDate, LocalDate from, LocalDate to,
-                                          String scope, List<CustomerPack> packs,
-                                          List<ProductNeed> pickList, double pipeline,
-                                          int shortfalls) {
+    private String formatPlainText(LocalDate marketDate, LocalDate from, LocalDate to,
+                                   String scope, List<CustomerPack> packs,
+                                   List<ProductNeed> pickList, double pipeline,
+                                   int shortfalls) {
         StringBuilder sb = new StringBuilder();
-        sb.append("MARKET DAY PACKING LIST — Port Orchard / Kitsap County\n");
+        sb.append(farmProfile.documentBanner("Market Day Packing List")
+                .toUpperCase(Locale.ROOT)).append('\n');
         sb.append("══════════════════════════════════════════════════════\n");
         sb.append("Market date : ").append(marketDate).append('\n');
         if (!from.equals(to)) {

@@ -1,6 +1,7 @@
 package com.flowerfarm.service;
 
 import com.flowerfarm.model.KnowledgeEntry;
+import com.flowerfarm.model.FarmProfile;
 import com.flowerfarm.repository.CustomerOrderRepository;
 import com.flowerfarm.repository.CustomerRepository;
 import com.flowerfarm.repository.HarvestRepository;
@@ -69,9 +70,10 @@ public class KnowledgeService {
                             InventoryRepository inventoryRepository,
                             CustomerOrderRepository orderRepository,
                             CustomerRepository customerRepository,
-                            SyncHistoryService syncHistoryService) {
+                            SyncHistoryService syncHistoryService,
+                            FarmProfile farmProfile) {
         this(repository, harvestRepository, inventoryRepository, orderRepository,
-                customerRepository, syncHistoryService, Clock.systemDefaultZone());
+                customerRepository, syncHistoryService, Clock.system(farmProfile.zoneId()));
     }
 
     KnowledgeService(KnowledgeRepository repository,
@@ -93,6 +95,16 @@ public class KnowledgeService {
     @Transactional(readOnly = true)
     public Optional<KnowledgeEntry> findById(Long id) {
         return repository.findById(id);
+    }
+
+    /** Small database-bounded field journal for the phone and tablet workflow. */
+    @Transactional(readOnly = true)
+    public List<KnowledgeEntry> recentThrough(LocalDate through, int limit) {
+        if (limit < 1 || limit > 50) {
+            throw new IllegalArgumentException("Field note limit must be between 1 and 50.");
+        }
+        LocalDate date = through == null ? LocalDate.now(clock) : through;
+        return List.copyOf(repository.findRecentThrough(date, limit));
     }
 
     @Transactional(readOnly = true)

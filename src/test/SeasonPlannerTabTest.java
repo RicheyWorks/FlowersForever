@@ -2,25 +2,35 @@ package com.flowerfarm.gui;
 
 import com.flowerfarm.gui.tabs.SeasonPlannerTab;
 import com.flowerfarm.gui.tabs.TabHost;
+import com.flowerfarm.model.PnwPlantProfile;
 import com.flowerfarm.model.SeasonPlanEntry;
 import com.flowerfarm.model.SeasonPlanStatus;
+import com.flowerfarm.reference.PnwPlantCatalog;
 import com.flowerfarm.service.SeasonPlanService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import javax.swing.JButton;
+import javax.swing.Icon;
 import javax.swing.JComponent;
 import javax.swing.JLabel;
+import javax.swing.JOptionPane;
 import javax.swing.JTabbedPane;
 import javax.swing.JTable;
+import javax.swing.JTextArea;
+import javax.swing.JTextField;
 import javax.swing.SwingUtilities;
 import java.awt.Component;
 import java.awt.Container;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.timeout;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @DisplayName("Season Planner desktop workflow")
@@ -45,7 +55,9 @@ class SeasonPlannerTabTest {
                 List.of(rose), summary, List.of(performance), List.of(), List.of(), weekly,
                 320, 0, 0));
         when(service.availableSeasons()).thenReturn(List.of(2026));
-        SeasonPlannerTab tab = new SeasonPlannerTab(service, new TestHost());
+        AtomicReference<String> copiedAvailability = new AtomicReference<>();
+        SeasonPlannerTab tab = new SeasonPlannerTab(service, new TestHost(),
+                FarmDialogs.swing(), copiedAvailability::set);
         JComponent[] root = new JComponent[1];
 
         SwingUtilities.invokeAndWait(() -> {
@@ -79,6 +91,22 @@ class SeasonPlannerTabTest {
                 .extracting(JLabel::getText)
                 .contains("The season plan is aligned");
         assertThat(((JButton) named(root[0], "seasonPlanner.succession")).isEnabled()).isTrue();
+        JTable availability = (JTable) named(root[0], "seasonPlanner.availabilityTable");
+        assertThat(availability.getRowCount()).isGreaterThan(8);
+        int projected = 0;
+        for (int row = 0; row < availability.getRowCount(); row++) {
+            projected += (Integer) availability.getValueAt(row, 3);
+        }
+        assertThat(projected).isBetween(635, 645);
+        JButton copyAvailability = (JButton) named(
+                root[0], "seasonPlanner.copyAvailability");
+        assertThat(copyAvailability.isEnabled()).isTrue();
+        SwingUtilities.invokeAndWait(copyAvailability::doClick);
+        assertThat(copiedAvailability.get())
+                .startsWith("Week of\tCrop\tVariety\tPlanned stems")
+                .contains("Nootka Rose", "Schoener's Nutkana");
+        assertThat(FarmUi.focusFirstInteractive(root[0]))
+                .isSameAs(named(root[0], "seasonPlanner.season"));
 
         SwingUtilities.invokeAndWait(() -> tab.applyRolePermissions(false));
         assertThat(((JButton) named(root[0], "seasonPlanner.add")).isEnabled()).isFalse();
@@ -142,6 +170,37 @@ class SeasonPlannerTabTest {
         assertThat(workspace.getSelectedIndex()).isEqualTo(1);
         int selectedModelRow = table.convertRowIndexToModel(table.getSelectedRow());
         assertThat(table.getValueAt(selectedModelRow, 1)).isEqualTo("Sunflower · ProCut Plum");
+    }
+
+    @Test
+    @DisplayName("turns a sourced plant profile into a validated farm-owned draft")
+    void preparesSourcedPlantingDraft() throws Exception {
+        SeasonPlanService service = mock(SeasonPlanService.class);
+        when(service.create(any(SeasonPlanEntry.class))).thenAnswer(invocation -> {
+            SeasonPlanEntry saved = invocation.getArgument(0);
+            saved.setId(91L);
+            return saved;
+        });
+        CapturingDialogs dialogs = new CapturingDialogs();
+        SeasonPlannerTab tab = new SeasonPlannerTab(service, new TestHost(), dialogs);
+        PnwPlantProfile dahlia = PnwPlantCatalog.all().stream()
+                .filter(plant -> plant.commonName().equals("Dahlia"))
+                .findFirst().orElseThrow();
+        boolean[] accepted = new boolean[1];
+
+        SwingUtilities.invokeAndWait(() ->
+                accepted[0] = tab.preparePlantingFromReference(dahlia));
+
+        assertThat(accepted[0]).isTrue();
+        verify(service, timeout(2000)).create(any(SeasonPlanEntry.class));
+        assertThat(dialogs.crop).isEqualTo("Dahlia");
+        assertThat(dialogs.variety).isBlank();
+        assertThat(dialogs.sow).isBlank();
+        assertThat(dialogs.harvestStart).isBlank();
+        assertThat(dialogs.expectedStems).isBlank();
+        assertThat(dialogs.notes)
+                .contains(dahlia.scientificName(), dahlia.source().label(),
+                        dahlia.source().url(), "Farm override / cultivar notes");
     }
 
     private static SeasonPlanEntry entry() {
@@ -215,5 +274,57 @@ class SeasonPlannerTabTest {
         @Override public void setStatus(String message) { }
         @Override public void selectTab(String title) { }
         @Override public void runTrendAnalysis() { }
+    }
+
+    private static final class CapturingDialogs implements FarmDialogs {
+        private String crop;
+        private String variety;
+        private String notes;
+        private String sow;
+        private String harvestStart;
+        private String expectedStems;
+
+        @Override
+        public int showOption(Component parent, Object message, String title,
+                              int optionType, int messageType, Icon icon,
+                              Object[] options, Object initialValue) {
+            return JOptionPane.CANCEL_OPTION;
+        }
+
+        @Override
+        public int showConfirm(Component parent, Object message, String title,
+                               int optionType, int messageType) {
+            Component form = (Component) message;
+            JTextField cropField = field(form, "Crop");
+            JTextField varietyField = field(form, "Variety");
+            JTextField bedField = field(form, "Bed or field");
+            JTextArea notesArea = descendants(form, JTextArea.class).get(0);
+            crop = cropField.getText();
+            variety = varietyField.getText();
+            notes = notesArea.getText();
+            sow = field(form, "Sow date").getText();
+            harvestStart = field(form, "Harvest start").getText();
+            expectedStems = field(form, "Expected stems").getText();
+            bedField.setText("Reference Bed");
+            field(form, "Sow date").setText("2026-03-01");
+            field(form, "Harvest start").setText("2026-07-01");
+            field(form, "Harvest end").setText("2026-09-01");
+            field(form, "Bed length in feet").setText("40");
+            field(form, "Expected stems").setText("320");
+            return JOptionPane.OK_OPTION;
+        }
+
+        @Override
+        public void showMessage(Component parent, Object message,
+                                String title, int messageType) {
+            throw new AssertionError("Unexpected validation message: " + message);
+        }
+
+        private static JTextField field(Component root, String accessibleName) {
+            return descendants(root, JTextField.class).stream()
+                    .filter(candidate -> accessibleName.equals(candidate
+                            .getAccessibleContext().getAccessibleName()))
+                    .findFirst().orElseThrow();
+        }
     }
 }

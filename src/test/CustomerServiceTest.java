@@ -82,6 +82,28 @@ class CustomerServiceTest {
     }
 
     @Test
+    @DisplayName("upsertByName() updates an exact-name customer and inserts a new one")
+    void upsertByName() {
+        Customer existing = new Customer("Kitsap Blooms", "Old", "", "", "OTHER", "");
+        existing.setId(2L);
+        when(repository.findByNameIgnoreCaseForUpdate("KITSAP BLOOMS"))
+                .thenReturn(Optional.of(existing));
+        when(repository.findByNameIgnoreCaseForUpdate("New Market"))
+                .thenReturn(Optional.empty());
+        when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        Customer updated = service.upsertByName(new Customer(
+                "KITSAP BLOOMS", "Pat", "p@example.test", "360", "WHOLESALE", "weekly"));
+        Customer inserted = service.upsertByName(new Customer(
+                "New Market", "Lee", "", "", "MARKET", ""));
+
+        assertThat(updated.getId()).isEqualTo(2L);
+        assertThat(updated.getContactName()).isEqualTo("Pat");
+        assertThat(inserted.getId()).isNull();
+        verify(repository, times(2)).save(any());
+    }
+
+    @Test
     @DisplayName("add and rename reject an existing customer name without saving")
     void duplicateCustomerNamesAreRejected() {
         Customer existing = new Customer(

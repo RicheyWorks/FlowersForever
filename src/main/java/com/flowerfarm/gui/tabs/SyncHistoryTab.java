@@ -1,6 +1,8 @@
 package com.flowerfarm.gui.tabs;
 
 import com.flowerfarm.gui.FarmUi;
+import com.flowerfarm.gui.FarmDialogs;
+import com.flowerfarm.gui.FarmFileChooser;
 import com.flowerfarm.gui.GuiPermissions;
 import com.flowerfarm.model.SyncHistoryEntry;
 import com.flowerfarm.service.SyncHistoryService;
@@ -36,6 +38,8 @@ public class SyncHistoryTab implements FlowerFarmTab {
 
     private final SyncHistoryService syncHistoryService;
     private final TabHost host;
+    private final FarmDialogs dialogs;
+    private final FarmFileChooser files;
 
     private JPanel panel;
     private DefaultTableModel tableModel;
@@ -69,8 +73,20 @@ public class SyncHistoryTab implements FlowerFarmTab {
     private String historyRefreshFailure;
 
     public SyncHistoryTab(SyncHistoryService syncHistoryService, TabHost host) {
+        this(syncHistoryService, host, FarmDialogs.swing(), FarmFileChooser.swing());
+    }
+
+    public SyncHistoryTab(SyncHistoryService syncHistoryService, TabHost host,
+                          FarmDialogs dialogs) {
+        this(syncHistoryService, host, dialogs, FarmFileChooser.swing());
+    }
+
+    public SyncHistoryTab(SyncHistoryService syncHistoryService, TabHost host,
+                          FarmDialogs dialogs, FarmFileChooser files) {
         this.syncHistoryService = syncHistoryService;
         this.host = host;
+        this.dialogs = java.util.Objects.requireNonNull(dialogs, "dialogs");
+        this.files = java.util.Objects.requireNonNull(files, "files");
     }
 
     @Override public String getTabTitle() { return "Activity History"; }
@@ -514,15 +530,21 @@ public class SyncHistoryTab implements FlowerFarmTab {
             return;
         }
         List<SyncHistoryEntry> snapshot = List.copyOf(lastView);
-        JFileChooser chooser = new JFileChooser();
-        chooser.setSelectedFile(new File("farm_activity_history.csv"));
-        chooser.setDialogTitle("Export the current activity list");
-        if (chooser.showSaveDialog(panel) != JFileChooser.APPROVE_OPTION) {
+        var selected = files.chooseSave(panel, "Export the current activity list",
+                new File("farm_activity_history.csv"));
+        if (selected.isEmpty()) {
+            showExportState("CSV not saved · exports ready",
+                    "No destination was changed; the filtered activity rows were kept.",
+                    FarmUi.Tone.NEUTRAL);
             return;
         }
-        File file = chooser.getSelectedFile();
+        File file = selected.get();
         if (approveReplacement(file)) {
             startActivityCsvExport(file, snapshot);
+        } else {
+            showExportState("CSV not saved · existing file kept",
+                    "The selected file was not replaced; the filtered activity rows were kept.",
+                    FarmUi.Tone.NEUTRAL);
         }
     }
 
@@ -618,7 +640,7 @@ public class SyncHistoryTab implements FlowerFarmTab {
         JScrollPane scroll = new JScrollPane(area);
         scroll.setPreferredSize(new Dimension(700, 400));
         Object[] options = {"Save PDF…", "Close"};
-        int choice = JOptionPane.showOptionDialog(panel, scroll,
+        int choice = dialogs.showOption(panel, scroll,
                 "Activity history — " + report.total() + " row(s)",
                 JOptionPane.DEFAULT_OPTION, JOptionPane.PLAIN_MESSAGE,
                 null, options, options[1]);
@@ -633,17 +655,16 @@ public class SyncHistoryTab implements FlowerFarmTab {
             }
             return;
         }
-        JFileChooser chooser = new JFileChooser();
-        chooser.setSelectedFile(new File("activity-history-" + report.generatedOn() + ".pdf"));
-        if (chooser.showSaveDialog(panel) != JFileChooser.APPROVE_OPTION
-                || !approveReplacement(chooser.getSelectedFile())) {
+        var selected = files.chooseSave(panel, "Save activity history PDF",
+                new File("activity-history-" + report.generatedOn() + ".pdf"));
+        if (selected.isEmpty() || !approveReplacement(selected.get())) {
             finishExportControls();
             showExportState("PDF not saved · exports ready",
                     "No destination was changed; the reviewed activity rows and filters were kept.",
                     FarmUi.Tone.NEUTRAL);
             return;
         }
-        continuePdfExport(chooser.getSelectedFile(), report);
+        continuePdfExport(selected.get(), report);
     }
 
     private void continuePdfExport(File destination, SyncHistoryService.AuditReport report) {
@@ -686,7 +707,7 @@ public class SyncHistoryTab implements FlowerFarmTab {
                         + " (" + rows + " rows)");
             }
             if (panel.isShowing()) {
-                JOptionPane.showMessageDialog(panel,
+                dialogs.showMessage(panel,
                         "Exported " + rows + " row(s) to:\n" + saved,
                         "Export complete", JOptionPane.INFORMATION_MESSAGE);
             }
@@ -737,7 +758,7 @@ public class SyncHistoryTab implements FlowerFarmTab {
             host.setStatus(guidance + " Activity filters and diagnostics were kept for retry.");
         }
         if (panel.isShowing()) {
-            JOptionPane.showMessageDialog(panel, guidance, "Export failed",
+            dialogs.showMessage(panel, guidance, "Export failed",
                     JOptionPane.ERROR_MESSAGE);
         }
     }
@@ -763,7 +784,7 @@ public class SyncHistoryTab implements FlowerFarmTab {
         if (!file.exists()) {
             return true;
         }
-        return JOptionPane.showConfirmDialog(panel,
+        return dialogs.showConfirm(panel,
                 file.getName() + " already exists. Replace it?",
                 "Replace existing export?", JOptionPane.YES_NO_OPTION,
                 JOptionPane.WARNING_MESSAGE) == JOptionPane.YES_OPTION;
@@ -797,7 +818,7 @@ public class SyncHistoryTab implements FlowerFarmTab {
         if (!com.flowerfarm.gui.GuiPermissions.requireOwnerClear(host, panel)) {
             return;
         }
-        int confirm = JOptionPane.showConfirmDialog(panel,
+        int confirm = dialogs.showConfirm(panel,
                 "Delete the entire activity history? This cannot be undone.",
                 "Clear all activity history?", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
         if (confirm != JOptionPane.YES_OPTION) {

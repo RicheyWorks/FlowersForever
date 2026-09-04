@@ -9,10 +9,15 @@ import org.springframework.data.repository.query.Param;
 
 import java.util.List;
 import java.util.Optional;
+import java.time.LocalDate;
+import org.springframework.data.domain.Pageable;
 
 public interface KnowledgeJpaRepository extends JpaRepository<KnowledgeEntry, Long> {
 
     List<KnowledgeEntry> findAllByOrderByObservedOnDescIdDesc();
+
+    List<KnowledgeEntry> findByObservedOnLessThanEqualOrderByObservedOnDescIdDesc(
+            LocalDate through, Pageable pageable);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select k from KnowledgeEntry k where k.id = :id")

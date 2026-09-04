@@ -1,6 +1,8 @@
 package com.flowerfarm;
 
+import com.flowerfarm.automation.HarnessRegistry;
 import com.flowerfarm.connector.ConnectorRegistry;
+import com.flowerfarm.controller.HarnessController;
 import com.flowerfarm.model.Customer;
 import com.flowerfarm.model.CustomerOrder;
 import com.flowerfarm.model.Item;
@@ -13,6 +15,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.ApplicationContext;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 
@@ -43,6 +46,9 @@ class ApplicationContextSmokeTest {
     @Autowired
     ConnectorRegistry connectorRegistry;
 
+    @Autowired HarnessRegistry harnessRegistry;
+    @Autowired ApplicationContext applicationContext;
+
     @Autowired CustomerService customerService;
     @Autowired OrderService orderService;
     @Autowired InventoryService inventoryService;
@@ -63,6 +69,15 @@ class ApplicationContextSmokeTest {
                 "webhook");
         assertThatThrownBy(() -> userDetailsService.loadUserByUsername("unused-default-user"))
                 .isInstanceOf(UsernameNotFoundException.class);
+    }
+
+    @Test
+    @DisplayName("registers AI harness plugins but keeps their REST transport disabled")
+    void harnessIsPluggableAndDisabledByDefault() {
+        assertThat(harnessRegistry.descriptors())
+                .extracting(descriptor -> descriptor.id())
+                .contains("swing-desktop", "farm-data");
+        assertThat(applicationContext.getBeansOfType(HarnessController.class)).isEmpty();
     }
 
     @Test

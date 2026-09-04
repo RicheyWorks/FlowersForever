@@ -1,6 +1,8 @@
 package com.flowerfarm.service;
 
+import com.flowerfarm.model.FarmProfile;
 import com.flowerfarm.model.HarvestEntry;
+import com.flowerfarm.model.HarvestGrade;
 import com.flowerfarm.model.Item;
 import com.flowerfarm.repository.HarvestRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -41,7 +43,8 @@ class HarvestServiceTest {
     @BeforeEach
     void setUp() {
         service = new HarvestService(repository, inventoryService, syncHistoryService,
-                new HarvestReportGenerator(), new HarvestCsvExporter());
+                new HarvestReportGenerator(new FarmProfile()), new HarvestCsvExporter(),
+                new FarmProfile());
         lenient().when(syncHistoryService.record(any(), any(), anyBoolean(), any(), any(), any()))
                 .thenReturn(null);
     }
@@ -61,8 +64,55 @@ class HarvestServiceTest {
                 LocalDate.of(2026, 7, 10), "Nootka Rose", 120, "stems", "Bed A", "morning"));
 
         assertThat(saved.getId()).isEqualTo(7L);
+        assertThat(saved.getLotCode()).matches("FFH-20260710-[A-F0-9]{12}");
         verify(inventoryService).incrementQuantityByName(eq("Nootka Rose"), eq(120), eq("stems"), anyString());
         verify(syncHistoryService).record(eq("harvest"), eq("HARVEST_LOG"), eq(true), any(), any(), eq(120));
+    }
+
+    @Test
+    @DisplayName("traceability fields persist while only marketable quantity reaches inventory")
+    void recordsLotGradeLossAndStorage() {
+        when(repository.save(any())).thenAnswer(invocation -> {
+            HarvestEntry entry = invocation.getArgument(0);
+            entry.setId(17L);
+            return entry;
+        });
+        when(inventoryService.incrementQuantityByName(
+                eq("Dahlia"), eq(20), eq("stems"), anyString()))
+                .thenReturn(new Item("Dahlia", "Flowers/Plants", 0, "stems", 0, 20, ""));
+
+        HarvestEntry saved = service.add(new HarvestEntry(
+                LocalDate.of(2026, 7, 10), "Dahlia", 20, "stems", "Bed C", "Morning",
+                "lot-c-17", HarvestGrade.SELECT, 4, "Cooler 1 / Rack B"));
+
+        assertThat(saved.getLotCode()).isEqualTo("LOT-C-17");
+        assertThat(saved.getGrade()).isEqualTo(HarvestGrade.SELECT);
+        assertThat(saved.getLossQuantity()).isEqualTo(4);
+        assertThat(saved.getGrossQuantity()).isEqualTo(24);
+        assertThat(saved.getStorageLocation()).isEqualTo("Cooler 1 / Rack B");
+        verify(inventoryService).incrementQuantityByName(
+                eq("Dahlia"), eq(20), eq("stems"), anyString());
+        verify(syncHistoryService).record(eq("harvest"), eq("HARVEST_LOG"), eq(true),
+                any(), contains("lot=LOT-C-17"), eq(20));
+    }
+
+    @Test
+    @DisplayName("duplicate lot identity is rejected before harvest or inventory mutation")
+    void rejectsDuplicateLotCode() {
+        HarvestEntry existing = new HarvestEntry(
+                LocalDate.of(2026, 7, 9), "Dahlia", 10, "stems", "Bed C", "",
+                "LOT-C-17", HarvestGrade.STANDARD, 0, "Cooler 1");
+        existing.setId(9L);
+        when(repository.findByLotCodeIgnoreCase("LOT-C-17"))
+                .thenReturn(Optional.of(existing));
+
+        assertThatIllegalArgumentException().isThrownBy(() -> service.add(new HarvestEntry(
+                        LocalDate.of(2026, 7, 10), "Dahlia", 20, "stems", "Bed C", "",
+                        "lot-c-17", HarvestGrade.SELECT, 2, "Cooler 2")))
+                .withMessageContaining("already exists");
+
+        verify(repository, never()).save(any());
+        verifyNoInteractions(inventoryService);
     }
 
     @Test
@@ -285,6 +335,25 @@ class HarvestServiceTest {
     }
 
     @Test
+    @DisplayName("importHistoricalBatch() preserves harvests without changing current inventory")
+    void importsHistoricalHarvestsWithoutInventoryEffects() {
+        when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        List<HarvestEntry> saved = service.importHistoricalBatch(List.of(
+                new HarvestEntry(LocalDate.of(2025, 7, 1),
+                        "Dahlia", 80, "stems", "Old field", "migration"),
+                new HarvestEntry(LocalDate.of(2025, 7, 2),
+                        "Zinnia", 40, "stems", "Old field", "migration")));
+
+        assertThat(saved).hasSize(2);
+        verify(repository, times(2)).save(any());
+        verifyNoInteractions(inventoryService);
+        verify(syncHistoryService).record(
+                eq("harvest"), eq("HARVEST_HISTORY_IMPORT"), eq(true),
+                any(), eq("Inventory was not adjusted"), eq(2));
+    }
+
+    @Test
     @DisplayName("addBatch() rejects empty or invalid batches without partial writes")
     void addBatchEmpty() {
         assertThatIllegalArgumentException().isThrownBy(() -> service.addBatch(List.of()));
@@ -401,7 +470,8 @@ class HarvestServiceTest {
 
         service.exportToCsv(tmp.toString());
         String body = java.nio.file.Files.readString(tmp);
-        assertThat(body).contains("Id,Date,Crop,Quantity,Unit,BedOrField,Notes");
+        assertThat(body).contains(
+                "Id,Date,Crop,MarketableQuantity,Unit,BedOrField,Notes,LotCode,Grade,LossQuantity,GrossQuantity,StorageLocation");
         assertThat(body).contains("Nootka Rose");
         assertThat(body).contains("12.50");
         assertThat(body).contains("Bed A");
@@ -413,6 +483,23 @@ class HarvestServiceTest {
         assertThatIllegalArgumentException().isThrownBy(() -> service.exportToCsv("  "));
         java.nio.file.Files.deleteIfExists(tmp);
         java.nio.file.Files.deleteIfExists(tmp2);
+    }
+
+    @Test
+    @DisplayName("printable lot label contains a QR payload for a saved harvest")
+    void generatesHarvestLotLabel() {
+        HarvestEntry entry = new HarvestEntry(
+                LocalDate.of(2026, 7, 10), "Dahlia", 20, "stems", "Bed C", "Morning",
+                "LOT-C-17", HarvestGrade.SELECT, 4, "Cooler 1 / Rack B");
+        entry.setId(17L);
+        when(repository.findById(17L)).thenReturn(Optional.of(entry));
+
+        byte[] pdf = service.generateLotLabelPdf(17L);
+
+        assertThat(new String(pdf, 0, 4)).isEqualTo("%PDF");
+        assertThat(pdf.length).isGreaterThan(1_000);
+        assertThatExceptionOfType(IndexOutOfBoundsException.class)
+                .isThrownBy(() -> service.generateLotLabelPdf(99L));
     }
 
     @Test

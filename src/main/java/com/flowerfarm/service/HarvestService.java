@@ -1,5 +1,6 @@
 package com.flowerfarm.service;
 
+import com.flowerfarm.model.FarmProfile;
 import com.flowerfarm.model.HarvestEntry;
 import com.flowerfarm.model.Item;
 import com.flowerfarm.repository.HarvestRepository;
@@ -17,6 +18,9 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
+import java.util.HashSet;
+import java.util.UUID;
 
 /**
  * Harvest logging for PNW flower production — stems, bunches, beds, market prep.
@@ -34,17 +38,20 @@ public class HarvestService {
     private final SyncHistoryService syncHistoryService;
     private final HarvestReportGenerator reportGenerator;
     private final HarvestCsvExporter csvExporter;
+    private final FarmProfile farmProfile;
 
     public HarvestService(HarvestRepository repository,
                           InventoryService inventoryService,
                           SyncHistoryService syncHistoryService,
                           HarvestReportGenerator reportGenerator,
-                          HarvestCsvExporter csvExporter) {
+                          HarvestCsvExporter csvExporter,
+                          FarmProfile farmProfile) {
         this.repository = repository;
         this.inventoryService = inventoryService;
         this.syncHistoryService = syncHistoryService;
         this.reportGenerator = reportGenerator;
         this.csvExporter = csvExporter;
+        this.farmProfile = farmProfile;
     }
 
     @Transactional(readOnly = true)
@@ -55,6 +62,16 @@ public class HarvestService {
     @Transactional(readOnly = true)
     public Optional<HarvestEntry> findById(Long id) {
         return repository.findById(id);
+    }
+
+    /** Exact, case-insensitive lot lookup used by labels, scanners, and AI clients. */
+    @Transactional(readOnly = true)
+    public Optional<HarvestEntry> findByLotCode(String lotCode) {
+        String normalized = normalizeLotCode(lotCode);
+        if (normalized.isEmpty()) {
+            throw new IllegalArgumentException("Lot code is required.");
+        }
+        return repository.findByLotCodeIgnoreCase(normalized);
     }
 
     /**
@@ -108,20 +125,7 @@ public class HarvestService {
      */
     @Transactional
     public List<HarvestEntry> addBatch(List<HarvestEntry> entries) {
-        if (entries == null || entries.isEmpty()) {
-            throw new IllegalArgumentException("Batch must contain at least one harvest row.");
-        }
-        if (entries.size() > MAX_BATCH_SIZE) {
-            throw new IllegalArgumentException(
-                    "Batch cannot contain more than " + MAX_BATCH_SIZE + " harvest rows.");
-        }
-        for (HarvestEntry e : entries) {
-            if (e == null) {
-                throw new IllegalArgumentException("Batch harvest rows must not be null.");
-            }
-            validateHarvestDate(e.getHarvestDate());
-            inventoryQuantityFor(e.getQuantity());
-        }
+        validateBatch(entries);
         List<HarvestEntry> saved = new ArrayList<>();
         for (HarvestEntry e : entries) {
             saved.add(add(e));
@@ -140,6 +144,48 @@ public class HarvestService {
     }
 
     /**
+     * Imports historical harvest evidence without changing today's inventory balance.
+     * This keeps migration semantics separate from a newly logged operational harvest.
+     */
+    @Transactional
+    public List<HarvestEntry> importHistoricalBatch(List<HarvestEntry> entries) {
+        validateBatch(entries);
+        validateLotCodes(entries, null);
+        List<HarvestEntry> saved = new ArrayList<>();
+        for (HarvestEntry entry : entries) {
+            entry.setId(null);
+            assignLotCode(entry);
+            saved.add(repository.save(entry));
+        }
+        syncHistoryService.record(
+                "harvest",
+                "HARVEST_HISTORY_IMPORT",
+                true,
+                "Historical harvest imported: " + saved.size() + " row(s)",
+                "Inventory was not adjusted",
+                saved.size());
+        return List.copyOf(saved);
+    }
+
+    private void validateBatch(List<HarvestEntry> entries) {
+        if (entries == null || entries.isEmpty()) {
+            throw new IllegalArgumentException("Batch must contain at least one harvest row.");
+        }
+        if (entries.size() > MAX_BATCH_SIZE) {
+            throw new IllegalArgumentException(
+                    "Batch cannot contain more than " + MAX_BATCH_SIZE + " harvest rows.");
+        }
+        for (HarvestEntry entry : entries) {
+            if (entry == null) {
+                throw new IllegalArgumentException("Batch harvest rows must not be null.");
+            }
+            validateHarvestDate(entry.getHarvestDate());
+            inventoryQuantityFor(entry.getQuantity());
+            validateLossQuantity(entry.getLossQuantity());
+        }
+    }
+
+    /**
      * Saves the harvest entry and increments inventory for the crop name.
      * Creates a new inventory SKU when none exists. Records {@code HARVEST_LOG} audit.
      */
@@ -149,7 +195,10 @@ public class HarvestService {
             throw new IllegalArgumentException("Harvest entry must not be null.");
         }
         validateHarvestDate(entry.getHarvestDate());
+        validateLossQuantity(entry.getLossQuantity());
         entry.setId(null);
+        validateLotCodes(List.of(entry), null);
+        assignLotCode(entry);
         HarvestEntry saved = repository.save(entry);
 
         int amount = inventoryQuantityFor(saved.getQuantity());
@@ -168,8 +217,10 @@ public class HarvestService {
                 "HARVEST_LOG",
                 true,
                 msg,
-                "harvestId=" + saved.getId() + ", inventoryId=" + stock.getId()
-                        + ", bed=" + saved.getBedOrField(),
+                "harvestId=" + saved.getId() + ", lot=" + saved.getLotCode()
+                        + ", grade=" + saved.getGrade() + ", loss=" + saved.getLossQuantity()
+                        + ", storage=" + saved.getStorageLocation()
+                        + ", inventoryId=" + stock.getId() + ", bed=" + saved.getBedOrField(),
                 amount
         );
         log.info("[harvest] {}", msg);
@@ -187,6 +238,7 @@ public class HarvestService {
             throw new IllegalArgumentException("Harvest entry must not be null.");
         }
         validateHarvestDate(incoming.getHarvestDate());
+        validateLossQuantity(incoming.getLossQuantity());
         HarvestEntry existing = repository.findByIdForUpdate(id)
                 .orElseThrow(() -> new IndexOutOfBoundsException("No harvest entry with id=" + id));
 
@@ -199,6 +251,11 @@ public class HarvestService {
         if (newCrop.isBlank()) {
             throw new IllegalArgumentException("Crop name is required.");
         }
+        if (incoming.getLotCode() == null || incoming.getLotCode().isBlank()) {
+            assignLotCode(existing);
+            incoming.setLotCode(existing.getLotCode());
+        }
+        validateLotCodes(List.of(incoming), id);
         // Apply inventory correction before persisting harvest fields
         applyInventoryEdit(oldCrop, oldQty, newCrop, newQty, newUnit, existing.getHarvestDate());
 
@@ -208,6 +265,10 @@ public class HarvestService {
         existing.setUnit(incoming.getUnit());
         existing.setBedOrField(incoming.getBedOrField());
         existing.setNotes(incoming.getNotes());
+        existing.setLotCode(incoming.getLotCode());
+        existing.setGrade(incoming.getGrade());
+        existing.setLossQuantity(incoming.getLossQuantity());
+        existing.setStorageLocation(incoming.getStorageLocation());
         HarvestEntry saved = repository.save(existing);
 
         String msg = "Harvest edited id=" + id + ": " + oldCrop + "×" + oldQty
@@ -217,7 +278,10 @@ public class HarvestService {
                 "HARVEST_EDIT",
                 true,
                 msg,
-                "notes=" + saved.getNotes() + ", bed=" + saved.getBedOrField(),
+                "lot=" + saved.getLotCode() + ", grade=" + saved.getGrade()
+                        + ", loss=" + saved.getLossQuantity()
+                        + ", storage=" + saved.getStorageLocation()
+                        + ", notes=" + saved.getNotes() + ", bed=" + saved.getBedOrField(),
                 Math.abs(newQty - oldQty)
         );
         log.info("[harvest] {}", msg);
@@ -243,11 +307,53 @@ public class HarvestService {
         return rounded;
     }
 
-    private static void validateHarvestDate(LocalDate date) {
+    private static void validateLossQuantity(double lossQuantity) {
+        if (!Double.isFinite(lossQuantity) || lossQuantity < 0
+                || lossQuantity > Integer.MAX_VALUE) {
+            throw new IllegalArgumentException(
+                    "Loss quantity must be a finite number from 0 through "
+                            + Integer.MAX_VALUE + ".");
+        }
+    }
+
+    private void validateLotCodes(List<HarvestEntry> entries, Long allowedId) {
+        Set<String> batchCodes = new HashSet<>();
+        for (HarvestEntry entry : entries) {
+            String code = normalizeLotCode(entry.getLotCode());
+            if (code.isEmpty()) {
+                continue;
+            }
+            if (!batchCodes.add(code)) {
+                throw new IllegalArgumentException("Duplicate harvest lot code in batch: " + code + ".");
+            }
+            repository.findByLotCodeIgnoreCase(code).ifPresent(existing -> {
+                if (allowedId == null || !allowedId.equals(existing.getId())) {
+                    throw new IllegalArgumentException(
+                            "Harvest lot code already exists: " + code + ".");
+                }
+            });
+        }
+    }
+
+    private static void assignLotCode(HarvestEntry entry) {
+        if (entry.getLotCode() != null && !entry.getLotCode().isBlank()) {
+            return;
+        }
+        String date = entry.getHarvestDate().toString().replace("-", "");
+        String nonce = UUID.randomUUID().toString().replace("-", "")
+                .substring(0, 12).toUpperCase(Locale.ROOT);
+        entry.setLotCode("FFH-" + date + "-" + nonce);
+    }
+
+    private static String normalizeLotCode(String lotCode) {
+        return lotCode == null ? "" : lotCode.trim().toUpperCase(Locale.ROOT);
+    }
+
+    private void validateHarvestDate(LocalDate date) {
         if (date == null) {
             throw new IllegalArgumentException("Harvest date is required.");
         }
-        LocalDate today = LocalDate.now();
+        LocalDate today = LocalDate.now(farmProfile.zoneId());
         if (date.isAfter(today)) {
             throw new IllegalArgumentException(
                     "Harvest date cannot be after today (" + today + ").");
@@ -322,7 +428,7 @@ public class HarvestService {
     /** Sum of harvest quantities for the trailing 7 days (inclusive of today). */
     @Transactional(readOnly = true)
     public double totalQuantityLast7Days() {
-        LocalDate to = LocalDate.now();
+        LocalDate to = LocalDate.now(farmProfile.zoneId());
         LocalDate from = to.minusDays(6);
         return findBetween(from, to).stream().mapToDouble(HarvestEntry::getQuantity).sum();
     }
@@ -330,7 +436,7 @@ public class HarvestService {
     /** Prior 7-day window (days -13 … -7) for week-over-week comparison. */
     @Transactional(readOnly = true)
     public double totalQuantityPrior7Days() {
-        LocalDate to = LocalDate.now().minusDays(7);
+        LocalDate to = LocalDate.now(farmProfile.zoneId()).minusDays(7);
         LocalDate from = to.minusDays(6);
         return findBetween(from, to).stream().mapToDouble(HarvestEntry::getQuantity).sum();
     }
@@ -355,7 +461,7 @@ public class HarvestService {
      */
     @Transactional(readOnly = true)
     public double[] dailyQuantitiesLast7Days() {
-        LocalDate today = LocalDate.now();
+        LocalDate today = LocalDate.now(farmProfile.zoneId());
         LocalDate from = today.minusDays(6);
         Map<LocalDate, Double> byDay = new LinkedHashMap<>();
         for (int i = 0; i < 7; i++) {
@@ -536,7 +642,7 @@ public class HarvestService {
     /** Trailing 7 days bed production (inclusive of today). */
     @Transactional(readOnly = true)
     public BedProductionReport productionByBedLast7Days() {
-        LocalDate to = LocalDate.now();
+        LocalDate to = LocalDate.now(farmProfile.zoneId());
         return productionByBed(to.minusDays(6), to);
     }
 
@@ -566,10 +672,14 @@ public class HarvestService {
     ) {
         public Map<String, Object> toMap() {
             Map<String, Object> m = new LinkedHashMap<>();
+            double totalLoss = entries.stream()
+                    .mapToDouble(HarvestEntry::getLossQuantity).sum();
             m.put("from", from);
             m.put("to", to);
             m.put("entryCount", entryCount);
             m.put("totalQuantity", totalQuantity);
+            m.put("totalLossQuantity", round1(totalLoss));
+            m.put("totalGrossQuantity", round1(totalQuantity + totalLoss));
             m.put("byCrop", byCrop);
             m.put("entries", entries.stream().map(e -> {
                 Map<String, Object> row = new LinkedHashMap<>();
@@ -580,6 +690,11 @@ public class HarvestService {
                 row.put("unit", e.getUnit());
                 row.put("bedOrField", e.getBedOrField() == null ? "" : e.getBedOrField());
                 row.put("notes", e.getNotes() == null ? "" : e.getNotes());
+                row.put("lotCode", e.getLotCode());
+                row.put("grade", e.getGrade());
+                row.put("lossQuantity", e.getLossQuantity());
+                row.put("grossQuantity", e.getGrossQuantity());
+                row.put("storageLocation", e.getStorageLocation());
                 return row;
             }).toList());
             m.put("plainText", plainText);
@@ -589,7 +704,7 @@ public class HarvestService {
 
     @Transactional(readOnly = true)
     public HarvestLogReport buildHarvestLogReport(LocalDate from, LocalDate to) {
-        LocalDate end = to != null ? to : LocalDate.now();
+        LocalDate end = to != null ? to : LocalDate.now(farmProfile.zoneId());
         LocalDate start = from != null ? from : end.minusDays(6);
         if (end.isBefore(start)) {
             throw new IllegalArgumentException("to must be on or after from.");
@@ -629,7 +744,7 @@ public class HarvestService {
     /** Trailing 7 days harvest log (clipboard default). */
     @Transactional(readOnly = true)
     public HarvestLogReport buildHarvestLogReportLast7Days() {
-        LocalDate to = LocalDate.now();
+        LocalDate to = LocalDate.now(farmProfile.zoneId());
         return buildHarvestLogReport(to.minusDays(6), to);
     }
 
@@ -637,16 +752,27 @@ public class HarvestService {
         return reportGenerator.generateHarvestLogPdf(report);
     }
 
-    private static String formatHarvestLogText(String from, String to,
-                                               List<HarvestEntry> entries,
-                                               double total,
-                                               Map<String, Double> byCrop) {
+    @Transactional(readOnly = true)
+    public byte[] generateLotLabelPdf(Long harvestId) {
+        HarvestEntry entry = repository.findById(harvestId)
+                .orElseThrow(() -> new IndexOutOfBoundsException(
+                        "No harvest entry with id=" + harvestId));
+        return reportGenerator.generateHarvestLotLabelPdf(entry);
+    }
+
+    private String formatHarvestLogText(String from, String to,
+                                        List<HarvestEntry> entries,
+                                        double total,
+                                        Map<String, Double> byCrop) {
         StringBuilder sb = new StringBuilder();
-        sb.append("HARVEST LOG — Port Orchard / Kitsap County\n");
+        sb.append(farmProfile.documentBanner("Harvest Log").toUpperCase(Locale.ROOT))
+                .append('\n');
         sb.append("═════════════════════════════════════════\n");
         sb.append("Period: ").append(from).append(" → ").append(to).append('\n');
-        sb.append(String.format(Locale.US, "Entries: %d  ·  Total qty: %,.1f  ·  Crops: %d%n",
-                entries.size(), total, byCrop.size()));
+        double totalLoss = entries.stream().mapToDouble(HarvestEntry::getLossQuantity).sum();
+        sb.append(String.format(Locale.US,
+                "Entries: %d  ·  Marketable: %,.1f  ·  Loss: %,.1f  ·  Crops: %d%n",
+                entries.size(), total, totalLoss, byCrop.size()));
         sb.append('\n');
         sb.append("BY CROP\n");
         sb.append("───────\n");
@@ -664,30 +790,41 @@ public class HarvestService {
         if (entries.isEmpty()) {
             sb.append("  (no harvests in period)\n");
         } else {
-            sb.append(String.format(Locale.US, "%-12s %-18s %8s %-8s %-12s%n",
-                    "Date", "Crop", "Qty", "Unit", "Bed"));
-            sb.append("-".repeat(62)).append('\n');
+            sb.append(String.format(Locale.US, "%-12s %-16s %8s %-8s %-10s %-12s %-10s%n",
+                    "Date", "Crop", "Qty", "Unit", "Grade", "Lot", "Loss"));
+            sb.append("-".repeat(86)).append('\n');
             for (HarvestEntry e : entries) {
-                sb.append(String.format(Locale.US, "%-12s %-18s %8.1f %-8s %-12s%n",
+                sb.append(String.format(Locale.US,
+                        "%-12s %-16s %8.1f %-8s %-10s %-12s %10.1f%n",
                         e.getHarvestDate() == null ? "" : e.getHarvestDate().toString(),
-                        truncate(e.getCropName(), 18),
+                        truncate(e.getCropName(), 16),
                         e.getQuantity(),
                         truncate(e.getUnit() == null ? "" : e.getUnit(), 8),
-                        truncate(e.getBedOrField() == null || e.getBedOrField().isBlank()
-                                ? "—" : e.getBedOrField(), 12)));
+                        e.getGrade(),
+                        truncate(e.getLotCode(), 12),
+                        e.getLossQuantity()));
+                sb.append("    Source: ").append(
+                        e.getBedOrField() == null || e.getBedOrField().isBlank()
+                                ? "—" : e.getBedOrField())
+                        .append(" · Storage: ").append(
+                                e.getStorageLocation() == null || e.getStorageLocation().isBlank()
+                                        ? "—" : e.getStorageLocation())
+                        .append('\n');
             }
-            sb.append("-".repeat(62)).append('\n');
-            sb.append(String.format(Locale.US, "TOTAL QTY  %,.1f%n", total));
+            sb.append("-".repeat(86)).append('\n');
+            sb.append(String.format(Locale.US,
+                    "TOTAL MARKETABLE  %,.1f · TOTAL LOSS %,.1f%n", total, totalLoss));
         }
         sb.append("\nTip: export bed production PDF for ranked fields; this is the cut list.\n");
         return sb.toString();
     }
 
-    private static String formatBedProductionText(String from, String to,
-                                                  List<BedProduction> beds,
-                                                  double grand, int entryCount) {
+    private String formatBedProductionText(String from, String to,
+                                           List<BedProduction> beds,
+                                           double grand, int entryCount) {
         StringBuilder sb = new StringBuilder();
-        sb.append("BED / FIELD PRODUCTION — Port Orchard / Kitsap County\n");
+        sb.append(farmProfile.documentBanner("Bed / Field Production")
+                .toUpperCase(Locale.ROOT)).append('\n');
         sb.append("════════════════════════════════════════════════════\n");
         sb.append("Period     : ").append(from).append(" → ").append(to).append('\n');
         sb.append("Beds       : ").append(beds.size())

@@ -1,7 +1,10 @@
 package com.flowerfarm.gui;
 
 import com.flowerfarm.auth.DesktopSession;
+import com.flowerfarm.model.FarmProfile;
+import com.flowerfarm.model.PnwPlantProfile;
 import com.flowerfarm.connector.ConnectorRegistry;
+import com.flowerfarm.gui.automation.SwingHarnessBridge;
 import com.flowerfarm.gui.presenter.ConnectorActionPresenter;
 import com.flowerfarm.gui.tabs.*;
 import com.flowerfarm.service.CustomerService;
@@ -14,6 +17,7 @@ import com.flowerfarm.service.CustomerStatementService;
 import com.flowerfarm.service.DayCloseoutService;
 import com.flowerfarm.service.MorningBriefingService;
 import com.flowerfarm.service.OrderService;
+import com.flowerfarm.service.ProductionStudioService;
 import com.flowerfarm.service.ReportService;
 import com.flowerfarm.service.SyncHistoryService;
 import com.flowerfarm.service.TrendService;
@@ -22,11 +26,14 @@ import com.formdev.flatlaf.FlatDarkLaf;
 import com.formdev.flatlaf.FlatLightLaf;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
 import javax.swing.*;
 import java.awt.*;
+import java.awt.event.InputEvent;
+import java.awt.event.KeyEvent;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.io.File;
@@ -35,6 +42,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.concurrent.Callable;
 import java.util.prefs.Preferences;
 
@@ -55,13 +63,17 @@ import java.util.prefs.Preferences;
  * and then dispatched onto the Event Dispatch Thread.
  */
 @Component
-@Profile("!cli & !release-smoke")
+@Profile("!cli & !container & !mcp & !release-smoke")
 public class FlowerFarmGUI implements ApplicationRunner, TabHost {
 
     private final FarmTabCatalog tabCatalog;
     private final ConnectorActionPresenter connectorActions;
     private final GuiLoginGate loginGate;
     private final DesktopSession session;
+    private final FarmProfile farmProfile;
+    private final FarmDialogs dialogs;
+    private final FarmFileChooser fileChooser;
+    private final SwingHarnessBridge harnessBridge;
 
     // Created lazily on the EDT inside initialise() — never touched before run().
     private JFrame frame;
@@ -82,6 +94,7 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
     private MarketDayTab marketDayTab;
     private IrrigationInfoTab irrigationTab;
     private CrmTab crmTab;
+    private SeasonPlannerTab seasonPlannerTab;
 
     private final Preferences prefs = Preferences.userNodeForPackage(FlowerFarmGUI.class);
     private boolean darkMode;
@@ -94,6 +107,7 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
     private static final String PREF_DARK   = "ui.dark";
     private static final String PREF_INTEGRATIONS = "ui.integrationsExpanded";
 
+    @Autowired
     public FlowerFarmGUI(InventoryService inventoryService,
                          TrendService trendService,
                          ConnectorRegistry connectorRegistry,
@@ -109,17 +123,55 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
                          CustomerStatementService customerStatementService,
                          KnowledgeService knowledgeService,
                          SeasonPlanService seasonPlanService,
+                         ProductionStudioService productionStudioService,
                          GuiLoginGate loginGate,
-                         DesktopSession session) {
+                         DesktopSession session,
+                         FarmProfile farmProfile,
+                         SwingHarnessBridge harnessBridge) {
+        this(inventoryService, trendService, connectorRegistry, harvestService,
+                syncHistoryService, customerService, orderService, reportService,
+                irrigationAdvisorService, marketDayPackingService, morningBriefingService,
+                dayCloseoutService, customerStatementService, knowledgeService,
+                seasonPlanService, productionStudioService, loginGate, session, farmProfile,
+                harnessBridge,
+                FarmDialogs.swing(), FarmFileChooser.swing());
+    }
+
+    FlowerFarmGUI(InventoryService inventoryService,
+                  TrendService trendService,
+                  ConnectorRegistry connectorRegistry,
+                  HarvestService harvestService,
+                  SyncHistoryService syncHistoryService,
+                  CustomerService customerService,
+                  OrderService orderService,
+                  ReportService reportService,
+                  IrrigationAdvisorService irrigationAdvisorService,
+                  MarketDayPackingService marketDayPackingService,
+                  MorningBriefingService morningBriefingService,
+                  DayCloseoutService dayCloseoutService,
+                  CustomerStatementService customerStatementService,
+                  KnowledgeService knowledgeService,
+                  SeasonPlanService seasonPlanService,
+                  ProductionStudioService productionStudioService,
+                  GuiLoginGate loginGate,
+                  DesktopSession session,
+                  FarmProfile farmProfile,
+                  SwingHarnessBridge harnessBridge,
+                  FarmDialogs dialogs,
+                  FarmFileChooser fileChooser) {
         // No AWT calls here — Spring safe to construct this bean at any time.
         this.tabCatalog = new FarmTabCatalog(inventoryService, trendService, harvestService,
                 syncHistoryService, customerService, orderService, reportService,
                 irrigationAdvisorService, marketDayPackingService, morningBriefingService,
                 dayCloseoutService, customerStatementService, knowledgeService,
-                seasonPlanService);
+                seasonPlanService, productionStudioService);
         this.connectorActions = new ConnectorActionPresenter(inventoryService, connectorRegistry);
         this.loginGate = loginGate;
         this.session = session;
+        this.farmProfile = farmProfile;
+        this.harnessBridge = Objects.requireNonNull(harnessBridge, "harnessBridge");
+        this.dialogs = Objects.requireNonNull(dialogs, "dialogs");
+        this.fileChooser = Objects.requireNonNull(fileChooser, "fileChooser");
     }
 
     // ── ApplicationRunner ─────────────────────────────────────────────────────
@@ -148,7 +200,7 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
         darkMode = prefs.getBoolean(PREF_DARK, false);
         applyLookAndFeel(darkMode);
 
-        frame = new JFrame("🌸 Flower Farm Manager — Port Orchard, Kitsap County WA | PNW West of the Cascades");
+        frame = new JFrame(applicationTitle());
         frame.setSize(prefs.getInt(PREF_WIDTH, 1500), prefs.getInt(PREF_HEIGHT, 900));
         frame.setMinimumSize(new Dimension(1100, 700));
         frame.setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
@@ -166,6 +218,7 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
         marketDayTab = catalog.marketDay();
         irrigationTab = catalog.irrigation();
         crmTab = catalog.crm();
+        seasonPlannerTab = catalog.seasonPlanner();
         tabs.clear();
         tabs.addAll(catalog.tabs());
 
@@ -183,48 +236,7 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
         }));
         frame.add(tabbedPane, BorderLayout.CENTER);
 
-        // South region: connector button bar (top) + status bar (bottom).
-        JPanel south = new JPanel(new BorderLayout());
-        JScrollPane connectorScroll = buildConnectorBar();
-        boolean integrationsExpanded = prefs.getBoolean(PREF_INTEGRATIONS, false);
-        connectorScroll.setVisible(integrationsExpanded);
-        JToggleButton integrationsToggle = new JToggleButton(
-                integrationsExpanded ? "Hide integrations" : "Show integrations",
-                integrationsExpanded);
-        integrationsToggle.setToolTipText(
-                "Open connector actions for CSV, commerce, sheets, and farm systems.");
-        integrationsToggle.getAccessibleContext().setAccessibleName("Toggle integrations tray");
-        JPanel integrationHeader = FarmUi.toolbar(
-                integrationsToggle,
-                FarmUi.mutedLabel("CSV · Excel · Shopify · Square · Sheets · Airtable · farm systems"));
-        integrationHeader.setBorder(BorderFactory.createEmptyBorder(6, 10, 6, 10));
-        JPanel integrations = new JPanel(new BorderLayout());
-        integrations.add(integrationHeader, BorderLayout.NORTH);
-        integrations.add(connectorScroll, BorderLayout.CENTER);
-        integrationsToggle.addActionListener(e -> {
-            boolean expanded = integrationsToggle.isSelected();
-            connectorScroll.setVisible(expanded);
-            integrationsToggle.setText(expanded ? "Hide integrations" : "Show integrations");
-            prefs.putBoolean(PREF_INTEGRATIONS, expanded);
-            integrations.revalidate();
-            integrations.repaint();
-        });
-        south.add(integrations, BorderLayout.CENTER);
-        JPanel statusRow = new JPanel(new BorderLayout());
-        statusRow.setBackground(FarmUi.surfaceColor());
-        statusLabel = FarmUi.mutedLabel("Ready · Kitsap County flower farm");
-        statusLabel.setBorder(BorderFactory.createEmptyBorder(7, 12, 7, 12));
-        statusLabel.getAccessibleContext().setAccessibleName("Application status");
-        sessionLabel = FarmUi.statusBadge(sessionBadgeText(), FarmUi.Tone.NEUTRAL);
-        sessionLabel.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createEmptyBorder(4, 10, 4, 10), sessionLabel.getBorder()));
-        sessionLabel.setHorizontalAlignment(SwingConstants.RIGHT);
-        statusRow.setBorder(BorderFactory.createMatteBorder(
-                1, 0, 0, 0, FarmUi.borderColor()));
-        statusRow.add(statusLabel, BorderLayout.CENTER);
-        statusRow.add(sessionLabel, BorderLayout.EAST);
-        south.add(statusRow, BorderLayout.SOUTH);
-        frame.add(south, BorderLayout.SOUTH);
+        frame.add(buildSouthBar(), BorderLayout.SOUTH);
 
         frame.setJMenuBar(buildMenuBar());
         installShortcuts();
@@ -252,15 +264,70 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
             @Override public void windowClosing(WindowEvent e) {
                 closeApplication(false);
             }
+
+            @Override public void windowClosed(WindowEvent event) {
+                harnessBridge.detach();
+            }
         });
 
         frame.setVisible(true);
+        harnessBridge.attach(frame.getRootPane(), navigator::select);
         refreshAll();
         if (loginGate.isEnabled()) {
             setStatus("Signed in as " + session.displayName() + " · " + session.roleHint());
         } else {
             setStatus("Ready · local mode (auth off)");
         }
+    }
+
+    /** Frame-level integrations and status chrome, kept separate for theme verification. */
+    JPanel buildSouthBar() {
+        JPanel south = new JPanel(new BorderLayout());
+        south.setName("farm.southBar");
+        JScrollPane connectorScroll = buildConnectorBar();
+        boolean integrationsExpanded = prefs.getBoolean(PREF_INTEGRATIONS, false);
+        connectorScroll.setVisible(integrationsExpanded);
+        JToggleButton integrationsToggle = new JToggleButton(
+                integrationsExpanded ? "Hide integrations" : "Show integrations",
+                integrationsExpanded);
+        integrationsToggle.setToolTipText(
+                "Open connector actions for CSV, commerce, sheets, and farm systems.");
+        integrationsToggle.getAccessibleContext().setAccessibleName("Toggle integrations tray");
+        integrationsToggle.getAccessibleContext().setAccessibleDescription(
+                "Show or hide import, export, and synchronization actions.");
+        JPanel integrationHeader = FarmUi.toolbar(
+                integrationsToggle,
+                FarmUi.mutedLabel("CSV · Excel · Shopify · Square · Sheets · Airtable · farm systems"));
+        integrationHeader.setBorder(BorderFactory.createEmptyBorder(6, 10, 6, 10));
+        JPanel integrations = new JPanel(new BorderLayout());
+        integrations.add(integrationHeader, BorderLayout.NORTH);
+        integrations.add(connectorScroll, BorderLayout.CENTER);
+        integrationsToggle.addActionListener(e -> {
+            boolean expanded = integrationsToggle.isSelected();
+            connectorScroll.setVisible(expanded);
+            integrationsToggle.setText(expanded ? "Hide integrations" : "Show integrations");
+            prefs.putBoolean(PREF_INTEGRATIONS, expanded);
+            integrations.revalidate();
+            integrations.repaint();
+        });
+        south.add(integrations, BorderLayout.CENTER);
+        JPanel statusRow = new JPanel(new BorderLayout());
+        statusRow.setName("farm.statusBar");
+        statusRow.setBackground(FarmUi.surfaceColor());
+        statusLabel = FarmUi.mutedLabel("Ready · " + farmProfile.getName());
+        statusLabel.setName("farm.statusMessage");
+        statusLabel.setBorder(BorderFactory.createEmptyBorder(7, 12, 7, 12));
+        statusLabel.getAccessibleContext().setAccessibleName("Application status");
+        sessionLabel = FarmUi.statusBadge(sessionBadgeText(), FarmUi.Tone.NEUTRAL);
+        sessionLabel.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createEmptyBorder(4, 10, 4, 10), sessionLabel.getBorder()));
+        sessionLabel.setHorizontalAlignment(SwingConstants.RIGHT);
+        statusRow.setBorder(BorderFactory.createMatteBorder(
+                1, 0, 0, 0, FarmUi.borderColor()));
+        statusRow.add(statusLabel, BorderLayout.CENTER);
+        statusRow.add(sessionLabel, BorderLayout.EAST);
+        south.add(statusRow, BorderLayout.SOUTH);
+        return south;
     }
 
     private String sessionBadgeText() {
@@ -290,8 +357,7 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
             }
         }
         if (frame != null && loginGate.isEnabled()) {
-            frame.setTitle("🌸 Flower Farm Manager — " + session.displayName()
-                    + " | Port Orchard, Kitsap County WA");
+            frame.setTitle(applicationTitle() + " · " + session.displayName());
         }
     }
 
@@ -300,20 +366,27 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
     JMenuBar buildMenuBar() {
         JMenuBar menuBar = new JMenuBar();
 
-        JMenu fileMenu = new JMenu("File");
-        fileMenu.add(writeMenuItem("Import CSV…", e -> runImportConnector("csv", "CSV")));
-        fileMenu.add(writeMenuItem("Import Excel…", e -> runImportConnector("excel", "Excel")));
-        fileMenu.add(menuItem("Export All to CSV…", e -> exportAllToCsv()));
+        JMenu fileMenu = menu("File", KeyEvent.VK_F,
+                "Import farm data, export a local backup, or exit FlowersForever.");
+        fileMenu.add(writeMenuItem("Import CSV…", KeyEvent.VK_C,
+                "Import inventory records from a CSV file.",
+                e -> runImportConnector("csv", "CSV")));
+        fileMenu.add(writeMenuItem("Import Excel…", KeyEvent.VK_E,
+                "Import inventory records from an Excel workbook.",
+                e -> runImportConnector("excel", "Excel")));
+        fileMenu.add(menuItem("Export All to CSV…", KeyEvent.VK_A,
+                "Save all current inventory records to a CSV file.",
+                e -> exportAllToCsv()));
         fileMenu.addSeparator();
-        fileMenu.add(menuItem("Exit", e -> {
-            savePreferences();
-            frame.dispose();
-            System.exit(0);
-        }));
+        fileMenu.add(menuItem("Exit", KeyEvent.VK_X,
+                "Close FlowersForever after reviewing any unfinished work.",
+                e -> closeApplication(false)));
         menuBar.add(fileMenu);
 
-        JMenu viewMenu = new JMenu("View");
-        JMenuItem refresh = menuItem("Refresh All Tabs", e -> {
+        JMenu viewMenu = menu("View", KeyEvent.VK_V,
+                "Refresh farm data or switch between light and dark mode.");
+        JMenuItem refresh = menuItem("Refresh All Tabs", KeyEvent.VK_R,
+                "Reload every workflow from the latest saved farm records.", e -> {
             refreshAll();
             setStatus("All tabs refreshed.");
         });
@@ -321,31 +394,62 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
         viewMenu.add(refresh);
         viewMenu.addSeparator();
         darkModeItem = new JCheckBoxMenuItem("Dark Mode", darkMode);
+        configureMenuItem(darkModeItem, KeyEvent.VK_D,
+                "Toggle the entire desktop between light and dark mode.");
+        darkModeItem.setAccelerator(KeyStroke.getKeyStroke(
+                KeyEvent.VK_D, InputEvent.CTRL_DOWN_MASK | InputEvent.SHIFT_DOWN_MASK));
         darkModeItem.addActionListener(e -> toggleDarkMode(darkModeItem.isSelected()));
         viewMenu.add(darkModeItem);
         menuBar.add(viewMenu);
 
-        JMenu toolsMenu = new JMenu("Tools");
-        toolsMenu.add(menuItem("Run Harvest Forecast", e -> runTrendAnalysis()));
+        JMenu toolsMenu = menu("Tools", KeyEvent.VK_T,
+                "Open farm analysis and planning tools.");
+        toolsMenu.add(menuItem("Run Harvest Forecast", KeyEvent.VK_H,
+                "Open Trend Analysis and calculate the latest harvest forecast.",
+                e -> runTrendAnalysis()));
         menuBar.add(toolsMenu);
 
-        JMenu accountMenu = new JMenu("Account");
-        accountMenu.add(menuItem("My access", e -> showWhoAmI()));
+        JMenu accountMenu = menu("Account", KeyEvent.VK_A,
+                "Review the active worker, role, and sign-in options.");
+        JMenuItem myAccess = menuItem("My access", KeyEvent.VK_M,
+                "Review the current worker and available farm permissions.",
+                e -> showWhoAmI());
+        myAccess.setAccelerator(KeyStroke.getKeyStroke(
+                KeyEvent.VK_M, InputEvent.CTRL_DOWN_MASK | InputEvent.SHIFT_DOWN_MASK));
+        accountMenu.add(myAccess);
         if (loginGate.isEnabled()) {
-            accountMenu.add(menuItem("Switch user…", e -> switchUser()));
-            accountMenu.add(menuItem("Sign out", e -> signOut()));
+            accountMenu.add(menuItem("Switch user…", KeyEvent.VK_S,
+                    "Choose another configured farm account.", e -> switchUser()));
+            accountMenu.add(menuItem("Sign out", KeyEvent.VK_O,
+                    "Review unfinished work, then sign out and close FlowersForever.",
+                    e -> signOut()));
         } else {
             JMenuItem disabled = new JMenuItem("Local mode — full OWNER access");
             disabled.setEnabled(false);
+            disabled.getAccessibleContext().setAccessibleDescription(
+                    "Authentication is disabled; this desktop has full owner access.");
             accountMenu.add(disabled);
         }
         menuBar.add(accountMenu);
 
-        JMenu helpMenu = new JMenu("Help");
-        helpMenu.add(menuItem("PNW Rose Growing Guide", e -> selectTab("Rose Varieties")));
-        helpMenu.add(menuItem("About Flower Farm Manager", e -> JOptionPane.showMessageDialog(frame,
-                "Flower Farm Manager\n"
-                + "PNW West of the Cascades — Port Orchard, Kitsap County, WA\n\n"
+        JMenu helpMenu = menu("Help", KeyEvent.VK_H,
+                "Open growing guidance or application information.");
+        JMenuItem growingGuide = menuItem("PNW Plant Guide", KeyEvent.VK_P,
+                "Open the sourced Pacific Northwest plant and crop reference.",
+                e -> selectTab("PNW Plant Guide"));
+        growingGuide.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_F1, 0));
+        helpMenu.add(growingGuide);
+        helpMenu.add(menuItem("Wedding & Memorial Services", KeyEvent.VK_W,
+                "Open sourced floral, catering, décor, photography, and event-service starters.",
+                e -> selectTab("Event Services")));
+        helpMenu.add(menuItem("PNW Rose Growing Guide", KeyEvent.VK_G,
+                "Open the Pacific Northwest rose variety reference.",
+                e -> selectTab("Rose Varieties")));
+        helpMenu.add(menuItem("About FlowersForever", KeyEvent.VK_A,
+                "Show the farm profile, application purpose, and active session.",
+                e -> dialogs.showMessage(frame,
+                "FlowersForever\n"
+                + farmProfile.getName() + " · " + farmProfile.locationLabel() + "\n\n"
                 + "Plan harvests, manage inventory and customer orders,\n"
                 + "prepare market days, and keep printable farm records.\n\n"
                 + "Session: " + session.displayName() + "\n"
@@ -358,7 +462,7 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
 
     private void showWhoAmI() {
         String accounts = loginGate.isEnabled() ? loginGate.accountHint() : "Local mode";
-        JOptionPane.showMessageDialog(frame,
+        dialogs.showMessage(frame,
                 "Signed in as: " + session.displayName() + "\n"
                         + "Access: " + session.roleHint() + "\n"
                         + (canMutateData()
@@ -392,7 +496,7 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
         if (warning != null) {
             Object[] options = {"Keep working", signingOut
                     ? "Discard and sign out" : "Discard and exit"};
-            int choice = JOptionPane.showOptionDialog(
+            int choice = dialogs.showOption(
                     frame, exitPrompt(warning, signingOut),
                     signingOut ? "Unfinished work — sign out" : "Unfinished work — exit",
                     JOptionPane.DEFAULT_OPTION, JOptionPane.WARNING_MESSAGE,
@@ -402,8 +506,9 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
                 return;
             }
         } else if (signingOut) {
-            int choice = JOptionPane.showConfirmDialog(
-                    frame, "Sign out and exit?", "Sign out", JOptionPane.YES_NO_OPTION);
+            int choice = dialogs.showConfirm(
+                    frame, "Sign out and exit?", "Sign out",
+                    JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE);
             if (choice != JOptionPane.YES_OPTION) {
                 return;
             }
@@ -435,15 +540,34 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
                 + " only if losing this unfinished work is intentional before " + action + ".";
     }
 
-    private JMenuItem menuItem(String label, java.awt.event.ActionListener action) {
+    private static JMenu menu(String label, int mnemonic, String description) {
+        JMenu menu = new JMenu(label);
+        menu.setMnemonic(mnemonic);
+        menu.setToolTipText(description);
+        menu.getAccessibleContext().setAccessibleDescription(description);
+        return menu;
+    }
+
+    private JMenuItem menuItem(String label, int mnemonic, String description,
+                               java.awt.event.ActionListener action) {
         JMenuItem item = new JMenuItem(label);
+        configureMenuItem(item, mnemonic, description);
         item.addActionListener(action);
         return item;
     }
 
-    private JMenuItem writeMenuItem(String label, java.awt.event.ActionListener action) {
-        JMenuItem item = menuItem(label, action);
+    private JMenuItem writeMenuItem(String label, int mnemonic, String description,
+                                    java.awt.event.ActionListener action) {
+        JMenuItem item = menuItem(label, mnemonic, description, action);
         mutateButtons.add(item);
+        return item;
+    }
+
+    private static <T extends JMenuItem> T configureMenuItem(
+            T item, int mnemonic, String description) {
+        item.setMnemonic(mnemonic);
+        item.setToolTipText(description);
+        item.getAccessibleContext().setAccessibleDescription(description);
         return item;
     }
 
@@ -489,9 +613,15 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
 
     private JPanel buildBrandHeader() {
         return FarmUi.brandHeader(
-                "PORT ORCHARD, WA",
-                LocalDate.now().format(DateTimeFormatter.ofPattern(
+                farmProfile.getName(),
+                farmProfile.getTagline(),
+                farmProfile.locationLabel(),
+                LocalDate.now(farmProfile.zoneId()).format(DateTimeFormatter.ofPattern(
                         "EEEE · MMMM d", Locale.US)));
+    }
+
+    private String applicationTitle() {
+        return "FlowersForever — " + farmProfile.getName();
     }
 
     private void savePreferences() {
@@ -549,16 +679,24 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
         JScrollPane scroll = new JScrollPane(connectorGrid,
                 JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED,
                 JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+        scroll.setName("farm.connectorScroll");
         scroll.setPreferredSize(new Dimension(0, 110));
         scroll.setBorder(BorderFactory.createMatteBorder(
                 1, 0, 0, 0, FarmUi.borderColor()));
         scroll.getAccessibleContext().setAccessibleName("Connected tools import and export actions");
+        scroll.getAccessibleContext().setAccessibleDescription(
+                "Use Tab to move through local files, commerce, sheets, and farm-system actions.");
         return scroll;
     }
 
     private JButton connButton(String label, Runnable action, boolean requiresWrite) {
         JButton button = FarmUi.secondaryButton(label);
         button.setFont(button.getFont().deriveFont(11f));
+        String access = requiresWrite ? " Requires HAND or OWNER access."
+                : " Available to every farm role.";
+        String guidance = label + "." + access;
+        button.setToolTipText(guidance);
+        button.getAccessibleContext().setAccessibleDescription(guidance);
         button.addActionListener(e -> {
             if (requiresWrite && !canMutateData()) {
                 denyWrite("imports and exports");
@@ -573,7 +711,7 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
     }
 
     private void denyWrite(String area) {
-        JOptionPane.showMessageDialog(frame,
+        dialogs.showMessage(frame,
                 "Your role is VIEWER (read-only).\n"
                         + "Sign in as HAND or OWNER to change " + area + ".",
                 "Permission denied", JOptionPane.WARNING_MESSAGE);
@@ -584,20 +722,31 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
 
     private void exportAllToCsv() {
         // Export is read of local data — allowed for VIEWER (accounting / backup)
-        JFileChooser chooser = new JFileChooser();
-        chooser.setDialogTitle("Export Full Inventory to CSV");
-        chooser.setSelectedFile(new File("exported_inventory.csv"));
-        if (chooser.showSaveDialog(frame) != JFileChooser.APPROVE_OPTION) {
+        var selected = fileChooser.chooseSave(frame, "Export Full Inventory to CSV",
+                new File("exported_inventory.csv"));
+        if (selected.isEmpty()) {
+            setStatus("Export cancelled. No file was changed.");
             return;
         }
-        String path = chooser.getSelectedFile().getAbsolutePath();
+        File destination = selected.get();
+        String path = destination.getAbsolutePath();
+        if (destination.exists()) {
+            int overwrite = dialogs.showConfirm(frame,
+                    "Replace the existing file?\n" + path,
+                    "Replace existing export",
+                    JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
+            if (overwrite != JOptionPane.YES_OPTION) {
+                setStatus("Export cancelled. Existing file was not replaced.");
+                return;
+            }
+        }
         try {
             connectorActions.exportInventory(path);
             setStatus("Inventory exported to " + path);
-            JOptionPane.showMessageDialog(frame, "Inventory exported to\n" + path,
+            dialogs.showMessage(frame, "Inventory exported to\n" + path,
                     "Export Complete", JOptionPane.INFORMATION_MESSAGE);
         } catch (Exception ex) {
-            JOptionPane.showMessageDialog(frame, "Export failed: " + ex.getMessage(),
+            dialogs.showMessage(frame, "Export failed: " + ex.getMessage(),
                     "Export Error", JOptionPane.ERROR_MESSAGE);
         }
     }
@@ -642,12 +791,12 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
                         refreshAll();
                     }
                     setStatus(feedback.status());
-                    JOptionPane.showMessageDialog(frame, feedback.message(), feedback.title(),
+                    dialogs.showMessage(frame, feedback.message(), feedback.title(),
                             feedback.success()
                                     ? JOptionPane.INFORMATION_MESSAGE : JOptionPane.ERROR_MESSAGE);
                 } catch (Exception ex) {
                     setStatus(displayName + " " + operation + " error: " + ex.getMessage());
-                    JOptionPane.showMessageDialog(frame,
+                    dialogs.showMessage(frame,
                             displayName + " " + operation + " error: " + ex.getMessage(),
                             displayName + " " + operation + " Error", JOptionPane.ERROR_MESSAGE);
                 }
@@ -747,6 +896,42 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
             setStatus("Opened order #" + orderId
                     + " for packing and customer-detail review.");
         }
+    }
+
+    @Override
+    public boolean showEventOrderDraft(String occasion, String services, String brief) {
+        selectTab("Customers & Orders");
+        String safeOccasion = occasion == null || occasion.isBlank()
+                ? "event" : occasion.trim();
+        String safeServices = services == null || services.isBlank()
+                ? "selected services" : services.trim();
+        if (crmTab != null && crmTab.prepareEventOrderBrief(brief)) {
+            setStatus("Prepared a " + safeOccasion + " CRM brief for " + safeServices
+                    + ". Add the customer, date, and physical flower products before saving.");
+            return true;
+        } else {
+            setStatus("Opened Customers & Orders, but its existing new-order instructions were "
+                    + "kept. Copy the " + safeOccasion + " brief when that draft is ready.");
+            return false;
+        }
+    }
+
+    @Override
+    public boolean showSeasonPlanDraft(PnwPlantProfile plant) {
+        if (plant == null) {
+            return false;
+        }
+        selectTab("Season Planner");
+        if (seasonPlannerTab == null) {
+            setStatus("Opened Season Planner, but the plant reference draft is unavailable.");
+            return false;
+        }
+        boolean accepted = seasonPlannerTab.preparePlantingFromReference(plant);
+        if (!accepted) {
+            setStatus("Opened Season Planner for “" + plant.commonName()
+                    + "”; no planting block was saved.");
+        }
+        return accepted;
     }
 
     @Override

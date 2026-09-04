@@ -27,6 +27,23 @@ import static org.mockito.Mockito.verify;
 class InventoryItemInteractionTest {
 
     @Test
+    void correctingAnEntryRestoresItsFarmerGuidance() throws Exception {
+        SwingUtilities.invokeAndWait(() -> {
+            InventoryItemFormView form = new InventoryItemFormView();
+            var quantity = form.quantityField();
+            form.markError("quantity", "Enter a whole number.");
+            quantity.setText("8");
+            assertThat(quantity.getClientProperty("JComponent.outline")).isNull();
+            assertThat(quantity.getAccessibleContext().getAccessibleDescription())
+                    .contains("Whole units on hand", "Start at zero");
+            assertThat(quantity.getToolTipText()).contains("Whole units on hand");
+            form.resetForSimilarItem();
+            assertThat(form.draft().quantity()).isEqualTo("0");
+            assertThat(quantity.getToolTipText()).contains("Whole units on hand");
+        });
+    }
+
+    @Test
     @DisplayName("presenter parses one shared draft and delegates add and edit mutations")
     void presenterParsesAndDelegatesMutations() {
         InventoryService service = mock(InventoryService.class);
@@ -149,6 +166,24 @@ class InventoryItemInteractionTest {
     }
 
     @Test
+    @DisplayName("flower starter library fills safe product facts without inventing prices")
+    void formAppliesFlowerStarter() throws Exception {
+        InventoryItemFormView[] form = new InventoryItemFormView[1];
+        SwingUtilities.invokeAndWait(() -> {
+            form[0] = new InventoryItemFormView();
+            form[0].applyPreset("Nootka rose stem");
+        });
+
+        InventoryItemPresenter.ItemDraft draft = form[0].draft();
+        assertThat(draft.name()).isEqualTo("Nootka Rose");
+        assertThat(draft.category()).isEqualTo("Flowers/Plants");
+        assertThat(draft.roseVariety()).isEqualTo("Nootka");
+        assertThat(draft.unit()).isEqualTo("Per Stem");
+        assertThat(draft.price()).isEqualTo("0.00");
+        assertThat(draft.cost()).isEqualTo("0.00");
+    }
+
+    @Test
     @DisplayName("similar-item reset keeps shared setup and clears product-specific facts")
     void formPreparesSafeSimilarItem() throws Exception {
         InventoryItemFormView[] form = new InventoryItemFormView[1];
@@ -165,7 +200,7 @@ class InventoryItemInteractionTest {
         assertThat(next.unit()).isEqualTo("Per Stem");
         assertThat(next.cost()).isEqualTo("1.40");
         assertThat(next.name()).isEmpty();
-        assertThat(next.roseVariety()).isEqualTo("Alba");
+        assertThat(next.roseVariety()).isEmpty();
         assertThat(next.quantity()).isEqualTo("0");
         assertThat(next.notes()).isEmpty();
     }

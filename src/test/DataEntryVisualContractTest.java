@@ -3,6 +3,7 @@ package com.flowerfarm.gui;
 import com.flowerfarm.gui.tabs.AddItemTab;
 import com.flowerfarm.gui.tabs.CrmTab;
 import com.flowerfarm.gui.tabs.DashboardTab;
+import com.flowerfarm.gui.tabs.EventServicesTab;
 import com.flowerfarm.gui.tabs.HarvestLogTab;
 import com.flowerfarm.gui.tabs.InventoryTab;
 import com.flowerfarm.gui.tabs.InventoryWorkspaceTab;
@@ -13,6 +14,7 @@ import com.flowerfarm.gui.tabs.PricingInfoTab;
 import com.flowerfarm.gui.tabs.ReportsTab;
 import com.flowerfarm.gui.tabs.ReferenceTab;
 import com.flowerfarm.gui.tabs.RoseVarietiesTab;
+import com.flowerfarm.gui.tabs.PnwPlantGuideTab;
 import com.flowerfarm.gui.tabs.RoseVisualizerTab;
 import com.flowerfarm.gui.tabs.SyncHistoryTab;
 import com.flowerfarm.gui.tabs.SeasonPlannerTab;
@@ -40,6 +42,7 @@ import com.flowerfarm.service.ReportService;
 import com.flowerfarm.service.SyncHistoryService;
 import com.flowerfarm.service.TrendService;
 import com.flowerfarm.service.SeasonPlanService;
+import com.formdev.flatlaf.FlatDarkLaf;
 import com.formdev.flatlaf.FlatLightLaf;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
@@ -286,9 +289,12 @@ class DataEntryVisualContractTest {
                 .thenThrow(new IllegalStateException("Forecast service timed out"));
         IrrigationInfoTab irrigationError = new IrrigationInfoTab(failingIrrigation, new Host());
         RoseVarietiesTab roseGuide = new RoseVarietiesTab(inventory, new Host());
+        PnwPlantGuideTab plantGuide = new PnwPlantGuideTab();
+        EventServicesTab eventServices = new EventServicesTab(new Host());
         PricingInfoTab pricing = new PricingInfoTab();
         RoseVisualizerTab roseVisualizer = new RoseVisualizerTab(inventory, new Host());
-        ReferenceTab reference = new ReferenceTab(roseGuide, pricing, roseVisualizer);
+        ReferenceTab reference = new ReferenceTab(
+                plantGuide, eventServices, roseGuide, pricing, roseVisualizer);
         InventoryWorkspaceTab inventoryWorkspace =
                 new InventoryWorkspaceTab(inventoryTab, addItem);
 
@@ -331,6 +337,10 @@ class DataEntryVisualContractTest {
         trends.runAnalysis();
         awaitLabel(trends.getUIComponent(), "Forecast ready");
         render("add-item", addItem.getUIComponent(), new Dimension(1060, 700));
+        assertThat(textField(addItem.getUIComponent(), "Item name").getHeight())
+                .as("comfortable product-name input at laptop size").isGreaterThanOrEqualTo(36);
+        assertThat(textField(addItem.getUIComponent(), "Inventory quantity").getHeight())
+                .as("comfortable stock-count input at laptop size").isGreaterThanOrEqualTo(36);
         SwingUtilities.invokeAndWait(() -> {
             textField(addItem.getUIComponent(), "Item name").setText("Saturday Bouquet");
             textField(addItem.getUIComponent(), "Selling price").setText("28.00");
@@ -360,6 +370,27 @@ class DataEntryVisualContractTest {
                 .as("visible harvest history rows at laptop height")
                 .isGreaterThanOrEqualTo(80);
         render("harvest-log-compact", harvestLog.getUIComponent(), new Dimension(1050, 700));
+        Component cropInput = findNamed(harvestLog.getUIComponent(), "harvest.crop");
+        Component historyTable = findNamed(harvestLog.getUIComponent(), "harvest.history.table");
+        assertThat(SwingUtilities.convertPoint(cropInput, 0, 0, harvestLog.getUIComponent()).y)
+                .as("new harvest entry appears before history on a compact laptop")
+                .isLessThan(SwingUtilities.convertPoint(
+                        historyTable, 0, 0, harvestLog.getUIComponent()).y);
+        Component harvestUnit = findNamed(harvestLog.getUIComponent(), "harvest.unit");
+        assertThat(SwingUtilities.convertPoint(harvestUnit, 0, 0, harvestLog.getUIComponent()).y)
+                .as("harvest unit stays visible beside crop and quantity")
+                .isEqualTo(SwingUtilities.convertPoint(cropInput, 0, 0, harvestLog.getUIComponent()).y);
+        javax.swing.JViewport harvestViewport = (javax.swing.JViewport)
+                SwingUtilities.getAncestorOfClass(javax.swing.JViewport.class, cropInput);
+        for (Component input : List.of(cropInput, harvestUnit,
+                textField(harvestLog.getUIComponent(), "Harvest quantity"),
+                textField(harvestLog.getUIComponent(), "Harvest date"))) {
+            java.awt.Rectangle visibleBounds = SwingUtilities.convertRectangle(
+                    input.getParent(), input.getBounds(), harvestViewport);
+            assertThat(new java.awt.Rectangle(harvestViewport.getExtentSize())
+                    .contains(visibleBounds))
+                    .as("primary harvest input fully visible: %s", describe(input)).isTrue();
+        }
         assertThat(findNamed(harvestLog.getUIComponent(), "harvest.history.table").getHeight())
                 .as("visible harvest row at compact laptop height")
                 .isGreaterThanOrEqualTo(50);
@@ -371,6 +402,9 @@ class DataEntryVisualContractTest {
                 .setText("Lavender,1.5,lbs"));
         render("harvest-batch-rounded-compact", harvestLog.getUIComponent(),
                 new Dimension(1050, 700));
+        assertThat(SwingUtilities.getAncestorOfClass(javax.swing.JViewport.class,
+                textArea(harvestLog.getUIComponent(), "Batch harvest lines")).getHeight())
+                .as("batch lines stay visible at compact height").isGreaterThanOrEqualTo(36);
         render("inventory", inventoryTab.getUIComponent(), new Dimension(1080, 720));
         render("inventory-compact", inventoryTab.getUIComponent(), new Dimension(1050, 700));
         render("market-day", marketDayTab.getUIComponent(), new Dimension(1050, 700));
@@ -427,12 +461,18 @@ class DataEntryVisualContractTest {
         JTabbedPane referenceTabs = (JTabbedPane) findNamed(
                 reference.getUIComponent(), "reference.workspace");
         referenceTabs.setSelectedIndex(0);
+        render("reference-workspace-plants", reference.getUIComponent(),
+                new Dimension(1280, 820));
+        referenceTabs.setSelectedIndex(1);
+        render("reference-workspace-events", reference.getUIComponent(),
+                new Dimension(1280, 820));
+        referenceTabs.setSelectedIndex(2);
         render("reference-workspace-rose", reference.getUIComponent(),
                 new Dimension(1120, 780));
-        referenceTabs.setSelectedIndex(1);
+        referenceTabs.setSelectedIndex(3);
         render("reference-workspace-pricing", reference.getUIComponent(),
                 new Dimension(1120, 780));
-        referenceTabs.setSelectedIndex(2);
+        referenceTabs.setSelectedIndex(4);
         render("reference-workspace-visualizer", reference.getUIComponent(),
                 new Dimension(1200, 800));
         render("reference-workspace-visualizer-compact", reference.getUIComponent(),
@@ -452,6 +492,7 @@ class DataEntryVisualContractTest {
 
         assertInteractiveControlsFit(addItem.getUIComponent());
         assertInteractiveControlsFit(crm.getUIComponent());
+        assertInteractiveControlsFit(plantGuide.getUIComponent());
         assertInteractiveControlsFit(harvestLog.getUIComponent());
         assertInteractiveControlsFit(inventoryTab.getUIComponent());
         assertInteractiveControlsFit(marketDayTab.getUIComponent());
@@ -487,13 +528,81 @@ class DataEntryVisualContractTest {
                 irrigation, crm, knowledgeLog, reports, trends, activity,
                 reference)).populate();
         JPanel shell = new JPanel(new BorderLayout());
-        shell.add(FarmUi.brandHeader("PORT ORCHARD, WA", "Monday · August 24"),
-                BorderLayout.NORTH);
+        JPanel shellHeader = FarmUi.brandHeader(
+                "PORT ORCHARD, WA", "Monday · August 24");
+        shell.add(shellHeader, BorderLayout.NORTH);
         shell.add(navigation, BorderLayout.CENTER);
         awaitNamedLabelPrefix(dashboard.getUIComponent(),
                 "dashboard.overviewStatus", "Updated ");
         render("farm-shell", shell, new Dimension(1366, 768));
         render("farm-shell-compact", shell, new Dimension(1100, 700));
+        java.awt.Rectangle finalNavigationTab = navigation.getBoundsAt(
+                navigation.getTabCount() - 1);
+        assertThat(finalNavigationTab.y + finalNavigationTab.height)
+                .as("every primary workflow remains visible at minimum desktop height")
+                .isLessThanOrEqualTo(navigation.getHeight());
+        try {
+            FlatDarkLaf.setup();
+            FarmUi.installThemeDefaults();
+            SwingUtilities.invokeAndWait(() -> {
+                SwingUtilities.updateComponentTreeUI(shell);
+                FarmUi.refreshTheme(shell);
+                dashboard.applyTheme(true);
+                trends.applyTheme();
+                shell.remove(shellHeader);
+                shell.add(FarmUi.brandHeader(
+                        "PORT ORCHARD, WA", "Monday · August 24"), BorderLayout.NORTH);
+                for (JComponent workflow : List.of(
+                        inventoryWorkspace.getUIComponent(), marketDayTab.getUIComponent(),
+                        seasonPlanner.getUIComponent(), harvestLog.getUIComponent(),
+                        irrigation.getUIComponent(), irrigationError.getUIComponent(),
+                        crm.getUIComponent(), knowledgeLog.getUIComponent(),
+                        reports.getUIComponent(), trends.getUIComponent(),
+                        activity.getUIComponent(), reference.getUIComponent())) {
+                    SwingUtilities.updateComponentTreeUI(workflow);
+                    FarmUi.refreshTheme(workflow);
+                }
+                trends.applyTheme();
+            });
+            render("farm-shell-dark-compact", shell, new Dimension(1100, 700));
+            render("harvest-log-dark-compact", harvestLog.getUIComponent(),
+                    new Dimension(1050, 700));
+            render("inventory-dark-compact", inventoryTab.getUIComponent(),
+                    new Dimension(1050, 700));
+            render("orders-dark-compact", crm.getUIComponent(),
+                    new Dimension(1050, 700));
+            render("reports-dark-compact", reports.getUIComponent(),
+                    new Dimension(1050, 700));
+            render("season-planner-dark-compact", seasonPlanner.getUIComponent(),
+                    new Dimension(1050, 700));
+            render("add-item-dark-compact", addItem.getUIComponent(),
+                    new Dimension(1050, 700));
+            render("market-day-dark-compact", marketDayTab.getUIComponent(),
+                    new Dimension(1050, 700));
+            render("activity-history-dark-compact", activity.getUIComponent(),
+                    new Dimension(1050, 700));
+            render("knowledge-log-dark-compact", knowledgeLog.getUIComponent(),
+                    new Dimension(1050, 700));
+            render("trend-analysis-dark-compact", trends.getUIComponent(),
+                    new Dimension(1050, 700));
+            render("irrigation-dark-compact", irrigation.getUIComponent(),
+                    new Dimension(1050, 700));
+            render("rose-guide-dark-compact", roseGuide.getUIComponent(),
+                    new Dimension(1050, 700));
+            render("plant-guide-dark-compact", plantGuide.getUIComponent(),
+                    new Dimension(1050, 700));
+            render("pricing-reference-dark-compact", pricing.getUIComponent(),
+                    new Dimension(1050, 700));
+            render("rose-visualizer-dark-compact", roseVisualizer.getUIComponent(),
+                    new Dimension(1050, 700));
+            render("inventory-workspace-dark-compact", inventoryWorkspace.getUIComponent(),
+                    new Dimension(1050, 700));
+            render("reference-workspace-dark-compact", reference.getUIComponent(),
+                    new Dimension(1050, 700));
+        } finally {
+            FlatLightLaf.setup();
+            FarmUi.installThemeDefaults();
+        }
 
         assertThat(OUTPUT.resolve("add-item.png")).isRegularFile();
         assertThat(OUTPUT.resolve("add-item-validation.png")).isRegularFile();
@@ -506,6 +615,23 @@ class DataEntryVisualContractTest {
         assertThat(OUTPUT.resolve("harvest-batch-rounded-compact.png")).isRegularFile();
         assertThat(OUTPUT.resolve("farm-shell.png")).isRegularFile();
         assertThat(OUTPUT.resolve("farm-shell-compact.png")).isRegularFile();
+        assertThat(OUTPUT.resolve("farm-shell-dark-compact.png")).isRegularFile();
+        assertThat(OUTPUT.resolve("harvest-log-dark-compact.png")).isRegularFile();
+        assertThat(OUTPUT.resolve("inventory-dark-compact.png")).isRegularFile();
+        assertThat(OUTPUT.resolve("orders-dark-compact.png")).isRegularFile();
+        assertThat(OUTPUT.resolve("reports-dark-compact.png")).isRegularFile();
+        assertThat(OUTPUT.resolve("season-planner-dark-compact.png")).isRegularFile();
+        assertThat(OUTPUT.resolve("add-item-dark-compact.png")).isRegularFile();
+        assertThat(OUTPUT.resolve("market-day-dark-compact.png")).isRegularFile();
+        assertThat(OUTPUT.resolve("activity-history-dark-compact.png")).isRegularFile();
+        assertThat(OUTPUT.resolve("knowledge-log-dark-compact.png")).isRegularFile();
+        assertThat(OUTPUT.resolve("trend-analysis-dark-compact.png")).isRegularFile();
+        assertThat(OUTPUT.resolve("irrigation-dark-compact.png")).isRegularFile();
+        assertThat(OUTPUT.resolve("rose-guide-dark-compact.png")).isRegularFile();
+        assertThat(OUTPUT.resolve("pricing-reference-dark-compact.png")).isRegularFile();
+        assertThat(OUTPUT.resolve("rose-visualizer-dark-compact.png")).isRegularFile();
+        assertThat(OUTPUT.resolve("inventory-workspace-dark-compact.png")).isRegularFile();
+        assertThat(OUTPUT.resolve("reference-workspace-dark-compact.png")).isRegularFile();
         assertThat(OUTPUT.resolve("dashboard.png")).isRegularFile();
         assertThat(OUTPUT.resolve("dashboard-charts.png")).isRegularFile();
         assertThat(OUTPUT.resolve("inventory.png")).isRegularFile();
@@ -525,6 +651,7 @@ class DataEntryVisualContractTest {
         assertThat(OUTPUT.resolve("irrigation.png")).isRegularFile();
         assertThat(OUTPUT.resolve("irrigation-error.png")).isRegularFile();
         assertThat(OUTPUT.resolve("rose-guide.png")).isRegularFile();
+        assertThat(OUTPUT.resolve("plant-guide-dark-compact.png")).isRegularFile();
         assertThat(OUTPUT.resolve("pricing-reference.png")).isRegularFile();
         assertThat(OUTPUT.resolve("rose-visualizer.png")).isRegularFile();
         assertThat(OUTPUT.resolve("destructive-confirmation.png")).isRegularFile();
@@ -532,6 +659,8 @@ class DataEntryVisualContractTest {
         assertThat(OUTPUT.resolve("inventory-workspace-add.png")).isRegularFile();
         assertThat(OUTPUT.resolve("inventory-workspace-viewer.png")).isRegularFile();
         assertThat(OUTPUT.resolve("reference-workspace-rose.png")).isRegularFile();
+        assertThat(OUTPUT.resolve("reference-workspace-plants.png")).isRegularFile();
+        assertThat(OUTPUT.resolve("reference-workspace-events.png")).isRegularFile();
         assertThat(OUTPUT.resolve("reference-workspace-pricing.png")).isRegularFile();
         assertThat(OUTPUT.resolve("reference-workspace-visualizer.png")).isRegularFile();
         assertThat(OUTPUT.resolve("reference-workspace-visualizer-compact.png"))

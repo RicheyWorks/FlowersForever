@@ -1,5 +1,6 @@
 package com.flowerfarm.service;
 
+import com.flowerfarm.model.FarmProfile;
 import com.flowerfarm.model.SyncHistoryEntry;
 import com.flowerfarm.repository.SyncHistoryRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -26,7 +27,7 @@ class SyncHistoryServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new SyncHistoryService(repository);
+        service = new SyncHistoryService(repository, new FarmProfile());
         lenient().when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
     }
 

@@ -1,5 +1,6 @@
 package com.flowerfarm.service;
 
+import com.flowerfarm.model.FarmProfile;
 import com.flowerfarm.model.Item;
 import com.flowerfarm.repository.InMemoryInventoryRepository;
 import org.junit.jupiter.api.*;
@@ -70,7 +71,8 @@ class InventoryServiceTest {
     private static InventoryService service(
             InMemoryInventoryRepository repository, String seedCsv) {
         return new InventoryService(repository, seedCsv,
-                new InventoryReportGenerator(), new InventoryCsvExporter());
+                new InventoryReportGenerator(new FarmProfile()), new InventoryCsvExporter(),
+                new FarmProfile());
     }
 
     @Test
@@ -209,6 +211,36 @@ class InventoryServiceTest {
                 new Item("By Id Rose", "Other", 1.0, "Per Unit", 0.5, 3, "x"));
         assertThat(saved.getName()).isEqualTo("By Id Rose");
         assertThat(service.findById(id).orElseThrow().getName()).isEqualTo("By Id Rose");
+    }
+
+    @Test
+    @DisplayName("physical counts update only the reviewed inventory quantity")
+    void physicalCountRequiresCurrentReviewedQuantity() {
+        Item before = service.getAllItems().get(0);
+
+        Item counted = service.recordPhysicalCount(
+                before.getId(), before.getQuantity(), before.getQuantity() + 7);
+
+        assertThat(counted.getQuantity()).isEqualTo(before.getQuantity() + 7);
+        assertThat(counted.getName()).isEqualTo(before.getName());
+        assertThat(counted.getPrice()).isEqualTo(before.getPrice());
+        assertThat(counted.getNotes()).isEqualTo(before.getNotes());
+    }
+
+    @Test
+    @DisplayName("physical counts reject a stale review without overwriting newer stock")
+    void physicalCountRejectsStaleReview() {
+        Item before = service.getAllItems().get(0);
+        service.recordPhysicalCount(
+                before.getId(), before.getQuantity(), before.getQuantity() + 2);
+
+        assertThatThrownBy(() -> service.recordPhysicalCount(
+                before.getId(), before.getQuantity(), 1))
+                .isInstanceOfSatisfying(InventoryCountConflictException.class,
+                        conflict -> assertThat(conflict.currentQuantity())
+                                .isEqualTo(before.getQuantity() + 2));
+        assertThat(service.findById(before.getId()).orElseThrow().getQuantity())
+                .isEqualTo(before.getQuantity() + 2);
     }
 
     @Test

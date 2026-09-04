@@ -1,5 +1,6 @@
 package com.flowerfarm.gui.tabs;
 
+import com.flowerfarm.gui.FarmDialogs;
 import com.flowerfarm.gui.FarmUi;
 import com.flowerfarm.gui.GuiPermissions;
 import com.flowerfarm.model.KnowledgeConfidence;
@@ -54,6 +55,7 @@ public class KnowledgeLogTab implements FlowerFarmTab {
 
     private final KnowledgeService knowledgeService;
     private final TabHost host;
+    private final FarmDialogs dialogs;
 
     private JPanel panel;
     private DefaultTableModel tableModel;
@@ -73,12 +75,22 @@ public class KnowledgeLogTab implements FlowerFarmTab {
     private boolean canWrite = true;
     private boolean loading;
     private boolean saving;
+    private boolean savingDraft;
     private boolean updatingTags;
+    private boolean searchQueued;
     private Long requestedSelectionId;
+    private Long retrySaveId;
+    private KnowledgeEntry retrySaveDraft;
 
     public KnowledgeLogTab(KnowledgeService knowledgeService, TabHost host) {
+        this(knowledgeService, host, FarmDialogs.swing());
+    }
+
+    public KnowledgeLogTab(KnowledgeService knowledgeService, TabHost host,
+                           FarmDialogs dialogs) {
         this.knowledgeService = knowledgeService;
         this.host = host;
+        this.dialogs = java.util.Objects.requireNonNull(dialogs, "dialogs");
     }
 
     @Override
@@ -240,11 +252,18 @@ public class KnowledgeLogTab implements FlowerFarmTab {
     }
 
     private void startSearch() {
-        if (loading || tableModel == null) {
+        if (tableModel == null) {
+            return;
+        }
+        if (loading) {
+            searchQueued = true;
+            FarmUi.updateStatusBadge(statusBadge,
+                    "Search queued · current lesson search finishing", FarmUi.Tone.INFO);
             return;
         }
         KnowledgeService.SearchRequest request = currentRequest();
-        Long selectedId = selectedEntry() == null ? requestedSelectionId : selectedEntry().getId();
+        Long selectedId = requestedSelectionId != null ? requestedSelectionId
+                : selectedEntry() == null ? null : selectedEntry().getId();
         loading = true;
         updateActions();
         FarmUi.updateStatusBadge(statusBadge, "Searching the farm's lessons…", FarmUi.Tone.INFO);
@@ -273,6 +292,10 @@ public class KnowledgeLogTab implements FlowerFarmTab {
                 } finally {
                     loading = false;
                     updateActions();
+                    if (searchQueued) {
+                        searchQueued = false;
+                        startSearch();
+                    }
                 }
             }
         }.execute();
@@ -404,7 +427,10 @@ public class KnowledgeLogTab implements FlowerFarmTab {
         if (!GuiPermissions.requireWrite(host, panel, "record a farm lesson")) {
             return;
         }
-        KnowledgeEntry entry = showForm(null);
+        KnowledgeEntry retained = retrySaveId == null ? retrySaveDraft : null;
+        KnowledgeEntry entry = retained == null
+                ? showForm(null)
+                : showForm(retained, "Retry farm lesson");
         if (entry != null) {
             startSave(null, entry);
         }
@@ -418,20 +444,27 @@ public class KnowledgeLogTab implements FlowerFarmTab {
         if (selected == null) {
             return;
         }
-        KnowledgeEntry entry = showForm(selected);
+        KnowledgeEntry retained = selected.getId().equals(retrySaveId)
+                ? retrySaveDraft : selected;
+        KnowledgeEntry entry = showForm(retained,
+                retained == selected ? "Edit farm lesson" : "Retry farm lesson");
         if (entry != null) {
             startSave(selected.getId(), entry);
         }
     }
 
     private KnowledgeEntry showForm(KnowledgeEntry existing) {
+        String title = existing == null ? "Record a farm lesson" : "Edit farm lesson";
+        return showForm(existing, title);
+    }
+
+    private KnowledgeEntry showForm(KnowledgeEntry existing, String title) {
         KnowledgeForm form = new KnowledgeForm(existing);
         JScrollPane scroll = new JScrollPane(form.panel());
         scroll.setPreferredSize(new Dimension(720, 630));
         scroll.setBorder(BorderFactory.createEmptyBorder());
-        String title = existing == null ? "Record a farm lesson" : "Edit farm lesson";
         while (true) {
-            int choice = JOptionPane.showConfirmDialog(
+            int choice = dialogs.showConfirm(
                     panel, scroll, title, JOptionPane.OK_CANCEL_OPTION,
                     JOptionPane.PLAIN_MESSAGE);
             if (choice != JOptionPane.OK_OPTION) {
@@ -440,7 +473,7 @@ public class KnowledgeLogTab implements FlowerFarmTab {
             try {
                 return form.read();
             } catch (IllegalArgumentException exception) {
-                JOptionPane.showMessageDialog(panel, exception.getMessage(),
+                dialogs.showMessage(panel, exception.getMessage(),
                         "Check this lesson", JOptionPane.WARNING_MESSAGE);
             }
         }
@@ -450,7 +483,10 @@ public class KnowledgeLogTab implements FlowerFarmTab {
         if (saving) {
             return;
         }
+        retrySaveId = id;
+        retrySaveDraft = entry;
         saving = true;
+        savingDraft = true;
         updateActions();
         FarmUi.updateStatusBadge(statusBadge,
                 id == null ? "Recording farm lesson…" : "Updating farm lesson…",
@@ -465,6 +501,8 @@ public class KnowledgeLogTab implements FlowerFarmTab {
             protected void done() {
                 try {
                     KnowledgeEntry saved = get();
+                    retrySaveId = null;
+                    retrySaveDraft = null;
                     requestedSelectionId = saved.getId();
                     saving = false;
                     if (host != null) {
@@ -475,12 +513,13 @@ public class KnowledgeLogTab implements FlowerFarmTab {
                     }
                 } catch (InterruptedException exception) {
                     Thread.currentThread().interrupt();
-                    showFailure("Saving farm knowledge", exception);
+                    showSaveFailure(exception);
                 } catch (java.util.concurrent.ExecutionException exception) {
-                    showFailure("Saving farm knowledge",
+                    showSaveFailure(
                             exception.getCause() == null ? exception : exception.getCause());
                 } finally {
                     saving = false;
+                    savingDraft = false;
                     updateActions();
                 }
             }
@@ -495,7 +534,7 @@ public class KnowledgeLogTab implements FlowerFarmTab {
         if (selected == null) {
             return;
         }
-        int answer = JOptionPane.showConfirmDialog(panel,
+        int answer = dialogs.showConfirm(panel,
                 FarmUi.confirmationPanel(
                         "Remove this saved lesson?",
                         "“" + selected.getSummary() + "” will be removed from the Knowledge Log. "
@@ -554,8 +593,33 @@ public class KnowledgeLogTab implements FlowerFarmTab {
         }
     }
 
+    private void showSaveFailure(Throwable failure) {
+        String action = retrySaveId == null ? "Retry lesson" : "Edit selected";
+        String message = FarmUi.actionableError("Saving farm knowledge", failure)
+                + " The complete lesson draft was kept; choose " + action
+                + " to review and retry.";
+        FarmUi.updateStatusBadge(statusBadge,
+                "Farm lesson not saved · draft kept", FarmUi.Tone.DANGER);
+        statusBadge.setToolTipText(message);
+        statusBadge.getAccessibleContext().setAccessibleDescription(message);
+        if (host != null) {
+            host.setStatus(message);
+        }
+    }
+
     private void updateActions() {
         boolean ready = !loading && !saving;
+        if (recordButton != null) {
+            String label = savingDraft ? "Saving lesson…"
+                    : retrySaveDraft != null && retrySaveId == null
+                    ? "Retry lesson" : "Record a lesson";
+            recordButton.setText(label);
+            recordButton.setToolTipText(retrySaveDraft != null && retrySaveId == null
+                    ? "Review the complete lesson retained after the failed save."
+                    : "Record an observation, action, result, and follow-up for the farm.");
+            recordButton.getAccessibleContext().setAccessibleDescription(
+                    recordButton.getToolTipText());
+        }
         GuiPermissions.setWritable(canWrite && ready, recordButton);
         GuiPermissions.setWritable(canWrite && ready && selectedEntry() != null,
                 editButton, deleteButton);
@@ -697,7 +761,15 @@ public class KnowledgeLogTab implements FlowerFarmTab {
             GridBagConstraints left = constraints(0, row);
             left.anchor = GridBagConstraints.NORTHWEST;
             left.insets = new Insets(6, 4, 2, 10);
-            panel.add(new JLabel(label), left);
+            Component target = field instanceof JScrollPane scroll
+                    ? scroll.getViewport().getView() : field;
+            if (target instanceof JComponent component) {
+                component.getAccessibleContext().setAccessibleName(
+                        label.replace(" *", "").trim());
+            }
+            JLabel caption = new JLabel(label);
+            caption.setLabelFor(target);
+            panel.add(caption, left);
             GridBagConstraints right = constraints(1, row);
             right.weightx = 1;
             right.fill = GridBagConstraints.HORIZONTAL;

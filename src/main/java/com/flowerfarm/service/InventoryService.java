@@ -1,5 +1,6 @@
 package com.flowerfarm.service;
 
+import com.flowerfarm.model.FarmProfile;
 import com.flowerfarm.model.Item;
 import com.flowerfarm.repository.InventoryRepository;
 import com.flowerfarm.util.CsvSupport;
@@ -45,15 +46,18 @@ public class InventoryService {
     private final String seedCsvPath;
     private final InventoryReportGenerator reportGenerator;
     private final InventoryCsvExporter csvExporter;
+    private final FarmProfile farmProfile;
 
     public InventoryService(
             InventoryRepository repository,
             @Value("${flowerfarm.inventory.seed-csv:farm_inventory.csv}") String seedCsvPath,
             InventoryReportGenerator reportGenerator,
-            InventoryCsvExporter csvExporter) {
+            InventoryCsvExporter csvExporter,
+            FarmProfile farmProfile) {
         this.repository = repository;
         this.reportGenerator = reportGenerator;
         this.csvExporter = csvExporter;
+        this.farmProfile = farmProfile;
         this.seedCsvPath = seedCsvPath == null || seedCsvPath.isBlank()
                 ? "farm_inventory.csv"
                 : seedCsvPath.trim();
@@ -183,6 +187,37 @@ public class InventoryService {
         existing.copyBusinessFieldsFrom(newItem);
         Item saved = repository.save(existing);
         log.debug("Updated item id={}", id);
+        return saved;
+    }
+
+    /**
+     * Replaces one on-hand quantity only when the worker's reviewed quantity is
+     * still current. The row lock prevents harvest, fulfillment, imports, or a
+     * second count from being silently overwritten between review and commit.
+     */
+    @Transactional
+    public synchronized Item recordPhysicalCount(
+            Long id, int reviewedQuantity, int countedQuantity) {
+        if (id == null || id <= 0) {
+            throw new IllegalArgumentException("Inventory item id must be positive.");
+        }
+        if (reviewedQuantity < 0) {
+            throw new IllegalArgumentException("Reviewed quantity cannot be negative.");
+        }
+        if (countedQuantity < 0) {
+            throw new IllegalArgumentException("Counted quantity cannot be negative.");
+        }
+        Item item = repository.findByIdForUpdate(id)
+                .orElseThrow(() -> new IndexOutOfBoundsException(
+                        "No inventory item with id=" + id));
+        if (item.getQuantity() != reviewedQuantity) {
+            throw new InventoryCountConflictException(item.getName(), item.getQuantity());
+        }
+        item.setQuantity(countedQuantity);
+        Item saved = repository.save(item);
+        log.info("Recorded physical count for inventory '{}' id={}: {} -> {} {}",
+                saved.getName(), saved.getId(), reviewedQuantity,
+                saved.getQuantity(), saved.getUnit());
         return saved;
     }
 
@@ -458,7 +493,7 @@ public class InventoryService {
         }
         String text = formatLowStockText(t, all.size(), lines, costTotal);
         return new LowStockReport(
-                LocalDate.now(),
+                LocalDate.now(farmProfile.zoneId()),
                 t,
                 all.size(),
                 lines.size(),
@@ -562,7 +597,7 @@ public class InventoryService {
         }
         String text = formatPriceListText(inStockOnly, lines, sell, cost, units);
         return new PriceListReport(
-                LocalDate.now(),
+                LocalDate.now(farmProfile.zoneId()),
                 lines.size(),
                 units,
                 sell,
@@ -577,12 +612,13 @@ public class InventoryService {
         return reportGenerator.generatePriceListPdf(report);
     }
 
-    private static String formatPriceListText(boolean inStockOnly, List<PriceListLine> lines,
-                                              double sell, double cost, int units) {
+    private String formatPriceListText(boolean inStockOnly, List<PriceListLine> lines,
+                                       double sell, double cost, int units) {
         StringBuilder sb = new StringBuilder();
-        sb.append("PRICE LIST — Port Orchard / Kitsap County\n");
+        sb.append(farmProfile.documentBanner("Price List").toUpperCase(Locale.ROOT))
+                .append('\n');
         sb.append("═══════════════════════════════════════\n");
-        sb.append("Date: ").append(LocalDate.now())
+        sb.append("Date: ").append(LocalDate.now(farmProfile.zoneId()))
                 .append(inStockOnly ? "  ·  In-stock only" : "  ·  All SKUs")
                 .append('\n');
         sb.append(String.format(Locale.US,
@@ -610,12 +646,13 @@ public class InventoryService {
         return sb.toString();
     }
 
-    private static String formatLowStockText(int threshold, int skuCount,
-                                             List<LowStockLine> lines, double costTotal) {
+    private String formatLowStockText(int threshold, int skuCount,
+                                      List<LowStockLine> lines, double costTotal) {
         StringBuilder sb = new StringBuilder();
-        sb.append("LOW-STOCK REORDER — Port Orchard / Kitsap County\n");
+        sb.append(farmProfile.documentBanner("Low-Stock Reorder").toUpperCase(Locale.ROOT))
+                .append('\n');
         sb.append("═══════════════════════════════════════════════\n");
-        sb.append("Date: ").append(LocalDate.now())
+        sb.append("Date: ").append(LocalDate.now(farmProfile.zoneId()))
                 .append("  ·  Threshold: ≤ ").append(threshold)
                 .append("  ·  SKUs total: ").append(skuCount).append('\n');
         sb.append(String.format(Locale.US,

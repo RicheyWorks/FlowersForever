@@ -1,5 +1,6 @@
 package com.flowerfarm.service;
 
+import com.flowerfarm.model.FarmProfile;
 import com.flowerfarm.model.SyncHistoryEntry;
 import com.flowerfarm.repository.SyncHistoryRepository;
 import com.flowerfarm.util.CsvSupport;
@@ -24,7 +25,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.awt.Color;
 import java.io.ByteArrayOutputStream;
 import java.time.LocalDate;
-import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -46,9 +46,14 @@ public class SyncHistoryService {
     private static final int MAX_LIMIT = 500;
 
     private final SyncHistoryRepository repository;
+    private final FarmProfile farmProfile;
+    private final DateTimeFormatter whenFormatter;
 
-    public SyncHistoryService(SyncHistoryRepository repository) {
+    public SyncHistoryService(SyncHistoryRepository repository, FarmProfile farmProfile) {
         this.repository = repository;
+        this.farmProfile = farmProfile;
+        this.whenFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
+                .withZone(farmProfile.zoneId());
     }
 
     @Transactional
@@ -195,10 +200,6 @@ public class SyncHistoryService {
         }
     }
 
-    private static final ZoneId PNW = ZoneId.of("America/Los_Angeles");
-    private static final DateTimeFormatter WHEN =
-            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm").withZone(PNW);
-
     public record AuditReport(
             LocalDate generatedOn,
             String scopeLabel,
@@ -241,7 +242,8 @@ public class SyncHistoryService {
         HistoryStats s = stats(rows);
         String scope = scopeLabel == null || scopeLabel.isBlank() ? "Current view" : scopeLabel.trim();
         String text = formatAuditText(scope, s, rows);
-        return new AuditReport(LocalDate.now(PNW), scope, s.total(), s.ok(), s.fail(), rows, text);
+        return new AuditReport(LocalDate.now(farmProfile.zoneId()), scope,
+                s.total(), s.ok(), s.fail(), rows, text);
     }
 
     /**
@@ -290,7 +292,7 @@ public class SyncHistoryService {
             PdfPTable bannerTable = new PdfPTable(1);
             bannerTable.setWidthPercentage(100);
             PdfPCell bannerCell = new PdfPCell(new Phrase(
-                    "FlowersForever  ·  Port Orchard / Kitsap  ·  Audit History",
+                    farmProfile.documentBanner("Audit History"),
                     banner));
             bannerCell.setBackgroundColor(brandGreen);
             bannerCell.setPadding(10);
@@ -322,7 +324,7 @@ public class SyncHistoryService {
             } else {
                 PdfPTable t = new PdfPTable(new float[]{1.6f, 1.2f, 1.3f, 0.7f, 0.7f, 3.0f});
                 t.setWidthPercentage(100);
-                headerCell(t, "When (PNW)");
+                headerCell(t, "When (local)");
                 headerCell(t, "Source");
                 headerCell(t, "Op");
                 headerCell(t, "OK?");
@@ -330,7 +332,8 @@ public class SyncHistoryService {
                 headerCell(t, "Message");
                 for (SyncHistoryEntry e : report.entries()) {
                     Color bg = e.isSuccess() ? Color.WHITE : failSoft;
-                    String when = e.getOccurredAt() == null ? "" : WHEN.format(e.getOccurredAt());
+                    String when = e.getOccurredAt() == null
+                            ? "" : whenFormatter.format(e.getOccurredAt());
                     t.addCell(cell(when, body, bg));
                     t.addCell(cell(e.getConnectorName(), body, bg));
                     t.addCell(cell(e.getOperation(), body, bg));
@@ -347,10 +350,9 @@ public class SyncHistoryService {
             doc.add(Chunk.NEWLINE);
             doc.add(new Paragraph(
                     "Sources include connectors (farmbrite, shopify…), crm, harvest. "
-                            + "Failures are highlighted for barn troubleshooting.",
+                            + "Failures are highlighted for farm troubleshooting.",
                     small));
-            doc.add(new Paragraph(
-                    "FlowersForever · practical tools for PNW flower growers", small));
+            doc.add(new Paragraph(farmProfile.softwareFooter(), small));
 
             doc.close();
             log.info("Generated audit history PDF (total={}, fail={})", report.total(), report.fail());
@@ -360,11 +362,12 @@ public class SyncHistoryService {
         }
     }
 
-    private static String formatAuditText(String scope, HistoryStats s, List<SyncHistoryEntry> rows) {
+    private String formatAuditText(String scope, HistoryStats s, List<SyncHistoryEntry> rows) {
         StringBuilder sb = new StringBuilder();
-        sb.append("OPS AUDIT HISTORY — Port Orchard / Kitsap County\n");
+        sb.append(farmProfile.documentBanner("Ops Audit History").toUpperCase(Locale.ROOT))
+                .append('\n');
         sb.append("═══════════════════════════════════════════════\n");
-        sb.append("Generated: ").append(LocalDate.now(PNW)).append('\n');
+        sb.append("Generated: ").append(LocalDate.now(farmProfile.zoneId())).append('\n');
         sb.append("Scope: ").append(scope).append('\n');
         sb.append(String.format(Locale.US, "Total: %d  ·  OK: %d  ·  FAIL: %d%n",
                 s.total(), s.ok(), s.fail()));
@@ -376,7 +379,8 @@ public class SyncHistoryService {
                     "When", "Source", "Op", "OK?", "Message"));
             sb.append("-".repeat(72)).append('\n');
             for (SyncHistoryEntry e : rows) {
-                String when = e.getOccurredAt() == null ? "" : WHEN.format(e.getOccurredAt());
+                String when = e.getOccurredAt() == null
+                        ? "" : whenFormatter.format(e.getOccurredAt());
                 sb.append(String.format(Locale.US, "%-16s %-12s %-12s %-5s %s%n",
                         truncate(when, 16),
                         truncate(e.getConnectorName(), 12),

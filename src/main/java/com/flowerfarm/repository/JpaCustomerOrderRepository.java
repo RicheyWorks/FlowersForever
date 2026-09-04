@@ -1,6 +1,7 @@
 package com.flowerfarm.repository;
 
 import com.flowerfarm.model.CustomerOrder;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDate;
@@ -30,6 +31,17 @@ public class JpaCustomerOrderRepository implements CustomerOrderRepository {
     @Override
     public List<CustomerOrder> findByCustomer(Long customerId) {
         return jpa.findByCustomerIdOrderByOrderDateDescIdDesc(customerId);
+    }
+
+    @Override
+    public List<CustomerOrder> findConfirmedDueThrough(LocalDate throughDate, int limit) {
+        return jpa.findByStatusIgnoreCaseAndOrderDateLessThanEqualOrderByOrderDateAscIdAsc(
+                "CONFIRMED", throughDate, PageRequest.of(0, limit));
+    }
+
+    @Override
+    public long countConfirmedDueThrough(LocalDate throughDate) {
+        return jpa.countByStatusIgnoreCaseAndOrderDateLessThanEqual("CONFIRMED", throughDate);
     }
 
     @Override

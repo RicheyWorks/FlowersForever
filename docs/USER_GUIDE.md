@@ -1,4 +1,4 @@
-# Flower Farm Manager desktop guide
+# FlowersForever desktop guide
 
 This guide follows the everyday desktop workflow: check the farm, record the
 morning cut, prepare customer orders, pack for market, and close the day.
@@ -14,6 +14,75 @@ morning cut, prepare customer orders, pack for market, and close the day.
 
 Open **Account → My access** at any time to review the current role. In local
 mode the app provides full OWNER access.
+
+## Phone/tablet field work
+
+An authenticated server deployment also serves a responsive field screen at
+`https://<farm-server>/worker/`. OWNER and HAND accounts can record work;
+VIEWER accounts can review the screen but cannot submit changes.
+
+The two large actions at the top start new records: **Log a harvest** and
+**Add a field note**. They open the input form above the work lists so you can
+record what just happened without scrolling through the day's tasks first.
+
+For a field note, enter **What did you notice?** Crop and bed are optional.
+Expand **Date, type, and follow-up** when you need a different observation date,
+problem/opportunity type, action taken, or follow-up. Saved notes appear in the
+shared desktop Knowledge Log. They do not need a harvest or production task.
+A queued note keeps its operation key through retries, so a lost response does
+not create another copy. The recent-note list provides a way to read back what
+the farm has received.
+
+Use **Work date** to load incomplete production tasks due that day or earlier.
+Open a task, enter crew minutes, input cost, and the field result, then choose
+**Record completed work**. The completed task leaves the due list and the same
+actuals are immediately available to the desktop app, REST API, and AI
+`farm-data` tools.
+
+To preserve field evidence, choose or take an optional **Field photo** before
+recording the work and add a short caption describing what the farm or AI should
+notice. JPEG, PNG, WebP, HEIC, and HEIF images up to 15 MiB are accepted. The
+device queues the photo before the completion, and the server verifies its type,
+size, and SHA-256 before saving it. If the connection fails, both entries remain
+visible under **Pending on this device** and replay in that order after reconnect.
+
+Use **Due handoffs** for Confirmed Pickup, Delivery, and Market orders dated on
+or before the selected work date. Each card shows the customer contact, account
+delivery note, order instructions, and every product quantity without exposing
+prices. Choose **Review handoff**, verify that the physical handoff and complete
+load actually left the farm, then choose **Complete handoff & deduct stock**.
+FlowersForever marks the order Fulfilled, deducts matching inventory, and makes
+both results immediately visible to desktop and AI `farm-data` reads. If the
+customer, date, handoff type, instructions, or product load changed after the
+card loaded, the pending entry stays on the device and the current order must be
+reviewed before retrying. If another worker already completed the same unchanged
+load, retry reconciliation clears the device entry without deducting stock again.
+
+Use **Log a harvest** for crop, quantity, unit, bed or field, and notes. A saved
+harvest updates the normal Harvest Log and matching inventory record. Each
+submission receives one device-generated operation key. If a response is lost,
+FlowersForever recovers the committed result instead of recording it twice.
+
+Use **Count inventory** to search by product or category. Each card shows the
+system quantity that the count is based on. Enter the whole-number physical
+quantity and choose **Save count**. If inventory changed after the card loaded,
+FlowersForever does not overwrite it: the card refreshes, keeps the entered
+count in this device's pending queue, and asks you to review and retry. Choose
+**Discard pending** only when that device copy is no longer needed. Saved counts
+appear immediately in desktop Inventory and AI `farm-data` inventory reads;
+cost and notes are not returned to the field count screen.
+
+When the server cannot be reached, the entry stays in this browser's pending
+queue. Reopen the screen, restore the connection, or choose **Retry now** to
+continue. A queued task is locked on that device so it cannot be submitted a
+second time under a new key; a queued stock count can be reviewed, updated, or
+discarded from its product card, and a queued order handoff can be reviewed or
+discarded from its order card. **Pending on this device** also lists every queued
+photo, harvest, field note, task, count, and handoff with an explicit discard action. Keep the
+pending count at zero before clearing site data, changing browsers, or retiring
+a device; photo bytes and queue metadata belong to that browser profile. Installation and offline
+shell caching require HTTPS (or localhost), but queued submissions retry whenever
+the loaded page can reach the server.
 
 ## Start the morning
 
@@ -89,6 +158,13 @@ variety, bed or field, sow and optional transplant dates, expected harvest
 window, bed length, and expected stems. Direct-sown crops can leave the
 transplant date blank.
 
+You can also begin in **Reference & Planning → PNW Plant Guide**. Filter the
+sourced profiles, select one row, and choose **Plan selected crop**. The normal
+planting form opens with the common crop name and a concise source block in
+Notes. FlowersForever does not treat the scientific name as a cultivar and does
+not guess the bed, dates, spacing, or expected stems. Confirm those farm-owned
+values before saving; cancelling leaves the reference and season plan unchanged.
+
 The **Visual timeline** shows every saved block across the year: gold for sowing
 or propagation, blue for growing, and an outlined green harvest plan. Solid
 green fills that outline as matching stem harvests are recorded. A harvest only
@@ -121,6 +197,13 @@ today, so you can distinguish an unfinished season from one that is genuinely
 behind pace. Unmatched harvests and units other than stems are not added to the
 green bars.
 
+Open **Availability outlook** to read expected stems by Monday-based crop week.
+Each planting target is allocated in proportion to the days where its harvest
+window overlaps that week, and matching crop/variety blocks are combined. Choose
+**Copy planning availability** for a tab-separated summary suitable for a buyer
+conversation or spreadsheet. This is planned supply, not a reservation: check
+the live Inventory and committed orders before promising stems.
+
 Open **Plan insights** for a guided review instead of decoding the summary
 counts alone. Color-coded cards name the exact crops, beds, and dates involved
 in each bed overlap or harvest gap, show which planting blocks are behind their
@@ -128,15 +211,116 @@ expected-to-date pace, and total stem harvests that do not match the plan. Use
 the action on a card to jump to the relevant Plan records row or Harvest Log.
 An all-clear state appears when none of those signals needs attention.
 
+### Build production from farm-owned assumptions
+
+Open **Reference & Planning → Production studio → Frost & crop templates**.
+Save the season's last-spring-frost and first-fall-frost anchors from the farm's
+own weather station, extension guidance, or reviewed estimate. Save the loaded
+field-labor hourly rate beside those anchors; it can include wage, payroll burden,
+and other labor assumptions the farm chooses to count. Existing seasons begin at
+zero until the farm reviews this value. Then save crop
+templates with spacing, rows per bed, sow and transplant offsets from spring
+frost, sow-to-harvest days, harvest window, succession interval, germination,
+stems per viable plant, and task offsets. These values are farm records; the app
+does not silently replace them with a generic regional schedule.
+Changing to a season without saved anchors clears the previous season's values
+and shows dated farm-estimate defaults for review, so an older year's frost dates
+cannot silently remain in the form. Saving anchors also selects that year in the
+schedule builder.
+
+Open **Plantings & work**, select a template, and enter the bed, bed feet, season,
+and number of successions. **Preview schedule** shows every sow, transplant, and
+harvest window, the plant-site and viable-plant math, expected stems, and any
+first-fall-frost warning. **Commit plan & tasks** first reviews the exact block,
+stem, warning, and generated-work impact so a double submission is not silent.
+After confirmation it creates ordinary Season Planner blocks plus soil-prep, sow,
+transplant, support, harvest-prep, and first-harvest work. The work queue defaults
+to open items, labels overdue/today/upcoming timing, and can mark a task done,
+skipped, or reopened. Regeneration removes only open generated work; completed,
+skipped, and custom work remain part of the farm record. An exact duplicate block
+is rejected at the shared service boundary even when submitted through REST, and
+regeneration locks the plan and verifies that the selected template created its
+work. Reopen a done or skipped task before switching it to the other final state.
+Templates that already own generated work cannot be deleted because those saved
+assumptions are required to reproduce the task chain.
+Changing the template, year, bed, bed feet, or succession count clears an older
+preview and asks for a fresh calculation. Task actions activate only when the
+selected row supports them: open work can be completed or skipped, final work can
+be reopened, and linked generated work can be regenerated. Regeneration has its
+own impact confirmation before open work is replaced.
+To finish real field work, select its row and enter total **Labor min**, the
+task-specific **Input cost**, and a concise **Field result**. **Save actuals +
+done** stores those values and the completion time on the exact plan-linked task.
+Select a completed row to correct its actuals. Skipped work must be reopened
+before actuals can be entered. Reopening does not erase earlier labor, cost, or
+field evidence, and regeneration preserves any task that still contains those
+actuals.
+
+Open **Economics & handoffs → Production costs** and choose the season. The
+report groups task actuals by their exact planting-plan ID, applies the saved
+loaded labor rate, and combines labor plus direct input cost. The same planting
+rows show expected stems, harvests matched by crop/bed/date, cost per expected
+stem, and cost per matched harvested stem. The season summary keeps missing
+actuals, calendar-year work without a planting link, and harvests that could not
+be matched visible. These totals intentionally exclude sales revenue because an
+order product name does not yet prove which planting block supplied it.
+The confirmation is also bound to the exact preview. If frost anchors or template
+assumptions change between review and commit, nothing is written and the app asks
+you to preview the updated dates, yield, and warning first. REST clients receive
+the same preview token as an `ETag`; send it back with `If-Match` (or as
+`previewFingerprint`) when committing.
+
+Open **Design recipes** for a bouquet, event design, subscription, or wholesale
+pack. Each ingredient line uses `Item | stems/design | pack size | pack cost`.
+The saved recipe also owns its sale price, labor minutes and hourly rate,
+overhead, waste, and notes. In **Economics & handoffs → Recipe profitability**,
+choose a fulfillment date and quantity. FlowersForever first allocates matching
+live inventory and that week's planned crop supply, then rounds the remaining
+shortage to complete wholesale packs and reports leftovers. The result keeps
+flower cost, labor, overhead, revenue, profit, margin, and markup distinct.
+It also shows per-design cost, profit, and break-even sale price. Recipe and crop
+template selections stay in place across refreshes, saved frost anchors reload
+with the selected year, and a double-click on a library row opens it for editing.
+
+**Planned + live availability** is a sales planning view, not a reservation. It
+omits completed crop plans and empty inventory-only rows so stale supply does not
+inflate the sellable list. Review confirmed orders before promising those stems.
+**External handoffs**
+records the provider, status, amount, related order/recipe, and external
+reference for contract, payment, or marketplace work. It deliberately stores
+no card/bank credentials, signature data, access tokens, or substitute legal
+contract text; finish and verify those actions in the selected provider.
+Sent, accepted, and paid records require an external provider reference. A
+provider reference cannot be reused for the same handoff type, linked order and
+recipe identifiers must exist when recorded, payment amounts must be positive,
+and currency uses a three-letter code.
+Status choices follow the selected workflow: contracts can be accepted, payments
+can be paid, and every workflow can be marked failed or cancelled. Semantically
+invalid combinations, such as a paid marketplace handoff, are also rejected at
+the shared service boundary. The handoff ledger shows both related order and
+recipe identifiers.
+After a handoff is recorded, transaction-specific fields clear to reduce the risk
+of submitting the same reference twice. The status strip at the bottom of every
+Production Studio workspace keeps success, warning, and failure feedback visible.
+
 ## Record a harvest
 
-Open **Harvest Log**. For one cut, complete the date, crop, quantity, unit, and
-optional bed and notes, then choose **Add harvest**. Quantity starts at `1`, and
-inventory increases automatically. The form badge distinguishes a new entry,
+Open **Harvest Log**. For one cut, complete the date, crop, marketable quantity,
+unit, and optional bed, lot code, grade, loss/culls, storage location, and notes,
+then choose **Add harvest**. Quantity starts at `1`, and only marketable quantity
+increases inventory. Leave the lot blank when FlowersForever should assign a
+unique code. The form badge distinguishes a new entry,
 a loaded edit, and a copied entry; pressing `Enter` in Notes submits the correct
 add-or-save action. **Keep harvest context** is on by default for repeated cuts:
-after a save it retains the date, crop, unit, and bed while resetting quantity
-to `1` and clearing notes. Turn it off when the next cut is unrelated.
+after a save it retains the date, crop, unit, bed, grade, and storage while
+resetting quantity to `1`, loss/culls to `0`, and clearing the lot and notes.
+Turn it off when the next cut is unrelated.
+
+The history table keeps marketable quantity, loss/culls, grade, lot, and storage
+separate so unusable stems never inflate stock. Select a row and use **Export
+selected lot label** to save a printable 4×6 PDF. Its QR code identifies the
+exact lot; the printed text remains usable when a camera or scanner is not
+available. Lot codes are case-insensitive and must be unique.
 
 If a crop name has no matching Inventory product, harvest logging creates the
 SKU so the cut is not lost, but its price and cost start at zero. The Harvest
@@ -220,7 +404,9 @@ current.
 
 The **Reports & exports** menu uses the currently reviewed date range or visible
 harvest rows. CSV exports, bed-production grouping, printable harvest-log
-assembly, and PDF rendering run in the background. Report controls lock while
+assembly, lot-label generation, and PDF rendering run in the background. CSV
+and harvest reports include the traceability fields and separate marketable,
+loss, and gross quantities. Report controls lock while
 one captured job is running, preventing duplicate files or competing database
 queries. The header reports progress and the final row/bed count. A failure
 keeps the harvest rows, filters, selection, and entry form intact with a visible
@@ -1030,6 +1216,16 @@ a new product; price and cost start at `0.00`, and quantity starts at `0`. Edit
 opens the complete item in one dialog, so a validation error never loses changes
 already made to other fields.
 
+For faster setup, choose a common entry from **Product starter** and select
+**Use starter**. Flower starters fill only safe catalog facts such as product
+name, Flowers/Plants category, and selling unit; they never invent a price,
+cost, or opening quantity and never replace a name already typed. The Nootka
+rose starter selects its rose variety explicitly. Other flowers default to
+**Not a rose / unspecified**, preventing an unrelated rose type from being
+saved on dahlias, peonies, sunflowers, bouquets, or buckets. The live cards
+beside the form preview gross profit per unit, gross margin, and opening sell
+value while price, cost, and quantity are entered.
+
 Add and Edit enforce the same domain limits before saving. An out-of-range price
 or cost, overlong name/category/unit/notes value, or invalid quantity highlights
 the exact field while every other entered value remains in place for correction.
@@ -1071,11 +1267,64 @@ products. Search can narrow that queue further without turning the mode off.
 Open **Reports** to create the standard seven-day report or a custom inclusive
 date range. Dates use `YYYY-MM-DD`. The live period summary confirms the number
 of included days and keeps **Create selected report** unavailable until both
-dates form a valid range of no more than ten years. Report generation runs in
-the background, so other farm tabs stay responsive. Failures remain visible in
-the report workspace with a retry instruction. A missing `.pdf` extension is
-added automatically, and replacing an existing file requires confirmation;
-cancelling the save or replacement never overwrites the existing file.
+dates form a valid range of no more than ten years. Choose **Preview range** to
+verify harvest logs, orders, committed revenue, and fulfilled revenue before
+creating a file. **Products** ranks confirmed and fulfilled sales by product
+and selling unit, including quantity, order count, average unit price, committed
+revenue, and fulfilled revenue. **Customers** compares order count, average
+order value, and revenue for the same period. Draft and cancelled orders do not
+inflate either ranking. These tables are also included in the PDF. Report
+generation runs in the background, so other farm tabs stay responsive. Failures
+remain visible in the report workspace with a retry instruction. A missing
+`.pdf` extension is added automatically, and replacing an existing file requires
+confirmation; cancelling the save or replacement never overwrites the existing
+file.
+
+In **Reference → Plant guide**, search 94 Pacific Northwest native plants,
+fruit and berries, vegetables, cut flowers, bulbs, herbs, and climate-ready
+ornamentals. Combine **Type**, **Origin**, and **Light** filters, then select a
+row to read its moisture, season, uses, field note, and public source URL. The
+**Research library** includes WSU Extension and Master Gardener material, Oregon
+State University Extension publications, University of Washington Botanic
+Gardens resources, and The Evergreen State College's teaching garden. The guide
+is regional reference material, not a substitute for cultivar confirmation,
+site assessment, positive edible-plant identification, or current pest advice.
+
+The same read-only catalog is available to local integrations at
+`GET /api/plants`. Use `q`, `type`, and `nativeOnly=true` to filter it. Use
+`GET /api/plants/sources` to list the public research library. See the
+[competitive and source research](COMPETITIVE_RESEARCH.md) for the product gap
+analysis and editorial policy.
+
+In **Reference → Event services**, search and filter wedding,
+memorial/funeral, and any-event starters across floral design, catering, décor
+and rentals, photography and media, logistics, and coordination. Select one or
+Ctrl/Cmd-click several rows. The right panel keeps deliverables, discovery
+questions, an operations checklist, privacy/safety guidance, and the official
+workflow source visible.
+
+Use **Build selected-service brief** after entering any known event/family,
+date, venue, and guest-count context. The editable brief combines the chosen
+scope with final confirmation prompts for contacts, approvals, catering,
+photos, setup, strike, rentals, and privacy. **Copy brief** leaves it on the
+clipboard. **Start CRM order brief** opens new-order mode and places the brief
+in order instructions only when that field is blank; an unrelated unfinished
+brief is never overwritten. Add flowers and other physical goods as ordinary
+CRM product lines. Catering, photography, coordination, and other non-stock
+vendor responsibilities remain in the instructions so completing the order
+cannot deduct imaginary service inventory.
+
+Memorial photography and tribute-media starters default to private, require a
+named family decision maker and venue/funeral-home approval, and never assume
+permission for portfolio or social use. Catering prompts require an
+appropriately licensed provider; confirm food safety, allergen controls,
+permits, insurance, and venue requirements directly with that provider.
+
+Local integrations can search the same read-only catalog at
+`GET /api/event-services` with `q`, `occasion`, and `category` filters. Use
+`GET /api/event-services/sources` for the official product and professional
+source library. The [competitive and source research](COMPETITIVE_RESEARCH.md)
+explains the workflow choices and dignity policy.
 
 In **Reference → Rose Visualizer**, the inventory-product selector reloads in
 the background so an app-wide refresh does not interrupt other farm work. If a
@@ -1171,7 +1420,16 @@ the product draft itself should also be discarded.
 ## Keyboard use
 
 - `F5` refreshes the desktop.
+- `Alt+F`, `Alt+V`, `Alt+T`, `Alt+A`, and `Alt+H` open the File, View,
+  Tools, Account, and Help menus. Underlined menu items provide the next key.
+- `Ctrl+Shift+D` toggles dark mode, `Ctrl+Shift+M` opens My access, and `F1`
+  opens the sourced PNW Plant Guide. The Rose Growing Guide remains in Help.
+- **Help → Wedding & Memorial Services** opens the event-service catalog and
+  brief builder.
 - `Alt+1` through `Alt+9` opens the corresponding navigation item.
+- Opening a primary workflow or switching an Inventory or Reference subtab moves
+  focus to that screen's preferred first control, including when the outer
+  workspace was already selected.
 - Underlined field labels expose `Alt` keyboard mnemonics.
 - In Customers & Orders, `F6` moves between the order list and Product entry.
   Each destination is scrolled into view on compact screens and announced in the

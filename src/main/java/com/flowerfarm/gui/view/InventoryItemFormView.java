@@ -6,7 +6,6 @@ import com.flowerfarm.model.Item;
 
 import javax.swing.JComboBox;
 import javax.swing.JComponent;
-import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JTextField;
 import java.awt.GridBagConstraints;
@@ -18,6 +17,8 @@ import java.util.Map;
 /** Reusable inventory-item form for both creation and editing. */
 public final class InventoryItemFormView extends JPanel {
 
+    private static final String NO_ROSE_VARIETY = "Not a rose / unspecified";
+
     private static final String[] CATEGORIES = {
             "Flowers/Plants", "Fertilizers", "Pest Control",
             "Tools/Equipment", "Rentals", "Gas/Fuel", "Other"
@@ -26,6 +27,7 @@ public final class InventoryItemFormView extends JPanel {
             "Per Stem", "Per Weight (lb)", "Per Unit", "Per Gallon", "Per Hour"
     };
     private static final String[] ROSE_TYPES = {
+            NO_ROSE_VARIETY,
             "Alba", "Damask", "Gallicas", "Centifolia", "Moss", "Bourbon",
             "Hybrid Perpetual", "Portland", "Nootka", "Rosa rugosa",
             "New Dawn", "Queen Elizabeth"
@@ -41,6 +43,7 @@ public final class InventoryItemFormView extends JPanel {
     private final JTextField notesField = new JTextField(28);
     private final Map<String, JComponent> fields = new LinkedHashMap<>();
     private Runnable validationCorrectionListener = () -> { };
+    private Runnable draftChangeListener = () -> { };
 
     public InventoryItemFormView() {
         super(new GridBagLayout());
@@ -62,24 +65,31 @@ public final class InventoryItemFormView extends JPanel {
         register("quantity", quantityField, "Inventory quantity");
         register("notes", notesField, "Item notes");
         FarmUi.initialFocus(nameField);
+        FarmUi.entryControl(nameField, "e.g. Café au Lait dahlia", "Use the product name your crew and customers recognize.");
+        FarmUi.entryControl(categoryBox, "", "Choose a category or type your own.");
+        FarmUi.entryControl(roseBox, "", "Optional; choose a variety only for rose products.");
+        FarmUi.entryControl(unitBox, "", "Choose a selling unit or type your own, such as Per Bunch.");
+        FarmUi.entryControl(quantityField, "0", "Whole units on hand now. Start at zero if the crop is not ready.");
+        FarmUi.entryControl(priceField, "0.00", "Your selling price for one unit. Zero is allowed while planning.");
+        FarmUi.entryControl(costField, "0.00", "Your cost for one unit; used in the margin preview.");
+        FarmUi.entryControl(notesField, "e.g. Cooler 2 · Friday market", "Optional growing, storage, or packing notes.");
 
         GridBagConstraints constraints = new GridBagConstraints();
-        constraints.insets = new Insets(1, 5, 1, 5);
+        constraints.insets = new Insets(0, 5, 9, 5);
         constraints.fill = GridBagConstraints.HORIZONTAL;
         constraints.anchor = GridBagConstraints.WEST;
-        int row = 0;
-        addField(constraints, row++, "Item name *", nameField, 'N');
-        addField(constraints, row++, "Category *", categoryBox, 'C');
-        addField(constraints, row++, "Rose variety", roseBox, 'R');
-        addField(constraints, row++, "Selling price ($) *", priceField, 'P');
-        addField(constraints, row++, "Sold by *", unitBox, 'U');
-        addField(constraints, row++, "Cost per unit ($) *", costField, 'O');
-        addField(constraints, row++, "Quantity *", quantityField, 'Q');
-        addField(constraints, row++, "Notes", notesField, 'T');
+        addField(constraints, 0, 0, 1, "Item name *", nameField, 'N');
+        addField(constraints, 0, 1, 1, "Category *", categoryBox, 'C');
+        addField(constraints, 1, 0, 1, "Quantity on hand *", quantityField, 'Q');
+        addField(constraints, 1, 1, 1, "Sold by *", unitBox, 'U');
+        addField(constraints, 2, 0, 1, "Selling price ($) *", priceField, 'P');
+        addField(constraints, 2, 1, 1, "Cost per unit ($) *", costField, 'O');
+        addField(constraints, 3, 0, 1, "Notes · optional", notesField, 'T');
+        addField(constraints, 3, 1, 1, "Rose variety · optional", roseBox, 'R');
         JPanel verticalFiller = new JPanel();
         verticalFiller.setOpaque(false);
         constraints.gridx = 0;
-        constraints.gridy = row;
+        constraints.gridy = 4;
         constraints.gridwidth = 2;
         constraints.weighty = 1;
         constraints.fill = GridBagConstraints.BOTH;
@@ -90,7 +100,7 @@ public final class InventoryItemFormView extends JPanel {
     public InventoryItemPresenter.ItemDraft draft() {
         return new InventoryItemPresenter.ItemDraft(
                 nameField.getText(), selectedText(categoryBox),
-                roseBox.isEnabled() ? selectedText(roseBox) : "",
+                selectedRoseVariety(),
                 priceField.getText(), selectedText(unitBox), costField.getText(),
                 quantityField.getText(), notesField.getText());
     }
@@ -109,6 +119,8 @@ public final class InventoryItemFormView extends JPanel {
             String variety = separator < 0 ? notes.substring(6) : notes.substring(6, separator);
             roseBox.setSelectedItem(variety.trim());
             notes = separator < 0 ? "" : notes.substring(separator + 1).trim();
+        } else {
+            roseBox.setSelectedItem(NO_ROSE_VARIETY);
         }
         notesField.setText(notes);
         updateRoseAvailability();
@@ -122,7 +134,8 @@ public final class InventoryItemFormView extends JPanel {
         clearValidation();
         nameField.setText(draft.name());
         categoryBox.setSelectedItem(draft.category());
-        roseBox.setSelectedItem(draft.roseVariety());
+        roseBox.setSelectedItem(draft.roseVariety() == null || draft.roseVariety().isBlank()
+                ? NO_ROSE_VARIETY : draft.roseVariety());
         priceField.setText(draft.price());
         unitBox.setSelectedItem(draft.unit());
         costField.setText(draft.cost());
@@ -181,19 +194,18 @@ public final class InventoryItemFormView extends JPanel {
 
     public void clearValidation() {
         for (JComponent component : fields.values()) {
-            if (component instanceof JTextField textField) {
-                FarmUi.clearFieldError(textField);
-            } else {
-                component.putClientProperty("JComponent.outline", null);
-                component.setToolTipText(null);
-                component.getAccessibleContext().setAccessibleDescription(null);
-            }
+            FarmUi.clearControlError(component);
         }
     }
 
     /** Notify the owning workflow when a worker changes a previously invalid value. */
     public void setValidationCorrectionListener(Runnable listener) {
         validationCorrectionListener = listener == null ? () -> { } : listener;
+    }
+
+    /** Notify the owning workflow whenever a value affecting the item draft changes. */
+    public void setDraftChangeListener(Runnable listener) {
+        draftChangeListener = listener == null ? () -> { } : listener;
     }
 
     public void setWritable(boolean writable) {
@@ -237,11 +249,20 @@ public final class InventoryItemFormView extends JPanel {
                 categoryBox.setSelectedItem("Flowers/Plants");
                 unitBox.setSelectedItem("Per Stem");
             }
-            case "Market bouquet" -> {
-                setIfBlank(nameField, "Market Bouquet");
-                categoryBox.setSelectedItem("Flowers/Plants");
-                unitBox.setSelectedItem("Per Unit");
+            case "Dahlia stem" -> applyFlowerStarter("Dahlia", "Per Stem");
+            case "Nootka rose stem" -> {
+                applyFlowerStarter("Nootka Rose", "Per Stem");
+                roseBox.setSelectedItem("Nootka");
             }
+            case "Peony stem" -> applyFlowerStarter("Peony", "Per Stem");
+            case "Sunflower stem" -> applyFlowerStarter("Sunflower", "Per Stem");
+            case "Market bouquet" -> {
+                applyFlowerStarter("Market Bouquet", "Per Unit");
+            }
+            case "Wedding flower bucket" ->
+                    applyFlowerStarter("Wedding Flower Bucket", "Per Unit");
+            case "Flower subscription" ->
+                    applyFlowerStarter("Flower Subscription Bouquet", "Per Unit");
             case "Farm supply" -> {
                 categoryBox.setSelectedItem("Other");
                 unitBox.setSelectedItem("Per Unit");
@@ -258,6 +279,12 @@ public final class InventoryItemFormView extends JPanel {
         nameField.requestFocusInWindow();
     }
 
+    private void applyFlowerStarter(String name, String unit) {
+        setIfBlank(nameField, name);
+        categoryBox.setSelectedItem("Flowers/Plants");
+        unitBox.setSelectedItem(unit);
+    }
+
     private static void setIfBlank(JTextField field, String value) {
         if (field.getText().isBlank()) {
             field.setText(value);
@@ -270,7 +297,10 @@ public final class InventoryItemFormView extends JPanel {
         if (component instanceof JTextField textField) {
             watchValidationCorrection(textField, component);
         } else if (component instanceof JComboBox<?> comboBox) {
-            comboBox.addActionListener(event -> clearCorrectedValidation(component));
+            comboBox.addActionListener(event -> {
+                clearCorrectedValidation(component);
+                draftChangeListener.run();
+            });
             if (comboBox.isEditable()
                     && comboBox.getEditor().getEditorComponent() instanceof JTextField editor) {
                 watchValidationCorrection(editor, component);
@@ -282,6 +312,7 @@ public final class InventoryItemFormView extends JPanel {
         editor.getDocument().addDocumentListener(new javax.swing.event.DocumentListener() {
             private void changed() {
                 clearCorrectedValidation(validationTarget);
+                draftChangeListener.run();
             }
 
             @Override public void insertUpdate(javax.swing.event.DocumentEvent event) { changed(); }
@@ -294,33 +325,30 @@ public final class InventoryItemFormView extends JPanel {
         if (!"error".equals(component.getClientProperty("JComponent.outline"))) {
             return;
         }
-        if (component instanceof JTextField textField) {
-            FarmUi.clearFieldError(textField);
-        } else {
-            component.putClientProperty("JComponent.outline", null);
-            component.setToolTipText(null);
-            component.getAccessibleContext().setAccessibleDescription(null);
-        }
+        FarmUi.clearControlError(component);
         validationCorrectionListener.run();
     }
 
-    private void addField(GridBagConstraints constraints, int row, String text,
+    private void addField(GridBagConstraints constraints, int row, int column, int span, String text,
                           JComponent field, char mnemonic) {
-        constraints.gridx = 0;
+        constraints.gridx = column;
         constraints.gridy = row;
-        constraints.weightx = 0;
-        JLabel label = new JLabel(text + ":");
-        label.setLabelFor(field);
-        label.setDisplayedMnemonic(mnemonic);
-        add(label, constraints);
-        constraints.gridx = 1;
+        constraints.gridwidth = span;
         constraints.weightx = 1;
-        add(field, constraints);
+        add(FarmUi.entryField(text, field, field, mnemonic), constraints);
     }
 
     private void updateRoseAvailability() {
         roseBox.setEnabled("Flowers/Plants".equals(selectedText(categoryBox))
                 && categoryBox.isEnabled());
+    }
+
+    private String selectedRoseVariety() {
+        if (!roseBox.isEnabled()) {
+            return "";
+        }
+        String selected = selectedText(roseBox);
+        return NO_ROSE_VARIETY.equals(selected) ? "" : selected;
     }
 
     private static String selectedText(JComboBox<String> box) {

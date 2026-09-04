@@ -17,6 +17,7 @@ import java.awt.BorderLayout;
 import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.Font;
+import java.awt.Insets;
 import java.awt.event.ActionEvent;
 import java.awt.event.InputEvent;
 import java.awt.event.KeyEvent;
@@ -41,7 +42,12 @@ public final class FarmTabNavigator {
         pane.putClientProperty("JTabbedPane.tabAreaAlignment", "leading");
         pane.putClientProperty("JTabbedPane.minimumTabWidth", 190);
         pane.putClientProperty("JTabbedPane.maximumTabWidth", 220);
-        pane.putClientProperty("JTabbedPane.tabInsets", "8,12,8,12");
+        pane.putClientProperty("JTabbedPane.tabHeight", 32);
+        // Keep every primary workflow visible at the supported 1100 x 700 minimum.
+        // The custom labels already provide generous internal spacing; adding eight
+        // more pixels above and below every tab pushed the final workflows behind
+        // FlatLaf's scroll arrows on compact laptops.
+        pane.putClientProperty("JTabbedPane.tabInsets", new Insets(1, 1, 1, 1));
         String previousGroup = null;
         for (FlowerFarmTab tab : tabs) {
             javax.swing.Icon icon = tab.getIcon() == null
@@ -65,11 +71,11 @@ public final class FarmTabNavigator {
         tab.setOpaque(false);
         tab.setLayout(new BoxLayout(tab, BoxLayout.Y_AXIS));
         if (group != null) {
-            JLabel heading = new JLabel(group.toUpperCase(java.util.Locale.ROOT));
+            JLabel heading = FarmUi.mutedLabel(
+                    group.toUpperCase(java.util.Locale.ROOT));
             heading.setName("farm.navigationGroup");
-            heading.setForeground(FarmUi.mutedColor());
             heading.setFont(heading.getFont().deriveFont(Font.BOLD, 9f));
-            heading.setBorder(BorderFactory.createEmptyBorder(2, 4, 3, 0));
+            heading.setBorder(BorderFactory.createEmptyBorder(0, 4, 0, 0));
             heading.setAlignmentX(Component.LEFT_ALIGNMENT);
             tab.add(heading);
         }
@@ -77,17 +83,17 @@ public final class FarmTabNavigator {
         JLabel item = new JLabel(visibleTitle, icon, JLabel.LEFT);
         item.setFont(item.getFont().deriveFont(Font.PLAIN, 12f));
         item.setIconTextGap(10);
-        item.setBorder(BorderFactory.createEmptyBorder(3, 4, 3, 4));
+        item.setBorder(BorderFactory.createEmptyBorder(0, 4, 0, 4));
         item.setAlignmentX(Component.LEFT_ALIGNMENT);
         JPanel row = new JPanel(new BorderLayout());
         row.setOpaque(false);
         row.add(item, BorderLayout.WEST);
         JLabel shortcutHint = FarmUi.mutedLabel(shortcut);
         shortcutHint.setFont(shortcutHint.getFont().deriveFont(Font.PLAIN, 10f));
-        shortcutHint.setBorder(BorderFactory.createEmptyBorder(3, 4, 3, 5));
+        shortcutHint.setBorder(BorderFactory.createEmptyBorder(0, 4, 0, 5));
         row.add(shortcutHint, BorderLayout.EAST);
         row.setAlignmentX(Component.LEFT_ALIGNMENT);
-        row.setPreferredSize(new Dimension(205, 32));
+        row.setPreferredSize(new Dimension(205, 22));
         tab.add(row);
         tab.getAccessibleContext().setAccessibleName(
                 title + " navigation item, shortcut " + shortcut);
@@ -153,15 +159,15 @@ public final class FarmTabNavigator {
             FlowerFarmTab tab = tabs.get(i);
             if (tab instanceof InventoryWorkspaceTab inventory
                     && inventory.selectWorkspace(title)) {
-                pane.setSelectedIndex(i);
+                selectAndFocus(i);
                 return true;
             }
             if (tab.getTabTitle().equals(title)) {
-                pane.setSelectedIndex(i);
+                selectAndFocus(i);
                 return true;
             }
             if (tab instanceof ReferenceTab reference && reference.selectReference(title)) {
-                pane.setSelectedIndex(i);
+                selectAndFocus(i);
                 return true;
             }
         }
@@ -185,9 +191,15 @@ public final class FarmTabNavigator {
                     actionKey);
             root.getActionMap().put(actionKey, new AbstractAction() {
                 @Override public void actionPerformed(ActionEvent event) {
-                    pane.setSelectedIndex(tabIndex);
+                    selectAndFocus(tabIndex);
                 }
             });
         }
+    }
+
+    private void selectAndFocus(int index) {
+        pane.setSelectedIndex(index);
+        javax.swing.SwingUtilities.invokeLater(() ->
+                FarmUi.focusFirstInteractive(tabs.get(index).getUIComponent()));
     }
 }

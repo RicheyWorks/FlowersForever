@@ -12,6 +12,8 @@ public interface SeasonPlanRepository {
 
     List<Integer> findDistinctSeasonYears();
 
+    Optional<SeasonPlanEntry> findById(Long id);
+
     Optional<SeasonPlanEntry> findByIdForUpdate(Long id);
 
     SeasonPlanEntry save(SeasonPlanEntry entry);

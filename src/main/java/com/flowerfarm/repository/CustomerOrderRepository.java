@@ -15,6 +15,10 @@ public interface CustomerOrderRepository {
 
     List<CustomerOrder> findByCustomer(Long customerId);
 
+    List<CustomerOrder> findConfirmedDueThrough(LocalDate throughDate, int limit);
+
+    long countConfirmedDueThrough(LocalDate throughDate);
+
     Optional<CustomerOrder> findById(Long id);
 
     Optional<CustomerOrder> findByIdForUpdate(Long id);

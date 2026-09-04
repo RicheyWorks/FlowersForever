@@ -1,5 +1,6 @@
 package com.flowerfarm.service;
 
+import com.flowerfarm.model.FarmProfile;
 import com.flowerfarm.model.Customer;
 import com.flowerfarm.model.CustomerOrder;
 import com.flowerfarm.model.Item;
@@ -38,7 +39,7 @@ class OrderServiceTest {
     @BeforeEach
     void setUp() {
         service = new OrderService(orderRepository, customerRepository, inventoryService,
-                syncHistoryService, new OrderReportGenerator());
+                syncHistoryService, new OrderReportGenerator(new FarmProfile()));
         lenient().when(syncHistoryService.record(any(), any(), anyBoolean(), any(), any(), any()))
                 .thenAnswer(inv -> null);
     }
@@ -73,6 +74,57 @@ class OrderServiceTest {
         assertThat(OrderService.reviewSnapshot(order).customerNotes())
                 .isEqualTo("North gate load-in");
         verify(syncHistoryService).record(eq("crm"), eq("ORDER_CREATE"), eq(true), any(), any(), eq(1));
+    }
+
+    @Test
+    @DisplayName("mobile handoff token tracks shown load fields but not hidden pricing or status")
+    void handoffReviewTokenTracksOperationalLoad() {
+        Customer customer = new Customer(
+                "Token Florist", "Casey", "casey@example.test", "555-0130",
+                "FLORIST", "South door");
+        customer.setId(4L);
+        CustomerOrder order = new CustomerOrder(
+                customer, LocalDate.of(2026, 9, 2), "CONFIRMED",
+                "Call first", "DELIVERY");
+        order.setId(18L);
+        OrderLine line = new OrderLine("Dahlia", 10, "stems", 4.5);
+        line.setId(22L);
+        order.addLine(line);
+        String reviewed = OrderService.handoffReviewToken(order);
+
+        order.setStatus("FULFILLED");
+        line.setUnitPrice(7.5);
+        assertThat(OrderService.handoffReviewToken(order)).isEqualTo(reviewed);
+
+        line.setQuantity(11);
+        assertThat(OrderService.handoffReviewToken(order)).isNotEqualTo(reviewed);
+    }
+
+    @Test
+    @DisplayName("importHistorical() preserves final status without changing current inventory")
+    void importsHistoricalOrderWithoutInventoryEffects() {
+        Customer customer = new Customer(
+                "Legacy Market", "", "", "", "MARKET", "");
+        customer.setId(3L);
+        when(customerRepository.findById(3L)).thenReturn(Optional.of(customer));
+        when(orderRepository.save(any())).thenAnswer(invocation -> {
+            CustomerOrder order = invocation.getArgument(0);
+            order.setId(19L);
+            return order;
+        });
+
+        CustomerOrder saved = service.importHistorical(
+                3L, LocalDate.of(2025, 7, 12), "FULFILLED", "legacy sale", "MARKET",
+                List.of(new OrderLine("Dahlia", 12, "stem", 2.25)));
+
+        assertThat(saved.getId()).isEqualTo(19L);
+        assertThat(saved.getStatus()).isEqualTo("FULFILLED");
+        assertThat(saved.getLines()).singleElement()
+                .extracting(OrderLine::getProductName).isEqualTo("Dahlia");
+        verifyNoInteractions(inventoryService);
+        verify(syncHistoryService).record(
+                eq("crm"), eq("ORDER_HISTORY_IMPORT"), eq(true), any(),
+                contains("inventoryAdjusted=false"), eq(1));
     }
 
     @Test

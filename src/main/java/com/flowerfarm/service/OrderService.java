@@ -11,10 +11,14 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -127,6 +131,12 @@ public class OrderService {
         }
     }
 
+    /** Result of a phone/tablet handoff attempt against one reviewed operational load. */
+    public record WorkerFulfillmentOutcome(
+            CustomerOrder order,
+            boolean alreadyFulfilled) {
+    }
+
     /** Captures exactly what a worker reviewed before a lifecycle change. */
     public static OrderReviewSnapshot reviewSnapshot(CustomerOrder order) {
         if (order == null || order.getId() == null) {
@@ -154,6 +164,33 @@ public class OrderService {
                 customer == null ? "" : confirmationText(customer.getNotes()));
     }
 
+    /**
+     * Opaque concurrency token for the operational fields shown on a worker handoff card.
+     * Price is intentionally excluded because it is not displayed or used for stock deduction.
+     */
+    public static String handoffReviewToken(CustomerOrder order) {
+        OrderReviewSnapshot review = reviewSnapshot(order);
+        MessageDigest digest = sha256();
+        appendFingerprintField(digest, review.orderId());
+        appendFingerprintField(digest, review.customerId());
+        appendFingerprintField(digest, review.customerName());
+        appendFingerprintField(digest, review.contactName());
+        appendFingerprintField(digest, review.phone());
+        appendFingerprintField(digest, review.email());
+        appendFingerprintField(digest, review.orderDate());
+        appendFingerprintField(digest, review.notes());
+        appendFingerprintField(digest, review.handoffType());
+        appendFingerprintField(digest, review.customerNotes());
+        appendFingerprintField(digest, review.lines().size());
+        for (OrderReviewLine line : review.lines()) {
+            appendFingerprintField(digest, line.lineId());
+            appendFingerprintField(digest, line.productName());
+            appendFingerprintField(digest, Double.toHexString(line.quantity()));
+            appendFingerprintField(digest, line.unit());
+        }
+        return HexFormat.of().formatHex(digest.digest());
+    }
+
     /** Captures exactly one saved product as displayed for edit or removal. */
     public static OrderReviewLine reviewLine(OrderLine line) {
         if (line == null) {
@@ -166,6 +203,28 @@ public class OrderService {
 
     private static String confirmationText(String value) {
         return value == null ? "" : value;
+    }
+
+    private static MessageDigest sha256() {
+        try {
+            return MessageDigest.getInstance("SHA-256");
+        } catch (NoSuchAlgorithmException exception) {
+            throw new IllegalStateException("SHA-256 is unavailable.", exception);
+        }
+    }
+
+    private static void appendFingerprintField(MessageDigest digest, Object value) {
+        if (value == null) {
+            digest.update(new byte[] {(byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff});
+            return;
+        }
+        byte[] bytes = String.valueOf(value).getBytes(StandardCharsets.UTF_8);
+        int length = bytes.length;
+        digest.update((byte) (length >>> 24));
+        digest.update((byte) (length >>> 16));
+        digest.update((byte) (length >>> 8));
+        digest.update((byte) length);
+        digest.update(bytes);
     }
 
     @Transactional(readOnly = true)
@@ -184,6 +243,17 @@ public class OrderService {
                         .thenComparing(CustomerOrder::getId,
                                 Comparator.nullsLast(Comparator.naturalOrder())))
                 .toList();
+    }
+
+    /** Bounded database-backed queue for phone/tablet order handoffs. */
+    @Transactional(readOnly = true)
+    public List<CustomerOrder> confirmedDueThrough(LocalDate throughDate, int limit) {
+        return new ArrayList<>(orderRepository.findConfirmedDueThrough(throughDate, limit));
+    }
+
+    @Transactional(readOnly = true)
+    public long countConfirmedDueThrough(LocalDate throughDate) {
+        return orderRepository.countConfirmedDueThrough(throughDate);
     }
 
     @Transactional(readOnly = true)
@@ -268,6 +338,47 @@ public class OrderService {
                         + ", total=$" + String.format("%.2f", saved.lineTotal()),
                 saved.getLines().size()
         );
+        return saved;
+    }
+
+    /**
+     * Imports an existing order in any supported final state without reserving or deducting
+     * current inventory. New operational orders must continue to use {@link #create}.
+     */
+    @Transactional
+    public CustomerOrder importHistorical(
+            Long customerId, LocalDate orderDate, String status, String notes,
+            String handoffType, List<OrderLine> lines) {
+        if (lines != null && lines.size() > MAX_ORDER_LINES) {
+            throw new IllegalArgumentException(
+                    "Order cannot contain more than " + MAX_ORDER_LINES + " lines.");
+        }
+        if (lines != null && lines.stream().anyMatch(java.util.Objects::isNull)) {
+            throw new IllegalArgumentException("Order lines must not be null.");
+        }
+        String historicalStatus = CustomerOrder.normalizeStatus(status);
+        String normalizedHandoff = CustomerOrder.normalizeHandoffType(handoffType);
+        Customer customer = customerRepository.findById(customerId)
+                .orElseThrow(() -> new IndexOutOfBoundsException(
+                        "No customer with id=" + customerId));
+        CustomerOrder order = new CustomerOrder(
+                customer, orderDate, historicalStatus, notes, normalizedHandoff);
+        if (lines != null) {
+            for (OrderLine line : lines) {
+                order.addLine(new OrderLine(
+                        line.getProductName(), line.getQuantity(),
+                        line.getUnit(), line.getUnitPrice()));
+            }
+        }
+        CustomerOrder saved = orderRepository.save(order);
+        syncHistoryService.record(
+                "crm",
+                "ORDER_HISTORY_IMPORT",
+                true,
+                "Historical order #" + saved.getId() + " imported for " + customer.getName(),
+                "status=" + saved.getStatus() + ", lines=" + saved.getLines().size()
+                        + ", inventoryAdjusted=false",
+                saved.getLines().size());
         return saved;
     }
 
@@ -686,6 +797,52 @@ public class OrderService {
                             + "and Orders and review it again.");
         }
         return fulfill(orderId, reviewedSnapshot);
+    }
+
+    /**
+     * Completes a mobile handoff in the caller's transaction so fulfillment and the
+     * worker retry receipt commit or roll back together.
+     */
+    @Transactional
+    public WorkerFulfillmentOutcome fulfillWorkerReviewed(
+            Long orderId, String reviewedToken) {
+        if (orderId == null || orderId <= 0) {
+            throw new IllegalArgumentException("Order id must be positive.");
+        }
+        String token = reviewedToken == null ? "" : reviewedToken.trim();
+        if (!token.matches("[0-9a-f]{64}")) {
+            throw new IllegalArgumentException("Order handoff review token is invalid.");
+        }
+        CustomerOrder order = orderRepository.findByIdForUpdate(orderId)
+                .orElseThrow(() -> new StaleOrderReviewException(
+                        orderId, "mobile handoff", "No status or inventory was changed",
+                        "remove the unavailable handoff", true));
+        Customer customer = order.getCustomer();
+        Customer liveCustomer = customer == null || customer.getId() == null
+                ? null : customerRepository.findByIdForUpdate(customer.getId()).orElse(null);
+        if (liveCustomer == null) {
+            throw new StaleOrderReviewException(
+                    orderId, "mobile handoff", "No status or inventory was changed",
+                    "review the current customer load");
+        }
+        order.setCustomer(liveCustomer);
+        String currentToken = handoffReviewToken(order);
+        if (!MessageDigest.isEqual(
+                token.getBytes(StandardCharsets.US_ASCII),
+                currentToken.getBytes(StandardCharsets.US_ASCII))) {
+            throw new StaleOrderReviewException(
+                    orderId, "mobile handoff", "No status or inventory was changed",
+                    "review the refreshed handoff and complete it again");
+        }
+        if ("FULFILLED".equalsIgnoreCase(order.getStatus())) {
+            return new WorkerFulfillmentOutcome(order, true);
+        }
+        if (!"CONFIRMED".equalsIgnoreCase(order.getStatus())) {
+            throw new StaleOrderReviewException(
+                    orderId, "mobile handoff", "No status or inventory was changed",
+                    "review its current lifecycle state");
+        }
+        return new WorkerFulfillmentOutcome(fulfillLocked(order), false);
     }
 
     private CustomerOrder fulfill(Long orderId, OrderReviewSnapshot reviewedSnapshot) {

@@ -20,7 +20,8 @@ class AppDataBootstrapTest {
     void clearProperties() {
         for (String property : new String[] {
                 AppDataBootstrap.DATA_PROPERTY, AppDataBootstrap.PACKAGED_PROPERTY,
-                "flowerfarm.exports.directory", "logging.file.name",
+                "flowerfarm.exports.directory", "flowerfarm.attachments.directory",
+                "logging.file.name",
                 "connector.airtable.local-file", "connector.webhook.local-file",
                 "connector.shopify.local-file", "connector.square.local-file",
                 "connector.google-sheets.local-file", "connector.farmbrite.local-file",
@@ -40,10 +41,13 @@ class AppDataBootstrapTest {
         assertThat(Files.isDirectory(data.resolve("exports"))).isTrue();
         assertThat(Files.isDirectory(data.resolve("backups"))).isTrue();
         assertThat(Files.isDirectory(data.resolve("logs"))).isTrue();
+        assertThat(Files.isDirectory(data.resolve("attachments"))).isTrue();
         assertThat(System.getProperty(AppDataBootstrap.DATA_PROPERTY))
                 .isEqualTo(data.toAbsolutePath().toString());
         assertThat(System.getProperty("logging.file.name"))
                 .endsWith(Path.of("logs", "flowersforever.log").toString());
+        assertThat(System.getProperty("flowerfarm.attachments.directory"))
+                .isEqualTo(data.resolve("attachments").toAbsolutePath().toString());
         assertThat(System.getProperty("connector.shopify.local-file"))
                 .isEqualTo(data.resolve("shopify-mirror.json").toAbsolutePath().toString());
     }

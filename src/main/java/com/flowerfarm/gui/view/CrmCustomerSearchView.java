@@ -22,6 +22,7 @@ public final class CrmCustomerSearchView extends JPanel {
         JButton search = FarmUi.primaryButton("Search");
         search.addActionListener(event -> searchAction.run());
         JButton clear = FarmUi.secondaryButton("Show all");
+        clear.getAccessibleContext().setAccessibleName("Show all customers");
         clear.addActionListener(event -> {
             searchField.setText("");
             searchAction.run();

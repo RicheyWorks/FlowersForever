@@ -35,6 +35,7 @@ public final class AppDataBootstrap {
             Files.createDirectories(dataDirectory.resolve("exports"));
             Files.createDirectories(dataDirectory.resolve("backups"));
             Files.createDirectories(dataDirectory.resolve("logs"));
+            Files.createDirectories(dataDirectory.resolve("attachments"));
             verifyWritable(dataDirectory);
             if (!explicitDataDirectory) {
                 migrateLegacyData(dataDirectory);
@@ -48,6 +49,8 @@ public final class AppDataBootstrap {
 
         setDefault(DATA_PROPERTY, dataDirectory.toString());
         setDefault("flowerfarm.exports.directory", dataDirectory.resolve("exports").toString());
+        setDefault("flowerfarm.attachments.directory",
+                dataDirectory.resolve("attachments").toString());
         setDefault("logging.file.name", dataDirectory.resolve("logs").resolve("flowersforever.log").toString());
 
         Map<String, String> localFiles = new LinkedHashMap<>();

@@ -1,6 +1,7 @@
 package com.flowerfarm.gui.tabs;
 
 import com.flowerfarm.gui.FarmUi;
+import com.flowerfarm.gui.FarmDialogs;
 import com.flowerfarm.gui.GuiPermissions;
 import com.flowerfarm.model.Item;
 import com.flowerfarm.service.InventoryService;
@@ -44,6 +45,7 @@ public class RoseVarietiesTab implements FlowerFarmTab {
 
     private final InventoryService inventoryService;
     private final TabHost host;
+    private final FarmDialogs dialogs;
 
     private JPanel panel;
     private JButton sampleButton;
@@ -54,8 +56,14 @@ public class RoseVarietiesTab implements FlowerFarmTab {
     private boolean sampleAvailable = true;
 
     public RoseVarietiesTab(InventoryService inventoryService, TabHost host) {
+        this(inventoryService, host, FarmDialogs.swing());
+    }
+
+    public RoseVarietiesTab(InventoryService inventoryService, TabHost host,
+                            FarmDialogs dialogs) {
         this.inventoryService = inventoryService;
         this.host = host;
+        this.dialogs = java.util.Objects.requireNonNull(dialogs, "dialogs");
     }
 
     @Override
@@ -275,7 +283,7 @@ public class RoseVarietiesTab implements FlowerFarmTab {
                     + refreshGuidance);
         }
         if (panel.isShowing()) {
-            JOptionPane.showMessageDialog(panel,
+            dialogs.showMessage(panel,
                     result.added()
                             ? "Nootka Rose was added to Inventory.\nOpen Inventory to edit its details."
                             : "Nootka Rose is already in Inventory.\nNo duplicate was added.",
@@ -294,7 +302,7 @@ public class RoseVarietiesTab implements FlowerFarmTab {
             host.setStatus(guidance + " The sample button is ready to retry.");
         }
         if (panel.isShowing()) {
-            JOptionPane.showMessageDialog(panel, guidance, "Sample not added",
+            dialogs.showMessage(panel, guidance, "Sample not added",
                     JOptionPane.ERROR_MESSAGE);
         }
     }

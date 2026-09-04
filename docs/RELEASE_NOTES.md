@@ -1,5 +1,305 @@
 # FlowersForever private-preview notes
 
+## September 4, 2026 — Farmer entry and connected production
+
+- Moves Harvest Log entry above history and gives Inventory larger paired fields,
+  practical examples, persistent field guidance, and a clearer save area.
+- Adds prominent **Log a harvest** and **Add a field note** actions on the phone
+  screen. Field notes enter the shared Knowledge Log and use the existing device
+  queue plus a durable server receipt; Flyway V21 permits that receipt type.
+- Enables custom categories and selling units through the desktop harness,
+  and adds explicit file-dialog approval/cancellation for real export workflows.
+- Adds eight farm-data tools for reviewed planting schedules, task status and
+  regeneration, recipe estimates, availability, and local provider handoffs.
+  The headless bridge now exposes 33 tools; the desktop bridge exposes 21.
+- Selects the standard JDK console provider in packaged AI launchers, fixing
+  a reproduced Windows startup stall with redirected stdin/stdout on JDK 22.
+- Reworks the README around grower outcomes across seasons and adds a grounded
+  idea backlog with explicit dependencies and acceptance criteria.
+
+## Next — AI and future-device harness contract
+
+- Adds a shared production-cost report across desktop, REST, and MCP. It joins
+  planting-linked task labor/input actuals to the season planner's deterministic
+  harvest allocation, calculates per-planting and season cost per expected and
+  harvested stem, and keeps unlinked tasks, missing actuals, and unmatched
+  harvests visible instead of hiding them in totals.
+- Adds Flyway V20 and a season-owned loaded labor rate. Existing farms migrate
+  at a zero rate, the desktop makes the assumption editable beside frost dates,
+  REST accepts a compatible optional field, and the AI `get-production-costs`
+  tool can use the saved value or an explicit scenario override. Revenue is not
+  attributed to plantings until order data can prove that relationship.
+- Adds structured harvest traceability across desktop, phone/tablet, REST, CSV,
+  PDF, mapped migration, and MCP. Harvests now keep a unique normalized lot
+  code, grade, marketable quantity, loss/culls, storage location, and gross
+  quantity while only marketable quantity changes sellable inventory.
+- Adds Flyway V19 with deterministic lot codes for existing harvest history,
+  exact REST and AI lot lookup, and printable 4×6 PDF labels containing a real
+  QR payload for the canonical lot identifier.
+- Adds an authenticated responsive `/worker/` field app for phones and tablets.
+  It lists overdue/due-today production tasks, records labor/cost/observations,
+  and logs harvests through the same domain services used by desktop and AI.
+- Adds a browser-persisted pending queue plus Flyway V15 durable worker-action
+  receipts. Stable operation keys make retries exact across lost responses and
+  application restarts; changed reuse returns a conflict instead of duplicating
+  a harvest or task completion. Network failure, auth interruption, manual
+  retry, pending-task locking, and farm-time-zone defaults are explicit.
+- Adds end-to-end field workflow coverage proving inventory effects, task
+  completion, exact replay/recovery, role enforcement, and immediate AI
+  `farm-data` read-back. The responsive UI was exercised at a 390×844 viewport.
+- Adds searchable mobile physical stock counts with a bounded field-only
+  projection. Count writes compare the quantity reviewed on the device under a
+  database row lock, so harvest, fulfillment, import, and concurrent count
+  changes cannot be silently overwritten.
+- Adds Flyway V16 count receipts, exact response-loss replay, typed stale-count
+  conflicts, on-device review/retry/discard controls, and immediate canonical
+  inventory read-back for connected AI clients.
+- Adds a database-bounded **Due handoffs** queue to the mobile field app. Workers
+  can review customer contact, delivery context, instructions, and complete
+  product quantities before fulfilling a Confirmed Pickup, Delivery, or Market
+  order and deducting its inventory.
+- Adds Flyway V17 `COMPLETE_ORDER` receipts, operational review tokens, typed
+  changed-load conflicts, same-order multi-worker reconciliation without a second
+  stock deduction, per-entry pending-queue discard controls, and immediate AI
+  order/inventory read-back.
+- Adds optional production-task photos to the mobile completion form. JPEG, PNG,
+  WebP, HEIC, and HEIF files up to 15 MiB are stored by SHA-256 beneath the farm
+  data directory; metadata and bytes are validated on every read.
+- Adds IndexedDB-backed offline photo bytes, ordered photo-before-completion
+  replay, V18 `ADD_ATTACHMENT` receipts, exact restart recovery, explicit
+  oversized-file responses, and regeneration protection for tasks that own
+  evidence.
+- Extends `farm-data` to ten readable/exportable types and 25 tools with
+  attachment metadata paging, bounded verified content reads, and retry-safe AI
+  uploads. Normal data-directory backup includes attachment bytes.
+
+- Adds a dedicated `FlowersForeverAI` native launcher to Windows and macOS
+  packages. It carries the packaged runtime/data behavior and, on Windows, the
+  console subsystem required for redirected MCP stdin/stdout.
+- Adds `--mcp-doctor`, a one-line machine-readable preflight over the real
+  application graph. It verifies the resolved farm store, database and Flyway
+  schema, installed plug-ins, all 33 farm tools, read-back/resume permission,
+  and mutation permission; incomplete setup exits with actionable guidance and
+  never emits the token.
+- Adds child-process mapping/import/read-back/receipt coverage and requires both
+  unsigned candidates and signed releases to exercise the native doctor and a
+  real stdio protocol ping before an installer is retained.
+
+- Adds a bundled, headless MCP stdio server over `HarnessGateway`. It supports
+  the current stateless `2026-07-28` discovery/request model and the legacy
+  `2025-11-25` initialize flow, lists only currently enabled tools, returns both
+  structured and text-compatible results, and keeps stdout protocol-only.
+- Adds `--mcp` runtime wiring with no Swing, Tomcat, or REST listener. The local
+  process consumes the independent harness token from its environment without
+  exposing credentials in model-visible tool arguments.
+- Adds the headless `farm-data` AI plugin with detailed nested JSON schemas for
+  inventory, customers, harvests, orders, farm knowledge, and production-task
+  actuals. AI clients can discover the contract instead of hard-coding models.
+- Adds bounded transactional master-data upserts, historical imports, live farm
+  operations, and paged record reads. Historical harvests and fulfilled orders
+  do not alter today's stock; live harvests retain normal inventory effects.
+- Adds Flyway V14 durable import receipts using a stable source-system and
+  per-row source key. Exact row retries survive request-ID changes and restarts,
+  inventory/customer corrections retain the same target ID, and changed
+  append-history rows return a conflict instead of duplicating farm history.
+- Adds database-backed `list-import-receipts` paging so an AI can audit and
+  resume legacy-app, Excel, CSV, or sheet migrations by source and record type.
+- Replaces `list-records` in-memory slicing with true database-level paging for
+  all ten readable/exportable record types. Arbitrary offsets remain compatible, every
+  type has deterministic ordering, production-task date filters execute in the
+  query, and `nextOffset` gives AI clients an unambiguous continuation value.
+- Adds restart-stable complete farm-data exports. An AI can create an immutable
+  all-type or selected-type snapshot, recover or exactly replay it by a stable
+  caller key, and consume bounded JSON parts with manifest, size, record-count,
+  and SHA-256 validation. A reused key with changed parameters returns a
+  conflict instead of silently substituting a different dataset.
+- Extends the discoverable `farm-data` catalog with growing templates, planting
+  plans, and floral recipes. All three support canonical read-back, natural-key
+  upserts, durable source-key correction, and transactional batches; recipes
+  retain their nested ingredient quantities, pack sizes, costs, and notes.
+- Adds a guided source-record intake workflow for AI-owned Excel, CSV, sheet,
+  and previous-app readers. New tools suggest deterministic field mappings,
+  preview canonical rows with row-level validation, coerce common spreadsheet
+  values and nested JSON, create stable composite source keys, and atomically
+  import only fully valid batches through the existing canonical actions.
+- Makes the opt-in harness transport available in authenticated container
+  deployments. Container credentials and the independent harness token are both
+  required, and the headless plugin does not depend on Swing.
+- Adds end-to-end JSON/REST tests for schema discovery, replay, migration,
+  ongoing operations, record read-back, and container dual authentication.
+- Extends provider-neutral discovery with application, workflow, device, and
+  robot kinds; machine-readable capabilities; and typed observation signals.
+- Adds AI/MCP-friendly effect annotations for read-only, destructive,
+  idempotent, open-world, physical-world, and freshness behavior.
+- Adds an independent default-denied `PHYSICAL` tier. Physical commands need
+  the mutation, destructive, and physical operator gates plus an expiry within
+  30 seconds; exact retries remain replay-safe.
+- Validates sensor JSON types, strips declared sensitive telemetry unless the
+  sensitive-read gate is enabled, rejects undeclared device/robot metadata, and
+  rejects snapshot/plugin identity drift.
+- Documents the boundary clearly: hardware watchdogs, interlocks, collision
+  limits, loss-of-link behavior, and emergency stops stay inside the robot.
+- Adds a disabled-by-default `tesla-optimus` high-level plugin, replaceable
+  `OptimusRobotAdapter`, and deterministic simulator. Tasks use a reviewed
+  stage/token/execute flow; no undocumented Tesla transport or raw motion API is
+  assumed.
+- Hardens reviewed robot plans with a five-minute maximum lifetime, exact
+  non-replacement semantics, fresh/ready state checks, derived operational
+  telemetry, and fail-closed consumption before the adapter execution boundary.
+- Upgrades the Optimus boundary to an asynchronous operation contract: execution
+  returns a stable command ID and `RUNNING`, while typed status, progress, and
+  detail are observable through completion, failure, cancellation, or stop.
+- Adds exact active-command cancellation as a fresh, expiring physical action,
+  distinct from staged-draft cancellation and the independent emergency stop.
+- Requires stable adapter identity. Hardware mode needs a configured matching
+  robot ID and fails closed on startup mismatch or later identity drift;
+  simulator mode is explicit in discovery telemetry.
+- Adds a V8 append-only robot-operation journal plus read-only `get-operation`
+  and bounded `list-operations` tools. Accepted commands and lifecycle changes
+  survive replay eviction and application restarts; missing nonterminal adapter
+  state becomes `UNKNOWN` instead of being guessed complete.
+- Upgrades the Optimus plugin to 0.5 with Flyway V9 durable, exclusive
+  robot-scoped control leases. Lease capabilities expire after 15–300 seconds,
+  rotate on renewal, and are stored only as SHA-256 digests. All normal staging
+  and physical control requires the lease; emergency stop remains deliberately
+  lease-independent.
+- Removes the AI-facing lease-holder fingerprint. Its unsalted truncated hash
+  was guessable for low-entropy labels; holder labels now remain only in the
+  local audit record.
+- Rejects missing adapter timestamps for robot state, staged plans, and command
+  receipts, and rejects future-dated receipts instead of manufacturing fresh
+  local timestamps.
+- Cancels a known adapter-side staged plan before starting the safe-pose routine,
+  keeping the harness and robot draft state aligned.
+- Upgrades the Optimus plugin to 0.7 with a cursor-paginated
+  `list-operation-events` feed for AI reconnect and long-running job tracking.
+  Pages preserve append order, expose `nextCursor`/`hasMore`, and use string
+  cursors to avoid JavaScript integer rounding. The process-local journal now
+  mirrors production append, de-duplication, and recency behavior.
+- Upgrades the Optimus plugin to 0.8 with Flyway V10 staged-task resume storage.
+  Plugin recreation no longer loses the active plan's lease and expiry metadata;
+  only the plan-token digest is stored, and execution removes the record before
+  adapter dispatch. A new active controller can explicitly cancel staged work
+  left by an expired lease.
+- Upgrades the Optimus plugin to 0.9 with staged-state reconciliation. A new
+  `staged-plan-adapter-confirmed` observation distinguishes a live adapter-held
+  plan from a durable resume record. If an adapter restarts without its plan,
+  execution clears the stale record without dispatching and the active lease can
+  stage the task again; same-adapter restart resume remains supported.
+- Upgrades the Optimus plugin to 0.10 with unified staged-plan cleanup. Explicit
+  cancellation, lease release, plan expiry, restaging, and return-to-pose no
+  longer send redundant cancellation to an idle restarted adapter. If the
+  adapter still reports `STAGED`, cancellation completes before durable metadata
+  is removed so transport failures remain retryable.
+- Upgrades the Optimus plugin to 0.11 with exact staged-plan identity. Adapter
+  state carries an internal SHA-256 fingerprint of its opaque plan token;
+  `staged-plan-adapter-confirmed` and execution now require it to match the
+  durable digest. Missing or unrelated fingerprints cannot dispatch, and
+  authorized restaging reconciles adapter-only staged work.
+- Upgrades the Optimus plugin to 0.12 with verified staging acknowledgement. A
+  plan token is persisted and returned only after a fresh adapter observation
+  reports `STAGED` with that exact fingerprint. Idle, missing, mismatched, stale,
+  future-dated, or failed acknowledgement cancels the adapter draft and returns
+  the original diagnostic without creating resumable metadata.
+- Upgrades the Optimus plugin to 0.13 with complete staging rollback. Ambiguous
+  adapter exceptions, invalid returned plans, lease expiry or rotation during
+  staging, acknowledgement failure, and durable-store failure all attempt to
+  cancel the adapter draft. A cleanup failure is retained as a suppressed
+  diagnostic without replacing the primary staging error.
+- Upgrades the Optimus plugin to 0.14 with durable commit verification. The
+  staged-plan write result and a fresh read-back must both match the exact robot,
+  adapter mode, lease, and plan-token digest before the token is returned.
+  Missing, malformed, mismatched, or unreadable commits roll back the adapter,
+  then clear the stored record after cancellation succeeds; sub-millisecond
+  database timestamp normalization is supported.
+- Upgrades the Optimus plugin to 0.15 with Flyway V11 durable execution intent.
+  The original request ID is committed before adapter dispatch and retained
+  across ambiguous failures. An exact retry can safely redeliver a still-staged
+  idempotent plan or recover the matching running command without redispatch;
+  conflicting request IDs cannot take over, and intent clears only after the
+  command receipt reaches the operation journal.
+- Upgrades the Optimus plugin to 0.16 with Flyway V12 durable exact-request
+  receipts. If a successful execution response is lost, the identical request
+  can recover the same command after a full application restart—even after its
+  original deadline—without redispatch. Changed-action and changed-argument
+  collisions are rejected, and only a SHA-256 command fingerprint is persisted;
+  plan and lease tokens remain plaintext-free.
+- Upgrades the Optimus plugin to 0.17 with outage-tolerant durable replay. After
+  startup identity is established, an accepted exact execution can still return
+  while the owner API is unavailable. It is marked `UNKNOWN`/`UNCONFIRMED`, the
+  snapshot reports `UNAVAILABLE` without invented sensor values, and no physical
+  command is redispatched. New physical commands continue to require live state.
+- Upgrades the Optimus plugin to 0.18 with read-resilient reconciliation. An
+  unavailable snapshot now renders last-known nonterminal work as `UNKNOWN`
+  immediately. If the accepted receipt is readable but its `UNKNOWN` append
+  fails, exact replay still succeeds with `reconciliationPersisted=false`, keeps
+  the receipt for a later retry, and never redispatches the physical command.
+- Upgrades the Optimus plugin to 0.19 with live read-resilient reconciliation.
+  Exact adapter-confirmed state and its fresh gateway snapshot remain available
+  when secondary lifecycle appends fail, with
+  `reconciliationPersisted=false`. The original accepted receipt is still a
+  mandatory durable write, and the physical command is never redispatched.
+- Upgrades the Optimus plugin to 0.20 with read-tool outage continuity.
+  `get-operation`, `list-operations`, and the cursor event feed remain readable
+  when optional lifecycle enrichment cannot be appended, disclose persistence,
+  and never publish a cursor for unwritten state.
+- Upgrades the Optimus plugin to 0.21 with offline durable operation reads. The
+  three operation-query tools fall back to journal history during owner-API
+  outages, expose `adapterAvailable=false`, preserve terminal results, and mark
+  nonterminal work `UNKNOWN` without dispatching another robot command.
+- Upgrades the Optimus plugin to 0.22 with monotonic lifecycle reconciliation.
+  Transient and JPA journals now ignore delayed samples, prevent progress and
+  phase regression, retain terminal results across stale reconnects, and preserve
+  partial progress for cancellation, failure, and stop receipts.
+
+## Next — Production Studio
+
+- Adds farm-owned annual frost anchors and reusable crop templates for spacing,
+  rows, sow/transplant offsets, maturity, succession, germination, yield, and
+  standard-work offsets.
+- Builds reviewable frost-aware succession drafts, then commits normal Season
+  Planner blocks and dependent soil-prep, sow, transplant, support,
+  harvest-prep, and first-harvest tasks.
+- Adds reusable bouquet, event, subscription, and wholesale design recipes.
+- Reconciles recipe stems with planned weekly crops and live inventory, applies
+  waste, rounds only shortages to full packs, and exposes leftovers and supply
+  gaps.
+- Calculates material, labor, overhead, revenue, profit, margin, and markup in
+  one estimate.
+- Adds provider-neutral contract, payment, and marketplace handoff records that
+  retain status and references without storing card data, tokens, signatures,
+  or legal contract bodies.
+- Adds a versioned H2 V6 migration, REST routes under
+  `/api/production-studio`, six recursive desktop/harness routes, and focused
+  service and schema coverage.
+- Polishes the desktop workflow with automatic frost reload, selection-preserving
+  refreshes, double-click editing, persistent in-page feedback, and an explicit
+  impact review before planting blocks and generated work are committed.
+- Adds open/done/skipped work filters, overdue/today timing, skip and reopen
+  actions, per-design break-even economics, duplicate-ingredient protection, and
+  sellable availability that excludes completed plans and empty stock rows.
+- Adds a V7 integrity migration and service-level conflict handling: exact
+  planting duplicates are blocked before mutation, frost/template/plan/task rows
+  are locked during dependent updates, regeneration verifies template ownership,
+  and in-use templates retain their reproducible history.
+- Binds every planting commit to the exact reviewed draft with a deterministic
+  preview fingerprint; desktop confirmation carries it automatically and REST
+  publishes an `ETag` accepted through `If-Match` or `previewFingerprint`.
+- Hardens external handoffs with valid related-record checks, positive payment
+  amounts, three-letter currency validation, required references for sent/final
+  states, and database-enforced unique provider references and workflow states.
+- Polishes Production Studio state safety: unsaved seasons cannot retain stale
+  frost dates, changed planting inputs visibly invalidate old previews, task and
+  library actions follow selection and role, regeneration requires an impact
+  confirmation, ingredient errors identify their line, and handoff statuses are
+  scoped to contract, payment, or marketplace workflows.
+- Adds planting-linked field-work actuals. Production tasks now retain bounded
+  crew minutes, input cost, field observation, and completion time through the
+  desktop and `PUT /api/production-studio/tasks/{id}/actuals`.
+- Adds Flyway V13 for the new actual fields. Completion is one locked write;
+  reopened tasks retain their farm evidence, and regeneration preserves any task
+  containing recorded actuals instead of silently replacing it.
+
 ## Next — Visual Season & Bed Planner foundation
 
 - Refreshes the complete desktop visual system with botanical color washes,

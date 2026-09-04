@@ -20,6 +20,7 @@ import javax.swing.UIManager;
 import javax.swing.JViewport;
 import javax.swing.border.Border;
 import javax.swing.table.JTableHeader;
+import javax.swing.text.JTextComponent;
 import java.awt.BasicStroke;
 import java.awt.BorderLayout;
 import java.awt.Color;
@@ -56,6 +57,7 @@ public final class FarmUi {
     private static final String INITIAL_FOCUS = "flowerfarm.initialFocus";
     private static final String TONE_PROPERTY = "flowerfarm.tone";
     private static final String ROLE_PROPERTY = "flowerfarm.visualRole";
+    private static final String SURFACE_PROPERTY = "flowerfarm.surface";
 
     public enum Tone {
         NEUTRAL,
@@ -98,9 +100,14 @@ public final class FarmUi {
         UIManager.put("TableHeader.foreground",
                 isDark() ? new Color(238, 242, 239) : new Color(31, 48, 38));
         UIManager.put("TextField.background", surfaceColor());
+        UIManager.put("TextField.inactiveBackground", surfaceColor());
         UIManager.put("FormattedTextField.background", surfaceColor());
+        UIManager.put("FormattedTextField.inactiveBackground", surfaceColor());
         UIManager.put("TextArea.background", surfaceColor());
+        UIManager.put("TextArea.inactiveBackground", surfaceColor());
         UIManager.put("ComboBox.background", surfaceColor());
+        UIManager.put("ComboBox.buttonBackground", surfaceColor());
+        UIManager.put("ComboBox.editableBackground", surfaceColor());
         UIManager.put("ScrollBar.thumb", blend(borderColor(), accentColor(), 0.42));
         UIManager.put("ScrollBar.hoverThumbColor", accentColor());
         UIManager.put("Component.accentColor", accentColor());
@@ -108,6 +115,12 @@ public final class FarmUi {
 
     /** Branded masthead used above every farm workflow. */
     public static JPanel brandHeader(String location, String dateText) {
+        return brandHeader("FlowersForever", "Cut-flower farm operations", location, dateText);
+    }
+
+    /** Customer-owned farm identity with quiet FlowersForever attribution. */
+    public static JPanel brandHeader(String farmName, String farmTagline,
+                                     String location, String dateText) {
         JPanel header = new FloralWashPanel(new BorderLayout(16, 0), true);
         header.setName("farm.brandHeader");
         header.setBorder(BorderFactory.createCompoundBorder(
@@ -115,14 +128,18 @@ public final class FarmUi {
                 BorderFactory.createEmptyBorder(12, 18, 12, 18)));
 
         JLabel mark = new JLabel(new FarmMarkIcon(40));
-        mark.getAccessibleContext().setAccessibleName("Flowers Forever farm mark");
+        mark.getAccessibleContext().setAccessibleName("FlowersForever farm mark");
         JPanel identity = new JPanel();
         identity.setOpaque(false);
         identity.setLayout(new BoxLayout(identity, BoxLayout.Y_AXIS));
-        JLabel name = new JLabel("FLOWERS FOREVER");
+        String safeFarmName = farmName == null || farmName.isBlank()
+                ? "YOUR FLOWER FARM" : farmName.trim().toUpperCase(java.util.Locale.ROOT);
+        JLabel name = new JLabel(safeFarmName);
         name.setFont(name.getFont().deriveFont(Font.BOLD, 18f));
         name.setForeground(accentColor());
-        JLabel purpose = mutedLabel("Flower farm operations");
+        String safeTagline = farmTagline == null || farmTagline.isBlank()
+                ? "Powered by FlowersForever" : farmTagline.trim() + " · Powered by FlowersForever";
+        JLabel purpose = mutedLabel(safeTagline);
         identity.add(name);
         identity.add(Box.createVerticalStrut(1));
         identity.add(purpose);
@@ -137,7 +154,8 @@ public final class FarmUi {
         date.setFont(date.getFont().deriveFont(Font.BOLD, 13f));
         JPanel context = toolbar(locationBadge, date);
         header.add(context, BorderLayout.EAST);
-        header.getAccessibleContext().setAccessibleName("Flowers Forever application header");
+        header.getAccessibleContext().setAccessibleName(
+                safeFarmName + " · FlowersForever application header");
         return header;
     }
 
@@ -154,6 +172,7 @@ public final class FarmUi {
             case "Trend Analysis" -> "TR";
             case "Activity History" -> "AC";
             case "Knowledge Log" -> "KL";
+            case "PNW Plant Guide" -> "PN";
             case "Reports" -> "RP";
             case "Rose Varieties" -> "RV";
             case "Rose Visualizer" -> "RO";
@@ -165,7 +184,7 @@ public final class FarmUi {
         Tone tone = switch (title) {
             case "Harvest Log", "Rose Varieties", "Rose Visualizer" -> Tone.DANGER;
             case "Market Day", "Pricing Info" -> Tone.WARNING;
-            case "Reference & Planning", "Knowledge Log" -> Tone.INFO;
+            case "Reference & Planning", "Knowledge Log", "PNW Plant Guide" -> Tone.INFO;
             case "Customers & Orders", "Irrigation & Care" -> Tone.INFO;
             case "Dashboard", "Inventory", "Add Item", "Season Planner" -> Tone.SUCCESS;
             default -> Tone.NEUTRAL;
@@ -176,18 +195,32 @@ public final class FarmUi {
     /** Creates the standard padded root used by feature tabs. */
     public static JPanel page() {
         JPanel page = new JPanel(new BorderLayout(0, SECTION_GAP));
-        page.setBackground(pageBackgroundColor());
         page.setBorder(BorderFactory.createEmptyBorder(
                 PAGE_INSET, PAGE_INSET, PAGE_INSET, PAGE_INSET));
         page.setName("farm.page");
-        return page;
+        return pageSurface(page);
+    }
+
+    /** Marks a custom workspace root so it follows runtime theme changes. */
+    public static <T extends JComponent> T pageSurface(T component) {
+        component.putClientProperty(SURFACE_PROPERTY, "page");
+        component.setBackground(pageBackgroundColor());
+        return component;
     }
 
     /** Re-applies custom farm surfaces after a runtime light/dark theme switch. */
     public static void refreshTheme(Component root) {
         if (root instanceof JComponent component) {
-            if ("farm.page".equals(component.getName())) {
+            if ("farm.page".equals(component.getName())
+                    || "page".equals(component.getClientProperty(SURFACE_PROPERTY))) {
                 component.setBackground(pageBackgroundColor());
+            } else if ("farm.statusBar".equals(component.getName())) {
+                component.setBackground(surfaceColor());
+                component.setBorder(BorderFactory.createMatteBorder(
+                        1, 0, 0, 0, borderColor()));
+            } else if ("farm.connectorScroll".equals(component.getName())) {
+                component.setBorder(BorderFactory.createMatteBorder(
+                        1, 0, 0, 0, borderColor()));
             } else if ("farm.brandHeader".equals(component.getName())) {
                 component.setBorder(BorderFactory.createCompoundBorder(
                         BorderFactory.createMatteBorder(0, 0, 1, 0, borderColor()),
@@ -223,6 +256,9 @@ public final class FarmUi {
                 component.setBorder(BorderFactory.createCompoundBorder(
                         BorderFactory.createLineBorder(toneBorder(tone)),
                         BorderFactory.createEmptyBorder(10, 12, 10, 12)));
+            } else if ("farm.displayArea".equals(component.getName())) {
+                component.setBackground(surfaceColor());
+                component.setForeground(controlForegroundColor());
             }
             Tone tone = componentTone(component);
             Object role = component.getClientProperty(ROLE_PROPERTY);
@@ -239,6 +275,32 @@ public final class FarmUi {
                 component.setForeground(toneForegroundColor(tone));
             } else if ("metric-detail".equals(role)) {
                 component.setForeground(mutedColor());
+            } else if ("muted".equals(role)) {
+                component.setForeground(mutedColor());
+            }
+            if (component instanceof JTextComponent textComponent) {
+                refreshTextComponentTheme(textComponent);
+            }
+            if (component instanceof JTable table) {
+                refreshTableTheme(table);
+            }
+            if (component instanceof JScrollPane scrollPane
+                    && "farm.tableScroll".equals(scrollPane.getName())) {
+                scrollPane.setBorder(BorderFactory.createLineBorder(borderColor()));
+            }
+            if (component instanceof JViewport viewport
+                    && (viewport.getView() instanceof JTable
+                    || viewport.getView() instanceof JTextComponent)) {
+                viewport.setBackground(surfaceColor());
+            }
+            if (component instanceof JComboBox<?> comboBox) {
+                comboBox.setBackground(surfaceColor());
+                comboBox.setForeground(controlForegroundColor());
+                Component editor = comboBox.getEditor().getEditorComponent();
+                if (editor != null) {
+                    editor.setBackground(surfaceColor());
+                    editor.setForeground(controlForegroundColor());
+                }
             }
         }
         if (root instanceof java.awt.Container container) {
@@ -440,8 +502,7 @@ public final class FarmUi {
     public static void configureTable(JTable table, String accessibleName) {
         table.setRowHeight(TABLE_ROW_HEIGHT);
         table.setIntercellSpacing(new Dimension(0, 1));
-        table.setGridColor(borderColor());
-        table.setBackground(surfaceColor());
+        refreshTableTheme(table);
         table.setShowHorizontalLines(true);
         table.setShowVerticalLines(false);
         table.setFillsViewportHeight(true);
@@ -454,14 +515,7 @@ public final class FarmUi {
         JTableHeader header = table.getTableHeader();
         if (header != null) {
             header.setReorderingAllowed(false);
-            header.setOpaque(true);
-            header.setBackground(color("TableHeader.background",
-                    blend(surfaceColor(), toneBackgroundColor(Tone.SUCCESS), 0.72)));
-            header.setForeground(color("TableHeader.foreground",
-                    isDark() ? new Color(238, 242, 239) : new Color(31, 48, 38)));
             header.setFont(header.getFont().deriveFont(Font.BOLD, 12f));
-            header.setBorder(BorderFactory.createMatteBorder(
-                    0, 0, 1, 0, borderColor()));
             header.setPreferredSize(new Dimension(
                     Math.max(1, header.getPreferredSize().width), 34));
             header.getAccessibleContext()
@@ -481,16 +535,20 @@ public final class FarmUi {
 
     public static JTextArea displayArea(int rows, int columns) {
         JTextArea area = new JTextArea(rows, columns);
+        area.setName("farm.displayArea");
         area.setEditable(false);
         area.setLineWrap(true);
         area.setWrapStyleWord(true);
         area.setFont(area.getFont().deriveFont(13f));
+        area.setBackground(surfaceColor());
+        area.setForeground(controlForegroundColor());
         area.setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
         return area;
     }
 
     public static JLabel mutedLabel(String text) {
         JLabel label = new JLabel(text);
+        label.putClientProperty(ROLE_PROPERTY, "muted");
         label.setForeground(mutedColor());
         label.setFont(label.getFont().deriveFont(12f));
         return label;
@@ -581,6 +639,36 @@ public final class FarmUi {
         hint.getAccessibleContext().setAccessibleName("Form guidance");
         hint.getAccessibleContext().setAccessibleDescription(text);
         return hint;
+    }
+
+    /** A comfortable, clearly labelled entry target for everyday farm data. */
+    public static <T extends JComponent> T entryControl(T field, String placeholder, String guidance) {
+        field.setFont(field.getFont().deriveFont(15f));
+        Dimension preferred = field.getPreferredSize();
+        field.setPreferredSize(new Dimension(preferred.width, Math.max(36, preferred.height)));
+        field.setMinimumSize(new Dimension(60, 36));
+        if (field instanceof JTextField text) {
+            text.putClientProperty("JTextField.placeholderText", placeholder);
+            text.setMargin(new Insets(5, 9, 5, 9));
+        }
+        field.putClientProperty("flowerfarm.fieldGuidance", guidance);
+        clearControlError(field);
+        return field;
+    }
+
+    /** Keeps a field label close to its value and preserves keyboard mnemonics. */
+    public static JPanel entryField(String text, JComponent field, JComponent labelTarget, char mnemonic) {
+        JPanel group = new JPanel(new BorderLayout(0, 4));
+        group.setOpaque(false);
+        JLabel label = new JLabel(text);
+        label.setFont(label.getFont().deriveFont(Font.BOLD, 13f));
+        label.setLabelFor(labelTarget);
+        if (mnemonic != '\0') {
+            label.setDisplayedMnemonic(mnemonic);
+        }
+        group.add(label, BorderLayout.NORTH);
+        group.add(field, BorderLayout.CENTER);
+        return group;
     }
 
     /** Consistent accessible content for destructive or inventory-changing dialogs. */
@@ -685,15 +773,27 @@ public final class FarmUi {
 
     /** Clears validation styling while preserving the field's accessible name. */
     public static void clearFieldError(JTextField field) {
+        clearControlError(field);
+    }
+
+    /** Restore normal field guidance when a validation error has been corrected. */
+    public static void clearControlError(JComponent field) {
         if (field == null) {
             return;
         }
         field.putClientProperty("JComponent.outline", null);
-        field.setToolTipText(null);
-        field.getAccessibleContext().setAccessibleDescription(null);
+        Object guidance = field.getClientProperty("flowerfarm.fieldGuidance");
+        String text = guidance instanceof String value ? value : null;
+        field.setToolTipText(text);
+        field.getAccessibleContext().setAccessibleDescription(text);
     }
 
     public static JPanel emptyState(String title, String guidance) {
+        return emptyStateView(title, guidance).component();
+    }
+
+    /** Builds an empty state whose copy can follow first-run and filtered-result context. */
+    public static EmptyStateView emptyStateView(String title, String guidance) {
         JPanel state = new JPanel(new GridBagLayout());
         state.setOpaque(false);
         state.setName("farm.emptyState");
@@ -711,7 +811,17 @@ public final class FarmUi {
         state.add(copy, new GridBagConstraints());
         state.getAccessibleContext().setAccessibleName(title);
         state.getAccessibleContext().setAccessibleDescription(guidance);
-        return state;
+        return new EmptyStateView(state, titleLabel, guidanceLabel);
+    }
+
+    /** Mutable copy handles for one reusable CardLayout empty state. */
+    public record EmptyStateView(JPanel component, JLabel title, JLabel guidance) {
+        public void updateCopy(String nextTitle, String nextGuidance) {
+            title.setText(nextTitle);
+            guidance.setText(nextGuidance);
+            component.getAccessibleContext().setAccessibleName(nextTitle);
+            component.getAccessibleContext().setAccessibleDescription(nextGuidance);
+        }
     }
 
     /** Theme-aware stock tint used by tables without hard-coding light-only colors. */
@@ -836,6 +946,11 @@ public final class FarmUi {
         return blend(toneBackgroundColor(tone), toneForegroundColor(tone), 0.35);
     }
 
+    /** Returns whether the active look and feel uses a dark base surface. */
+    public static boolean isDarkTheme() {
+        return isDark();
+    }
+
     private static boolean isDark() {
         Color background = color("Panel.background", Color.WHITE);
         double luminance = 0.2126 * background.getRed()
@@ -847,6 +962,44 @@ public final class FarmUi {
     private static Color color(String key, Color fallback) {
         Color value = UIManager.getColor(key);
         return value == null ? fallback : value;
+    }
+
+    private static Color controlForegroundColor() {
+        return color("Label.foreground", isDark() ? new Color(238, 242, 239)
+                : new Color(31, 48, 38));
+    }
+
+    private static void refreshTextComponentTheme(JTextComponent component) {
+        boolean enabled = component.isEnabled();
+        component.setBackground(enabled
+                ? surfaceColor()
+                : blend(surfaceColor(), pageBackgroundColor(), 0.42));
+        component.setForeground(enabled ? controlForegroundColor() : mutedColor());
+        component.setCaretColor(controlForegroundColor());
+        component.setSelectionColor(color("TextComponent.selectionBackground",
+                color("TextField.selectionBackground", toneBackgroundColor(Tone.INFO))));
+        component.setSelectedTextColor(color("TextComponent.selectionForeground",
+                color("TextField.selectionForeground", controlForegroundColor())));
+    }
+
+    private static void refreshTableTheme(JTable table) {
+        table.setGridColor(borderColor());
+        table.setBackground(surfaceColor());
+        table.setForeground(controlForegroundColor());
+        table.setSelectionBackground(color("Table.selectionBackground",
+                isDark() ? new Color(45, 103, 75) : new Color(202, 232, 213)));
+        table.setSelectionForeground(color("Table.selectionForeground",
+                isDark() ? Color.WHITE : new Color(20, 62, 41)));
+        JTableHeader header = table.getTableHeader();
+        if (header != null) {
+            header.setOpaque(true);
+            header.setBackground(color("TableHeader.background",
+                    blend(surfaceColor(), toneBackgroundColor(Tone.SUCCESS), 0.72)));
+            header.setForeground(color("TableHeader.foreground",
+                    isDark() ? new Color(238, 242, 239) : new Color(31, 48, 38)));
+            header.setBorder(BorderFactory.createMatteBorder(
+                    0, 0, 1, 0, borderColor()));
+        }
     }
 
     private static Color blend(Color first, Color second, double secondWeight) {
@@ -904,11 +1057,11 @@ public final class FarmUi {
         }
 
         @Override public int getIconWidth() {
-            return 26;
+            return 22;
         }
 
         @Override public int getIconHeight() {
-            return 26;
+            return 22;
         }
 
         @Override public void paintIcon(Component component, Graphics graphics, int x, int y) {
@@ -917,13 +1070,13 @@ public final class FarmUi {
                 copy.setRenderingHint(RenderingHints.KEY_ANTIALIASING,
                         RenderingHints.VALUE_ANTIALIAS_ON);
                 copy.setColor(background);
-                copy.fillRoundRect(x + 1, y + 1, 24, 24, 9, 9);
+                copy.fillRoundRect(x + 1, y + 1, 20, 20, 8, 8);
                 copy.setColor(foreground);
                 copy.setFont(component.getFont().deriveFont(Font.BOLD,
-                        code.length() > 1 ? 9f : 13f));
+                        code.length() > 1 ? 8f : 11f));
                 int width = copy.getFontMetrics().stringWidth(code);
-                int baseline = y + 13 + copy.getFontMetrics().getAscent() / 2 - 2;
-                copy.drawString(code, x + (26 - width) / 2, baseline);
+                int baseline = y + 11 + copy.getFontMetrics().getAscent() / 2 - 2;
+                copy.drawString(code, x + (22 - width) / 2, baseline);
             } finally {
                 copy.dispose();
             }

@@ -66,6 +66,110 @@ shared or externally reachable deployment.
 - Connector requests use bounded network timeouts, and connector failure details redact common credential forms before they reach API responses or audit history.
 - Offline JSON mirrors are replaced atomically so an interrupted export keeps the last complete file.
 
+### AI and automation harness
+
+The provider-neutral runtime harness and its loopback REST transport are
+disabled by default. Enabling it requires a separate token of at least 24
+characters on every discovery, observation, and command request. The token does
+not replace normal Spring Security: under the `auth` profile, HTTP Basic role
+authorization is also required.
+
+Read and navigation are the only default capabilities after enablement. Draft,
+mutation, and destructive actions require separate operator switches;
+destructive access cannot be enabled without mutation access. Physical-world
+actions add another independent switch and remain blocked unless mutation and
+destructive access are also enabled. Each physical command expires within at
+most 30 seconds, preventing delayed delivery of stale actuation. Plugins declare
+the risk for each action, so a client cannot downgrade its own request. Generic
+Swing button activation is classified destructive. Completed request IDs are
+replay-safe within a bounded process-local cache, and conflicting reuse fails.
+
+UI observations exclude editable field and password values. Visible control
+labels can still contain private farm, customer, or event information. Keep the
+harness on loopback, protect the token like a credential, supervise elevated
+sessions, and disable it again after use. The transport is unavailable in
+`container`, `cli`, and `release-smoke` profiles. Configuration and integration
+examples are in the [AI harness guide](docs/AI_HARNESS.md).
+
+Ordinary snapshots publish every reachable primary/nested route using tab
+titles only. `navigate-route` accepts only an exact published path and rejects
+missing, disabled, or ambiguous steps. This expands navigation coverage without
+exposing field contents or bypassing the same risk policy applied to other
+commands.
+
+The authenticated manifest exposes effective capability flags and JSON-Schema
+tool definitions, but never returns the harness token or editable field values.
+Clients should omit tools marked `allowed=false`; server-side policy still
+rejects them if submitted directly.
+
+Structured control values and application-window pixels require the independent
+`SENSITIVE_READ` policy, which is disabled by default. Password fields remain
+unreadable under every policy. Captures are bounded, returned in memory rather
+than written to server storage, and count against the 8 MiB replay-output cache.
+Treat enabled sensitive-read sessions and downstream model transcripts as access
+to visible customer and farm data.
+
+Device and robot plugins may declare typed sensor signals. The gateway validates
+their JSON types, strips signals marked sensitive unless sensitive read is
+enabled, rejects undeclared physical metadata, and requires descriptor/snapshot
+identity to match. This boundary does
+not replace hardware safety: robot adapters must enforce local emergency stop,
+watchdog, collision, speed/travel, coordinate-frame, interlock, and loss-of-link
+behavior independently of the AI client and network transport.
+
+The `tesla-optimus` integration is disabled by default and currently has only a
+simulator transport. It exposes bounded high-level tasks with a stage/token/
+execute handshake, never raw joints, trajectories, or velocity commands. A
+future hardware adapter must use an official owner interface, authenticate and
+attest the intended robot, reject stale or mismatched state locally, preserve a
+hardware stop path independent of this process, and require robot-local reset
+after an emergency stop. Do not enable physical actions merely to make a tool
+catalog look complete.
+
+Reviewed Optimus plans expire within five minutes and cannot be replaced without
+cancel or execution. The plugin blocks staging and motion on stale, future-dated,
+stopped, or not-ready state and consumes its local plan before an adapter execute
+call. This fail-closed behavior makes an ambiguous transport result require
+observation and a new review; a hardware adapter must still enforce token
+idempotency and plan expiry on the robot side.
+
+Robot state, staged plans, and command receipts must carry adapter-provided
+timestamps. Missing timestamps are rejected instead of being replaced with the
+application clock, and future-dated state, plans, and receipts fail closed.
+
+Hardware mode additionally requires
+`flowerfarm.harness.optimus.expected-robot-id` (or
+`FLOWERFARM_OPTIMUS_EXPECTED_ROBOT_ID`) to exactly match the adapter-reported
+stable ID. Simulator/hardware mode, model, software version, and coordinate
+frame are explicit; an identity change after startup fails closed. Active jobs
+report a typed lifecycle and command ID, and graceful cancellation must target
+that exact ID using a fresh, expiring physical command. The robot-owned
+emergency-stop path remains independent and never exposes a remote reset.
+
+Robot command receipts and meaningful lifecycle changes are persisted as
+append-only events in the local database. Records include the adapter-reported
+robot ID and bounded status detail so recovery can reject cross-robot history;
+protect them with the same OS access controls as other farm data. The read-only
+`get-operation` and bounded `list-operations` tools return status, progress,
+timestamps, and reconciliation state but do not return the stored robot ID or
+status detail. A nonterminal
+record missing from current adapter state is marked `UNKNOWN`, never inferred as
+successful.
+
+Normal Optimus control is protected by a durable, robot-scoped capability
+lease. Only one 15–300 second lease can be active for a stable adapter identity.
+Staging, staged-plan cancellation, execution, graceful cancellation, and safe
+pose require its token; renewal rotates the token, release invalidates it, and
+expiry fails closed. Emergency stop does not require lease ownership so a
+second authorized supervisor can still stop the robot. The database stores the
+lease holder label and a SHA-256 token digest, never the plaintext capability.
+Plaintext tokens exist transiently in the acquisition/renewal response, caller
+memory, request body, and bounded in-process replay cache: treat all four as
+secrets and do not log them. The holder label stays in the local lease record and
+is omitted from AI-facing observations and status responses; it is audit metadata
+under the shared local harness credential, not proof of an external human
+identity.
+
 ### Data at rest
 
 Default inventory DB is local **H2** (`./data/flowerfarm.mv.db`) or optional **SQLite**. Protect the `data/` directory with OS file permissions on multi-user machines.
@@ -84,3 +188,4 @@ Default inventory DB is local **H2** (`./data/flowerfarm.mv.db`) or optional **S
 4. Prefer VIEWER accounts for office/guest kiosks.
 5. Review connector audit history for unexpected live syncs.
 6. For containers, supply `FLOWERFARM_AUTH_USERS` and terminate TLS at a trusted reverse proxy.
+7. Leave the AI harness disabled unless a supervised local integration needs it; rotate its token after any suspected disclosure.

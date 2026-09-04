@@ -1,0 +1,363 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#245b42">
+  <meta name="description" content="FlowersForever field work and harvest capture">
+  <title>Field Work · FlowersForever</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="stylesheet" href="worker.css">
+  <script src="worker.js" defer></script>
+</head>
+<body>
+  <header class="app-header">
+    <div>
+      <p class="eyebrow">FlowersForever</p>
+      <h1>Field Work</h1>
+    </div>
+    <div class="connection" aria-live="polite">
+      <span id="connection-dot" class="connection-dot"></span>
+      <span id="connection-label">Checking connection</span>
+    </div>
+  </header>
+
+  <main>
+    <aside id="offline-banner" class="offline-banner" hidden>
+      Offline. New entries stay on this device and retry when the connection returns.
+    </aside>
+
+    <nav class="capture-actions" aria-label="Add a farm record">
+      <button id="add-harvest" class="capture-action" type="button"
+              aria-controls="harvest-section" aria-expanded="false">
+        <span class="capture-icon" aria-hidden="true">+</span>
+        <span><strong>Log a harvest</strong><small>Cut flowers, stock, and lot details</small></span>
+      </button>
+      <button id="add-field-note" class="capture-action note-action" type="button"
+              aria-controls="field-note-section" aria-expanded="false">
+        <span class="capture-icon" aria-hidden="true">+</span>
+        <span><strong>Add a field note</strong><small>A problem, idea, or observation</small></span>
+      </button>
+    </nav>
+    <div id="capture-workspace"></div>
+
+    <section id="field-note-section" class="capture-section" aria-labelledby="field-note-heading" hidden>
+      <div class="section-heading">
+        <div><p class="eyebrow">Farm journal</p><h2 id="field-note-heading">Add a field note</h2></div>
+        <button class="secondary" type="button" data-close-capture="note">Close</button>
+      </div>
+      <p class="section-copy">Save what you notice now. Your team can find it in the Knowledge Log, with or without a harvest or task.</p>
+      <form id="field-note-form" class="card form-card">
+        <label for="field-note-observation">What did you notice? <span class="optional">Required</span></label>
+        <textarea id="field-note-observation" name="observation" maxlength="2000" rows="4"
+                  placeholder="e.g. Dahlia stems in Bed 4 are leaning after last night's rain." required></textarea>
+        <div class="field-grid equal-columns">
+          <label>Crop or product <span class="optional">Optional</span>
+            <input name="cropName" type="text" maxlength="255" list="farm-crop-options"
+                   placeholder="e.g. Dahlia" autocomplete="off">
+          </label>
+          <label>Bed or field <span class="optional">Optional</span>
+            <input name="bedOrField" type="text" maxlength="128" placeholder="e.g. Bed 4">
+          </label>
+        </div>
+        <details class="note-details">
+          <summary>Date, type, and follow-up</summary>
+          <div class="field-grid equal-columns">
+            <label>Observed on<input id="field-note-date" name="observedOn" type="date" required></label>
+            <label>Note type<select name="kind">
+              <option value="PRACTICE">Observation</option>
+              <option value="PROBLEM">Problem</option>
+              <option value="OPPORTUNITY">Idea or opportunity</option>
+            </select></label>
+          </div>
+          <label>Action taken <span class="optional">Optional</span>
+            <textarea name="actionTaken" maxlength="2000" rows="2" placeholder="What did you do?"></textarea>
+          </label>
+          <div class="field-grid equal-columns">
+            <label>Your name <span class="optional">Optional</span>
+              <input name="performedBy" maxlength="255" type="text" autocomplete="name">
+            </label>
+            <label>Follow up on <span class="optional">Optional</span>
+              <input name="followUpDate" type="date">
+            </label>
+          </div>
+        </details>
+        <button class="primary full-width" type="submit">Save field note</button>
+        <p id="field-note-message" class="form-message" aria-live="polite"></p>
+      </form>
+    </section>
+    <datalist id="farm-crop-options"></datalist>
+
+    <section class="hero" aria-labelledby="today-heading">
+      <div>
+        <p class="eyebrow">Today in the field</p>
+        <h2 id="today-heading">Work that is due</h2>
+        <p class="section-copy">Overdue work stays here until it is completed or updated in FlowersForever.</p>
+      </div>
+      <div class="date-controls">
+        <label for="work-date">Work date</label>
+        <div class="date-row">
+          <input id="work-date" type="date">
+          <button id="refresh-work" type="button" class="secondary">Refresh</button>
+        </div>
+      </div>
+    </section>
+
+    <section aria-labelledby="tasks-heading">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Production</p>
+          <h2 id="tasks-heading">Open tasks</h2>
+        </div>
+        <span id="task-count" class="count-pill">—</span>
+      </div>
+      <div id="task-message" class="inline-message" aria-live="polite">Loading work…</div>
+      <div id="task-list" class="task-list"></div>
+    </section>
+
+    <section class="order-section" aria-labelledby="orders-heading">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Pickup, delivery, and market</p>
+          <h2 id="orders-heading">Due handoffs</h2>
+        </div>
+        <span id="order-count" class="count-pill">—</span>
+      </div>
+      <p class="section-copy">Review the customer, instructions, and complete product load before recording a physical handoff.</p>
+      <div id="order-message" class="inline-message" aria-live="polite">Loading handoffs…</div>
+      <div id="order-list" class="order-list"></div>
+    </section>
+
+    <section class="inventory-section" aria-labelledby="inventory-heading">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Cooler and shed</p>
+          <h2 id="inventory-heading">Count inventory</h2>
+        </div>
+        <span id="inventory-count" class="count-pill">—</span>
+      </div>
+      <p class="section-copy">Find a product, review its system quantity, then enter what is physically on hand.</p>
+      <form id="inventory-search-form" class="search-row" role="search">
+        <label class="search-field">
+          Product or category
+          <input id="inventory-search" name="query" type="search" maxlength="120"
+                 autocomplete="off" placeholder="Search inventory">
+        </label>
+        <button type="submit" class="secondary">Find stock</button>
+      </form>
+      <div id="inventory-message" class="inline-message" aria-live="polite">Loading inventory…</div>
+      <div id="inventory-list" class="inventory-list"></div>
+    </section>
+
+    <section id="harvest-section" class="harvest-section capture-section" aria-labelledby="harvest-heading" hidden>
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Field capture</p>
+          <h2 id="harvest-heading">Log a harvest</h2>
+        </div>
+        <button class="secondary" type="button" data-close-capture="harvest">Close</button>
+      </div>
+      <p class="section-copy">Marketable quantity increases inventory. Record the lot, grade, loss, and cooler location for traceability.</p>
+
+      <form id="harvest-form" class="card form-card">
+        <div class="field-grid two-column">
+          <label>
+            Harvest date
+            <input id="harvest-date" name="harvestDate" type="date" required>
+          </label>
+          <label>
+            Crop or product
+            <input name="cropName" type="text" maxlength="255" autocomplete="off" list="farm-crop-options"
+                   placeholder="e.g. Cafe au Lait Dahlia" required>
+          </label>
+        </div>
+        <div class="field-grid quantity-grid">
+          <label>
+            Marketable quantity
+            <input name="quantity" type="number" min="0.01" step="0.01"
+                   inputmode="decimal" placeholder="0" required>
+          </label>
+          <label>
+            Unit
+            <input name="unit" type="text" maxlength="64" value="stems" required>
+          </label>
+          <label>
+            Bed or field
+            <input name="bedOrField" type="text" maxlength="128"
+                   placeholder="e.g. Bed 4">
+          </label>
+        </div>
+        <div class="field-grid two-column">
+          <label>
+            Lot code <span class="optional">(optional)</span>
+            <input name="lotCode" type="text" maxlength="64" autocomplete="off"
+                   pattern="[A-Za-z0-9][A-Za-z0-9._/-]{0,63}"
+                   placeholder="Generated when blank">
+          </label>
+          <label>
+            Grade
+            <select name="grade">
+              <option value="UNGRADED">Ungraded</option>
+              <option value="SELECT">Select</option>
+              <option value="STANDARD">Standard</option>
+              <option value="PROCESSING">Processing</option>
+            </select>
+          </label>
+          <label>
+            Loss / culls
+            <input name="lossQuantity" type="number" min="0" step="0.01"
+                   inputmode="decimal" value="0">
+          </label>
+          <label>
+            Storage location
+            <input name="storageLocation" type="text" maxlength="128"
+                   placeholder="e.g. Cooler 1 · Rack B">
+          </label>
+        </div>
+        <label>
+          Notes
+          <textarea name="notes" maxlength="2000" rows="3"
+                    placeholder="Weather, crew note, treatment, or destination"></textarea>
+        </label>
+        <button class="primary full-width" type="submit">Save harvest</button>
+        <p id="harvest-message" class="form-message" aria-live="polite"></p>
+      </form>
+    </section>
+
+    <section class="field-notes-section" aria-labelledby="field-notes-heading">
+      <div class="section-heading">
+        <div><p class="eyebrow">Shared farm journal</p><h2 id="field-notes-heading">Recent field notes</h2></div>
+        <button id="refresh-field-notes" type="button" class="secondary">Refresh notes</button>
+      </div>
+      <p class="section-copy">Latest 10 Knowledge Log entries through the selected work date.</p>
+      <p id="field-notes-message" class="inline-message" aria-live="polite">Loading notes…</p>
+      <div id="field-notes-list" class="field-notes-list"></div>
+    </section>
+
+    <section class="sync-card" aria-labelledby="sync-heading">
+      <div>
+        <p class="eyebrow">Reliable handoff</p>
+        <h2 id="sync-heading">Pending on this device</h2>
+        <p id="sync-detail" class="section-copy">No field entries are waiting to sync.</p>
+        <div id="pending-list" class="pending-list"></div>
+      </div>
+      <button id="retry-sync" type="button" class="secondary">Retry now</button>
+    </section>
+  </main>
+
+  <template id="task-template">
+    <article class="card task-card">
+      <div class="task-summary">
+        <div>
+          <div class="task-badges">
+            <span class="task-date"></span>
+            <span class="task-type"></span>
+          </div>
+          <h3 class="task-title"></h3>
+          <p class="task-location"></p>
+          <p class="task-notes"></p>
+        </div>
+        <button class="secondary complete-toggle" type="button" aria-expanded="false">
+          Complete
+        </button>
+      </div>
+      <form class="task-form" hidden>
+        <div class="field-grid task-actual-grid">
+          <label>
+            Crew minutes
+            <input name="actualMinutes" type="number" min="0" max="10080"
+                   step="1" inputmode="numeric" value="0" required>
+          </label>
+          <label>
+            Input cost
+            <input name="inputCost" type="number" min="0" max="1000000"
+                   step="0.01" inputmode="decimal" value="0" required>
+          </label>
+        </div>
+        <label>
+          Field result
+          <textarea name="fieldObservation" maxlength="1000" rows="2"
+                    placeholder="What was completed or observed?"></textarea>
+        </label>
+        <div class="attachment-fields">
+          <label>
+            Field photo (optional)
+            <input class="task-photo" name="photo" type="file"
+                   accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
+                   capture="environment">
+          </label>
+          <label>
+            Photo caption
+            <input name="photoCaption" type="text" maxlength="500"
+                   placeholder="What should the farm or AI notice?">
+          </label>
+          <p class="attachment-help">JPEG, PNG, WebP, HEIC, or HEIF · up to 15 MiB. The photo is saved before the task closes.</p>
+        </div>
+        <button class="primary full-width" type="submit">Record completed work</button>
+        <p class="form-message" aria-live="polite"></p>
+      </form>
+    </article>
+  </template>
+
+  <template id="inventory-template">
+    <article class="card inventory-card">
+      <div class="inventory-summary">
+        <div>
+          <p class="inventory-category"></p>
+          <h3 class="inventory-name"></h3>
+          <p class="inventory-on-hand"></p>
+        </div>
+        <span class="count-pill inventory-quantity"></span>
+      </div>
+      <form class="inventory-form">
+        <label>
+          Physical count
+          <input name="countedQuantity" type="number" min="0" step="1"
+                 inputmode="numeric" required>
+        </label>
+        <div class="inventory-actions">
+          <button class="primary" type="submit">Save count</button>
+          <button class="secondary discard-count" type="button" hidden>Discard pending</button>
+        </div>
+        <p class="form-message" aria-live="polite"></p>
+      </form>
+    </article>
+  </template>
+
+  <template id="order-template">
+    <article class="card order-card">
+      <div class="order-summary">
+        <div>
+          <div class="order-badges">
+            <span class="order-date"></span>
+            <span class="order-type"></span>
+          </div>
+          <h3 class="order-customer"></h3>
+          <p class="order-contact"></p>
+        </div>
+        <button class="secondary handoff-toggle" type="button" aria-expanded="false">
+          Review handoff
+        </button>
+      </div>
+      <div class="order-context">
+        <p class="order-account-note"></p>
+        <p class="order-instructions"></p>
+        <ul class="order-lines"></ul>
+      </div>
+      <form class="handoff-form" hidden>
+        <label class="handoff-confirmation">
+          <input name="confirmedPhysicalHandoff" type="checkbox" required>
+          <span class="handoff-confirmation-text"></span>
+        </label>
+        <div class="handoff-actions">
+          <button class="primary complete-handoff" type="submit">Complete handoff &amp; deduct stock</button>
+          <button class="secondary discard-handoff" type="button" hidden>Discard pending</button>
+        </div>
+        <p class="form-message" aria-live="polite"></p>
+      </form>
+    </article>
+  </template>
+
+  <noscript>This field screen requires JavaScript to load and save farm work.</noscript>
+</body>
+</html>

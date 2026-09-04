@@ -1,6 +1,8 @@
 package com.flowerfarm.gui.tabs;
 
 import com.flowerfarm.gui.FarmUi;
+import com.flowerfarm.gui.FarmDialogs;
+import com.flowerfarm.gui.FarmFileChooser;
 import com.flowerfarm.gui.GuiPermissions;
 import com.flowerfarm.service.MarketDayPackingService;
 import com.flowerfarm.service.MarketDayPackingService.FulfillBatchResult;
@@ -29,6 +31,8 @@ public class MarketDayTab implements FlowerFarmTab {
 
     private final MarketDayPackingService packingService;
     private final TabHost host;
+    private final FarmDialogs dialogs;
+    private final FarmFileChooser files;
 
     private JPanel panel;
     private JTextField dateField;
@@ -82,8 +86,20 @@ public class MarketDayTab implements FlowerFarmTab {
     private String handoffReturnLabel;
 
     public MarketDayTab(MarketDayPackingService packingService, TabHost host) {
+        this(packingService, host, FarmDialogs.swing(), FarmFileChooser.swing());
+    }
+
+    public MarketDayTab(MarketDayPackingService packingService, TabHost host,
+                        FarmDialogs dialogs) {
+        this(packingService, host, dialogs, FarmFileChooser.swing());
+    }
+
+    public MarketDayTab(MarketDayPackingService packingService, TabHost host,
+                        FarmDialogs dialogs, FarmFileChooser files) {
         this.packingService = packingService;
         this.host = host;
+        this.dialogs = java.util.Objects.requireNonNull(dialogs, "dialogs");
+        this.files = java.util.Objects.requireNonNull(files, "files");
     }
 
     @Override
@@ -481,14 +497,27 @@ public class MarketDayTab implements FlowerFarmTab {
         try {
             MarketDayPlan plan = snapshotPlan(requireDisplayedPlan());
             ExportKind kind = ExportKind.fromLabel(type);
-            JFileChooser chooser = new JFileChooser();
-            chooser.setSelectedFile(new File(kind.defaultName(plan.marketDate())));
-            if (chooser.showSaveDialog(panel) != JFileChooser.APPROVE_OPTION) {
+            var selected = files.chooseSave(panel, "Save market-day packing export",
+                    new File(kind.defaultName(plan.marketDate())));
+            if (selected.isEmpty()) {
+                showExportState("Export cancelled · ready",
+                        "No file was written; the packing plan and checked loads were kept.",
+                        FarmUi.Tone.NEUTRAL);
+                if (host != null) {
+                    host.setStatus("Market-day export cancelled. No file was changed.");
+                }
                 return;
             }
-            File destination = chooser.getSelectedFile();
+            File destination = selected.get();
             if (approveReplacement(destination)) {
                 startMarketDayExport(type, destination, plan);
+            } else {
+                showExportState("Export cancelled · existing file kept",
+                        "The selected file was not replaced; the packing plan and checks were kept.",
+                        FarmUi.Tone.NEUTRAL);
+                if (host != null) {
+                    host.setStatus("Market-day export cancelled. Existing file was kept.");
+                }
             }
         } catch (RuntimeException exception) {
             failExport(exception);
@@ -503,12 +532,16 @@ public class MarketDayTab implements FlowerFarmTab {
             GuiPermissions.setWritable(
                     canWrite && allPacked && !stockBlocked && !planScopeDirty
                             && !completionRefreshRequired
+                            && planRefreshFailure == null
                             && !fulfilling && !refreshingPlan, fulfillBtn);
             if (fulfilling) {
                 return;
             }
             fulfillBtn.setToolTipText(completionRefreshRequired
                     ? completionRefreshRecovery()
+                    : planRefreshFailure != null
+                    ? "The previous packing plan is still shown. Rebuild it successfully before "
+                            + "completing orders or deducting inventory."
                     : planScopeDirty
                     ? "Build the packing list again for the changed date or scope before completion."
                     : stockBlocked
@@ -532,6 +565,9 @@ public class MarketDayTab implements FlowerFarmTab {
                     message = committedCompletionCount
                             + " completed once · packing refresh required";
                     tone = FarmUi.Tone.WARNING;
+                } else if (planRefreshFailure != null) {
+                    message = "Refresh failed · previous plan shown · completion locked";
+                    tone = FarmUi.Tone.DANGER;
                 } else if (planScopeDirty) {
                     message = "Scope changed · rebuild before completion";
                     tone = FarmUi.Tone.WARNING;
@@ -1044,7 +1080,7 @@ public class MarketDayTab implements FlowerFarmTab {
         String detail = FarmUi.actionableError("Market-day packing list", failure);
         planRefreshFailure = detail
                 + " Existing plan, packed checks, scope, and shortfall guidance were kept; retry when ready.";
-        showPlanRefreshState("Packing list refresh failed · retry",
+        showPlanRefreshState("Packing list refresh failed · previous plan shown · retry",
                 planRefreshFailure, FarmUi.Tone.DANGER);
         if (host != null) {
             host.setStatus("Market-day refresh failed. Existing packing work was kept; retry when ready.");
@@ -1055,7 +1091,7 @@ public class MarketDayTab implements FlowerFarmTab {
         refreshingPlan = false;
         setPlanRefreshControls(true);
         if (planRefreshFailure != null) {
-            showPlanRefreshState("Packing list refresh failed · retry",
+            showPlanRefreshState("Packing list refresh failed · previous plan shown · retry",
                     planRefreshFailure, FarmUi.Tone.DANGER);
         }
         if (pendingFulfillmentPresentation != null && !planRefreshQueued) {
@@ -1714,7 +1750,7 @@ public class MarketDayTab implements FlowerFarmTab {
             host.setStatus("Market-day " + kind.shortName() + " saved → " + saved);
         }
         if (panel.isShowing()) {
-            JOptionPane.showMessageDialog(panel,
+            dialogs.showMessage(panel,
                     "Packing list saved to:\n" + saved,
                     "Packing list saved", JOptionPane.INFORMATION_MESSAGE);
         }
@@ -1730,7 +1766,7 @@ public class MarketDayTab implements FlowerFarmTab {
             host.setStatus(guidance + " Packing work was kept; choose Export file to retry.");
         }
         if (panel.isShowing()) {
-            JOptionPane.showMessageDialog(panel, guidance, "Export failed",
+            dialogs.showMessage(panel, guidance, "Export failed",
                     JOptionPane.ERROR_MESSAGE);
         }
     }
@@ -1752,7 +1788,7 @@ public class MarketDayTab implements FlowerFarmTab {
         if (!file.exists()) {
             return true;
         }
-        return JOptionPane.showConfirmDialog(panel,
+        return dialogs.showConfirm(panel,
                 file.getName() + " already exists. Replace it?",
                 "Replace existing export?", JOptionPane.YES_NO_OPTION,
                 JOptionPane.WARNING_MESSAGE) == JOptionPane.YES_OPTION;
@@ -1854,7 +1890,7 @@ public class MarketDayTab implements FlowerFarmTab {
             }
             MarketDayCompletionReview review = marketDayCompletionReview(plan);
             Object[] options = new Object[]{"Cancel", "Complete checked orders"};
-            int ok = JOptionPane.showOptionDialog(panel,
+            int ok = dialogs.showOption(panel,
                     marketDayCompletionPanel(review),
                     "Complete confirmed orders",
                     JOptionPane.DEFAULT_OPTION,

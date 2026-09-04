@@ -46,12 +46,12 @@ public final class HarvestBatchView extends JPanel {
         add(buildContextPanel(), BorderLayout.NORTH);
 
         batchArea = new JTextArea(6, 28);
-        batchArea.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
+        batchArea.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 14));
         batchArea.getAccessibleContext().setAccessibleName("Batch harvest lines");
         batchArea.getAccessibleContext().setAccessibleDescription(
                 "One harvest per line: Crop, Qty, optional Unit, optional Bed");
-        batchArea.setText("# Morning cut — blank unit and bed use the visible defaults above\n"
-                + "Nootka Rose,40\nDamask Rose,25,bunches\nDahlia mix,15,stems,Bed C\n");
+        batchArea.setToolTipText(
+                "Enter your harvests, one per line: Crop, Quantity, optional Unit, optional Bed.");
         add(new JScrollPane(batchArea), BorderLayout.CENTER);
 
         logButton = FarmUi.primaryButton("Log batch harvest");
@@ -109,9 +109,9 @@ public final class HarvestBatchView extends JPanel {
         constraints.fill = GridBagConstraints.HORIZONTAL;
         constraints.anchor = GridBagConstraints.WEST;
         addField(context, constraints, 0, 0, "Date", dateField, 'D');
-        addField(context, constraints, 0, 1, "Default unit", unitField, 'U');
-        addField(context, constraints, 1, 0, "Default bed / field", bedField, 'B');
-        addField(context, constraints, 1, 1, "Notes for every row", notesField, 'N');
+        addField(context, constraints, 0, 1, "Unit", unitField, 'U');
+        addField(context, constraints, 0, 2, "Bed / field", bedField, 'B');
+        addField(context, constraints, 0, 3, "Notes", notesField, 'N');
         return context;
     }
 

@@ -1,18 +1,24 @@
 package com.flowerfarm.gui;
 
+import com.formdev.flatlaf.FlatDarkLaf;
+import com.formdev.flatlaf.FlatLightLaf;
+import com.flowerfarm.gui.tabs.LSystemCanvas;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import javax.swing.Box;
 import javax.swing.BoxLayout;
 import javax.swing.JButton;
+import javax.swing.JComboBox;
 import javax.swing.Icon;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTable;
+import javax.swing.JTextArea;
 import javax.swing.JTextField;
 import javax.swing.SwingUtilities;
+import javax.swing.UIManager;
 import javax.swing.table.DefaultTableModel;
 import java.awt.BorderLayout;
 import java.awt.Color;
@@ -49,9 +55,9 @@ class FarmUiTest {
 
         assertThat(header.getName()).isEqualTo("farm.brandHeader");
         assertThat(header.getAccessibleContext().getAccessibleName())
-                .isEqualTo("Flowers Forever application header");
-        assertThat(dashboard.getIconWidth()).isEqualTo(26);
-        assertThat(harvest.getIconHeight()).isEqualTo(26);
+                .isEqualTo("FLOWERSFOREVER · FlowersForever application header");
+        assertThat(dashboard.getIconWidth()).isEqualTo(22);
+        assertThat(harvest.getIconHeight()).isEqualTo(22);
     }
 
     @Test
@@ -132,6 +138,23 @@ class FarmUiTest {
         assertThat(planningValue.getForeground())
                 .isEqualTo(FarmUi.toneForegroundColor(FarmUi.Tone.WARNING));
         assertThat(searchSection.getBackground()).isNotEqualTo(stockSection.getBackground());
+    }
+
+    @Test
+    @DisplayName("empty-state copy updates visible and accessible first-run context together")
+    void mutableEmptyStateCopy() {
+        FarmUi.EmptyStateView state = FarmUi.emptyStateView(
+                "No inventory yet", "Add the first product.");
+
+        state.updateCopy(
+                "No inventory matches this view", "Clear the search and try again.");
+
+        assertThat(state.title().getText()).isEqualTo("No inventory matches this view");
+        assertThat(state.guidance().getText()).isEqualTo("Clear the search and try again.");
+        assertThat(state.component().getAccessibleContext().getAccessibleName())
+                .isEqualTo("No inventory matches this view");
+        assertThat(state.component().getAccessibleContext().getAccessibleDescription())
+                .isEqualTo("Clear the search and try again.");
     }
 
     @Test
@@ -236,5 +259,62 @@ class FarmUiTest {
 
         search.setEnabled(false);
         assertThat(FarmUi.focusFirstInteractive(page)).isSameAs(refresh);
+    }
+
+    @Test
+    @DisplayName("runtime dark mode refreshes muted copy and read-only controls")
+    void runtimeDarkModeRefresh() throws Exception {
+        FlatLightLaf.setup();
+        FarmUi.installThemeDefaults();
+        JPanel page = FarmUi.page();
+        page.setName("seasonPlanner.page");
+        JLabel muted = FarmUi.mutedLabel("Updated just now");
+        JTextField search = new JTextField("Dahlia");
+        JTextArea display = FarmUi.displayArea(3, 24);
+        JComboBox<String> choices = new JComboBox<>(new String[]{"Low-stock reorder"});
+        LSystemCanvas growthPreview = new LSystemCanvas();
+        JTable table = new JTable(new DefaultTableModel(
+                new Object[][]{{"Cafe au Lait", 24}}, new Object[]{"Flower", "Qty"}));
+        FarmUi.configureTable(table, "Dark mode inventory table");
+        JScrollPane tableScroll = FarmUi.tableScroll(table);
+        JPanel controls = new JPanel();
+        controls.setOpaque(false);
+        controls.add(muted);
+        controls.add(search);
+        controls.add(choices);
+        page.add(controls, BorderLayout.NORTH);
+        page.add(display, BorderLayout.CENTER);
+        page.add(tableScroll, BorderLayout.SOUTH);
+
+        try {
+            FlatDarkLaf.setup();
+            FarmUi.installThemeDefaults();
+            SwingUtilities.invokeAndWait(() -> {
+                SwingUtilities.updateComponentTreeUI(page);
+                SwingUtilities.updateComponentTreeUI(growthPreview);
+                FarmUi.refreshTheme(page);
+            });
+
+            assertThat(page.getBackground()).isEqualTo(FarmUi.pageBackgroundColor());
+            assertThat(muted.getForeground()).isEqualTo(FarmUi.mutedColor());
+            assertThat(search.getBackground()).isEqualTo(FarmUi.surfaceColor());
+            assertThat(search.getForeground()).isNotEqualTo(search.getBackground());
+            assertThat(display.getBackground()).isEqualTo(FarmUi.surfaceColor());
+            assertThat(display.getForeground()).isEqualTo(UIManager.getColor("Label.foreground"));
+            assertThat(display.getForeground()).isNotEqualTo(display.getBackground());
+            assertThat(choices.getBackground()).isEqualTo(FarmUi.surfaceColor());
+            assertThat(choices.getForeground()).isNotEqualTo(choices.getBackground());
+            assertThat(table.getBackground()).isEqualTo(FarmUi.surfaceColor());
+            assertThat(table.getForeground()).isNotEqualTo(table.getBackground());
+            assertThat(table.getTableHeader().getForeground())
+                    .isNotEqualTo(table.getTableHeader().getBackground());
+            assertThat(tableScroll.getViewport().getBackground())
+                    .isEqualTo(FarmUi.surfaceColor());
+            assertThat(growthPreview.getBackground().getRed()).isLessThan(100);
+            assertThat(FarmUi.isDarkTheme()).isTrue();
+        } finally {
+            FlatLightLaf.setup();
+            FarmUi.installThemeDefaults();
+        }
     }
 }

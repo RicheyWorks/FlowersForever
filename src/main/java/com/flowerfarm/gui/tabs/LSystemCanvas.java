@@ -1,5 +1,6 @@
 package com.flowerfarm.gui.tabs;
 
+import com.flowerfarm.gui.FarmUi;
 import com.flowerfarm.lsystem.SeasonPalette;
 
 import javax.swing.*;
@@ -24,7 +25,7 @@ public class LSystemCanvas extends JPanel {
 
     public LSystemCanvas() {
         setPreferredSize(new Dimension(640, 520));
-        setBackground(SeasonPalette.SPRING_BLOOM.getBackground());
+        refreshTheme();
     }
 
     public void setScene(String instructions, double angleDegrees, double step, SeasonPalette palette) {
@@ -32,7 +33,20 @@ public class LSystemCanvas extends JPanel {
         this.angleDegrees = angleDegrees;
         this.step = step;
         this.palette = palette == null ? SeasonPalette.SPRING_BLOOM : palette;
-        setBackground(this.palette.getBackground());
+        refreshTheme();
+        repaint();
+    }
+
+    @Override
+    public void updateUI() {
+        super.updateUI();
+        if (palette != null) {
+            refreshTheme();
+        }
+    }
+
+    private void refreshTheme() {
+        setBackground(sceneBackground());
         repaint();
     }
 
@@ -59,11 +73,11 @@ public class LSystemCanvas extends JPanel {
 
     private void paintScene(Graphics2D g, int width, int height) {
         g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-        g.setColor(palette.getBackground());
+        g.setColor(sceneBackground());
         g.fillRect(0, 0, width, height);
 
         if (instructions.isEmpty()) {
-            g.setColor(Color.GRAY);
+            g.setColor(FarmUi.mutedColor());
             g.drawString("Select a rose preset and click Grow.", 24, 32);
             return;
         }
@@ -89,7 +103,8 @@ public class LSystemCanvas extends JPanel {
         g.setTransform(old);
 
         if (!statusLine.isEmpty()) {
-            g.setColor(new Color(40, 60, 40));
+            g.setColor(FarmUi.isDarkTheme()
+                    ? FarmUi.mutedColor() : new Color(40, 60, 40));
             g.setFont(getFont().deriveFont(Font.PLAIN, 12f));
             g.drawString(statusLine, 12, height - 12);
         }
@@ -115,7 +130,8 @@ public class LSystemCanvas extends JPanel {
                     if (draw && g != null) {
                         g.setStroke(new BasicStroke(c == 'G' ? 2.2f : 1.4f,
                                 BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
-                        g.setColor(c == 'G' ? palette.getStemDark() : palette.getStem());
+                        g.setColor(themeColor(
+                                c == 'G' ? palette.getStemDark() : palette.getStem()));
                         g.draw(new Line2D.Double(x, y, nx, ny));
                     }
                     x = nx;
@@ -142,9 +158,9 @@ public class LSystemCanvas extends JPanel {
                 case 'B' -> {
                     if (draw && g != null) {
                         double r = radStep * 0.85;
-                        g.setColor(palette.getBloom());
+                        g.setColor(themeColor(palette.getBloom()));
                         g.fill(new Ellipse2D.Double(x - r, y - r, r * 2, r * 2));
-                        g.setColor(palette.getBloomCenter());
+                        g.setColor(themeColor(palette.getBloomCenter()));
                         g.fill(new Ellipse2D.Double(x - r * 0.35, y - r * 0.35, r * 0.7, r * 0.7));
                     }
                     b.include(x + radStep, y + radStep);
@@ -160,6 +176,25 @@ public class LSystemCanvas extends JPanel {
         // (already handled when B is in the language)
 
         return b;
+    }
+
+    private Color sceneBackground() {
+        if (!FarmUi.isDarkTheme()) {
+            return palette.getBackground();
+        }
+        return blend(FarmUi.surfaceColor(), palette.getBackground(), 0.08);
+    }
+
+    private Color themeColor(Color color) {
+        return FarmUi.isDarkTheme() ? blend(color, Color.WHITE, 0.34) : color;
+    }
+
+    private static Color blend(Color first, Color second, double secondWeight) {
+        double weight = Math.max(0, Math.min(1, secondWeight));
+        return new Color(
+                (int) Math.round(first.getRed() * (1 - weight) + second.getRed() * weight),
+                (int) Math.round(first.getGreen() * (1 - weight) + second.getGreen() * weight),
+                (int) Math.round(first.getBlue() * (1 - weight) + second.getBlue() * weight));
     }
 
     private static final class Bounds {

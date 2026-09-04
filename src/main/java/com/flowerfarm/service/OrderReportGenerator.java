@@ -1,5 +1,6 @@
 package com.flowerfarm.service;
 
+import com.flowerfarm.model.FarmProfile;
 import com.flowerfarm.model.Customer;
 import com.flowerfarm.model.CustomerOrder;
 import com.flowerfarm.model.OrderLine;
@@ -36,6 +37,11 @@ import java.util.Locale;
 public class OrderReportGenerator {
 
     private static final Logger log = LoggerFactory.getLogger(OrderReportGenerator.class);
+    private final FarmProfile farmProfile;
+
+    public OrderReportGenerator(FarmProfile farmProfile) {
+        this.farmProfile = farmProfile;
+    }
 
     public void exportCsv(String filename, List<CustomerOrder> orders) {
         if (filename == null || filename.isBlank()) {
@@ -94,7 +100,7 @@ public class OrderReportGenerator {
             PdfPTable bannerTable = new PdfPTable(1);
             bannerTable.setWidthPercentage(100);
             PdfPCell bannerCell = new PdfPCell(new Phrase(
-                    "FlowersForever  ·  Port Orchard / Kitsap County  ·  Wholesale Invoice",
+                    farmProfile.documentBanner("Wholesale Invoice"),
                     banner));
             bannerCell.setBackgroundColor(brandGreen);
             bannerCell.setPadding(10);
@@ -134,8 +140,7 @@ public class OrderReportGenerator {
                             ? "" : "\nAccount delivery note: " + accountNote),
                     brandSoft, body));
             parties.addCell(infoBlock("From",
-                    "FlowersForever Farm\nPort Orchard / Kitsap County, WA\n"
-                            + "PNW West of the Cascades",
+                    farmProfile.contactBlock(),
                     brandSoft, body));
             document.add(parties);
             document.add(Chunk.NEWLINE);
@@ -184,10 +189,11 @@ public class OrderReportGenerator {
             document.add(totalBox);
             document.add(Chunk.NEWLINE);
             document.add(new Paragraph(
-                    "Thank you for supporting local PNW cut flowers. "
-                            + "Questions: farm@flowersforever.example (demo)", small));
+                    farmProfile.thankYouLine()
+                            + (farmProfile.getEmail().isBlank()
+                                    ? "" : " Questions: " + farmProfile.getEmail()), small));
             document.add(new Paragraph(
-                    "FlowersForever · practical tools for PNW flower growers", small));
+                    farmProfile.softwareFooter(), small));
 
             document.close();
             log.info("Generated order invoice PDF for order #{} (${})",
@@ -244,7 +250,7 @@ public class OrderReportGenerator {
         }
         text.append("-".repeat(64)).append('\n');
         text.append(String.format(Locale.US, "TOTAL  $%,.2f%n", order.lineTotal()));
-        text.append("\nFlowersForever · Port Orchard / Kitsap County, WA\n");
+        text.append('\n').append(farmProfile.documentBanner("Wholesale Invoice")).append('\n');
         return text.toString();
     }
 

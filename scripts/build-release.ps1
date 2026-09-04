@@ -1,3 +1,4 @@
+#Requires -Version 7.0
 param([switch]$SkipTests, [switch]$SkipMsi)
 
 $ErrorActionPreference = 'Stop'
@@ -10,6 +11,7 @@ if ($version -like '*-SNAPSHOT') {
 $target = Join-Path $project 'target'
 $dist = Join-Path $project 'dist'
 $staging = Join-Path $target 'jpackage-input'
+$aiLauncher = Join-Path $project 'packaging\FlowersForeverAI-windows.properties'
 
 Push-Location $project
 try {
@@ -18,10 +20,15 @@ try {
     $jar = Join-Path $target "flowerfarm-manager-$version.jar"
     $thirdParty = Join-Path $target 'generated-resources\licenses\THIRD-PARTY.txt'
     foreach ($required in @($jar, (Join-Path $target 'bom.json'),
-            (Join-Path $target 'bom.xml'), $thirdParty)) {
+            (Join-Path $target 'bom.xml'), $thirdParty, $aiLauncher)) {
         if (-not (Test-Path -LiteralPath $required -PathType Leaf)) { throw "Missing release artifact: $required" }
     }
-    if (Test-Path -LiteralPath $staging) { Remove-Item -LiteralPath $staging -Recurse -Force }
+    $resolvedTarget = [IO.Path]::GetFullPath($target).TrimEnd([IO.Path]::DirectorySeparatorChar)
+    $resolvedStaging = [IO.Path]::GetFullPath($staging)
+    if (-not $resolvedStaging.StartsWith($resolvedTarget + [IO.Path]::DirectorySeparatorChar)) {
+        throw 'Refusing to clean staging outside the build directory.'
+    }
+    if (Test-Path -LiteralPath $resolvedStaging) { Remove-Item -LiteralPath $resolvedStaging -Recurse -Force }
     New-Item -ItemType Directory -Path $staging | Out-Null
     $resolvedProject = [IO.Path]::GetFullPath($project).TrimEnd([IO.Path]::DirectorySeparatorChar)
     $resolvedDist = [IO.Path]::GetFullPath($dist)
@@ -47,8 +54,15 @@ try {
     & jpackage --type app-image --name FlowersForever --app-version $version --vendor RicheyWorks `
         --description 'Flower farm operations and knowledge, kept in one place' `
         --input $staging --main-jar ([IO.Path]::GetFileName($jar)) `
+        --add-launcher "FlowersForeverAI=$aiLauncher" `
         --java-options '-Djava.awt.headless=false' --java-options '-Dflowerfarm.packaged=true' --dest $dist
     if ($LASTEXITCODE -ne 0) { throw 'jpackage app-image failed.' }
+    $aiExecutable = Join-Path $appImage 'FlowersForeverAI.exe'
+    if (-not (Test-Path -LiteralPath $aiExecutable -PathType Leaf)) {
+        throw "jpackage did not create the AI launcher: $aiExecutable"
+    }
+    $smokeData = Join-Path $target ('release-mcp-smoke-' + [Guid]::NewGuid().ToString('N'))
+    & (Join-Path $PSScriptRoot 'test-mcp-launcher.ps1') -Launcher $aiExecutable -DataDir $smokeData
     $appImageZip = Join-Path $dist "FlowersForever-$version-windows-app-image.zip"
     if (Test-Path -LiteralPath $appImageZip) { Remove-Item -LiteralPath $appImageZip -Force }
     Compress-Archive -LiteralPath $appImage -DestinationPath $appImageZip -CompressionLevel Optimal
@@ -56,6 +70,7 @@ try {
         & jpackage --type msi --name FlowersForever --app-version $version --vendor RicheyWorks `
             --description 'Flower farm operations and knowledge, kept in one place' `
             --input $staging --main-jar ([IO.Path]::GetFileName($jar)) `
+            --add-launcher "FlowersForeverAI=$aiLauncher" `
             --java-options '-Djava.awt.headless=false' --java-options '-Dflowerfarm.packaged=true' `
             --win-menu --win-shortcut --win-dir-chooser --dest $dist
         if ($LASTEXITCODE -ne 0) { throw 'jpackage MSI build failed.' }

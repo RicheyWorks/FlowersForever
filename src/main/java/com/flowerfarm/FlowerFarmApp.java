@@ -1,7 +1,11 @@
 package com.flowerfarm;
 
+import com.flowerfarm.automation.mcp.McpDoctorBootstrap;
+import com.flowerfarm.automation.mcp.McpDoctorRunner;
 import com.flowerfarm.config.AppDataBootstrap;
+import org.springframework.boot.Banner;
 import org.springframework.boot.SpringApplication;
+import org.springframework.boot.WebApplicationType;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.ConfigurableApplicationContext;
 
@@ -15,6 +19,10 @@ import java.util.Arrays;
 public class FlowerFarmApp {
 
     public static void main(String[] args) {
+        boolean mcpDoctor = Arrays.asList(args).contains("--mcp-doctor");
+        if (mcpDoctor) {
+            McpDoctorBootstrap.prepare();
+        }
         AppDataBootstrap.configure();
         // Preserve the existing --cli flag UX while mapping it to a Spring profile.
         // Users can still run:  java -jar flowerfarm.jar --cli
@@ -24,15 +32,32 @@ public class FlowerFarmApp {
         // java.awt.headless to true when the JVM property is not supplied.
         // Explicit values such as the Docker image's -Djava.awt.headless=true
         // still take precedence.
-        app.setHeadless(false);
+        boolean mcp = mcpDoctor || Arrays.asList(args).contains("--mcp");
+        app.setHeadless(mcp);
         boolean releaseSmoke = Arrays.asList(args).contains("--release-smoke");
-        if (Arrays.asList(args).contains("--cli")) {
+        if (mcp) {
+            if (mcpDoctor) {
+                app.setAdditionalProfiles("mcp", "mcp-doctor");
+            } else {
+                app.setAdditionalProfiles("mcp");
+            }
+            app.setWebApplicationType(WebApplicationType.NONE);
+            app.setBannerMode(Banner.Mode.OFF);
+        } else if (Arrays.asList(args).contains("--cli")) {
             app.setAdditionalProfiles("cli");
         } else if (releaseSmoke) {
             app.setAdditionalProfiles("release-smoke");
         }
         ConfigurableApplicationContext context = app.run(args);
-        if (releaseSmoke) {
+        if (mcpDoctor) {
+            int exitCode = context.getBean(McpDoctorRunner.class).getExitCode();
+            context.close();
+            if (exitCode != 0) {
+                System.exit(exitCode);
+            }
+        } else if (mcp) {
+            context.close();
+        } else if (releaseSmoke) {
             try {
                 writeReleaseSmokeMarker();
             } finally {

@@ -32,9 +32,8 @@ public final class InventoryWorkspaceTab implements FlowerFarmTab {
     @Override
     public JComponent getUIComponent() {
         if (panel == null) {
-            panel = new JPanel(new BorderLayout());
+            panel = FarmUi.pageSurface(new JPanel(new BorderLayout()));
             panel.setName("inventory.workspace.page");
-            panel.setBackground(FarmUi.pageBackgroundColor());
             workspace = new JTabbedPane();
             workspace.setName("inventory.workspace");
             workspace.getAccessibleContext().setAccessibleName("Inventory workspaces");
@@ -42,6 +41,7 @@ public final class InventoryWorkspaceTab implements FlowerFarmTab {
             workspace.addTab("Add item", workflows.get(1).getUIComponent());
             workspace.setMnemonicAt(0, 'S');
             workspace.setMnemonicAt(1, 'A');
+            workspace.addChangeListener(event -> focusSelectedWorkflow());
             panel.add(workspace, BorderLayout.CENTER);
         }
         return panel;
@@ -75,5 +75,13 @@ public final class InventoryWorkspaceTab implements FlowerFarmTab {
             return true;
         }
         return false;
+    }
+
+    private void focusSelectedWorkflow() {
+        int index = workspace.getSelectedIndex();
+        if (index >= 0 && index < workflows.size()) {
+            javax.swing.SwingUtilities.invokeLater(() ->
+                    FarmUi.focusFirstInteractive(workflows.get(index).getUIComponent()));
+        }
     }
 }

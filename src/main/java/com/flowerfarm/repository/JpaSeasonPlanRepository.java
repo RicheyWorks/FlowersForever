@@ -27,6 +27,11 @@ public class JpaSeasonPlanRepository implements SeasonPlanRepository {
     }
 
     @Override
+    public Optional<SeasonPlanEntry> findById(Long id) {
+        return jpa.findById(id);
+    }
+
+    @Override
     public Optional<SeasonPlanEntry> findByIdForUpdate(Long id) {
         return jpa.findByIdForUpdate(id);
     }

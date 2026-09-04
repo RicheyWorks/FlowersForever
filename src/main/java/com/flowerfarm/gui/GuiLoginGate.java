@@ -91,11 +91,11 @@ public class GuiLoginGate {
         return promptUntilAuthenticatedOrCancel();
     }
 
-    private JPanel buildLoginPanel() {
+    JPanel buildLoginPanel() {
         JPanel root = new JPanel(new BorderLayout(8, 8));
         root.setBorder(new EmptyBorder(8, 8, 4, 8));
 
-        JLabel title = new JLabel("<html><b>Kitsap barn login</b><br/>"
+        JLabel title = new JLabel("<html><b>FlowersForever sign in</b><br/>"
                 + "<span style='font-size:10px;color:gray'>Roles: Owner · Hand · Viewer</span></html>");
         root.add(title, BorderLayout.NORTH);
 
@@ -107,12 +107,20 @@ public class GuiLoginGate {
 
         JTextField userField = new JTextField(18);
         JPasswordField passField = new JPasswordField(18);
+        userField.getAccessibleContext().setAccessibleName("Farm username");
+        passField.getAccessibleContext().setAccessibleName("Farm password");
+        JLabel userLabel = new JLabel("Username");
+        userLabel.setDisplayedMnemonic('U');
+        userLabel.setLabelFor(userField);
+        JLabel passwordLabel = new JLabel("Password");
+        passwordLabel.setDisplayedMnemonic('P');
+        passwordLabel.setLabelFor(passField);
         c.gridx = 0; c.gridy = 0; c.weightx = 0;
-        form.add(new JLabel("Username"), c);
+        form.add(userLabel, c);
         c.gridx = 1; c.weightx = 1;
         form.add(userField, c);
         c.gridx = 0; c.gridy = 1; c.weightx = 0;
-        form.add(new JLabel("Password"), c);
+        form.add(passwordLabel, c);
         c.gridx = 1; c.weightx = 1;
         form.add(passField, c);
         root.add(form, BorderLayout.CENTER);

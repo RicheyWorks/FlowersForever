@@ -1,6 +1,7 @@
 package com.flowerfarm.gui.tabs;
 
 import com.flowerfarm.gui.FarmUi;
+import com.flowerfarm.gui.FarmDialogs;
 import com.flowerfarm.gui.GuiPermissions;
 import com.flowerfarm.gui.presenter.InventoryItemPresenter;
 import com.flowerfarm.gui.view.InventoryItemFormView;
@@ -18,13 +19,17 @@ import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import java.awt.BorderLayout;
 import java.awt.Component;
+import java.awt.Dimension;
+import java.awt.GridLayout;
 import java.util.List;
+import java.util.Locale;
 
 /** Add-inventory workflow using the same item form and validation as editing. */
 public class AddItemTab implements FlowerFarmTab {
 
     private final InventoryItemPresenter presenter;
     private final TabHost host;
+    private final FarmDialogs dialogs;
 
     private JPanel panel;
     private InventoryItemFormView formView;
@@ -37,14 +42,23 @@ public class AddItemTab implements FlowerFarmTab {
     private JCheckBox keepSetupBox;
     private JLabel accessBadge;
     private JLabel feedbackBadge;
+    private JLabel unitProfitLabel;
+    private JLabel marginRateLabel;
+    private JLabel openingValueLabel;
     private boolean canWrite = true;
     private boolean savingItem;
     private String duplicateProductName;
     private String missingQueueProduct;
 
     public AddItemTab(InventoryService inventoryService, TabHost host) {
+        this(inventoryService, host, FarmDialogs.swing());
+    }
+
+    public AddItemTab(InventoryService inventoryService, TabHost host,
+                      FarmDialogs dialogs) {
         this.presenter = new InventoryItemPresenter(inventoryService);
         this.host = host;
+        this.dialogs = java.util.Objects.requireNonNull(dialogs, "dialogs");
     }
 
     @Override
@@ -88,16 +102,27 @@ public class AddItemTab implements FlowerFarmTab {
                 "HAND / OWNER · editing available", FarmUi.Tone.SUCCESS);
         panel.add(FarmUi.pageHeader(
                 "Add inventory item",
-                "Create a flower, supply, equipment, or service item with a starting quantity.",
+                "Start with a crop or product. Add prices and the stock you have today.",
                 accessBadge), BorderLayout.NORTH);
 
         formView = new InventoryItemFormView();
         presetBox = new JComboBox<>(new String[]{
-                "Cut flower / stem", "Market bouquet", "Farm supply", "Tool or equipment"
+                "Cut flower / stem",
+                "Dahlia stem",
+                "Nootka rose stem",
+                "Peony stem",
+                "Sunflower stem",
+                "Market bouquet",
+                "Wedding flower bucket",
+                "Flower subscription",
+                "Farm supply",
+                "Tool or equipment"
         });
         presetBox.setName("inventory.itemPreset");
-        presetBox.getAccessibleContext().setAccessibleName("Common farm item preset");
-        applyPresetBtn = FarmUi.secondaryButton("Apply preset");
+        presetBox.getAccessibleContext().setAccessibleName("Flower product starter library");
+        presetBox.getAccessibleContext().setAccessibleDescription(
+                "Choose a common flower product or general farm item setup.");
+        applyPresetBtn = FarmUi.secondaryButton("Use starter");
         applyPresetBtn.addActionListener(event -> {
             String preset = String.valueOf(presetBox.getSelectedItem());
             formView.applyPreset(preset);
@@ -105,6 +130,7 @@ public class AddItemTab implements FlowerFarmTab {
                     preset + " defaults applied", FarmUi.Tone.INFO);
         });
         addBtn = FarmUi.primaryButton("Add item to inventory");
+        addBtn.setMnemonic('A');
         addBtn.addActionListener(event -> submitItem());
         resetBtn = FarmUi.secondaryButton("Reset form");
         resetBtn.addActionListener(event -> {
@@ -145,19 +171,35 @@ public class AddItemTab implements FlowerFarmTab {
                     "The highlighted value changed. Submit the item again to validate and save it.",
                     FarmUi.Tone.INFO);
         });
+        formView.setDraftChangeListener(this::updateEconomicsPreview);
         formView.quantityField().addActionListener(event -> submitItem());
+
+        unitProfitLabel = economicsValue("inventory.unitProfit", "$0.00");
+        marginRateLabel = economicsValue("inventory.marginRate", "—");
+        openingValueLabel = economicsValue("inventory.openingValue", "$0.00");
+        unitProfitLabel.getAccessibleContext().setAccessibleDescription(
+                "Selling price minus unit cost");
+        marginRateLabel.getAccessibleContext().setAccessibleDescription(
+                "Gross margin before labor and overhead");
+        openingValueLabel.getAccessibleContext().setAccessibleDescription(
+                "Opening quantity multiplied by selling price");
+        JPanel economics = new JPanel(new GridLayout(3, 1, 0, FarmUi.CONTROL_GAP));
+        economics.setName("inventory.economicsPreview");
+        economics.setOpaque(false);
+        economics.setPreferredSize(new Dimension(225, 0));
+        economics.add(FarmUi.metricCard(
+                "Gross profit / unit", unitProfitLabel, null, FarmUi.Tone.SUCCESS));
+        economics.add(FarmUi.metricCard(
+                "Gross margin", marginRateLabel, null, FarmUi.Tone.INFO));
+        economics.add(FarmUi.metricCard(
+                "Opening sell value", openingValueLabel, null, FarmUi.Tone.NEUTRAL));
 
         JPanel actions = new JPanel();
         actions.setOpaque(false);
         actions.setLayout(new BoxLayout(actions, BoxLayout.Y_AXIS));
-        JLabel guidance = FarmUi.formHint(
-                "Required fields are marked *. Prices and quantities must be zero or greater.");
-        guidance.setAlignmentX(Component.LEFT_ALIGNMENT);
-        actions.add(guidance);
-        actions.add(Box.createVerticalStrut(FarmUi.CONTROL_GAP));
         JPanel repeatMode = FarmUi.toolbar(
                 keepSetupBox,
-                FarmUi.formHint("Keeps category, unit, price, and cost; clears product-specific fields."));
+                FarmUi.formHint("Adding a few similar products? Keep their shared setup."));
         repeatMode.setAlignmentX(Component.LEFT_ALIGNMENT);
         actions.add(repeatMode);
         actions.add(Box.createVerticalStrut(FarmUi.CONTROL_GAP));
@@ -168,22 +210,88 @@ public class AddItemTab implements FlowerFarmTab {
 
         JPanel content = new JPanel(new BorderLayout(0, FarmUi.SECTION_GAP));
         content.setOpaque(false);
-        JPanel itemWorkspace = new JPanel(new BorderLayout(0, FarmUi.CONTROL_GAP));
+        JPanel itemWorkspace = new JPanel(new BorderLayout(
+                FarmUi.SECTION_GAP, FarmUi.CONTROL_GAP));
         itemWorkspace.setOpaque(false);
         itemWorkspace.add(FarmUi.toolbar(
-                new JLabel("Quick setup"), presetBox, applyPresetBtn,
-                FarmUi.formHint("Presets set category and selling unit; entered prices stay intact.")),
+                new JLabel("Product starter"), presetBox, applyPresetBtn,
+                FarmUi.formHint(
+                        "A head start; your entered prices stay intact.")),
                 BorderLayout.NORTH);
         itemWorkspace.add(formView, BorderLayout.CENTER);
+        itemWorkspace.add(economics, BorderLayout.EAST);
         content.add(FarmUi.section(
-                "Item details",
-                "Choose Flowers/Plants to make the rose-variety list available.",
+                "1 · Product & stock",
+                "Choose a starter, or make it your own. Fields marked * are required.",
                 itemWorkspace), BorderLayout.CENTER);
         content.add(FarmUi.section(
-                "Save item",
-                "Press Enter from Quantity or use the button below.",
+                "2 · Save to your inventory",
+                "Zero price or stock is fine while planning. Press Enter from Quantity to save.",
                 actions), BorderLayout.SOUTH);
         panel.add(content, BorderLayout.CENTER);
+        updateEconomicsPreview();
+    }
+
+    private JLabel economicsValue(String name, String text) {
+        JLabel label = new JLabel(text);
+        label.setName(name);
+        label.setFont(label.getFont().deriveFont(java.awt.Font.BOLD, 18f));
+        label.getAccessibleContext().setAccessibleName(text);
+        return label;
+    }
+
+    private void updateEconomicsPreview() {
+        if (formView == null || unitProfitLabel == null) {
+            return;
+        }
+        InventoryItemPresenter.ItemDraft draft = formView.draft();
+        Double price = parseNonNegative(draft.price());
+        Double cost = parseNonNegative(draft.cost());
+        Integer quantity = parseNonNegativeWholeNumber(draft.quantity());
+        if (price == null || cost == null || quantity == null) {
+            setEconomicsValue(unitProfitLabel, "Check values");
+            setEconomicsValue(marginRateLabel, "—");
+            setEconomicsValue(openingValueLabel, "—");
+            return;
+        }
+        double profit = price - cost;
+        String profitText = profit < 0
+                ? String.format(Locale.US, "−$%,.2f", Math.abs(profit))
+                : String.format(Locale.US, "$%,.2f", profit);
+        setEconomicsValue(unitProfitLabel, profitText);
+        setEconomicsValue(marginRateLabel, price == 0
+                ? "—" : String.format(Locale.US, "%.0f%%", profit / price * 100));
+        setEconomicsValue(openingValueLabel,
+                String.format(Locale.US, "$%,.2f", price * quantity));
+        unitProfitLabel.setForeground(profit < 0
+                ? FarmUi.toneForegroundColor(FarmUi.Tone.DANGER)
+                : FarmUi.toneForegroundColor(FarmUi.Tone.SUCCESS));
+    }
+
+    private void setEconomicsValue(JLabel label, String value) {
+        label.setText(value);
+        label.getAccessibleContext().setAccessibleName(value);
+        if (label == unitProfitLabel && !value.startsWith("−")) {
+            label.setForeground(FarmUi.toneForegroundColor(FarmUi.Tone.SUCCESS));
+        }
+    }
+
+    private static Double parseNonNegative(String text) {
+        try {
+            double value = Double.parseDouble(text.trim());
+            return Double.isFinite(value) && value >= 0 ? value : null;
+        } catch (RuntimeException exception) {
+            return null;
+        }
+    }
+
+    private static Integer parseNonNegativeWholeNumber(String text) {
+        try {
+            int value = Integer.parseInt(text.trim());
+            return value >= 0 ? value : null;
+        } catch (RuntimeException exception) {
+            return null;
+        }
     }
 
     private void submitItem() {
@@ -291,7 +399,7 @@ public class AddItemTab implements FlowerFarmTab {
             host.setStatus(guidance + " Item details were kept; retry when ready.");
         }
         if (panel.isShowing()) {
-            JOptionPane.showMessageDialog(panel, guidance,
+            dialogs.showMessage(panel, guidance,
                     "Item not saved", JOptionPane.ERROR_MESSAGE);
         }
     }

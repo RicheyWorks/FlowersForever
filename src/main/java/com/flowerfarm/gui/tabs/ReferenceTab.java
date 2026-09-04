@@ -20,6 +20,24 @@ public final class ReferenceTab implements FlowerFarmTab {
         references = List.of(roseGuide, pricing, visualizer);
     }
 
+    public ReferenceTab(FlowerFarmTab plantGuide, FlowerFarmTab roseGuide,
+                        FlowerFarmTab pricing, FlowerFarmTab visualizer) {
+        references = List.of(plantGuide, roseGuide, pricing, visualizer);
+    }
+
+    public ReferenceTab(FlowerFarmTab plantGuide, FlowerFarmTab eventServices,
+                        FlowerFarmTab roseGuide, FlowerFarmTab pricing,
+                        FlowerFarmTab visualizer) {
+        references = List.of(plantGuide, eventServices, roseGuide, pricing, visualizer);
+    }
+
+    public ReferenceTab(FlowerFarmTab plantGuide, FlowerFarmTab eventServices,
+                        FlowerFarmTab productionStudio, FlowerFarmTab roseGuide,
+                        FlowerFarmTab pricing, FlowerFarmTab visualizer) {
+        references = List.of(plantGuide, eventServices, productionStudio,
+                roseGuide, pricing, visualizer);
+    }
+
     @Override
     public String getTabTitle() {
         return "Reference & Planning";
@@ -27,24 +45,24 @@ public final class ReferenceTab implements FlowerFarmTab {
 
     @Override
     public String getDescription() {
-        return "Rose guidance, pricing units, and growth-pattern planning tools";
+        return "Sourced PNW plants, rose guidance, pricing units, and planning tools";
     }
 
     @Override
     public JComponent getUIComponent() {
         if (panel == null) {
-            panel = new JPanel(new BorderLayout());
+            panel = FarmUi.pageSurface(new JPanel(new BorderLayout()));
             panel.setName("reference.workspace.page");
-            panel.setBackground(FarmUi.pageBackgroundColor());
             workspace = new JTabbedPane();
             workspace.setName("reference.workspace");
             workspace.getAccessibleContext().setAccessibleName("Farm reference workspaces");
-            workspace.addTab("Rose guide", references.get(0).getUIComponent());
-            workspace.addTab("Pricing", references.get(1).getUIComponent());
-            workspace.addTab("Growth visualizer", references.get(2).getUIComponent());
-            workspace.setMnemonicAt(0, 'R');
-            workspace.setMnemonicAt(1, 'P');
-            workspace.setMnemonicAt(2, 'G');
+            for (int index = 0; index < references.size(); index++) {
+                FlowerFarmTab reference = references.get(index);
+                workspace.addTab(visibleTitle(reference.getTabTitle()),
+                        reference.getUIComponent());
+                workspace.setMnemonicAt(index, mnemonic(reference.getTabTitle()));
+            }
+            workspace.addChangeListener(event -> focusSelectedReference());
             panel.add(workspace, BorderLayout.CENTER);
         }
         return panel;
@@ -76,5 +94,37 @@ public final class ReferenceTab implements FlowerFarmTab {
             }
         }
         return false;
+    }
+
+    private void focusSelectedReference() {
+        int index = workspace.getSelectedIndex();
+        if (index >= 0 && index < references.size()) {
+            javax.swing.SwingUtilities.invokeLater(() ->
+                    FarmUi.focusFirstInteractive(references.get(index).getUIComponent()));
+        }
+    }
+
+    private static String visibleTitle(String title) {
+        return switch (title) {
+            case "PNW Plant Guide" -> "Plant guide";
+            case "Event Services" -> "Event services";
+            case "Production Studio" -> "Production studio";
+            case "Rose Varieties" -> "Rose guide";
+            case "Pricing Info" -> "Pricing";
+            case "Rose Visualizer" -> "Growth visualizer";
+            default -> title;
+        };
+    }
+
+    private static char mnemonic(String title) {
+        return switch (title) {
+            case "PNW Plant Guide" -> 'N';
+            case "Event Services" -> 'E';
+            case "Production Studio" -> 'U';
+            case "Rose Varieties" -> 'R';
+            case "Pricing Info" -> 'P';
+            case "Rose Visualizer" -> 'G';
+            default -> Character.toUpperCase(title.charAt(0));
+        };
     }
 }

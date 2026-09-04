@@ -68,6 +68,14 @@ public class SeasonPlanService {
     }
 
     @Transactional(readOnly = true)
+    public java.util.Optional<SeasonPlanEntry> findById(Long id) {
+        if (id == null || id <= 0) {
+            throw new IllegalArgumentException("Season plan id must be positive.");
+        }
+        return repository.findById(id);
+    }
+
+    @Transactional(readOnly = true)
     public SeasonSummary summarize(int seasonYear) {
         List<SeasonPlanEntry> entries = listForSeason(seasonYear);
         return summarizeEntries(entries);
@@ -362,6 +370,17 @@ public class SeasonPlanService {
         SeasonPlanEntry saved = repository.save(existing);
         audit("SEASON_PLAN_UPDATE", saved, "Planting block updated");
         return saved;
+    }
+
+    /** Locks one plan row so dependent-work regeneration cannot race an edit or delete. */
+    @Transactional
+    public SeasonPlanEntry findForUpdate(Long id) {
+        if (id == null || id <= 0) {
+            throw new IllegalArgumentException("Season plan id must be positive.");
+        }
+        return repository.findByIdForUpdate(id)
+                .orElseThrow(() -> new IndexOutOfBoundsException(
+                        "No season plan entry with id=" + id));
     }
 
     @Transactional

@@ -1,8 +1,10 @@
 package com.flowerfarm.service;
 
+import com.flowerfarm.model.FarmProfile;
 import com.flowerfarm.model.Customer;
 import com.flowerfarm.model.CustomerOrder;
 import com.flowerfarm.model.HarvestEntry;
+import com.flowerfarm.model.HarvestGrade;
 import com.flowerfarm.model.Item;
 import com.flowerfarm.model.OrderLine;
 import org.junit.jupiter.api.DisplayName;
@@ -28,7 +30,7 @@ class ReportCollaboratorTest {
     @Test
     @DisplayName("harvest report generator renders both report families and escaped bed CSV")
     void harvestReports() {
-        HarvestReportGenerator generator = new HarvestReportGenerator();
+        HarvestReportGenerator generator = new HarvestReportGenerator(new FarmProfile());
         HarvestService.BedProduction bed = new HarvestService.BedProduction(
                 "Bed, A", 25, 1, Map.of("Nootka Rose", 25.0),
                 "2026-08-20", "2026-08-20");
@@ -54,15 +56,18 @@ class ReportCollaboratorTest {
     @DisplayName("harvest CSV exporter preserves quotes, commas, and the stable header")
     void harvestCsv() throws Exception {
         HarvestEntry entry = new HarvestEntry(LocalDate.of(2026, 8, 20),
-                "Rose, field", 12, "stems", "Bed A", "said \"ready\"");
+                "Rose, field", 12, "stems", "Bed A", "said \"ready\"",
+                "LOT/ROSE-20", HarvestGrade.SELECT, 2, "Cooler A");
         Path output = temporaryDirectory.resolve("harvest.csv");
 
         new HarvestCsvExporter().export(output.toString(), List.of(entry));
 
         assertThat(Files.readString(output))
-                .startsWith("Id,Date,Crop,Quantity,Unit,BedOrField,Notes")
+                .startsWith("Id,Date,Crop,MarketableQuantity,Unit,BedOrField,Notes,"
+                        + "LotCode,Grade,LossQuantity,GrossQuantity,StorageLocation")
                 .contains("\"Rose, field\"")
-                .contains("\"said \"\"ready\"\"\"");
+                .contains("\"said \"\"ready\"\"\"")
+                .contains("LOT/ROSE-20,SELECT,2.00,14.00,Cooler A");
         assertThatIllegalArgumentException()
                 .isThrownBy(() -> new HarvestCsvExporter().export(" ", List.of()));
     }
@@ -70,7 +75,7 @@ class ReportCollaboratorTest {
     @Test
     @DisplayName("inventory report generator renders reorder and price-list documents")
     void inventoryReports() {
-        InventoryReportGenerator generator = new InventoryReportGenerator();
+        InventoryReportGenerator generator = new InventoryReportGenerator(new FarmProfile());
         InventoryService.LowStockLine lowLine = new InventoryService.LowStockLine(
                 1L, "Nootka Rose", "Flowers", 2, "stems", 2.5, 1.0,
                 5, 8, 8.0);
@@ -116,7 +121,7 @@ class ReportCollaboratorTest {
         order.setHandoffType("DELIVERY");
         order.setId(42L);
         order.addLine(new OrderLine("Nootka Rose", 10, "stems", 2.5));
-        OrderReportGenerator generator = new OrderReportGenerator();
+        OrderReportGenerator generator = new OrderReportGenerator(new FarmProfile());
         Path output = temporaryDirectory.resolve("orders.csv");
 
         assertPdf(generator.generateInvoicePdf(order));

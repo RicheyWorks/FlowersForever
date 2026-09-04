@@ -25,4 +25,6 @@ public interface HarvestJpaRepository extends JpaRepository<HarvestEntry, Long> 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select h from HarvestEntry h where h.id = :id")
     Optional<HarvestEntry> findByIdForUpdate(@Param("id") Long id);
+
+    Optional<HarvestEntry> findByLotCodeIgnoreCase(String lotCode);
 }

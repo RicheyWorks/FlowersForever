@@ -42,6 +42,8 @@ com.flowerfarm.gui
     ├── SyncHistoryTab.java     # Searchable connector audit timeline and exports
     ├── AddItemTab.java         # Clean form with conditional Rose Type combo
     ├── TrendAnalysisTab.java   # Real weekly-harvest forecast (SwingWorker); exposes runAnalysis()
+    ├── PnwPlantGuideTab.java   # 94 sourced regional plants + plan-draft handoff
+    ├── SeasonPlannerTab.java   # Timing, beds, pace, insights, and availability outlook
     ├── RoseVarietiesTab.java   # PNW rose guide + add-sample action
     ├── PricingInfoTab.java     # Static reference
     ├── IrrigationInfoTab.java  # Kitsap live/climatology irrigation advisor

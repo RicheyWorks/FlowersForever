@@ -1,6 +1,11 @@
 package com.flowerfarm.controller;
 
 import com.flowerfarm.security.SecretRedactor;
+import com.flowerfarm.service.AttachmentTooLargeException;
+import com.flowerfarm.service.InventoryCountConflictException;
+import com.flowerfarm.service.ProductionConflictException;
+import com.flowerfarm.service.WorkerActionConflictException;
+import com.flowerfarm.service.WorkerOrderConflictException;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -16,6 +21,7 @@ import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.time.Instant;
@@ -53,6 +59,14 @@ public class ApiExceptionHandler {
                 publicMessage(exception, "The request contains an invalid value."), request);
     }
 
+    @ExceptionHandler({AttachmentTooLargeException.class,
+            MaxUploadSizeExceededException.class})
+    public ResponseEntity<Map<String, Object>> attachmentTooLarge(
+            Exception exception, HttpServletRequest request) {
+        return response(HttpStatus.PAYLOAD_TOO_LARGE, "ATTACHMENT_TOO_LARGE",
+                publicMessage(exception, "Attachment file cannot exceed 15 MiB."), request);
+    }
+
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<Map<String, Object>> malformedBody(HttpServletRequest request) {
         return response(HttpStatus.BAD_REQUEST, "MALFORMED_BODY",
@@ -77,6 +91,46 @@ public class ApiExceptionHandler {
                 request.getRequestURI(), exception.getClass().getSimpleName());
         return response(HttpStatus.CONFLICT, "DATA_CONFLICT",
                 "The record changed or conflicts with existing data. Refresh and try again.", request);
+    }
+
+    @ExceptionHandler(ProductionConflictException.class)
+    public ResponseEntity<Map<String, Object>> productionConflict(
+            ProductionConflictException exception, HttpServletRequest request) {
+        return response(HttpStatus.CONFLICT, "PRODUCTION_CONFLICT",
+                publicMessage(exception, "The production change conflicts with existing data."),
+                request);
+    }
+
+    @ExceptionHandler(WorkerActionConflictException.class)
+    public ResponseEntity<Map<String, Object>> workerActionConflict(
+            WorkerActionConflictException exception, HttpServletRequest request) {
+        return response(HttpStatus.CONFLICT, "WORKER_ACTION_CONFLICT",
+                publicMessage(exception, "The worker operation key is already in use."),
+                request);
+    }
+
+    @ExceptionHandler(InventoryCountConflictException.class)
+    public ResponseEntity<Map<String, Object>> inventoryCountConflict(
+            InventoryCountConflictException exception, HttpServletRequest request) {
+        ResponseEntity<Map<String, Object>> result = response(
+                HttpStatus.CONFLICT, "INVENTORY_COUNT_CONFLICT",
+                publicMessage(exception, "Inventory changed after the count was reviewed."),
+                request);
+        Objects.requireNonNull(result.getBody(), "API error body")
+                .put("currentQuantity", exception.currentQuantity());
+        return result;
+    }
+
+    @ExceptionHandler(WorkerOrderConflictException.class)
+    public ResponseEntity<Map<String, Object>> workerOrderConflict(
+            WorkerOrderConflictException exception, HttpServletRequest request) {
+        ResponseEntity<Map<String, Object>> result = response(
+                HttpStatus.CONFLICT, "ORDER_HANDOFF_CONFLICT",
+                publicMessage(exception, "The order changed after the handoff was reviewed."),
+                request);
+        Objects.requireNonNull(result.getBody(), "API error body")
+                .put("orderId", exception.orderId());
+        return result;
     }
 
     @ExceptionHandler(NoResourceFoundException.class)

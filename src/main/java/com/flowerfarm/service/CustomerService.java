@@ -59,6 +59,31 @@ public class CustomerService {
         return repository.save(customer);
     }
 
+    /**
+     * Idempotent import boundary used by connectors and AI-assisted migrations.
+     * Customer names are the current canonical natural key.
+     */
+    @Transactional
+    public Customer upsertByName(Customer incoming) {
+        if (incoming == null) {
+            throw new IllegalArgumentException("Customer must not be null.");
+        }
+        Optional<Customer> matched = repository.findByNameIgnoreCaseForUpdate(
+                incoming.getName());
+        if (matched.isEmpty()) {
+            incoming.setId(null);
+            return repository.save(incoming);
+        }
+        Customer existing = matched.get();
+        existing.setName(incoming.getName());
+        existing.setContactName(incoming.getContactName());
+        existing.setEmail(incoming.getEmail());
+        existing.setPhone(incoming.getPhone());
+        existing.setCustomerType(incoming.getCustomerType());
+        existing.setNotes(incoming.getNotes());
+        return repository.save(existing);
+    }
+
     @Transactional
     public Customer update(Long id, Customer incoming) {
         if (incoming == null) {

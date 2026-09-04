@@ -1,10 +1,13 @@
 package com.flowerfarm.gui.tabs;
 
+import com.flowerfarm.gui.FarmDialogs;
+import com.flowerfarm.gui.FarmFileChooser;
 import com.flowerfarm.gui.FarmUi;
 import com.flowerfarm.gui.GuiPermissions;
 import com.flowerfarm.gui.presenter.HarvestLogPresenter;
 import com.flowerfarm.gui.view.HarvestBatchView;
 import com.flowerfarm.model.HarvestEntry;
+import com.flowerfarm.model.HarvestGrade;
 import com.flowerfarm.service.HarvestService;
 
 import javax.swing.*;
@@ -26,6 +29,8 @@ public class HarvestLogTab implements FlowerFarmTab {
 
     private final HarvestLogPresenter presenter;
     private final TabHost host;
+    private final FarmDialogs dialogs;
+    private final FarmFileChooser files;
 
     private JPanel panel;
     private DefaultTableModel tableModel;
@@ -38,6 +43,10 @@ public class HarvestLogTab implements FlowerFarmTab {
     private JTextField unitField;
     private JTextField bedField;
     private JTextField notesField;
+    private JTextField lotCodeField;
+    private JComboBox<HarvestGrade> gradeField;
+    private JTextField lossQuantityField;
+    private JTextField storageLocationField;
 
     private JTextField filterCropField;
     private JTextField filterBedField;
@@ -94,10 +103,23 @@ public class HarvestLogTab implements FlowerFarmTab {
     private List<String> newInventoryProducts = List.of();
     private CardLayout tableCardLayout;
     private JPanel tableState;
+    private FarmUi.EmptyStateView harvestEmptyState;
 
     public HarvestLogTab(HarvestService harvestService, TabHost host) {
+        this(harvestService, host, FarmDialogs.swing(), FarmFileChooser.swing());
+    }
+
+    public HarvestLogTab(HarvestService harvestService, TabHost host,
+                         FarmDialogs dialogs) {
+        this(harvestService, host, dialogs, FarmFileChooser.swing());
+    }
+
+    public HarvestLogTab(HarvestService harvestService, TabHost host,
+                         FarmDialogs dialogs, FarmFileChooser files) {
         this.presenter = new HarvestLogPresenter(harvestService);
         this.host = host;
+        this.dialogs = java.util.Objects.requireNonNull(dialogs, "dialogs");
+        this.files = java.util.Objects.requireNonNull(files, "files");
     }
 
     @Override public String getTabTitle() { return "Harvest Log"; }
@@ -213,8 +235,12 @@ public class HarvestLogTab implements FlowerFarmTab {
                         snapshot.view().rows().size(),
                         snapshot.view().rows().size() == 1 ? "y" : "ies",
                         snapshot.view().quantity()),
-                "Harvest history and production totals are current.", FarmUi.Tone.SUCCESS);
+                "Harvest history and production totals are current.",
+                snapshot.view().rows().isEmpty()
+                        ? allTotals.isEmpty() ? FarmUi.Tone.NEUTRAL : FarmUi.Tone.WARNING
+                        : FarmUi.Tone.SUCCESS);
         if (tableCardLayout != null && tableState != null) {
+            updateHarvestEmptyState();
             tableCardLayout.show(tableState,
                     snapshot.view().rows().isEmpty() ? "empty" : "table");
         }
@@ -344,7 +370,7 @@ public class HarvestLogTab implements FlowerFarmTab {
         String detail = FarmUi.actionableError("Refreshing harvest history", failure);
         historyRefreshFailure = detail
                 + " Existing rows, totals, filters, selection, and entry details were kept; retry when ready.";
-        showHistoryRefreshState("Harvest refresh failed · retry",
+        showHistoryRefreshState("Harvest refresh failed · previous snapshot shown · retry",
                 historyRefreshFailure, FarmUi.Tone.DANGER);
         if (host != null) {
             host.setStatus("Harvest refresh failed. Existing work was kept; review the status and retry.");
@@ -354,11 +380,12 @@ public class HarvestLogTab implements FlowerFarmTab {
     private void finishHistoryRefresh() {
         refreshingHistory = false;
         refreshHistoryBtn.setEnabled(true);
+        updateBatchPreview();
         updateEntryActionAvailability();
         updateEntryToolActions();
         updateReportActions();
         if (historyRefreshFailure != null) {
-            showHistoryRefreshState("Harvest refresh failed · retry",
+            showHistoryRefreshState("Harvest refresh failed · previous snapshot shown · retry",
                     historyRefreshFailure, FarmUi.Tone.DANGER);
         }
         if (historyRefreshQueued) {
@@ -385,7 +412,8 @@ public class HarvestLogTab implements FlowerFarmTab {
         // Filter / export / refresh stay enabled for VIEWER
         GuiPermissions.setWritable(writable,
                 dateField, cropField, cropSuggest, qtyField, unitField, unitSuggest,
-                bedField, notesField, keepContextBox, batchArea,
+                bedField, notesField, lotCodeField, gradeField, lossQuantityField,
+                storageLocationField, keepContextBox, batchArea,
                 batchDateField, batchUnitField, batchBedField, batchNotesField,
                 batchBtn, fillSampleBtn, addBtn, loadBtn, saveBtn);
         if (batchLogging || savingEntry || deletingEntry) {
@@ -428,19 +456,21 @@ public class HarvestLogTab implements FlowerFarmTab {
         reviewNewSkuBtn.addActionListener(event -> reviewNewInventoryProducts());
         panel.add(FarmUi.pageHeader(
                 "Harvest log",
-                "Record a cut in seconds, keep inventory synchronized, and spot production patterns.",
+                "Log today's cut. Stock updates automatically.",
                 FarmUi.toolbar(accessLabel, filterStatusLabel,
                         reportStatusLabel, newSkuStatusLabel,
                         reviewNewSkuBtn, refreshHistoryBtn)), BorderLayout.NORTH);
 
         tableModel = new DefaultTableModel(
-                new String[]{"Id", "Date", "Crop", "Quantity", "Unit", "Bed / Field", "Notes"}, 0) {
+                new String[]{"Id", "Date", "Crop", "Quantity", "Unit", "Bed / Field", "Notes",
+                        "Lot", "Grade", "Loss", "Storage"}, 0) {
             @Override public boolean isCellEditable(int row, int column) { return false; }
             @Override public Class<?> getColumnClass(int column) {
                 return switch (column) {
                     case 0 -> Long.class;
                     case 1 -> LocalDate.class;
-                    case 3 -> Double.class;
+                    case 3, 9 -> Double.class;
+                    case 8 -> HarvestGrade.class;
                     default -> String.class;
                 };
             }
@@ -451,6 +481,8 @@ public class HarvestLogTab implements FlowerFarmTab {
         table.setAutoCreateRowSorter(true);
         table.getColumnModel().getColumn(0).setMaxWidth(50);
         table.getColumnModel().getColumn(6).setPreferredWidth(180);
+        table.getColumnModel().getColumn(7).setPreferredWidth(170);
+        table.getColumnModel().getColumn(10).setPreferredWidth(120);
         table.getSelectionModel().addListSelectionListener(e -> {
             if (!e.getValueIsAdjusting()) {
                 updateEntryMode();
@@ -468,9 +500,10 @@ public class HarvestLogTab implements FlowerFarmTab {
         tableCardLayout = new CardLayout();
         tableState = new JPanel(tableCardLayout);
         tableState.add(FarmUi.tableScroll(table), "table");
-        tableState.add(FarmUi.emptyState(
-                "No harvests match these filters",
-                "Clear the filters or log today's first cut below."), "empty");
+        harvestEmptyState = FarmUi.emptyStateView(
+                "No harvests yet",
+                "Log today's first cut above; it will appear here after save.");
+        tableState.add(harvestEmptyState.component(), "empty");
 
         JPanel history = new JPanel(new BorderLayout(0, FarmUi.SECTION_GAP));
         history.setOpaque(false);
@@ -490,7 +523,7 @@ public class HarvestLogTab implements FlowerFarmTab {
         historyTop.add(harvestHandoffBanner);
         historyTop.add(FarmUi.section(
                 "Filter harvest history",
-                "Use crop, bed, notes, or date range; press Enter in a field to apply.",
+                null,
                 filterBar));
         history.add(historyTop, BorderLayout.NORTH);
         history.add(FarmUi.section(
@@ -519,13 +552,13 @@ public class HarvestLogTab implements FlowerFarmTab {
         workbench.setMnemonicAt(1, 'B');
         workbench.setMnemonicAt(2, 'P');
         workbench.getAccessibleContext().setAccessibleName("Harvest entry and totals workspace");
-        history.setMinimumSize(new Dimension(0, 275));
-        workbench.setMinimumSize(new Dimension(0, 325));
+        history.setMinimumSize(new Dimension(0, 292));
+        workbench.setMinimumSize(new Dimension(0, 280));
 
-        JSplitPane split = new JSplitPane(JSplitPane.VERTICAL_SPLIT, history, workbench);
+        JSplitPane split = new JSplitPane(JSplitPane.VERTICAL_SPLIT, workbench, history);
         split.setBorder(null);
-        split.setResizeWeight(0.45);
-        split.setDividerLocation(0.45);
+        split.setResizeWeight(0.52);
+        split.setDividerLocation(0.52);
         split.setContinuousLayout(true);
         split.setOneTouchExpandable(true);
         panel.add(split, BorderLayout.CENTER);
@@ -803,13 +836,10 @@ public class HarvestLogTab implements FlowerFarmTab {
         reportStatusLabel.getAccessibleContext().setAccessibleName(
                 "Harvest report and export status");
         JPanel actions = FarmUi.toolbar(
-                apply, clear, thisWeek, new JLabel("Reports & exports"), reportTools,
-                createReportBtn);
-        JPanel totalOptions = FarmUi.toolbar(filterTotalsOnly);
+                apply, clear, thisWeek, reportTools, createReportBtn, filterTotalsOnly);
         bar.add(fields);
         bar.add(Box.createVerticalStrut(FarmUi.CONTROL_GAP));
         bar.add(actions);
-        bar.add(totalOptions);
         return bar;
     }
 
@@ -864,8 +894,12 @@ public class HarvestLogTab implements FlowerFarmTab {
     }
 
     private JPanel buildForm() {
-        JPanel form = new JPanel(new GridBagLayout());
+        JPanel form = new JPanel(new BorderLayout(0, FarmUi.CONTROL_GAP));
+        form.setName("harvest.quickEntry.form");
         form.setOpaque(false);
+        JPanel fields = new WidthTrackingFields();
+        fields.setName("harvest.quickEntry.fields");
+        fields.setOpaque(false);
         GridBagConstraints c = new GridBagConstraints();
         c.insets = new Insets(3, 4, 3, 4);
         c.fill = GridBagConstraints.HORIZONTAL;
@@ -873,9 +907,11 @@ public class HarvestLogTab implements FlowerFarmTab {
 
         dateField = new JTextField(LocalDate.now().toString(), 10);
         cropField = new JTextField(14);
+        cropField.setName("harvest.crop");
         FarmUi.initialFocus(cropField);
         cropField.putClientProperty("JTextField.placeholderText", "Search or type a crop");
         cropSuggest = new JComboBox<>();
+        cropSuggest.setName("harvest.cropPreset");
         cropSuggest.setEditable(false);
         cropSuggest.setPrototypeDisplayValue("Recent crop…");
         cropSuggest.addActionListener(e -> {
@@ -885,11 +921,14 @@ public class HarvestLogTab implements FlowerFarmTab {
             }
         });
         qtyField = new JTextField("1", 6);
+        qtyField.setName("harvest.quantity");
         qtyField.putClientProperty("JTextField.placeholderText", "Amount");
         unitField = new JTextField("stems", 8);
+        unitField.setName("harvest.unit");
         unitSuggest = new JComboBox<>(new String[]{
                 "stems", "bunches", "buckets", "lbs", "oz", "each"
         });
+        unitSuggest.setName("harvest.unitPreset");
         unitSuggest.setSelectedItem("stems");
         unitSuggest.addActionListener(e -> {
             Object u = unitSuggest.getSelectedItem();
@@ -898,9 +937,24 @@ public class HarvestLogTab implements FlowerFarmTab {
             }
         });
         bedField = new JTextField(10);
+        bedField.setName("harvest.bed");
         bedField.putClientProperty("JTextField.placeholderText", "Optional growing location");
         notesField = new JTextField(18);
+        notesField.setName("harvest.notes");
         notesField.putClientProperty("JTextField.placeholderText", "Optional field note");
+        lotCodeField = new JTextField(14);
+        lotCodeField.setName("harvest.lotCode");
+        lotCodeField.putClientProperty("JTextField.placeholderText", "Generated when blank");
+        gradeField = new JComboBox<>(HarvestGrade.values());
+        gradeField.setName("harvest.grade");
+        gradeField.setSelectedItem(HarvestGrade.UNGRADED);
+        lossQuantityField = new JTextField("0", 6);
+        lossQuantityField.setName("harvest.lossQuantity");
+        lossQuantityField.putClientProperty("JTextField.placeholderText", "0");
+        storageLocationField = new JTextField(14);
+        storageLocationField.setName("harvest.storageLocation");
+        storageLocationField.putClientProperty(
+                "JTextField.placeholderText", "Cooler, rack, shelf, or bucket");
         dateField.getAccessibleContext().setAccessibleName("Harvest date");
         cropField.getAccessibleContext().setAccessibleName("Harvest crop or variety");
         qtyField.getAccessibleContext().setAccessibleName("Harvest quantity");
@@ -911,10 +965,35 @@ public class HarvestLogTab implements FlowerFarmTab {
         unitField.getAccessibleContext().setAccessibleName("Harvest unit");
         bedField.getAccessibleContext().setAccessibleName("Harvest bed or field");
         notesField.getAccessibleContext().setAccessibleName("Harvest notes");
+        lotCodeField.getAccessibleContext().setAccessibleName("Harvest lot code");
+        lotCodeField.getAccessibleContext().setAccessibleDescription(
+                "Optional existing traceability code; FlowersForever generates one when blank.");
+        gradeField.getAccessibleContext().setAccessibleName("Harvest quality grade");
+        lossQuantityField.getAccessibleContext().setAccessibleName("Harvest loss or cull quantity");
+        lossQuantityField.getAccessibleContext().setAccessibleDescription(
+                "Unusable quantity recorded for yield evidence and excluded from inventory.");
+        storageLocationField.getAccessibleContext().setAccessibleName("Harvest storage location");
+        FarmUi.entryControl(cropField, "e.g. Dahlia · Café au Lait", "Type any crop or choose a recent crop. Required.");
+        FarmUi.entryControl(qtyField, "Amount", "Recorded quantity; inventory stores whole units and rounds to the nearest unit.");
+        FarmUi.entryControl(dateField, "YYYY-MM-DD", "Harvest date; today's date is filled in for you.");
+        dateField.setMinimumSize(dateField.getPreferredSize());
+        FarmUi.entryControl(unitField, "stems", "Choose a unit or type your own, such as bunches or buckets.");
+        FarmUi.entryControl(bedField, "e.g. Field A · Bed 3", "Optional growing location for this harvest.");
+        FarmUi.entryControl(notesField, "e.g. Cut before the heat", "Optional field note; press Enter here to save.");
+        FarmUi.entryControl(lotCodeField, "Generated when blank", "Leave blank to generate a traceability code.");
+        FarmUi.entryControl(lossQuantityField, "0", "Unusable quantity; kept out of inventory.");
+        FarmUi.entryControl(storageLocationField, "e.g. Cooler 2 · rack B", "Optional storage destination.");
+        FarmUi.entryControl(cropSuggest, "", "Reuse a crop from recent harvests.");
+        FarmUi.entryControl(unitSuggest, "", "Common harvest units; your custom unit can also be typed.");
+        FarmUi.entryControl(gradeField, "", "Optional quality grade for this lot.");
+        cropSuggest.getAccessibleContext().setAccessibleName("Recent crop presets");
+        unitSuggest.getAccessibleContext().setAccessibleName("Harvest unit presets");
         clearEntryErrorOnEdit(dateField);
         clearEntryErrorOnEdit(cropField);
         clearEntryErrorOnEdit(qtyField);
         clearEntryErrorOnEdit(unitField);
+        clearEntryErrorOnEdit(lotCodeField);
+        clearEntryErrorOnEdit(lossQuantityField);
         notesField.addActionListener(event -> {
             if (editingId == null) {
                 addHarvest();
@@ -923,17 +1002,27 @@ public class HarvestLogTab implements FlowerFarmTab {
             }
         });
 
-        int row = 0;
-        addField(form, c, row, 0, "Crop / variety", cropField, 'C');
-        addField(form, c, row++, 1, "Quantity", qtyField, 'Q');
-        addField(form, c, row, 0, "Bed / field", bedField, 'B');
-        addField(form, c, row++, 1, "Unit", unitField, 'U');
-        addField(form, c, row, 0, "Date", dateField, 'D');
-        addField(form, c, row++, 1, "Notes", notesField, 'N');
-        addField(form, c, row, 0, "Recent crops", cropSuggest, 'R');
-        addField(form, c, row++, 1, "Unit presets", unitSuggest, 'P');
+        addField(fields, c, 0, 0, "Crop / variety",
+                fieldWithPreset(cropField, cropSuggest), 'C');
+        addField(fields, c, 0, 1, "Quantity", qtyField, 'Q');
+        addField(fields, c, 0, 2, "Unit", fieldWithPreset(unitField, unitSuggest), 'U');
+        addField(fields, c, 0, 3, "Date", dateField, 'D');
+        addField(fields, c, 1, 0, "Bed / field", bedField, 'B');
+        addField(fields, c, 1, 1, "Notes", notesField, 'N');
+        addField(fields, c, 1, 2, "Grade", gradeField, 'G');
+        addField(fields, c, 1, 3, "Loss / culls", lossQuantityField, 'O');
+        addField(fields, c, 2, 0, "Lot code", lotCodeField, 'L');
+        addField(fields, c, 2, 1, "Storage", storageLocationField, 'R');
+        c.gridx = 0;
+        c.gridy = 3;
+        c.gridwidth = 4;
+        c.weightx = 1;
+        c.weighty = 1;
+        c.fill = GridBagConstraints.BOTH;
+        fields.add(Box.createGlue(), c);
 
         addBtn = FarmUi.primaryButton("Add harvest");
+        addBtn.setName("harvest.add");
         addBtn.setToolTipText(
                 "Save this cut and keep the harvest context ready for another quantity.");
         addBtn.addActionListener(e -> addHarvest());
@@ -945,8 +1034,10 @@ public class HarvestLogTab implements FlowerFarmTab {
         keepContextBox.getAccessibleContext().setAccessibleName(
                 "Keep harvest context after adding");
         loadBtn = FarmUi.secondaryButton("Load selected");
+        loadBtn.setName("harvest.loadSelected");
         loadBtn.addActionListener(e -> loadSelectedIntoForm());
         saveBtn = FarmUi.primaryButton("Save edit");
+        saveBtn.setName("harvest.saveEdit");
         saveBtn.setToolTipText("Save the changes and adjust inventory automatically.");
         saveBtn.addActionListener(e -> saveEdit());
         JPanel buttons = FarmUi.toolbar(addBtn, saveBtn, loadBtn);
@@ -961,34 +1052,79 @@ public class HarvestLogTab implements FlowerFarmTab {
         updateEntryMode();
         JPanel actionTools = FarmUi.toolbar(entryTools, runEntryToolBtn);
         JPanel actions = new JPanel(new BorderLayout(FarmUi.CONTROL_GAP, 0));
+        actions.setName("harvest.quickEntry.footer");
         actions.setOpaque(false);
         actions.add(buttons, BorderLayout.WEST);
         actions.add(actionTools, BorderLayout.EAST);
         updateEntryToolActions();
 
-        c.gridx = 0;
-        c.gridy = row++;
-        c.weightx = 1;
-        c.gridwidth = 4;
-        JPanel retainedContext = new JPanel(new BorderLayout(FarmUi.CONTROL_GAP, 0));
-        retainedContext.setOpaque(false);
-        retainedContext.add(FarmUi.toolbar(keepContextBox, FarmUi.formHint(
-                "Retains date, crop, unit, and bed; quantity and notes reset.")),
-                BorderLayout.WEST);
-        retainedContext.add(entryStatusLabel, BorderLayout.EAST);
-        form.add(retainedContext, c);
+        JPanel retainedContext = FarmUi.toolbar(keepContextBox, entryStatusLabel);
+        retainedContext.setToolTipText(
+                "Retains date, crop, unit, and bed; quantity and notes reset.");
+        actions.add(retainedContext, BorderLayout.CENTER);
 
-        c.gridx = 0;
-        c.gridy = row;
-        c.gridwidth = 4;
-        form.add(actions, c);
+        JScrollPane fieldsScroll = new JScrollPane(fields,
+                ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED,
+                ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
+        fieldsScroll.setName("harvest.quickEntry.fieldsScroll");
+        fieldsScroll.setBorder(null);
+        fieldsScroll.setOpaque(false);
+        fieldsScroll.getViewport().setOpaque(false);
+        fieldsScroll.getVerticalScrollBar().setUnitIncrement(16);
+        fieldsScroll.getAccessibleContext().setAccessibleName(
+                "Optional harvest entry details");
+        form.add(fieldsScroll, BorderLayout.CENTER);
+        form.add(actions, BorderLayout.SOUTH);
         return form;
+    }
+
+    private static JPanel fieldWithPreset(JComponent field, JComponent preset) {
+        JPanel pair = new JPanel(new BorderLayout(FarmUi.CONTROL_GAP, 0));
+        pair.setOpaque(false);
+        pair.putClientProperty("farm.labelTarget", field);
+        pair.add(field, BorderLayout.CENTER);
+        pair.add(preset, BorderLayout.EAST);
+        return pair;
+    }
+
+    private static final class WidthTrackingFields extends JPanel implements Scrollable {
+        private WidthTrackingFields() {
+            super(new GridBagLayout());
+        }
+
+        @Override
+        public Dimension getPreferredScrollableViewportSize() {
+            return getPreferredSize();
+        }
+
+        @Override
+        public int getScrollableUnitIncrement(Rectangle visibleRect, int orientation,
+                                               int direction) {
+            return 16;
+        }
+
+        @Override
+        public int getScrollableBlockIncrement(Rectangle visibleRect, int orientation,
+                                                int direction) {
+            return Math.max(16, visibleRect.height - 16);
+        }
+
+        @Override
+        public boolean getScrollableTracksViewportWidth() {
+            return true;
+        }
+
+        @Override
+        public boolean getScrollableTracksViewportHeight() {
+            return false;
+        }
     }
 
     private void runEntryTool(String selection) {
         switch (selection == null ? "" : selection) {
             case "Clear form" -> clearForm();
             case "Duplicate selected as today" -> duplicateSelectedAsToday();
+            case "Export selected lot label" -> exportSelectedLotLabel();
             case "Refresh history" -> applyFilter();
             case "Delete selected harvest" -> deleteSelected();
             default -> {
@@ -1004,8 +1140,8 @@ public class HarvestLogTab implements FlowerFarmTab {
         String selected = String.valueOf(entryTools.getSelectedItem());
         String[] choices = writable
                 ? new String[]{"Clear form", "Duplicate selected as today",
-                    "Refresh history", "Delete selected harvest"}
-                : new String[]{"Refresh history"};
+                    "Export selected lot label", "Refresh history", "Delete selected harvest"}
+                : new String[]{"Refresh history", "Export selected lot label"};
         entryTools.setModel(new DefaultComboBoxModel<>(choices));
         for (String choice : choices) {
             if (choice.equals(selected)) {
@@ -1021,14 +1157,30 @@ public class HarvestLogTab implements FlowerFarmTab {
         }
         String selected = String.valueOf(entryTools.getSelectedItem());
         boolean selectionRequired = "Duplicate selected as today".equals(selected)
-                || "Delete selected harvest".equals(selected);
+                || "Delete selected harvest".equals(selected)
+                || "Export selected lot label".equals(selected);
+        boolean destructiveSelection = "Delete selected harvest".equals(selected);
         boolean refreshAction = "Refresh history".equals(selected);
         runEntryToolBtn.setEnabled((!refreshingHistory || refreshAction)
                 && (!savingEntry || refreshAction)
                 && (!batchLogging || refreshAction)
                 && (!deletingEntry || refreshAction)
+                && (!runningReport || refreshAction)
+                && (!destructiveSelection || historyRefreshFailure == null)
                 && (!selectionRequired
                 || (table != null && table.getSelectedRow() >= 0)));
+        if (destructiveSelection && historyRefreshFailure != null) {
+            String guidance = "Refresh harvest history successfully before deleting from the "
+                    + "retained snapshot.";
+            runEntryToolBtn.setToolTipText(guidance);
+            runEntryToolBtn.getAccessibleContext().setAccessibleDescription(guidance);
+        } else {
+            String guidance = refreshAction
+                    ? "Reload harvest history using the current filters."
+                    : "Run the selected harvest entry action.";
+            runEntryToolBtn.setToolTipText(guidance);
+            runEntryToolBtn.getAccessibleContext().setAccessibleDescription(guidance);
+        }
     }
 
     private void updateReportActions() {
@@ -1042,14 +1194,16 @@ public class HarvestLogTab implements FlowerFarmTab {
 
     private void addField(JPanel form, GridBagConstraints c, int row, int pair,
                           String label, JComponent field, char mnemonic) {
-        c.gridx = pair * 2;
+        JComponent labelTarget = field;
+        Object requestedTarget = field.getClientProperty("farm.labelTarget");
+        if (requestedTarget instanceof JComponent target) {
+            labelTarget = target;
+        }
+        c.gridx = pair;
         c.gridy = row;
-        c.weightx = 0;
+        c.weightx = pair == 0 ? 2 : 1;
         c.gridwidth = 1;
-        form.add(fieldLabel(label, field, mnemonic), c);
-        c.gridx = pair * 2 + 1;
-        c.weightx = 1;
-        form.add(field, c);
+        form.add(FarmUi.entryField(label, field, labelTarget, mnemonic), c);
     }
 
     private static JLabel fieldLabel(String text, JComponent field, char mnemonic) {
@@ -1149,6 +1303,10 @@ public class HarvestLogTab implements FlowerFarmTab {
         unitField.setText(entry.getUnit());
         bedField.setText(entry.getBedOrField());
         notesField.setText("");
+        lotCodeField.setText("");
+        lossQuantityField.setText("0");
+        gradeField.setSelectedItem(entry.getGrade());
+        storageLocationField.setText(entry.getStorageLocation());
         clearEntryValidation();
         updateEntryMode();
         updateEntryStatus(
@@ -1170,6 +1328,10 @@ public class HarvestLogTab implements FlowerFarmTab {
         unitField.setText(String.valueOf(tableModel.getValueAt(row, 4)));
         bedField.setText(nullToEmpty(tableModel.getValueAt(row, 5)));
         notesField.setText(nullToEmpty(tableModel.getValueAt(row, 6)));
+        lotCodeField.setText(nullToEmpty(tableModel.getValueAt(row, 7)));
+        gradeField.setSelectedItem(tableModel.getValueAt(row, 8));
+        lossQuantityField.setText(String.valueOf(tableModel.getValueAt(row, 9)));
+        storageLocationField.setText(nullToEmpty(tableModel.getValueAt(row, 10)));
         if (host != null) {
             host.setStatus("Editing the selected " + cropField.getText()
                     + " harvest. Change the fields, then choose Save edit.");
@@ -1191,6 +1353,10 @@ public class HarvestLogTab implements FlowerFarmTab {
         unitField.setText(String.valueOf(tableModel.getValueAt(row, 4)));
         bedField.setText(nullToEmpty(tableModel.getValueAt(row, 5)));
         notesField.setText(nullToEmpty(tableModel.getValueAt(row, 6)));
+        lotCodeField.setText("");
+        gradeField.setSelectedItem(tableModel.getValueAt(row, 8));
+        lossQuantityField.setText("0");
+        storageLocationField.setText(nullToEmpty(tableModel.getValueAt(row, 10)));
         if (host != null) {
             host.setStatus("Copied into today's form. Adjust the quantity if needed, then add it.");
         }
@@ -1328,7 +1494,7 @@ public class HarvestLogTab implements FlowerFarmTab {
             host.setStatus(guidance + " Harvest form and target were kept for retry.");
         }
         if (panel.isShowing()) {
-            JOptionPane.showMessageDialog(panel, guidance,
+            dialogs.showMessage(panel, guidance,
                     mutation == EntryMutation.ADD ? "Harvest not logged" : "Edit not saved",
                     JOptionPane.ERROR_MESSAGE);
         }
@@ -1342,7 +1508,9 @@ public class HarvestLogTab implements FlowerFarmTab {
     private HarvestEntry readFormEntry() {
         return presenter.fromForm(new HarvestLogPresenter.EntryDraft(
                 dateField.getText(), cropField.getText(), qtyField.getText(),
-                unitField.getText(), bedField.getText(), notesField.getText()));
+                unitField.getText(), bedField.getText(), notesField.getText(),
+                lotCodeField.getText(), String.valueOf(gradeField.getSelectedItem()),
+                lossQuantityField.getText(), storageLocationField.getText()));
     }
 
     private void clearForm() {
@@ -1353,6 +1521,10 @@ public class HarvestLogTab implements FlowerFarmTab {
         unitField.setText("stems");
         bedField.setText("");
         notesField.setText("");
+        lotCodeField.setText("");
+        gradeField.setSelectedItem(HarvestGrade.UNGRADED);
+        lossQuantityField.setText("0");
+        storageLocationField.setText("");
         clearEntryValidation();
         updateEntryMode();
     }
@@ -1411,11 +1583,25 @@ public class HarvestLogTab implements FlowerFarmTab {
         }
         boolean current = !refreshingHistory && !savingEntry
                 && !batchLogging && !deletingEntry;
+        boolean authoritative = current && historyRefreshFailure == null;
         boolean editing = editingId != null;
         boolean selected = selectedHarvestModelRow() >= 0;
+        addBtn.setVisible(!editing);
+        saveBtn.setVisible(editing);
+        loadBtn.setVisible(!editing && selected);
         addBtn.setEnabled(canWrite && current && !editing);
         loadBtn.setEnabled(canWrite && current && selected);
-        saveBtn.setEnabled(canWrite && current && editing);
+        saveBtn.setEnabled(canWrite && authoritative && editing);
+        if (editing && historyRefreshFailure != null) {
+            String guidance = "Your edit is retained. Refresh harvest history successfully before "
+                    + "saving changes to this existing harvest.";
+            saveBtn.setToolTipText(guidance);
+            saveBtn.getAccessibleContext().setAccessibleDescription(guidance);
+        } else {
+            String guidance = "Save the changes and adjust inventory automatically.";
+            saveBtn.setToolTipText(guidance);
+            saveBtn.getAccessibleContext().setAccessibleDescription(guidance);
+        }
     }
 
     private static String compactCrop(String crop) {
@@ -1480,6 +1666,8 @@ public class HarvestLogTab implements FlowerFarmTab {
             case "crop" -> cropField;
             case "quantity" -> qtyField;
             case "unit" -> unitField;
+            case "lossQuantity" -> lossQuantityField;
+            case "form" -> lotCodeField;
             default -> null;
         };
         FarmUi.markFieldError(field, exception.getMessage());
@@ -1501,6 +1689,8 @@ public class HarvestLogTab implements FlowerFarmTab {
         FarmUi.clearFieldError(cropField);
         FarmUi.clearFieldError(qtyField);
         FarmUi.clearFieldError(unitField);
+        FarmUi.clearFieldError(lotCodeField);
+        FarmUi.clearFieldError(lossQuantityField);
     }
 
     private void clearEntryErrorOnEdit(JTextField field) {
@@ -1534,7 +1724,7 @@ public class HarvestLogTab implements FlowerFarmTab {
         }
         Long id = (Long) tableModel.getValueAt(row, 0);
         String crop = String.valueOf(tableModel.getValueAt(row, 2));
-        int confirm = JOptionPane.showConfirmDialog(panel,
+        int confirm = dialogs.showConfirm(panel,
                 FarmUi.confirmationPanel(
                         "Delete this " + crop + " harvest?",
                         "The " + tableModel.getValueAt(row, 1)
@@ -1629,7 +1819,7 @@ public class HarvestLogTab implements FlowerFarmTab {
                     + " was not deleted. It remains selected for review or retry.");
         }
         if (panel.isShowing()) {
-            JOptionPane.showMessageDialog(panel, recovery,
+            dialogs.showMessage(panel, recovery,
                     "Harvest not deleted", JOptionPane.ERROR_MESSAGE);
         }
     }
@@ -1643,15 +1833,38 @@ public class HarvestLogTab implements FlowerFarmTab {
     }
 
     private void exportCsv(boolean filteredOnly) {
-        JFileChooser chooser = new JFileChooser();
-        chooser.setSelectedFile(new File(filteredOnly ? "harvest_filtered.csv" : "harvest_log.csv"));
-        chooser.setDialogTitle(filteredOnly
+        File file = files.chooseSave(panel, filteredOnly
                 ? "Export filtered harvest view to CSV"
-                : "Export full harvest history to CSV");
-        if (chooser.showSaveDialog(panel) != JFileChooser.APPROVE_OPTION) {
+                : "Export full harvest history to CSV",
+                new File(filteredOnly ? "harvest_filtered.csv" : "harvest_log.csv"))
+                .orElse(null);
+        if (!approveReplacement(file)) {
             return;
         }
-        startCsvExport(chooser.getSelectedFile(), filteredOnly);
+        startCsvExport(file, filteredOnly);
+    }
+
+    private void exportSelectedLotLabel() {
+        int row = selectedHarvestModelRow();
+        if (row < 0) {
+            showError("Select a harvest row before exporting its lot label.");
+            return;
+        }
+        Long id = (Long) tableModel.getValueAt(row, 0);
+        String lotCode = nullToEmpty(tableModel.getValueAt(row, 7));
+        File file = files.chooseSave(panel, "Save printable harvest lot label",
+                new File("harvest-lot-" + lotCode.replace('/', '-') + ".pdf"))
+                .orElse(null);
+        if (!approveReplacement(file)
+                || !beginReportWork("Creating lot label…",
+                "The selected harvest lot and QR identity are being rendered.")) {
+            return;
+        }
+        startReportFileExport(file,
+                () -> java.nio.file.Files.write(file.toPath(), presenter.lotLabelPdf(id)),
+                "Lot label saved · " + lotCode,
+                "Harvest lot label → " + file.getName(),
+                "Harvest lot label export");
     }
 
     void startCsvExport(File file, boolean filteredOnly) {
@@ -1740,17 +1953,16 @@ public class HarvestLogTab implements FlowerFarmTab {
     private void presentBedProduction(HarvestService.BedProductionReport report) {
         JTextArea area = reportArea(report.plainText());
         Object[] options = {"Export CSV…", "Export PDF…", "Close"};
-        int choice = JOptionPane.showOptionDialog(panel, new JScrollPane(area),
+        int choice = dialogs.showOption(panel, new JScrollPane(area),
                 "Bed / field production — " + report.from() + " → " + report.to(),
                 JOptionPane.DEFAULT_OPTION, JOptionPane.PLAIN_MESSAGE,
                 null, options, options[2]);
         if (choice == 0) {
-            JFileChooser chooser = new JFileChooser();
-            chooser.setSelectedFile(new File("bed-production-" + report.to() + ".csv"));
-            if (chooser.showSaveDialog(panel) == JFileChooser.APPROVE_OPTION
+            File file = files.chooseSave(panel, "Save bed production CSV",
+                    new File("bed-production-" + report.to() + ".csv")).orElse(null);
+            if (approveReplacement(file)
                     && beginReportWork("Exporting bed production CSV…",
                     "The reviewed bed-production snapshot is being written in the background.")) {
-                File file = chooser.getSelectedFile();
                 startReportFileExport(file,
                         () -> java.nio.file.Files.writeString(
                                 file.toPath(), presenter.bedProductionCsv(report)),
@@ -1758,12 +1970,11 @@ public class HarvestLogTab implements FlowerFarmTab {
                         "Bed-production CSV export");
             }
         } else if (choice == 1) {
-            JFileChooser chooser = new JFileChooser();
-            chooser.setSelectedFile(new File("bed-production-" + report.to() + ".pdf"));
-            if (chooser.showSaveDialog(panel) == JFileChooser.APPROVE_OPTION
+            File file = files.chooseSave(panel, "Save bed production PDF",
+                    new File("bed-production-" + report.to() + ".pdf")).orElse(null);
+            if (approveReplacement(file)
                     && beginReportWork("Creating bed production PDF…",
                     "The reviewed bed-production snapshot is being rendered in the background.")) {
-                File file = chooser.getSelectedFile();
                 startReportFileExport(file,
                         () -> java.nio.file.Files.write(
                                 file.toPath(), presenter.bedProductionPdf(report)),
@@ -1818,18 +2029,17 @@ public class HarvestLogTab implements FlowerFarmTab {
 
     private void presentHarvestLog(HarvestService.HarvestLogReport report) {
         Object[] options = {"Export PDF…", "Close"};
-        int choice = JOptionPane.showOptionDialog(panel,
+        int choice = dialogs.showOption(panel,
                 new JScrollPane(reportArea(report.plainText())),
                 "Harvest log — " + report.from() + " → " + report.to(),
                 JOptionPane.DEFAULT_OPTION, JOptionPane.PLAIN_MESSAGE,
                 null, options, options[1]);
         if (choice == 0) {
-            JFileChooser chooser = new JFileChooser();
-            chooser.setSelectedFile(new File("harvest-log-" + report.to() + ".pdf"));
-            if (chooser.showSaveDialog(panel) == JFileChooser.APPROVE_OPTION
+            File file = files.chooseSave(panel, "Save harvest log PDF",
+                    new File("harvest-log-" + report.to() + ".pdf")).orElse(null);
+            if (approveReplacement(file)
                     && beginReportWork("Creating harvest log PDF…",
                     "The reviewed harvest-log snapshot is being rendered in the background.")) {
-                File file = chooser.getSelectedFile();
                 startReportFileExport(file,
                         () -> java.nio.file.Files.write(
                                 file.toPath(), presenter.harvestLogPdf(report)),
@@ -1898,7 +2108,7 @@ public class HarvestLogTab implements FlowerFarmTab {
                             "Saved to " + file.getAbsolutePath(), FarmUi.Tone.SUCCESS,
                             hostMessage);
                     if (panel.isShowing()) {
-                        JOptionPane.showMessageDialog(panel,
+                        dialogs.showMessage(panel,
                                 "Saved to:\n" + file.getAbsolutePath(),
                                 "Export complete", JOptionPane.INFORMATION_MESSAGE);
                     }
@@ -1943,6 +2153,20 @@ public class HarvestLogTab implements FlowerFarmTab {
         }
     }
 
+    private boolean approveReplacement(File file) {
+        if (file == null || !file.exists()) {
+            return file != null;
+        }
+        int choice = dialogs.showConfirm(panel,
+                FarmUi.confirmationPanel(
+                        "Replace “" + file.getName() + "”?",
+                        "The existing file will be overwritten only if you continue.",
+                        FarmUi.Tone.WARNING),
+                "Replace existing file", JOptionPane.YES_NO_OPTION,
+                JOptionPane.WARNING_MESSAGE);
+        return choice == JOptionPane.YES_OPTION;
+    }
+
     private void showReportState(String message, String description, FarmUi.Tone tone) {
         FarmUi.updateStatusBadge(reportStatusLabel, message, tone);
         reportStatusLabel.setToolTipText(description);
@@ -1964,6 +2188,21 @@ public class HarvestLogTab implements FlowerFarmTab {
 
     private static String nullToEmpty(Object o) {
         return o == null ? "" : String.valueOf(o);
+    }
+
+    private void updateHarvestEmptyState() {
+        if (harvestEmptyState == null) {
+            return;
+        }
+        if (allTotals.isEmpty()) {
+            harvestEmptyState.updateCopy(
+                    "No harvests yet",
+                    "Log today's first cut below; it will appear here after save.");
+        } else {
+            harvestEmptyState.updateCopy(
+                    "No harvests match these filters",
+                    "Clear the filters or log today's next cut below.");
+        }
     }
 
     private record HistorySnapshot(HarvestLogPresenter.HarvestView view,
@@ -2001,6 +2240,6 @@ public class HarvestLogTab implements FlowerFarmTab {
     }
 
     private void showError(String msg) {
-        JOptionPane.showMessageDialog(panel, msg, "Harvest log", JOptionPane.ERROR_MESSAGE);
+        dialogs.showMessage(panel, msg, "Harvest log", JOptionPane.ERROR_MESSAGE);
     }
 }

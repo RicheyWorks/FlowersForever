@@ -1,5 +1,7 @@
 package com.flowerfarm.gui.tabs;
 
+import com.flowerfarm.gui.FarmDialogs;
+import com.flowerfarm.gui.FarmFileChooser;
 import com.flowerfarm.gui.FarmUi;
 import com.flowerfarm.model.Item;
 import com.flowerfarm.service.HarvestService;
@@ -50,6 +52,8 @@ public class DashboardTab implements FlowerFarmTab {
     private final MorningBriefingService morningBriefingService;
     private final DayCloseoutService dayCloseoutService;
     private final TabHost host;
+    private final FarmDialogs dialogs;
+    private final FarmFileChooser files;
 
     private JPanel panel;
     private JLabel totalItemsLabel;
@@ -76,6 +80,9 @@ public class DashboardTab implements FlowerFarmTab {
     private List<DashboardPriority> rankedPriorities = List.of();
     private boolean priorityQueueUpdating;
     private DashboardPriority selectedDashboardPriority;
+    private volatile HarvestService.BedProductionReport lastGoodBedProduction;
+    private volatile IrrigationAdvisorService.IrrigationAdvice lastGoodIrrigation;
+    private volatile MarketDayPackingService.MarketDayPlan lastGoodPacking;
 
     private final JPanel[] kpiCards = new JPanel[4];
     private SparklinePanel weekHarvestSpark;
@@ -94,6 +101,21 @@ public class DashboardTab implements FlowerFarmTab {
                         MorningBriefingService morningBriefingService,
                         DayCloseoutService dayCloseoutService,
                         TabHost host) {
+        this(inventoryService, harvestService, orderService, irrigationAdvisorService,
+                marketDayPackingService, morningBriefingService, dayCloseoutService, host,
+                FarmDialogs.swing(), FarmFileChooser.swing());
+    }
+
+    public DashboardTab(InventoryService inventoryService,
+                        HarvestService harvestService,
+                        OrderService orderService,
+                        IrrigationAdvisorService irrigationAdvisorService,
+                        MarketDayPackingService marketDayPackingService,
+                        MorningBriefingService morningBriefingService,
+                        DayCloseoutService dayCloseoutService,
+                        TabHost host,
+                        FarmDialogs dialogs,
+                        FarmFileChooser files) {
         this.inventoryService = inventoryService;
         this.harvestService = harvestService;
         this.orderService = orderService;
@@ -102,6 +124,8 @@ public class DashboardTab implements FlowerFarmTab {
         this.morningBriefingService = morningBriefingService;
         this.dayCloseoutService = dayCloseoutService;
         this.host = host;
+        this.dialogs = java.util.Objects.requireNonNull(dialogs, "dialogs");
+        this.files = java.util.Objects.requireNonNull(files, "files");
     }
 
     @Override public String getTabTitle() { return "Dashboard"; }
@@ -163,7 +187,11 @@ public class DashboardTab implements FlowerFarmTab {
                     if (!refreshQueued) {
                         applyDashboardSnapshot(snapshot);
                         if (host != null) {
-                            host.setStatus("Dashboard overview refreshed.");
+                            host.setStatus(snapshot.partialFailures().isEmpty()
+                                    ? "Dashboard overview refreshed."
+                                    : "Dashboard core metrics refreshed; "
+                                            + partialSourceSummary(snapshot.partialFailures())
+                                            + " unavailable. Retained context is marked when available.");
                         }
                     } else if (host != null) {
                         host.setStatus("A newer dashboard refresh is queued; discarding the older snapshot.");
@@ -200,32 +228,47 @@ public class DashboardTab implements FlowerFarmTab {
         double[] harvestDays = harvestService.dailyQuantitiesLast7Days();
         double[] revenueDays = orderService.dailyRevenueLast7Days();
 
+        List<DashboardSourceFailure> partialFailures = new ArrayList<>();
         HarvestService.BedProductionReport beds = null;
         if (weekHarvest > 0) {
             try {
                 beds = harvestService.productionByBedLast7Days();
-            } catch (RuntimeException ignored) {
-                // Best-effort context must not discard the core dashboard snapshot.
+            } catch (RuntimeException failure) {
+                beds = lastGoodBedProduction;
+                partialFailures.add(sourceFailure(
+                        "Bed production", failure, beds != null));
             }
         }
         IrrigationAdvisorService.IrrigationAdvice irrigation = null;
         if (irrigationAdvisorService != null) {
             try {
                 irrigation = irrigationAdvisorService.adviseClimatology();
-            } catch (RuntimeException ignored) {
-                // Best-effort context must not discard the core dashboard snapshot.
+            } catch (RuntimeException failure) {
+                irrigation = lastGoodIrrigation;
+                partialFailures.add(sourceFailure(
+                        "Irrigation", failure, irrigation != null));
             }
         }
         MarketDayPackingService.MarketDayPlan packing = null;
         if (marketDayPackingService != null) {
             try {
                 packing = marketDayPackingService.planForDay(LocalDate.now());
-            } catch (RuntimeException ignored) {
-                // Best-effort context must not discard the core dashboard snapshot.
+            } catch (RuntimeException failure) {
+                packing = lastGoodPacking;
+                partialFailures.add(sourceFailure(
+                        "Market Day", failure, packing != null));
             }
         }
         return new DashboardSnapshot(items, inv, weekHarvest, priorHarvest,
-                rev, priorRev, harvestDays, revenueDays, beds, irrigation, packing);
+                rev, priorRev, harvestDays, revenueDays, beds, irrigation, packing,
+                List.copyOf(partialFailures));
+    }
+
+    private static DashboardSourceFailure sourceFailure(
+            String source, RuntimeException failure, boolean retained) {
+        return new DashboardSourceFailure(source,
+                compactMessage(FarmUi.actionableError("Loading " + source + " context", failure)),
+                retained);
     }
 
     private void applyDashboardSnapshot(DashboardSnapshot snapshot) {
@@ -273,22 +316,72 @@ public class DashboardTab implements FlowerFarmTab {
 
         applyLowStockCardStyle(lowStockCount > 0);
 
-        if (lastUpdatedLabel != null) {
-            lastUpdatedLabel.setText("Updated "
-                    + LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss"))
-                    + " · 7-day view");
+        updateOptionalContextCache(snapshot);
+        updateDashboardFreshness(snapshot.partialFailures());
+
+        rebuildAlerts(items, rev, weekHarvest,
+                snapshot.beds(), snapshot.irrigation(), snapshot.packing(),
+                snapshot.partialFailures());
+        rebuildValueByCategory(items);
+        rebuildQuantityByItem(items);
+    }
+
+    private void updateOptionalContextCache(DashboardSnapshot snapshot) {
+        if (!sourceFailed(snapshot.partialFailures(), "Bed production")
+                && snapshot.beds() != null) {
+            lastGoodBedProduction = snapshot.beds();
+        }
+        if (!sourceFailed(snapshot.partialFailures(), "Irrigation")
+                && snapshot.irrigation() != null) {
+            lastGoodIrrigation = snapshot.irrigation();
+        }
+        if (!sourceFailed(snapshot.partialFailures(), "Market Day")
+                && snapshot.packing() != null) {
+            lastGoodPacking = snapshot.packing();
+        }
+    }
+
+    private void updateDashboardFreshness(List<DashboardSourceFailure> failures) {
+        if (lastUpdatedLabel == null) {
+            return;
+        }
+        String updated = "Updated "
+                + LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss"))
+                + " · 7-day view";
+        if (failures.isEmpty()) {
+            lastUpdatedLabel.setText(updated);
             lastUpdatedLabel.setToolTipText(
                     "Week metrics use the last 7 days; revenue includes completed orders only.");
             lastUpdatedLabel.getAccessibleContext().setAccessibleDescription(
                     "Dashboard snapshot updated successfully. Week metrics use the last 7 days; "
                             + "revenue includes completed orders only.");
             lastUpdatedLabel.setForeground(FarmUi.mutedColor());
+            return;
         }
+        String sources = partialSourceSummary(failures);
+        String detail = failures.stream()
+                .map(failure -> failure.source() + ": " + failure.detail()
+                        + (failure.retained()
+                        ? " Last-good context retained." : " No prior context available."))
+                .collect(java.util.stream.Collectors.joining(" "));
+        lastUpdatedLabel.setText(updated + " · " + failures.size()
+                + " context" + (failures.size() == 1 ? "" : "s") + " unavailable");
+        lastUpdatedLabel.setToolTipText(
+                "Core inventory, harvest, and order metrics are current. " + detail);
+        lastUpdatedLabel.getAccessibleContext().setAccessibleDescription(
+                "Dashboard partially updated. Core inventory, harvest, and order metrics are current. "
+                        + sources + " unavailable. " + detail);
+        lastUpdatedLabel.setForeground(FarmUi.toneForegroundColor(FarmUi.Tone.WARNING));
+    }
 
-        rebuildAlerts(items, rev, weekHarvest,
-                snapshot.beds(), snapshot.irrigation(), snapshot.packing());
-        rebuildValueByCategory(items);
-        rebuildQuantityByItem(items);
+    private static String partialSourceSummary(List<DashboardSourceFailure> failures) {
+        return failures.stream().map(DashboardSourceFailure::source)
+                .collect(java.util.stream.Collectors.joining(", "));
+    }
+
+    private static boolean sourceFailed(
+            List<DashboardSourceFailure> failures, String source) {
+        return failures.stream().anyMatch(failure -> failure.source().equals(source));
     }
 
     private void failOverviewRefresh(Throwable failure) {
@@ -381,13 +474,17 @@ public class DashboardTab implements FlowerFarmTab {
             double[] revenueDays,
             HarvestService.BedProductionReport beds,
             IrrigationAdvisorService.IrrigationAdvice irrigation,
-            MarketDayPackingService.MarketDayPlan packing) {
+            MarketDayPackingService.MarketDayPlan packing,
+            List<DashboardSourceFailure> partialFailures) {
         private DashboardSnapshot {
             items = List.copyOf(items);
             harvestDays = harvestDays == null ? new double[0] : harvestDays.clone();
             revenueDays = revenueDays == null ? new double[0] : revenueDays.clone();
+            partialFailures = List.copyOf(partialFailures);
         }
     }
+
+    private record DashboardSourceFailure(String source, String detail, boolean retained) { }
 
     private static String formatWow(String prefix, Double pct, double absDelta, boolean money) {
         String abs = money
@@ -460,9 +557,16 @@ public class DashboardTab implements FlowerFarmTab {
                                double weekHarvest,
                                HarvestService.BedProductionReport beds,
                                IrrigationAdvisorService.IrrigationAdvice irrigation,
-                               MarketDayPackingService.MarketDayPlan packing) {
+                               MarketDayPackingService.MarketDayPlan packing,
+                               List<DashboardSourceFailure> partialFailures) {
         StringBuilder alerts = new StringBuilder();
         List<DashboardPriority> priorities = new ArrayList<>();
+        if (!partialFailures.isEmpty()) {
+            alerts.append("⚠ Partial update: ")
+                    .append(partialSourceSummary(partialFailures))
+                    .append(" unavailable. Retained context is marked when available; "
+                            + "core metrics are current.\n");
+        }
         List<Item> lowItems = items.stream()
                 .filter(i -> i.getQuantity() <= LOW_STOCK_THRESHOLD)
                 .sorted((a, b) -> Integer.compare(a.getQuantity(), b.getQuantity()))
@@ -514,7 +618,9 @@ public class DashboardTab implements FlowerFarmTab {
             alerts.append("• Top bed this week: ").append(top.bed())
                     .append(" (").append(String.format("%.0f", top.totalQuantity()))
                     .append(" harvested) across ").append(beds.bedCount())
-                    .append(" bed(s)\n");
+                    .append(" bed(s)")
+                    .append(sourceFailed(partialFailures, "Bed production")
+                            ? " · previous snapshot · verify\n" : "\n");
         }
 
         if (irrigation != null
@@ -522,29 +628,39 @@ public class DashboardTab implements FlowerFarmTab {
                 || irrigation.priority() == IrrigationAdvisorService.Priority.MEDIUM)) {
             alerts.append("• Watering priority: ")
                     .append(irrigation.priority().name().toLowerCase())
-                    .append(" — ").append(irrigation.headline()).append('\n');
-            priorities.add(new DashboardPriority(
-                    irrigation.priority() == IrrigationAdvisorService.Priority.HIGH ? 10 : 45,
-                    "Watering " + irrigation.priority().name().toLowerCase()
-                            + " · " + irrigation.headline(),
-                    "Irrigation & Care",
-                    "Opened irrigation guidance for today."));
+                    .append(" — ").append(irrigation.headline())
+                    .append(sourceFailed(partialFailures, "Irrigation")
+                            ? " · previous snapshot · verify\n" : "\n");
+            if (!sourceFailed(partialFailures, "Irrigation")) {
+                priorities.add(new DashboardPriority(
+                        irrigation.priority() == IrrigationAdvisorService.Priority.HIGH ? 10 : 45,
+                        "Watering " + irrigation.priority().name().toLowerCase()
+                                + " · " + irrigation.headline(),
+                        "Irrigation & Care",
+                        "Opened irrigation guidance for today."));
+            }
         }
 
         if (packing != null && packing.orderCount() > 0) {
             alerts.append("• Pack today: ").append(packing.orderCount())
                     .append(" confirmed order(s) — $")
                     .append(String.format("%,.2f", packing.pipelineValue()))
-                    .append(" total\n");
+                    .append(" total")
+                    .append(sourceFailed(partialFailures, "Market Day")
+                            ? " · previous snapshot · verify\n" : "\n");
             if (packing.shortfallSkuCount() > 0) {
                 alerts.append("• Packing shortfall: ").append(packing.shortfallSkuCount())
-                        .append(" product(s) under stock for today's load-out\n");
-                priorities.add(new DashboardPriority(0,
-                        "Resolve " + packing.shortfallSkuCount()
-                                + " packing shortfall(s)",
-                        "Market Day",
-                        "Opened Market Day to review packing shortfalls."));
-            } else {
+                        .append(" product(s) under stock for today's load-out")
+                        .append(sourceFailed(partialFailures, "Market Day")
+                                ? " · previous snapshot · verify\n" : "\n");
+                if (!sourceFailed(partialFailures, "Market Day")) {
+                    priorities.add(new DashboardPriority(0,
+                            "Resolve " + packing.shortfallSkuCount()
+                                    + " packing shortfall(s)",
+                            "Market Day",
+                            "Opened Market Day to review packing shortfalls."));
+                }
+            } else if (!sourceFailed(partialFailures, "Market Day")) {
                 priorities.add(new DashboardPriority(15,
                         "Pack " + packing.orderCount() + " order(s) for today",
                         "Market Day",
@@ -553,7 +669,7 @@ public class DashboardTab implements FlowerFarmTab {
         }
 
         if (alerts.length() == 0) {
-            alerts.append("All clear — stock healthy, harvest moving, orders on track. Great job, Kitsap!");
+            alerts.append("All clear — stock healthy, harvest moving, orders on track. Great job!");
         }
         alertsArea.setText(alerts.toString());
         alertsArea.setCaretPosition(0);
@@ -661,11 +777,10 @@ public class DashboardTab implements FlowerFarmTab {
     private void buildUI() {
         panel = FarmUi.page();
 
-        lastUpdatedLabel = new JLabel("Overview not refreshed yet");
+        lastUpdatedLabel = FarmUi.mutedLabel("Overview not refreshed yet");
         lastUpdatedLabel.setName("dashboard.overviewStatus");
         lastUpdatedLabel.getAccessibleContext().setAccessibleName("Dashboard refresh status");
         lastUpdatedLabel.setFont(lastUpdatedLabel.getFont().deriveFont(11f));
-        lastUpdatedLabel.setForeground(FarmUi.mutedColor());
         refreshOverviewButton = FarmUi.primaryButton("Refresh overview");
         refreshOverviewButton.setName("dashboard.refreshOverview");
         refreshOverviewButton.setToolTipText(
@@ -682,18 +797,18 @@ public class DashboardTab implements FlowerFarmTab {
         kpiPanel.setOpaque(false);
         weekHarvestSpark = new SparklinePanel();
         weekHarvestSpark.setLineColor(new Color(34, 100, 54));
-        weekHarvestDeltaLabel = new JLabel("vs prior wk —");
+        weekHarvestDeltaLabel = FarmUi.mutedLabel("vs prior wk —");
         kpiCards[0] = createKPICard("Week harvest", weekHarvestLabel = new JLabel("—"), "amount in last 7 days",
                 weekHarvestDeltaLabel, weekHarvestSpark, "Log harvest", "Harvest Log");
         weekRevenueSpark = new SparklinePanel();
-        weekRevenueSpark.setLineColor(FarmUi.roseAccentColor());
-        weekRevenuePipelineLabel = new JLabel("confirmed —");
+        weekRevenueSpark.setLineColor(FarmUi.accentColor());
+        weekRevenuePipelineLabel = FarmUi.mutedLabel("confirmed —");
         kpiCards[1] = createKPICard("Week revenue", weekRevenueLabel = new JLabel("—"), "from completed orders",
                 weekRevenuePipelineLabel, weekRevenueSpark, "Create order", "Customers & Orders");
-        totalItemsLabel = new JLabel("products and units —");
+        totalItemsLabel = FarmUi.mutedLabel("products and units —");
         kpiCards[2] = createKPICard("Inventory value", totalValueLabel = new JLabel("—"), "at sell prices",
                 totalItemsLabel, null, "Open Inventory", "Inventory");
-        lowStockSubtitle = new JLabel("items ≤ " + LOW_STOCK_THRESHOLD);
+        lowStockSubtitle = FarmUi.mutedLabel("items ≤ " + LOW_STOCK_THRESHOLD);
         kpiCards[3] = createKPICard("Low stock", lowStockLabel = new JLabel("—"), null,
                 lowStockSubtitle, null, "Review stock", "Inventory");
         for (JPanel card : kpiCards) {
@@ -823,6 +938,8 @@ public class DashboardTab implements FlowerFarmTab {
 
     private JButton actionButton(String label, String tabTitle, String statusMsg) {
         JButton btn = FarmUi.secondaryButton(label);
+        btn.getAccessibleContext().setAccessibleName(
+                label + " from Today’s work actions");
         btn.setToolTipText(statusMsg);
         btn.addActionListener(e -> openDashboardDestination(tabTitle, statusMsg));
         return btn;
@@ -1000,7 +1117,7 @@ public class DashboardTab implements FlowerFarmTab {
                     ? new Object[]{"Export PDF…", "Close"}
                     : new Object[]{"Start selected task",
                         "Export PDF…", "Close"};
-            int choice = JOptionPane.showOptionDialog(panel, briefingView,
+            int choice = dialogs.showOption(panel, briefingView,
                     "Morning briefing — " + briefing.date(),
                     JOptionPane.DEFAULT_OPTION, JOptionPane.PLAIN_MESSAGE,
                     null, options, options[options.length - 1]);
@@ -1011,12 +1128,7 @@ public class DashboardTab implements FlowerFarmTab {
             }
             int exportChoice = morningActions.isEmpty() ? 0 : 1;
             if (choice == exportChoice) {
-                JFileChooser chooser = new JFileChooser();
-                chooser.setSelectedFile(new File("morning-briefing-" + briefing.date() + ".pdf"));
-                if (chooser.showSaveDialog(panel) == JFileChooser.APPROVE_OPTION) {
-                    startMorningBriefingExport(
-                            briefing, chooser.getSelectedFile().toPath());
-                }
+                chooseMorningBriefingExport(briefing);
             } else if (host != null) {
                 host.setStatus("Briefing: " + morningActions.size() + " operational priority(s).");
             }
@@ -1242,7 +1354,7 @@ public class DashboardTab implements FlowerFarmTab {
                     ? new Object[]{"Export PDF…", "Close"}
                     : new Object[]{"Open selected follow-up",
                         "Export PDF…", "Close"};
-            int choice = JOptionPane.showOptionDialog(panel, closeoutView,
+            int choice = dialogs.showOption(panel, closeoutView,
                     "Day closeout — " + closeout.date(),
                     JOptionPane.DEFAULT_OPTION, JOptionPane.PLAIN_MESSAGE,
                     null, options, options[options.length - 1]);
@@ -1253,17 +1365,69 @@ public class DashboardTab implements FlowerFarmTab {
             }
             int exportChoice = followUps.isEmpty() ? 0 : 1;
             if (choice == exportChoice) {
-                JFileChooser chooser = new JFileChooser();
-                chooser.setSelectedFile(new File("day-closeout-" + closeout.date() + ".pdf"));
-                if (chooser.showSaveDialog(panel) == JFileChooser.APPROVE_OPTION) {
-                    startDayCloseoutExport(closeout, chooser.getSelectedFile().toPath());
-                }
+                chooseDayCloseoutExport(closeout);
             } else if (host != null) {
                 host.setStatus("Closeout: " + closeout.fulfilledCount() + " fulfilled · "
                         + followUps.size() + " follow-up area(s).");
             }
         } catch (Exception ex) {
             failDailySheet("Day closeout", ex);
+        }
+    }
+
+    void chooseMorningBriefingExport(MorningBriefingService.MorningBriefing briefing) {
+        File suggested = new File("morning-briefing-" + briefing.date() + ".pdf");
+        var selected = files.chooseSave(panel, "Save morning briefing PDF", suggested);
+        if (selected.isEmpty()) {
+            cancelDailySheetSave("Morning briefing", false);
+            return;
+        }
+        File destination = selected.get();
+        if (!approveDailySheetReplacement(destination, "morning briefing")) {
+            cancelDailySheetSave("Morning briefing", true);
+            return;
+        }
+        startMorningBriefingExport(briefing, destination.toPath());
+    }
+
+    void chooseDayCloseoutExport(DayCloseoutService.DayCloseout closeout) {
+        File suggested = new File("day-closeout-" + closeout.date() + ".pdf");
+        var selected = files.chooseSave(panel, "Save day closeout PDF", suggested);
+        if (selected.isEmpty()) {
+            cancelDailySheetSave("Day closeout", false);
+            return;
+        }
+        File destination = selected.get();
+        if (!approveDailySheetReplacement(destination, "day closeout")) {
+            cancelDailySheetSave("Day closeout", true);
+            return;
+        }
+        startDayCloseoutExport(closeout, destination.toPath());
+    }
+
+    private boolean approveDailySheetReplacement(File file, String sheet) {
+        if (!file.exists()) {
+            return true;
+        }
+        return dialogs.showConfirm(panel,
+                "A file named " + file.getName() + " already exists. Replace it?",
+                "Replace existing " + sheet + "?",
+                JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE)
+                == JOptionPane.YES_OPTION;
+    }
+
+    private void cancelDailySheetSave(String sheet, boolean existingFile) {
+        String message = existingFile
+                ? sheet + " not saved · existing file kept"
+                : sheet + " ready · save cancelled";
+        String description = existingFile
+                ? "The selected file was not replaced; the prepared daily sheet remains available."
+                : "No file was written; prepare the daily sheet again when ready to save.";
+        updateDailySheetStatus(message, description, FarmUi.Tone.NEUTRAL);
+        if (host != null) {
+            host.setStatus(existingFile
+                    ? sheet + " was not saved. The existing file was kept."
+                    : sheet + " save cancelled. No file was changed.");
         }
     }
 
@@ -1355,7 +1519,7 @@ public class DashboardTab implements FlowerFarmTab {
             host.setStatus(sheet + " was not saved. Review the status and retry the export.");
         }
         if (panel.isShowing()) {
-            JOptionPane.showMessageDialog(panel, recovery,
+            dialogs.showMessage(panel, recovery,
                     sheet + " export failed", JOptionPane.ERROR_MESSAGE);
         }
     }
@@ -1404,7 +1568,7 @@ public class DashboardTab implements FlowerFarmTab {
                     + " could not be prepared. Review the status and retry.");
         }
         if (panel.isShowing()) {
-            JOptionPane.showMessageDialog(panel, recovery,
+            dialogs.showMessage(panel, recovery,
                     sheet + " failed", JOptionPane.ERROR_MESSAGE);
         }
     }
@@ -1570,6 +1734,16 @@ public class DashboardTab implements FlowerFarmTab {
         }
         Color mutedFg = FarmUi.mutedColor();
 
+        if (lastUpdatedLabel != null) lastUpdatedLabel.setForeground(mutedFg);
+        if (lowStockSubtitle != null) lowStockSubtitle.setForeground(mutedFg);
+        if (weekHarvestSpark != null) {
+            weekHarvestSpark.setLineColor(
+                    FarmUi.toneForegroundColor(FarmUi.Tone.SUCCESS));
+        }
+        if (weekRevenueSpark != null) {
+            weekRevenueSpark.setLineColor(FarmUi.accentColor());
+        }
+
         styleChart(inventoryValueChart);
         styleChart(stockQuantityChart);
 
@@ -1587,7 +1761,7 @@ public class DashboardTab implements FlowerFarmTab {
         if (weekHarvestLabel != null) weekHarvestLabel.setForeground(
                 FarmUi.toneForegroundColor(FarmUi.Tone.SUCCESS));
         if (weekRevenueLabel != null) weekRevenueLabel.setForeground(
-                FarmUi.toneForegroundColor(FarmUi.Tone.DANGER));
+                FarmUi.toneForegroundColor(FarmUi.Tone.SUCCESS));
         if (weekRevenuePipelineLabel != null) weekRevenuePipelineLabel.setForeground(mutedFg);
         if (weekHarvestDeltaLabel != null) weekHarvestDeltaLabel.setForeground(mutedFg);
 
@@ -1659,7 +1833,7 @@ public class DashboardTab implements FlowerFarmTab {
         card.setLayout(new BoxLayout(card, BoxLayout.Y_AXIS));
         card.setOpaque(true);
         FarmUi.Tone cardTone = switch (title) {
-            case "Week revenue" -> FarmUi.Tone.DANGER;
+            case "Week revenue" -> FarmUi.Tone.SUCCESS;
             case "Inventory value" -> FarmUi.Tone.INFO;
             case "Low stock" -> FarmUi.Tone.WARNING;
             default -> FarmUi.Tone.SUCCESS;
@@ -1679,9 +1853,8 @@ public class DashboardTab implements FlowerFarmTab {
         card.add(valueLabel);
 
         if (subtitle != null && !subtitle.isBlank()) {
-            JLabel subLabel = new JLabel(subtitle);
+            JLabel subLabel = FarmUi.mutedLabel(subtitle);
             subLabel.setFont(subLabel.getFont().deriveFont(11f));
-            subLabel.setForeground(FarmUi.mutedColor());
             subLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
             card.add(Box.createVerticalStrut(4));
             card.add(subLabel);
@@ -1704,9 +1877,10 @@ public class DashboardTab implements FlowerFarmTab {
 
         if (actionLabel != null && tabTitle != null) {
             JButton action = FarmUi.secondaryButton(actionLabel);
+            action.getAccessibleContext().setAccessibleName(
+                    actionLabel + " from " + title + " metric");
             action.setFont(action.getFont().deriveFont(11f));
             action.setAlignmentX(Component.LEFT_ALIGNMENT);
-            action.setFocusable(false);
             action.setToolTipText(actionLabel + " in " + tabTitle + ".");
             action.addActionListener(e -> openDashboardDestination(
                     tabTitle, actionLabel + "…"));

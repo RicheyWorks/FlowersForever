@@ -2,6 +2,7 @@ package com.flowerfarm.repository;
 
 import com.flowerfarm.model.CustomerOrder;
 import jakarta.persistence.LockModeType;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -17,6 +18,12 @@ public interface CustomerOrderJpaRepository extends JpaRepository<CustomerOrder,
     List<CustomerOrder> findByOrderDateBetweenOrderByOrderDateDescIdDesc(LocalDate from, LocalDate to);
 
     List<CustomerOrder> findByCustomerIdOrderByOrderDateDescIdDesc(Long customerId);
+
+    List<CustomerOrder> findByStatusIgnoreCaseAndOrderDateLessThanEqualOrderByOrderDateAscIdAsc(
+            String status, LocalDate throughDate, Pageable pageable);
+
+    long countByStatusIgnoreCaseAndOrderDateLessThanEqual(
+            String status, LocalDate throughDate);
 
     /** Serializes state transitions such as fulfillment for a single order. */
     @Lock(LockModeType.PESSIMISTIC_WRITE)

@@ -2,6 +2,8 @@ package com.flowerfarm.gui.tabs;
 
 import com.flowerfarm.gui.GuiPermissions;
 import com.flowerfarm.gui.FarmUi;
+import com.flowerfarm.gui.FarmDialogs;
+import com.flowerfarm.gui.FarmFileChooser;
 import com.flowerfarm.gui.presenter.InventoryItemPresenter;
 import com.flowerfarm.gui.view.InventoryItemFormView;
 import com.flowerfarm.gui.view.StockCountView;
@@ -15,7 +17,11 @@ import javax.swing.table.TableRowSorter;
 import java.awt.*;
 import java.io.BufferedWriter;
 import java.io.File;
+import java.io.IOException;
+import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.List;
 
 /**
@@ -38,6 +44,8 @@ public class InventoryTab implements FlowerFarmTab {
     private final InventoryService inventoryService;
     private final InventoryItemPresenter itemPresenter;
     private final TabHost host;
+    private final FarmDialogs dialogs;
+    private final FarmFileChooser files;
 
     private JPanel panel;
     private DefaultTableModel tableModel;
@@ -84,11 +92,24 @@ public class InventoryTab implements FlowerFarmTab {
     private String conflictingProductName;
     private CardLayout tableCardLayout;
     private JPanel tableState;
+    private FarmUi.EmptyStateView inventoryEmptyState;
 
     public InventoryTab(InventoryService inventoryService, TabHost host) {
+        this(inventoryService, host, FarmDialogs.swing(), FarmFileChooser.swing());
+    }
+
+    public InventoryTab(InventoryService inventoryService, TabHost host,
+                        FarmDialogs dialogs) {
+        this(inventoryService, host, dialogs, FarmFileChooser.swing());
+    }
+
+    public InventoryTab(InventoryService inventoryService, TabHost host,
+                        FarmDialogs dialogs, FarmFileChooser files) {
         this.inventoryService = inventoryService;
         this.itemPresenter = new InventoryItemPresenter(inventoryService);
         this.host = host;
+        this.dialogs = java.util.Objects.requireNonNull(dialogs, "dialogs");
+        this.files = java.util.Objects.requireNonNull(files, "files");
     }
 
     @Override
@@ -417,9 +438,10 @@ public class InventoryTab implements FlowerFarmTab {
         tableCardLayout = new CardLayout();
         tableState = new JPanel(tableCardLayout);
         tableState.add(tableScroll, "table");
-        tableState.add(FarmUi.emptyState(
-                "No inventory matches this view",
-                "Clear the search, turn off Low stock only, or add an item."), "empty");
+        inventoryEmptyState = FarmUi.emptyStateView(
+                "No inventory yet",
+                "Add the first flower or farm product in Add item; it will appear here after save.");
+        tableState.add(inventoryEmptyState.component(), "empty");
 
         JPanel content = new JPanel(new BorderLayout(0, FarmUi.SECTION_GAP));
         content.setOpaque(false);
@@ -560,7 +582,7 @@ public class InventoryTab implements FlowerFarmTab {
         Object[] options = nextItem == null
                 ? new Object[]{"Save count", "Cancel"}
                 : new Object[]{"Save & count next", "Save count", "Cancel"};
-        int choice = JOptionPane.showOptionDialog(panel,
+        int choice = dialogs.showOption(panel,
                 FarmUi.section("Record physical count",
                         "System quantity: " + current.getQuantity() + " "
                                 + current.getUnit()
@@ -929,6 +951,7 @@ public class InventoryTab implements FlowerFarmTab {
             int visible = inventoryTable.getRowCount();
             updateInventorySummaryBadge();
             if (tableCardLayout != null && tableState != null) {
+                updateInventoryEmptyState();
                 tableCardLayout.show(tableState, visible == 0 ? "empty" : "table");
             }
             updateInventoryActions();
@@ -942,10 +965,32 @@ public class InventoryTab implements FlowerFarmTab {
         }
         int visible = inventoryTable.getRowCount();
         String status = inventorySummaryText();
-        FarmUi.updateStatusBadge(statusLabel, status,
-                visible == 0 ? FarmUi.Tone.WARNING : FarmUi.Tone.SUCCESS);
+        FarmUi.Tone tone = visible > 0 ? FarmUi.Tone.SUCCESS
+                : inventoryViewFiltered() ? FarmUi.Tone.WARNING : FarmUi.Tone.NEUTRAL;
+        FarmUi.updateStatusBadge(statusLabel, status, tone);
         statusLabel.getAccessibleContext().setAccessibleName(
                 "Inventory results and selected product");
+    }
+
+    private void updateInventoryEmptyState() {
+        if (inventoryEmptyState == null) {
+            return;
+        }
+        if (tableModel.getRowCount() == 0 && !inventoryViewFiltered()) {
+            inventoryEmptyState.updateCopy(
+                    "No inventory yet",
+                    "Add the first flower or farm product in Add item; it will appear here after save.");
+        } else {
+            inventoryEmptyState.updateCopy(
+                    "No inventory matches this view",
+                    "Clear the search, turn off Low stock only, or add an item.");
+        }
+    }
+
+    private boolean inventoryViewFiltered() {
+        return searchField != null && !searchField.getText().isBlank()
+                || lowStockOnlyBtn != null && lowStockOnlyBtn.isSelected()
+                || !productQueue.isEmpty();
     }
 
     private String inventorySummaryText() {
@@ -969,7 +1014,7 @@ public class InventoryTab implements FlowerFarmTab {
         }
         int viewRow = inventoryTable.getSelectedRow();
         if (viewRow < 0) {
-            JOptionPane.showMessageDialog(panel, "Please select a row to edit.",
+            dialogs.showMessage(panel, "Please select a row to edit.",
                     "No Selection", JOptionPane.WARNING_MESSAGE);
             return;
         }
@@ -983,7 +1028,7 @@ public class InventoryTab implements FlowerFarmTab {
             editor.setDraft(retryEditDraft);
         }
         while (true) {
-            int choice = JOptionPane.showConfirmDialog(panel,
+            int choice = dialogs.showConfirm(panel,
                     FarmUi.section("Item details",
                             "All values stay in place if a field needs correction.", editor),
                     "Edit “" + current.getName() + "”",
@@ -1002,11 +1047,11 @@ public class InventoryTab implements FlowerFarmTab {
                 return;
             } catch (InventoryItemPresenter.FieldValidationException exception) {
                 editor.markError(exception.field(), exception.getMessage());
-                JOptionPane.showMessageDialog(panel,
+                dialogs.showMessage(panel,
                         exception.getMessage() + "\nYour other changes are still in the form.",
                         "Check the highlighted field", JOptionPane.WARNING_MESSAGE);
             } catch (RuntimeException exception) {
-                JOptionPane.showMessageDialog(panel,
+                dialogs.showMessage(panel,
                         FarmUi.actionableError("Saving this inventory item", exception),
                         "Item not saved", JOptionPane.ERROR_MESSAGE);
                 return;
@@ -1160,7 +1205,7 @@ public class InventoryTab implements FlowerFarmTab {
         Item current = currentItems.get(modelRow);
         String name = current.getName();
 
-        int confirm = JOptionPane.showConfirmDialog(panel,
+        int confirm = dialogs.showConfirm(panel,
                 FarmUi.confirmationPanel(
                         "Delete “" + name + "”?",
                         "This permanently removes the product from inventory and cannot be undone.",
@@ -1282,7 +1327,7 @@ public class InventoryTab implements FlowerFarmTab {
         JLabel thresholdLabel = new JLabel("Show products with this quantity or less:");
         thresholdLabel.setLabelFor(thresholdInput);
         JPanel thresholdForm = FarmUi.toolbar(thresholdLabel, thresholdInput);
-        int inputChoice = JOptionPane.showConfirmDialog(panel,
+        int inputChoice = dialogs.showConfirm(panel,
                 FarmUi.section("Low-stock threshold",
                         "Use a whole number. Products at or below it will be included.",
                         thresholdForm),
@@ -1327,32 +1372,31 @@ public class InventoryTab implements FlowerFarmTab {
 
     private void presentLowStockReport(InventoryService.LowStockReport report, int threshold) {
         Object[] options = {"Export PDF…", "Close"};
-        int choice = JOptionPane.showOptionDialog(panel,
+        int choice = dialogs.showOption(panel,
                 new JScrollPane(documentArea(report.plainText())),
                 "Low-stock reorder — ≤ " + threshold,
                 JOptionPane.DEFAULT_OPTION, JOptionPane.PLAIN_MESSAGE,
                 null, options, options[1]);
         if (choice == 0) {
-            JFileChooser chooser = new JFileChooser();
-            chooser.setSelectedFile(new File("low-stock-reorder-" + report.date() + ".pdf"));
-            if (chooser.showSaveDialog(panel) == JFileChooser.APPROVE_OPTION) {
-                File file = chooser.getSelectedFile();
-                if (approveReplacement(file)
-                        && beginDocumentWork("Creating low-stock PDF…",
-                        "The reviewed reorder snapshot is being rendered in the background.")) {
-                    startDocumentFileExport(file,
-                            () -> Files.write(file.toPath(),
-                                    inventoryService.generateLowStockPdf(report)),
-                            "Low-stock PDF saved · " + report.lowStockCount() + " products",
-                            "Low-stock reorder PDF → " + file.getName(),
-                            "Saving the low-stock reorder PDF");
-                }
+            File file = files.chooseSave(panel, "Save low-stock reorder PDF",
+                    new File("low-stock-reorder-" + report.date() + ".pdf")).orElse(null);
+            if (file == null) {
+                showDocumentExportCancelled();
+            } else if (approveReplacement(file)
+                    && beginDocumentWork("Creating low-stock PDF…",
+                    "The reviewed reorder snapshot is being rendered in the background.")) {
+                startDocumentFileExport(file,
+                        temporary -> Files.write(temporary,
+                                inventoryService.generateLowStockPdf(report)),
+                        "Low-stock PDF saved · " + report.lowStockCount() + " products",
+                        "Low-stock reorder PDF → " + file.getName(),
+                        "Saving the low-stock reorder PDF");
             }
         }
     }
 
     private void showPriceList() {
-        int mode = JOptionPane.showOptionDialog(panel,
+        int mode = dialogs.showOption(panel,
                 "Include products with no stock?", "Price list",
                 JOptionPane.DEFAULT_OPTION, JOptionPane.QUESTION_MESSAGE,
                 null, new Object[]{"In-stock only", "All products", "Cancel"},
@@ -1396,27 +1440,26 @@ public class InventoryTab implements FlowerFarmTab {
     private void presentPriceList(InventoryService.PriceListReport report,
                                   boolean inStockOnly) {
         Object[] options = {"Export PDF…", "Close"};
-        int choice = JOptionPane.showOptionDialog(panel,
+        int choice = dialogs.showOption(panel,
                 new JScrollPane(documentArea(report.plainText())),
                 "Price list — " + (inStockOnly ? "in-stock" : "all products"),
                 JOptionPane.DEFAULT_OPTION, JOptionPane.PLAIN_MESSAGE,
                 null, options, options[1]);
         if (choice == 0) {
-            JFileChooser chooser = new JFileChooser();
-            chooser.setSelectedFile(new File("price-list-" + report.date() + ".pdf"));
-            if (chooser.showSaveDialog(panel) == JFileChooser.APPROVE_OPTION) {
-                File file = chooser.getSelectedFile();
-                if (approveReplacement(file)
-                        && beginDocumentWork("Creating price-list PDF…",
-                        "The reviewed price-list snapshot is being rendered in the background.")) {
-                    startDocumentFileExport(file,
-                            () -> Files.write(file.toPath(),
-                                    inventoryService.generatePriceListPdf(report)),
-                            "Price-list PDF saved · " + report.skuCount() + " products",
-                            "Price list PDF → " + file.getName()
-                                    + " (" + report.skuCount() + " products)",
-                            "Saving the price-list PDF");
-                }
+            File file = files.chooseSave(panel, "Save inventory price-list PDF",
+                    new File("price-list-" + report.date() + ".pdf")).orElse(null);
+            if (file == null) {
+                showDocumentExportCancelled();
+            } else if (approveReplacement(file)
+                    && beginDocumentWork("Creating price-list PDF…",
+                    "The reviewed price-list snapshot is being rendered in the background.")) {
+                startDocumentFileExport(file,
+                        temporary -> Files.write(temporary,
+                                inventoryService.generatePriceListPdf(report)),
+                        "Price-list PDF saved · " + report.skuCount() + " products",
+                        "Price list PDF → " + file.getName()
+                                + " (" + report.skuCount() + " products)",
+                        "Saving the price-list PDF");
             }
         }
     }
@@ -1433,13 +1476,12 @@ public class InventoryTab implements FlowerFarmTab {
             return;
         }
 
-        JFileChooser chooser = new JFileChooser();
-        chooser.setDialogTitle("Export Visible Rows to CSV");
-        chooser.setSelectedFile(new File("inventory_visible.csv"));
-        if (chooser.showSaveDialog(panel) != JFileChooser.APPROVE_OPTION) {
+        File file = files.chooseSave(panel, "Export Visible Rows to CSV",
+                new File("inventory_visible.csv")).orElse(null);
+        if (file == null) {
+            showDocumentExportCancelled();
             return;
         }
-        File file = chooser.getSelectedFile();
         if (approveReplacement(file)) {
             startVisibleCsvExport(file, rows);
         }
@@ -1453,8 +1495,8 @@ public class InventoryTab implements FlowerFarmTab {
             return;
         }
         startDocumentFileExport(file,
-                () -> {
-                    try (BufferedWriter writer = Files.newBufferedWriter(file.toPath(),
+                temporary -> {
+                    try (BufferedWriter writer = Files.newBufferedWriter(temporary,
                             java.nio.charset.StandardCharsets.UTF_8)) {
                         writer.write(String.join(",", COLUMNS));
                         writer.newLine();
@@ -1502,7 +1544,7 @@ public class InventoryTab implements FlowerFarmTab {
         new SwingWorker<Void, Void>() {
             @Override
             protected Void doInBackground() throws Exception {
-                writer.write();
+                writeDocumentAtomically(file.toPath(), writer);
                 return null;
             }
 
@@ -1523,6 +1565,27 @@ public class InventoryTab implements FlowerFarmTab {
                 }
             }
         }.execute();
+    }
+
+    private static void writeDocumentAtomically(Path destination, DocumentWriter writer)
+            throws Exception {
+        Path target = destination.toAbsolutePath().normalize();
+        Path parent = target.getParent();
+        if (parent == null || !Files.isDirectory(parent)) {
+            throw new IOException("The selected export folder is not available.");
+        }
+        Path temporary = Files.createTempFile(parent, ".inventory-export-", ".tmp");
+        try {
+            writer.write(temporary);
+            try {
+                Files.move(temporary, target,
+                        StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+            } catch (AtomicMoveNotSupportedException exception) {
+                Files.move(temporary, target, StandardCopyOption.REPLACE_EXISTING);
+            }
+        } finally {
+            Files.deleteIfExists(temporary);
+        }
     }
 
     private void completeDocumentWork(String message, String description,
@@ -1561,14 +1624,33 @@ public class InventoryTab implements FlowerFarmTab {
         if (file == null || !file.exists()) {
             return file != null;
         }
-        int choice = JOptionPane.showConfirmDialog(panel,
+        int choice = dialogs.showConfirm(panel,
                 FarmUi.confirmationPanel(
                         "Replace “" + file.getName() + "”?",
                         "The existing file will be overwritten only if you continue.",
                         FarmUi.Tone.WARNING),
                 "Replace existing file", JOptionPane.YES_NO_OPTION,
                 JOptionPane.WARNING_MESSAGE);
-        return choice == JOptionPane.YES_OPTION;
+        boolean approved = choice == JOptionPane.YES_OPTION;
+        if (!approved) {
+            showDocumentState("Inventory export not saved · existing file kept",
+                    "The existing file was kept unchanged: " + file.getAbsolutePath(),
+                    FarmUi.Tone.WARNING);
+            if (host != null) {
+                host.setStatus("Inventory export not saved. Existing file kept: "
+                        + file.getName());
+            }
+        }
+        return approved;
+    }
+
+    private void showDocumentExportCancelled() {
+        showDocumentState("Inventory export cancelled · no file changed",
+                "Choose the export again when you are ready to select a destination.",
+                FarmUi.Tone.WARNING);
+        if (host != null) {
+            host.setStatus("Inventory export cancelled. No file was changed.");
+        }
     }
 
     private static Throwable unwrapDocumentFailure(Exception exception) {
@@ -1593,6 +1675,6 @@ public class InventoryTab implements FlowerFarmTab {
 
     @FunctionalInterface
     private interface DocumentWriter {
-        void write() throws Exception;
+        void write(Path destination) throws Exception;
     }
 }
