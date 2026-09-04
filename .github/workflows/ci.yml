@@ -59,6 +59,7 @@ jobs:
           name: jacoco-report
           path: target/site/jacoco/
           if-no-files-found: ignore
+          retention-days: 7
 
       - name: Upload SBOM (JDK 17 only)
         if: matrix.java == '17'
@@ -67,6 +68,7 @@ jobs:
           name: sbom
           path: target/bom.*
           if-no-files-found: error
+          retention-days: 7
 
       - name: Upload Surefire reports on failure
         if: failure()
@@ -75,6 +77,7 @@ jobs:
           name: surefire-reports-jdk${{ matrix.java }}
           path: target/surefire-reports/
           if-no-files-found: ignore
+          retention-days: 7
 
       - name: Upload packaged MCP reports on failure
         if: failure()
@@ -83,6 +86,7 @@ jobs:
           name: packaged-mcp-reports-jdk${{ matrix.java }}
           path: target/failsafe-reports/
           if-no-files-found: ignore
+          retention-days: 7
 
   quality:
     name: Static analysis (Medium gate)
@@ -111,6 +115,7 @@ jobs:
             target/spotbugsXml.xml
             target/checkstyle-result.xml
           if-no-files-found: ignore
+          retention-days: 7
 
   docker:
     name: Docker image builds

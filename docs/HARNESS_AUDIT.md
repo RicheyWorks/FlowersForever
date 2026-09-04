@@ -537,24 +537,25 @@ selected rows. Production identifiers preserve the full signed 64-bit range.
 
 ## Farmer-entry verification — September 4, 2026
 
-The full application test stage exercised **1,069 tests**. Its only failure
-was a packaged-smoke assertion still expecting schema 20 after the field-note
-migration introduced V21. Updating that expectation made both classpath
-process tests pass; the final verification build also passed both actual
-executable-JAR process tests and every quality gate.
+After the V21 schema assertion and Tomcat security update, the final full
+verification build passed **1,069 application tests**, both actual
+executable-JAR process tests, and every quality gate. The packaged dependency
+set and SBOM contain Tomcat core, EL, and WebSocket **10.1.59**.
 
 | Check | Result |
 |---|---|
-| Full application stage | 1,068 passed; one stale schema assertion corrected and rerun successfully |
+| Full application stage | 1,069 passed; no failures, errors, or skips |
 | Backend and entry regressions | 250 passed |
 | Final desktop and layout regressions | 217 passed |
 | Field forms and device-queue JavaScript | 10 passed |
 | Final classpath / actual executable-JAR smoke | 2 / 2 passed |
-| Native release contracts after console-provider fix | 11 passed |
+| Native release contracts | 11 passed |
 | Coverage | 86.04% lines; 67.72% branches; both gates passed |
 | SpotBugs | 0 findings; 0 analysis errors |
 | Checkstyle | 0 violations |
 | CycloneDX | XML and JSON generated and validated; 94 components |
+| Windows app-image creation | JDK 17.0.20.1 image built; final payload SHA-256 verified |
+| Windows native launcher execution | Blocked on this host: all 63 JVM threads reported suspended |
 
 A live, isolated browser run saved a field note, restored an unfinished draft,
 queued a note while the server was stopped, reloaded the page, and recovered
@@ -564,17 +565,30 @@ overflow and primary inputs and buttons were at least 44px tall. Current
 desktop Add Item light/dark renders and the compact Harvest Log were inspected;
 essential fields remain visible while optional fields scroll.
 
-Native Windows testing reproduced a JDK 22 console-provider startup stall
-that did not occur with the ordinary executable JAR. Selecting
-`-Djdk.console=java.base` made the same native image complete its stdio request.
-Both packaged AI launcher configurations now carry that setting; it restores
-the standard console behavior described by the
-[OpenJDK Quality Group](https://inside.java/2023/07/31/quality-heads-up/).
+One JDK 22 native stdio request succeeded during diagnosis, but subsequent
+fresh JDK 22 and supported JDK 17 images stalled. Windows reported every JVM
+thread suspended while the launcher wrapper waited. The pausing mechanism
+was not identified or overridden. This is not evidence of a Java-level
+deadlock, and a complete native smoke remains unverified on this host.
+The native AI configurations select `-Djdk.console=java.base` for ordinary
+stdio console behavior, as described by the
+[OpenJDK Quality Group](https://inside.java/2023/07/31/quality-heads-up/);
+that setting alone does not resolve the observed process suspension.
 
-Local validation used JDK 22.0.2 with Java 17 compilation targets. Evidence is
-in `target/farmer-final-verify.log` (full test stage),
-`target/farmer-final-quality.log` (successful final quality build),
-`target/farmer-release-contract.log`, and `target/farmer-sbom.log`.
+GitHub's initial JDK 17 and JDK 21 builds also passed all 1,069 tests, and its
+browser, Docker, and static-analysis checks passed their execution steps.
+Artifact uploads failed because account storage was full, preventing the
+native release jobs from receiving their inputs. With owner approval, 20
+older preview archives totaling 3.84 GB were removed while retaining the
+newest preview and every test report. Future temporary release artifacts now
+expire after one day and candidate/report archives after seven days. Quota
+recalculation can delay subsequent uploads; the PR carries current CI status.
+
+Local application validation used JDK 22.0.2 with Java 17 compilation targets.
+The final full build is `target/farmer-patched-verify.log`; native build and
+execution evidence is in `target/farmer-native17-build.log` and
+`target/farmer-native17-final.log`. Earlier focused evidence is in
+`target/farmer-release-contract.log` and `target/farmer-sbom.log`.
 Detailed process reports are under `target/surefire-reports` and
 `target/failsafe-reports`; Node checks run with
 `node --test scripts/worker-ui.test.mjs`.

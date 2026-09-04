@@ -179,6 +179,12 @@ Default inventory DB is local **H2** (`./data/flowerfarm.mv.db`) or optional **S
 - CI runs `mvn clean verify` on every push/PR to `main`.
 - Dependabot opens weekly PRs for Maven and GitHub Actions.
 - Major framework bumps (e.g. Spring Boot 4, OpenPDF 3) are reviewed deliberately; minor/patch deps are preferred.
+- The POM overrides inherited versions with Jackson **2.21.5**, Log4j **2.25.5**,
+  Commons Lang **3.18.0**, and Tomcat **10.1.59** to address dependency advisories.
+  Tomcat's FORM authentication, DIGEST replay, and path-constraint fixes were made
+  in 10.1.58, but that release vote failed; Apache identifies **10.1.59** as the
+  released version containing those fixes. See the
+  [Apache Tomcat security advisory](https://tomcat.apache.org/security-10.html#Fixed_in_Apache_Tomcat_10.1.59).
 
 ## Hardening checklist (shared barn PC)
 

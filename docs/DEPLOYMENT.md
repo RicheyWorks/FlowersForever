@@ -115,8 +115,17 @@ uses the additional executable inside the signed app bundle.
 
 Maintainers can also start the workflow manually and optionally provide an exact
 candidate version. Candidate runs upload a checksum-complete private bundle for
-14 days, but cannot create a GitHub Release or publish a container. Only an exact
+7 days, but cannot create a GitHub Release or publish a container. Only an exact
 stable `vX.Y.Z` tag matching the POM can enter the publishing jobs.
+
+Temporary verified JAR, release metadata, and unsigned installer uploads expire
+after 1 day; the assembled candidate bundle provides the 7-day review copy.
+CI coverage, SBOM, test, and analysis reports also expire after 7 days. Signed
+installer and notarization-evidence uploads retain their existing 14-day window;
+published GitHub Release assets are separate from these workflow artifacts.
+Download a candidate before its review window ends. If intermediate artifacts
+expire before a delayed job or rerun consumes them, start a complete new run.
+These settings apply to future uploads; older artifacts require separate cleanup.
 
 An antivirus detection is a stop condition even when the checksum matches. Do
 not add broad folder or process exclusions. Record the detection name, alert ID,

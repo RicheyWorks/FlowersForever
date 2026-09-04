@@ -341,8 +341,9 @@ the correction. Fix the value and submit again; no dismissible error window
 interrupts repeated harvest entry.
 
 For a morning cut with several crops, use **Batch entry**. Its visible Date,
-Default unit, Default bed / field, and Notes fields apply to every row unless a
-line supplies its own unit or bed. Enter one `Crop,Quantity[,Unit][,Bed]` row per
+Unit, Bed / field, and Notes fields apply to every row unless a
+line supplies its own unit or bed. New batches start empty; **Use sample lines**
+loads examples only when selected. Enter one `Crop,Quantity[,Unit][,Bed]` row per
 line and review the live row count, totals, and rounded inventory impact before
 choosing **Log batch harvest**. After a successful save, the lines clear to
 prevent duplicate logging while the visible batch defaults remain ready for the
@@ -1215,6 +1216,9 @@ quantities, create a price list, or export the visible rows. Use **Add Item** fo
 a new product; price and cost start at `0.00`, and quantity starts at `0`. Edit
 opens the complete item in one dialog, so a validation error never loses changes
 already made to other fields.
+
+The **Category** and **Sold by** fields accept your own text as well as the
+listed choices. Type a new category or selling unit directly into either field.
 
 For faster setup, choose a common entry from **Product starter** and select
 **Use starter**. Flower starters fill only safe catalog facts such as product

@@ -108,7 +108,7 @@ jobs:
           name: verified-jar
           path: target/flowerfarm-manager-${{ steps.version.outputs.version }}.jar
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 1
 
       - name: Preserve release metadata
         uses: actions/upload-artifact@v7
@@ -116,7 +116,7 @@ jobs:
           name: release-metadata
           path: target/release-metadata/*
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 1
 
   installers:
     name: ${{ matrix.label }}
@@ -232,7 +232,7 @@ jobs:
           name: installer-${{ matrix.type }}
           path: dist/*
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 1
 
   windows-release:
     name: Signed Windows MSI
@@ -661,7 +661,7 @@ jobs:
           name: FlowersForever-${{ needs.verify.outputs.version }}-candidate
           path: candidate-assets/*
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 7
 
   publish:
     name: Publish complete private release

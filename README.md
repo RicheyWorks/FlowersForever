@@ -98,7 +98,7 @@ Grow something new? Add your own crops, products, growing templates, and recipes
 | What you want to add | Where to start |
 |---|---|
 | A crop, supply, or product you sell | **Inventory → Add item.** Enter your own name, category, selling unit, quantity, and pricing. You can type a new category or unit. |
-| The stems you just cut | **Harvest Log → Quick entry**, or **Log a harvest** on the phone/tablet field screen. Keep crop and bed context for the next entry. |
+| The stems you just cut | **Harvest Log → Quick entry**, or **Log a harvest** on the phone/tablet field screen. On desktop, **Keep harvest context** keeps crop and bed ready for the next entry. |
 | An observation worth remembering | **Knowledge Log**, or **Add a field note** on the phone/tablet field screen. Tie the observation to a crop, bed, action, or follow-up. |
 | Next season's planting | **Season Planner → Add planting**, or start with your own growing template in **Production Studio** and review the generated schedule. |
 | A customer, order, or bouquet recipe | **CRM** for buyers and orders; **Production Studio → Design recipes** for reusable flower requirements and pricing assumptions. |

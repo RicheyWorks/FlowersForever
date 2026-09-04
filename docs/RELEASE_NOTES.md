@@ -12,8 +12,11 @@
 - Adds eight farm-data tools for reviewed planting schedules, task status and
   regeneration, recipe estimates, availability, and local provider handoffs.
   The headless bridge now exposes 33 tools; the desktop bridge exposes 21.
-- Selects the standard JDK console provider in packaged AI launchers, fixing
-  a reproduced Windows startup stall with redirected stdin/stdout on JDK 22.
+- Selects the standard JDK console provider in packaged AI launchers for
+  redirected stdin/stdout; native process suspension on the local Windows
+  host remains a verification blocker documented in the harness audit.
+- Updates embedded Tomcat to 10.1.59 for the remaining dependency advisories
+  and reduces retention of temporary CI inputs and preview downloads.
 - Reworks the README around grower outcomes across seasons and adds a grounded
   idea backlog with explicit dependencies and acceptance criteria.
 
