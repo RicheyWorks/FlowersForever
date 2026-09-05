@@ -315,13 +315,7 @@ For a guided first visit, follow the [plain-language desktop user guide](docs/US
 ## One connected flow—from bed plan to closeout
 
 <p align="center">
-  <strong>🌱 PLAN</strong> &nbsp;→&nbsp;
-  <strong>✂️ HARVEST</strong> &nbsp;→&nbsp;
-  <strong>🌸 STOCK</strong> &nbsp;→&nbsp;
-  <strong>🤝 ORDER</strong> &nbsp;→&nbsp;
-  <strong>📦 PACK</strong> &nbsp;→&nbsp;
-  <strong>✅ COMPLETE</strong> &nbsp;→&nbsp;
-  <strong>🧾 CLOSE OUT</strong>
+  <img src="docs/images/farm-day-flow.svg" width="100%" alt="Every stem has a next step: plan the season, harvest into stock, confirm orders, pack, complete to deduct stock, and print the day's closeout.">
 </p>
 
 | When this happens | FlowersForever keeps the next step connected |
