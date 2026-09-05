@@ -1,5 +1,11 @@
 # Native signing setup
 
+**Current plan:** Microsoft and Apple enrollment is intentionally deferred by
+the maintainer for about 15 days after the September 4, 2026 discussion. The
+maintainer will handle enrollment when ready. Until then, continue unsigned
+private-preview engineering and defer publisher-identity and credential
+requests. Enrollment is not a prerequisite for those private builds.
+
 FlowersForever candidate builds remain private, unsigned, and non-publishing.
 An external pilot release requires both tagged-release signing jobs to pass in
 the GitHub `release-signing` environment. The workflow then verifies the
@@ -21,13 +27,21 @@ number. Individual Apple enrollment displays the individual's legal name.
 - [Microsoft Artifact Signing setup](https://learn.microsoft.com/en-us/azure/artifact-signing/quickstart)
 - [Apple Developer Program enrollment](https://developer.apple.com/programs/enroll/)
 
-Current published prices are $9.99/month for the Microsoft Basic signing account
-and $99/year for Apple Developer Program membership. Confirm the price shown in
-each provider's portal before purchasing.
+Current published prices are [$9.99/month for the Microsoft Basic signing
+account](https://learn.microsoft.com/en-us/azure/artifact-signing/how-to-change-sku)
+and [$99/year for Apple Developer Program
+membership](https://developer.apple.com/programs/enroll/). Confirm the price
+shown in each provider's portal before purchasing.
 
 ## 2. Configure Microsoft Artifact Signing
 
-1. Create or select an Azure subscription and Microsoft Entra tenant.
+1. Create or select a **paid Azure subscription** and Microsoft Entra tenant.
+   Artifact Signing does not support free, trial, or sponsored subscriptions;
+   see [Microsoft's subscription requirements](https://learn.microsoft.com/en-us/azure/artifact-signing/faq#can-i-use-artifact-signing-with-a-free-trial-or-sponsored-azure-subscription).
+   The Azure billing account type must match the intended individual or
+   organization identity validation. Confirm the legal name and billing address
+   before validation; individual validation takes these details from the billing
+   account. See [Microsoft's identity prerequisites](https://learn.microsoft.com/en-us/azure/artifact-signing/quickstart#prerequisites).
 2. Register the `Microsoft.CodeSigning` provider.
 3. Create a Basic Artifact Signing account, complete Public Trust identity
    validation, and create a Public Trust certificate profile.
@@ -64,10 +78,21 @@ certificate expires.
 ## 3. Configure Apple Developer ID and notarization
 
 1. Enroll in the Apple Developer Program.
-2. Create a **Developer ID Application** certificate for direct distribution.
+2. Have the Apple Developer Program **Account Holder** create a **Developer ID
+   Application** certificate for direct distribution. This is the role required
+   for the exportable certificate used here; see [Apple's Developer ID
+   certificate instructions](https://developer.apple.com/help/account/certificates/create-developer-id-certificates/).
 3. Export the certificate and private key as a password-protected `.p12` file.
-4. Create an App Store Connect API key authorized for notarization and retain
-   its key ID, issuer ID, and `.p8` private key.
+4. Have the **Account Holder request App Store Connect API access**, then have
+   the Account Holder or an Admin create a **team API key** authorized for
+   notarization. Retain its key ID, issuer ID, and `.p8` private key. See [Apple's
+   API access and team-key instructions](https://developer.apple.com/help/app-store-connect/get-started/app-store-connect-api).
+   This workflow requires a team key because its `notarytool` commands always
+   supply `--issuer`; see [Apple's notarization authentication
+   syntax](https://developer.apple.com/documentation/technotes/tn3147-migrating-to-the-latest-notarization-tool).
+   Apple's [API-key documentation](https://developer.apple.com/documentation/appstoreconnectapi/creating-api-keys-for-app-store-connect-api)
+   also excludes individual API keys from `notaryTool` access. The API-key type
+   is separate from the individual or organization enrollment choice.
 5. Base64-encode the `.p12` and `.p8` contents without adding line breaks.
 
 Use GitHub environment secrets:
