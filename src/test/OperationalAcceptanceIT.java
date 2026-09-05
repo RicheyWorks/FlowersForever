@@ -3,6 +3,7 @@ package com.flowerfarm.release;
 import com.flowerfarm.FlowerFarmApp;
 import com.flowerfarm.model.Customer;
 import com.flowerfarm.model.CustomerOrder;
+import com.flowerfarm.model.FarmProfile;
 import com.flowerfarm.model.HarvestEntry;
 import com.flowerfarm.model.Item;
 import com.flowerfarm.model.OrderLine;
@@ -48,6 +49,7 @@ class OperationalAcceptanceIT {
 
         Long customerId;
         Long persistentItemId;
+        LocalDate farmDay;
         try (ConfigurableApplicationContext context = start(properties)) {
             InventoryService inventory = context.getBean(InventoryService.class);
             HarvestService harvest = context.getBean(HarvestService.class);
@@ -72,16 +74,16 @@ class OperationalAcceptanceIT {
             assertThat(inventory.findById(concurrent.getId())).get()
                     .extracting(Item::getQuantity).isEqualTo(120);
 
-            LocalDate today = LocalDate.now();
-            harvest.add(new HarvestEntry(today.minusDays(2),
+            farmDay = LocalDate.now(context.getBean(FarmProfile.class).zoneId());
+            harvest.add(new HarvestEntry(farmDay.minusDays(2),
                     "Release Candidate Lisianthus", 18, "stems", "Bed RC-1", "first cut"));
-            harvest.add(new HarvestEntry(today,
+            harvest.add(new HarvestEntry(farmDay,
                     "Release Candidate Lisianthus", 24, "stems", "Bed RC-1", "market cut"));
             Customer customer = customers.add(new Customer(
                     "Release Florist", "Morgan", "morgan@example.test", "360-555-0119",
                     "FLORIST", "acceptance account"));
             customerId = customer.getId();
-            CustomerOrder order = orders.create(customerId, today, "CONFIRMED", "market pickup",
+            CustomerOrder order = orders.create(customerId, farmDay, "CONFIRMED", "market pickup",
                     "MARKET",
                     java.util.List.of(new OrderLine(
                             "Release Candidate Lisianthus", 12, "stems", 3.5)));
@@ -107,7 +109,7 @@ class OperationalAcceptanceIT {
             assertThat(inventory.findById(persistentItemId)).isPresent();
             assertThat(harvest.filter("", "Bed RC-1", null, null)).hasSize(2);
             assertThat(customers.findById(customerId)).isPresent();
-            assertThat(orders.findBetween(LocalDate.now(), LocalDate.now()))
+            assertThat(orders.findBetween(farmDay, farmDay))
                     .anySatisfy(order -> assertThat(order.getStatus()).isEqualTo("FULFILLED"));
         }
     }

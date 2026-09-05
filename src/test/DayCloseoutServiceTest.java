@@ -40,8 +40,10 @@ class DayCloseoutServiceTest {
 
     @BeforeEach
     void setUp() {
+        FarmProfile farmProfile = new FarmProfile();
+        farmProfile.setTimeZone(PNW.getId());
         service = new DayCloseoutService(
-                inventoryService, harvestService, orderService, new FarmProfile());
+                inventoryService, harvestService, orderService, farmProfile);
     }
 
     @Test
@@ -81,6 +83,7 @@ class DayCloseoutServiceTest {
         ));
 
         DayCloseout closeout = service.build();
+        assertThat(closeout.date()).isEqualTo(today);
         assertThat(closeout.plainText()).contains("DAY CLOSEOUT");
         assertThat(closeout.fulfilledCount()).isEqualTo(1);
         assertThat(closeout.fulfilledRevenue()).isEqualTo(50.0);

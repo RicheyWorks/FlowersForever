@@ -2,6 +2,7 @@ package com.flowerfarm.integration;
 
 import com.flowerfarm.model.Customer;
 import com.flowerfarm.model.CustomerOrder;
+import com.flowerfarm.model.FarmProfile;
 import com.flowerfarm.model.HarvestEntry;
 import com.flowerfarm.model.OrderLine;
 import com.flowerfarm.service.CustomerService;
@@ -50,10 +51,13 @@ class ReportDownloadCompatibilityIT {
     @Autowired
     OrderService orderService;
 
+    @Autowired
+    FarmProfile farmProfile;
+
     @Test
     @DisplayName("real renderers preserve PDF routes, headers, and persisted aggregates")
     void actualPdfDownloads() throws Exception {
-        LocalDate today = LocalDate.now();
+        LocalDate today = LocalDate.now(farmProfile.zoneId());
         HarvestEntry harvest = harvestService.add(new HarvestEntry(
                 today, "Nootka Rose", 5, "stems", "Bed A", "download test"));
         Customer customer = customerService.add(new Customer(

@@ -1,6 +1,7 @@
 package com.flowerfarm.integration;
 
 import com.flowerfarm.model.Customer;
+import com.flowerfarm.model.FarmProfile;
 import com.flowerfarm.model.HarvestEntry;
 import com.flowerfarm.model.Item;
 import com.flowerfarm.model.OrderLine;
@@ -44,11 +45,12 @@ class BackendTransactionIT {
     @Autowired OrderService orderService;
     @Autowired MarketDayPackingService marketDayPackingService;
     @Autowired HarvestService harvestService;
+    @Autowired FarmProfile farmProfile;
 
     @Test
     @DisplayName("market batch preflight prevents partial completion when aggregate stock is short")
     void marketBatchPreflightPreventsPartialCompletion() {
-        LocalDate day = LocalDate.now();
+        LocalDate day = LocalDate.now(farmProfile.zoneId());
         Item stock = inventoryService.addItem(new Item(
                 "Transaction Rose", "Flowers/Plants", 2, "stems", 1, 5, ""));
         Customer customer = customerService.add(new Customer(
@@ -78,7 +80,7 @@ class BackendTransactionIT {
     @Test
     @DisplayName("concurrent harvest edits keep the harvest row and inventory in agreement")
     void concurrentHarvestEditsRemainConsistent() throws Exception {
-        LocalDate day = LocalDate.now();
+        LocalDate day = LocalDate.now(farmProfile.zoneId());
         HarvestEntry original = harvestService.add(new HarvestEntry(
                 day, "Concurrent Rose", 10, "stems", "Bed C", ""));
         CountDownLatch start = new CountDownLatch(1);

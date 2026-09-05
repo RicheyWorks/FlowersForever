@@ -10,6 +10,9 @@
   [Norton review guide](ANTIVIRUS_REVIEW.md). The collector never runs artifacts,
   reads farm records, restores quarantine, or uploads samples. The observed
   `IDP.Generic` alert still requires review and a clean-workstation acceptance check.
+- Aligns integration-test harvest dates with the configured farm timezone and
+  gives the closeout fixture an explicit timezone, so UTC runners exercise the
+  same farm day even when Los Angeles is on the previous date.
 
 ## September 4, 2026 — Farmer entry and connected production
 

@@ -605,6 +605,15 @@ PowerShell 7 also collected the retained image's real unsigned metadata into
 `target/windows-security-review.json`. No file was submitted to Norton and
 no antivirus setting or quarantine was changed.
 
+The first follow-up CI run exposed four test-fixture errors during the window
+when UTC and Los Angeles have different dates. Integration harvest fixtures
+now use the injected farm profile's timezone, and the closeout unit fixture
+explicitly configures the farm timezone used by its expected dates. The
+restart acceptance test also preserves the originally captured farm date for
+its read-back. All six tests across the four affected classes passed with the
+JVM in UTC while Los Angeles was still on the preceding date. These changes
+leave production date validation intact.
+
 Local application validation used JDK 22.0.2 with Java 17 compilation targets.
 The final full build is `target/farmer-patched-verify.log`; native build and
 execution evidence is in `target/farmer-native17-build.log`,
