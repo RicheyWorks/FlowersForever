@@ -28,6 +28,8 @@ jobs:
         run: node --test scripts/worker-ui.test.mjs
       - name: Test private preview asset integrity and permissions
         run: node --test scripts/preview-release-assets.test.mjs
+      - name: Test bounded native smoke behavior
+        run: node --test scripts/test-macos-launchers.test.mjs
 
   verify:
     name: mvn clean verify (JDK ${{ matrix.java }})

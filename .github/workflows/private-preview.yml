@@ -81,6 +81,9 @@ jobs:
       - name: Verify draft transport behavior
         run: node --test scripts/preview-release-assets.test.mjs
 
+      - name: Verify bounded native smoke behavior
+        run: node --test scripts/test-macos-launchers.test.mjs
+
       - name: Build and run every application verification gate
         run: mvn -B clean verify
 
@@ -191,24 +194,21 @@ jobs:
           if test "${{ matrix.type }}" = "msi"; then
             pwsh -File scripts/test-mcp-launcher.ps1 \
               -Launcher "${{ matrix.ai_launcher }}" -DataDir "$SMOKE_DATA"
+            "${{ matrix.launcher }}" --release-smoke &
+            for attempt in $(seq 1 90); do
+              test -s "$SMOKE_DATA/release-smoke.ok" && break
+              sleep 1
+            done
+            test -s "$SMOKE_DATA/release-smoke.ok"
+            grep -q "Packaged runtime started successfully" "$SMOKE_DATA/release-smoke.ok"
           else
             export FLOWERFARM_HARNESS_TOKEN="candidate-mcp-doctor-token-123456"
             export FLOWERFARM_HARNESS_ALLOW_SENSITIVE_READ=true
             export FLOWERFARM_HARNESS_ALLOW_MUTATIONS=true
-            "${{ matrix.ai_launcher }}" --mcp-doctor > target/mcp-doctor-${{ matrix.type }}.json
-            grep -q '"ready":true' target/mcp-doctor-${{ matrix.type }}.json
-            ! grep -Fq "$FLOWERFARM_HARNESS_TOKEN" target/mcp-doctor-${{ matrix.type }}.json
-            printf '%s\n' '{"jsonrpc":"2.0","id":"release-smoke","method":"ping","params":{"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28","io.modelcontextprotocol/clientCapabilities":{}}}}' \
-              | "${{ matrix.ai_launcher }}" > target/mcp-ping-${{ matrix.type }}.json
-            grep -q '"id":"release-smoke"' target/mcp-ping-${{ matrix.type }}.json
+            bash scripts/test-macos-launchers.sh \
+              --ai-launcher "${{ matrix.ai_launcher }}" \
+              --launcher "${{ matrix.launcher }}" --data-dir "$SMOKE_DATA"
           fi
-          "${{ matrix.launcher }}" --release-smoke &
-          for attempt in $(seq 1 90); do
-            test -s "$SMOKE_DATA/release-smoke.ok" && break
-            sleep 1
-          done
-          test -s "$SMOKE_DATA/release-smoke.ok"
-          grep -q "Packaged runtime started successfully" "$SMOKE_DATA/release-smoke.ok"
 
       - name: Package the smoke-tested app image
         shell: bash

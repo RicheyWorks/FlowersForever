@@ -481,8 +481,8 @@ class ReleaseContractTest {
                 "FlowersForeverAI.exe",
                 "Contents/MacOS/FlowersForeverAI",
                 "scripts/test-mcp-launcher.ps1",
-                "mcp-doctor",
-                "mcp-ping");
+                "scripts/test-macos-launchers.sh",
+                "mcp-doctor");
         assertThat(smoke).contains(
                 "RedirectStandardInput = $true",
                 "RedirectStandardOutput = $true",

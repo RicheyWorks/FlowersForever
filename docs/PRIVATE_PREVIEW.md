@@ -54,6 +54,10 @@ preview jobs permission to write private release assets.
 2. Windows and macOS download that same JAR by asset ID and verify its hash.
    Each builds an app image, runs the desktop smoke marker and AI doctor/stdio
    checks, packages the tested image, and uploads its installer and record.
+   macOS waits for each launcher to exit, reuses the same database across all
+   three launches, and fails any phase that exceeds 90 seconds. A delayed phase
+   produces a bounded JVM thread dump and limited lock metadata for diagnosis;
+   the smoke test does not change the database's mixed-mode settings.
 3. The final job checks the inputs and both installers together, generates and
    verifies `SHA256SUMS.txt`, then uploads `preview-complete.json`. Binary files
    are stored once; the completion record points to those existing assets.

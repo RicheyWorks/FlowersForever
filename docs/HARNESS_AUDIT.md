@@ -653,3 +653,13 @@ rejection, manual-mode isolation, and identical native gates across both paths.
 The asset helper passes 31 mocked tests, including the complete transfer,
 binary redirects without token forwarding, source/hash mismatches, existing
 asset preservation, checksum validation, and failed-upload recovery boundaries.
+
+The first live private-draft run, `33947753440` at `c2fb388`, passed all 1,077
+Java tests and both packaged-process tests. Windows completed native doctor,
+stdio, runtime smoke, MSI packaging, and private upload. macOS created the
+database promptly, then spent 105 seconds reopening it for stdio and exceeded
+the runtime smoke deadline on another reopen. That draft remains incomplete.
+The macOS smoke helper now waits for each actual process exit and captures a
+bounded thread dump during a delayed phase while preserving the same database
+and normal mixed-mode settings. Earlier passing macOS builds tested only a
+fresh database, so they do not establish that reopening worked.
