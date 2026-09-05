@@ -27,6 +27,9 @@ public final class AppDataBootstrap {
 
     /** Configure Spring properties and create the runtime directories. */
     public static Path configure() {
+        // AUTO_SERVER shares the store between local desktop and MCP processes.
+        // Set this before H2 initializes to avoid machine-hostname DNS lookups.
+        setDefault("h2.bindAddress", "127.0.0.1");
         boolean explicitDataDirectory = firstNonBlank(
                 System.getProperty(DATA_PROPERTY), System.getenv("FLOWERFARM_DATA_DIR")) != null;
         Path dataDirectory = resolveDataDirectory().toAbsolutePath().normalize();

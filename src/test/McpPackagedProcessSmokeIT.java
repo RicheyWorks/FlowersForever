@@ -37,7 +37,7 @@ class McpPackagedProcessSmokeIT {
 
     @Test
     @Timeout(90)
-    @DisplayName("doctor and stdio transport open the same durable farm store")
+    @DisplayName("doctor and simultaneous stdio processes share the same durable farm store")
     void doctorAndStdioUseRealApplicationGraph() throws Exception {
         JsonNode doctor = runDoctor();
         assertThat(doctor.path("ready").asBoolean()).isTrue();
@@ -85,21 +85,32 @@ class McpPackagedProcessSmokeIT {
             pageArguments.put("record-type", "inventory");
             pageArguments.put("offset", 0);
             pageArguments.put("limit", 200);
-            JsonNode page = process.call(request(
-                    "read-back", "tools/call", tool("farm-data__list-records",
+            // A second JVM must connect while the first still owns the database.
+            // This exercises H2 AUTO_SERVER rather than just sequential reopening.
+            try (McpProcess peer = new McpProcess(startProcess("--mcp"))) {
+                JsonNode page = peer.call(request(
+                        "read-back", "tools/call", tool("farm-data__list-records",
+                                pageArguments)));
+                assertThat(page.path("result").path("structuredContent")
+                        .path("output").path("records").findValuesAsText("name"))
+                        .contains("Process Smoke Zinnia");
+
+                ObjectNode receiptArguments = mapper.createObjectNode();
+                receiptArguments.put("source-system", "process-smoke-workbook");
+                receiptArguments.put("record-type", "inventory");
+                JsonNode receipts = peer.call(request(
+                        "receipts", "tools/call", tool("farm-data__list-import-receipts",
+                                receiptArguments)));
+                assertThat(receipts.path("result").path("structuredContent")
+                        .path("output").path("total").asInt()).isEqualTo(1);
+            }
+
+            JsonNode afterPeerExit = process.call(request(
+                    "read-after-peer-exit", "tools/call", tool("farm-data__list-records",
                             pageArguments)));
-            assertThat(page.path("result").path("structuredContent")
+            assertThat(afterPeerExit.path("result").path("structuredContent")
                     .path("output").path("records").findValuesAsText("name"))
                     .contains("Process Smoke Zinnia");
-
-            ObjectNode receiptArguments = mapper.createObjectNode();
-            receiptArguments.put("source-system", "process-smoke-workbook");
-            receiptArguments.put("record-type", "inventory");
-            JsonNode receipts = process.call(request(
-                    "receipts", "tools/call", tool("farm-data__list-import-receipts",
-                            receiptArguments)));
-            assertThat(receipts.path("result").path("structuredContent")
-                    .path("output").path("total").asInt()).isEqualTo(1);
         }
 
         assertThat(dataDirectory.resolve("flowerfarm.mv.db")).isRegularFile();

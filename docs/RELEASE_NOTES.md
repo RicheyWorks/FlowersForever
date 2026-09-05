@@ -1,5 +1,13 @@
 # FlowersForever private-preview notes
 
+## September 4, 2026 — macOS shared-database startup
+
+- Avoids a machine-hostname lookup that stalled H2 startup on macOS by binding
+  its local shared-database listener to loopback before initialization. Desktop
+  and AI processes retain concurrent access; explicit JVM overrides are preserved.
+- Adds bounded native diagnostics and verifies that separate processes can
+  read the same committed records while both remain open.
+
 ## September 4, 2026 — Preview storage and checksum integrity
 
 - Adds an explicit manual [private draft preview path](PRIVATE_PREVIEW.md) for

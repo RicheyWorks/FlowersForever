@@ -663,3 +663,13 @@ The macOS smoke helper now waits for each actual process exit and captures a
 bounded thread dump during a delayed phase while preserving the same database
 and normal mixed-mode settings. Earlier passing macOS builds tested only a
 fresh database, so they do not establish that reopening worked.
+
+The diagnostic run `33948586405` at `d5777a5` confirmed the cause: the doctor
+exited with no remaining lock, then the second JVM stalled in
+`InetAddress.getLocalHost` through H2 `NetUtils.getLocalAddress` and
+`Database.startServer`. Its timed thread dump captured that stack before the
+90-second gate failed. Bootstrap now defaults H2's listener to `127.0.0.1`
+before H2 initializes, preserving explicit JVM overrides and `AUTO_SERVER`.
+The process smoke test also keeps two JVMs alive together: one imports data,
+the other reads its records and durable receipt, and the first reads again
+after the peer exits. Native validation of the fix follows in a fresh draft.

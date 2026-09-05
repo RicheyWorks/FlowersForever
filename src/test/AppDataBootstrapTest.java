@@ -1,6 +1,7 @@
 package com.flowerfarm.config;
 
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -16,8 +17,21 @@ class AppDataBootstrapTest {
     @TempDir
     Path temporaryDirectory;
 
+    private String previousH2BindAddress;
+
+    @BeforeEach
+    void isolateH2BindAddress() {
+        previousH2BindAddress = System.getProperty("h2.bindAddress");
+        System.clearProperty("h2.bindAddress");
+    }
+
     @AfterEach
     void clearProperties() {
+        if (previousH2BindAddress == null) {
+            System.clearProperty("h2.bindAddress");
+        } else {
+            System.setProperty("h2.bindAddress", previousH2BindAddress);
+        }
         for (String property : new String[] {
                 AppDataBootstrap.DATA_PROPERTY, AppDataBootstrap.PACKAGED_PROPERTY,
                 "flowerfarm.exports.directory", "flowerfarm.attachments.directory",
@@ -50,6 +64,19 @@ class AppDataBootstrapTest {
                 .isEqualTo(data.resolve("attachments").toAbsolutePath().toString());
         assertThat(System.getProperty("connector.shopify.local-file"))
                 .isEqualTo(data.resolve("shopify-mirror.json").toAbsolutePath().toString());
+        assertThat(System.getProperty("h2.bindAddress")).isEqualTo("127.0.0.1");
+    }
+
+    @Test
+    @DisplayName("an explicit H2 bind address overrides the local sharing default")
+    void explicitH2BindAddressIsPreserved() {
+        System.setProperty(AppDataBootstrap.DATA_PROPERTY,
+                temporaryDirectory.resolve("managed-data").toString());
+        System.setProperty("h2.bindAddress", "192.0.2.10");
+
+        AppDataBootstrap.configure();
+
+        assertThat(System.getProperty("h2.bindAddress")).isEqualTo("192.0.2.10");
     }
 
     @Test
