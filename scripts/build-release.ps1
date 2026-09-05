@@ -69,9 +69,7 @@ try {
     if (-not $SkipMsi) {
         & jpackage --type msi --name FlowersForever --app-version $version --vendor RicheyWorks `
             --description 'Flower farm operations and knowledge, kept in one place' `
-            --input $staging --main-jar ([IO.Path]::GetFileName($jar)) `
-            --add-launcher "FlowersForeverAI=$aiLauncher" `
-            --java-options '-Djava.awt.headless=false' --java-options '-Dflowerfarm.packaged=true' `
+            --app-image $appImage `
             --win-menu --win-shortcut --win-dir-chooser --dest $dist
         if ($LASTEXITCODE -ne 0) { throw 'jpackage MSI build failed.' }
     }

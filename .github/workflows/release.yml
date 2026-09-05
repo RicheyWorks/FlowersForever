@@ -133,6 +133,7 @@ jobs:
             type: msi
             extra: --win-menu --win-shortcut --win-dir-chooser
             ai_config: packaging/FlowersForeverAI-windows.properties
+            app_image: smoke-dist/FlowersForever
             ai_launcher: smoke-dist/FlowersForever/FlowersForeverAI.exe
             launcher: smoke-dist/FlowersForever/FlowersForever.exe
           - os: macos-latest
@@ -140,6 +141,7 @@ jobs:
             type: dmg
             extra: ""
             ai_config: packaging/FlowersForeverAI.properties
+            app_image: smoke-dist/FlowersForever.app
             ai_launcher: smoke-dist/FlowersForever.app/Contents/MacOS/FlowersForeverAI
             launcher: smoke-dist/FlowersForever.app/Contents/MacOS/FlowersForever
 
@@ -159,34 +161,13 @@ jobs:
           name: verified-jar
           path: target/jpackage-input
 
-      - name: Package the verified executable
+      - name: Build and smoke-test the candidate app image
         shell: bash
         run: |
           VERSION="${{ needs.verify.outputs.version }}"
           JAR="flowerfarm-manager-${VERSION}.jar"
           test -s "target/jpackage-input/$JAR"
           test "$(find target/jpackage-input -maxdepth 1 -type f | wc -l | tr -d ' ')" = "1"
-          mkdir -p dist
-          jpackage \
-            --type ${{ matrix.type }} \
-            --name FlowersForever \
-            --app-version "$VERSION" \
-            --vendor RicheyWorks \
-            --description "Flower farm operations and knowledge, kept in one place" \
-            --input target/jpackage-input \
-            --main-jar "$JAR" \
-            --add-launcher FlowersForeverAI=${{ matrix.ai_config }} \
-            --java-options "-Djava.awt.headless=false" \
-            --java-options "-Dflowerfarm.packaged=true" \
-            --dest dist \
-            ${{ matrix.extra }}
-          test "$(find dist -maxdepth 1 -type f | wc -l | tr -d ' ')" = "1"
-
-      - name: Launch the packaged runtime and require its smoke marker
-        shell: bash
-        run: |
-          VERSION="${{ needs.verify.outputs.version }}"
-          JAR="flowerfarm-manager-${VERSION}.jar"
           SMOKE_DATA="target/release-smoke-data-${{ matrix.type }}"
           mkdir -p "$SMOKE_DATA" smoke-dist
           jpackage \
@@ -225,6 +206,23 @@ jobs:
           done
           test -s "$SMOKE_DATA/release-smoke.ok"
           grep -q "Packaged runtime started successfully" "$SMOKE_DATA/release-smoke.ok"
+
+      - name: Package the smoke-tested app image
+        shell: bash
+        run: |
+          VERSION="${{ needs.verify.outputs.version }}"
+          test -d "${{ matrix.app_image }}"
+          mkdir -p dist
+          jpackage \
+            --type ${{ matrix.type }} \
+            --name FlowersForever \
+            --app-version "$VERSION" \
+            --vendor RicheyWorks \
+            --description "Flower farm operations and knowledge, kept in one place" \
+            --app-image "${{ matrix.app_image }}" \
+            --dest dist \
+            ${{ matrix.extra }}
+          test "$(find dist -maxdepth 1 -type f | wc -l | tr -d ' ')" = "1"
 
       - name: Preserve native installer
         uses: actions/upload-artifact@v7
@@ -353,6 +351,10 @@ jobs:
           VERSION="${{ needs.verify.outputs.version }}"
           jpackage \
             --type msi \
+            --name FlowersForever \
+            --app-version "$VERSION" \
+            --vendor RicheyWorks \
+            --description "Flower farm operations and knowledge, kept in one place" \
             --app-image signed-app-image/FlowersForever \
             --win-menu \
             --win-shortcut \
@@ -385,6 +387,18 @@ jobs:
           $signature = Get-AuthenticodeSignature -LiteralPath $msi
           if ($signature.Status -ne 'Valid' -or $null -eq $signature.SignerCertificate) {
             throw "FlowersForever MSI signature is not valid: $($signature.Status)"
+          }
+          $publisher = $signature.SignerCertificate.Subject
+          foreach ($name in @('FlowersForever.exe', 'FlowersForeverAI.exe')) {
+            $signedLauncher = Join-Path $env:GITHUB_WORKSPACE "signed-app-image\FlowersForever\$name"
+            $launcherSignature = Get-AuthenticodeSignature -LiteralPath $signedLauncher
+            if ($launcherSignature.Status -ne 'Valid' -or $null -eq $launcherSignature.SignerCertificate) {
+              throw "$name signature is not valid: $($launcherSignature.Status)"
+            }
+            # Artifact Signing certificates rotate; the verified publisher must stay the same.
+            if ($launcherSignature.SignerCertificate.Subject -cne $publisher) {
+              throw "$name and the MSI have different signing publishers."
+            }
           }
           $smokeData = Join-Path $env:GITHUB_WORKSPACE 'target\release-smoke-data-msi'
           New-Item -ItemType Directory -Path $smokeData -Force | Out-Null

@@ -4,7 +4,7 @@
 
 - Use a supported 64-bit Windows 10/11 workstation at 1366×768 or larger.
 - Obtain the MSI, `bom.json`, `bom.xml`, `THIRD-PARTY.txt`, and checksum file through the approved private RicheyWorks channel.
-- Verify the MSI SHA-256 value with `Get-FileHash`. The current installer is unsigned, so Windows may show an unknown-publisher warning.
+- Verify the MSI SHA-256 value with `Get-FileHash` and confirm its valid signature and expected publisher. Private unsigned candidates are for maintainer validation; external pilots require an approved signed release.
 - Record OWNER, HAND, and VIEWER credentials in the farm's password manager. Every LAN-enabled password must be at least 12 characters.
 - Back up an existing installation with `scripts/backup-data.ps1`, verify the checksum, and copy the ZIP and `.sha256` file off the workstation before upgrading.
 
@@ -127,11 +127,12 @@ Download a candidate before its review window ends. If intermediate artifacts
 expire before a delayed job or rerun consumes them, start a complete new run.
 These settings apply to future uploads; older artifacts require separate cleanup.
 
-An antivirus detection is a stop condition even when the checksum matches. Do
-not add broad folder or process exclusions. Record the detection name, alert ID,
-file SHA-256, and build commit; update security definitions and run a full scan.
-After the source and build provenance are confirmed, a maintainer may submit the
-specific file through [Norton's official false-positive review process](https://support.norton.com/sp/en/us/home/current/solutions/kb20090410134005EN).
+An antivirus detection is a stop condition even when the checksum matches.
+Save the alert details and send them to RicheyWorks through the private support
+channel. Maintainers can collect hashes and publisher details without launching
+the blocked app using `scripts/collect-windows-security-report.ps1`.
+Follow the [Windows antivirus review](ANTIVIRUS_REVIEW.md) for the exact Norton
+case and replacement-build checks; keep protection enabled during review.
 External pilot distribution remains blocked until platform signing is active.
 Maintainers preparing the signing accounts should follow the
 [native signing setup](SIGNING_SETUP.md); credentials belong only in the

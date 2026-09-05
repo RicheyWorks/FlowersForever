@@ -1,5 +1,16 @@
 # FlowersForever private-preview notes
 
+## September 4, 2026 — Windows antivirus follow-up
+
+- Packages preview MSI/DMG installers and the local MSI from their tested app
+  images, preserving the launcher bytes that passed smoke checks.
+- Requires the signed Windows MSI and both launchers to have the same verified
+  publisher, while allowing short-lived signing certificates to rotate.
+- Adds a Windows PowerShell 5.1-compatible metadata collector and a
+  [Norton review guide](ANTIVIRUS_REVIEW.md). The collector never runs artifacts,
+  reads farm records, restores quarantine, or uploads samples. The observed
+  `IDP.Generic` alert still requires review and a clean-workstation acceptance check.
+
 ## September 4, 2026 — Farmer entry and connected production
 
 - Moves Harvest Log entry above history and gives Inventory larger paired fields,

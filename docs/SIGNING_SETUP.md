@@ -51,9 +51,11 @@ Use GitHub environment variables:
 
 The workflow uses GitHub OIDC with `azure/login@v3` and Microsoft's
 `azure/artifact-signing-action@v2`. It signs and timestamps the generated
-`FlowersForever.exe`, verifies that signature, packages the signed app image,
-then signs and verifies the MSI. The timestamp uses Microsoft's RFC 3161
-service so the signature can remain valid after the short-lived signing
+`FlowersForever.exe` and `FlowersForeverAI.exe`, verifies both signatures,
+packages the signed app image, then signs and verifies the MSI. The final check
+requires all three valid signatures to have the same publisher subject; it
+allows certificate rotation between signing operations. The timestamp uses
+Microsoft's RFC 3161 service so the signature can remain valid after the short-lived signing
 certificate expires.
 
 - [Microsoft's Artifact Signing action](https://github.com/Azure/artifact-signing-action)
@@ -117,5 +119,5 @@ The release workflow intentionally behaves differently by event:
 - [ ] App Store Connect notarization API key generated
 - [ ] `release-signing` environment protected and populated
 - [ ] Controlled stable tag proves both signed jobs without exposing secrets
-- [ ] Signed MSI no longer triggers the Norton detection on a clean workstation
+- [ ] Signed MSI and both installed launchers pass the [Norton acceptance check](ANTIVIRUS_REVIEW.md#release-acceptance) on a clean workstation
 - [ ] Signed/notarized DMG passes Gatekeeper on a clean Mac

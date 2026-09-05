@@ -588,6 +588,23 @@ newest preview and every test report. Future temporary release artifacts now
 expire after one day and candidate/report archives after seven days. Quota
 recalculation can delay subsequent uploads; the PR carries current CI status.
 
+The subsequent Norton alert identifies `FlowersForeverAI.exe`, `IDP.Generic`,
+and Behavioral Protection. Metadata inspection of the retained local image
+found both launchers unsigned. That does not establish a false positive or
+attribute every earlier pause to Norton. The [antivirus review guide](ANTIVIRUS_REVIEW.md)
+documents collection and acceptance without running the blocked artifact.
+
+Local MSI and GitHub candidate MSI/DMG packaging now consume the app image
+that passed their smoke gates. Tagged Windows releases also require the MSI
+and both launchers to have valid signatures from the same publisher subject.
+The focused release contracts pass **14 tests**. The metadata collector was
+checked on Windows PowerShell 5.1 for accurate hashes, valid signature details,
+invalid executable status, missing launchers/installers, private-data omission,
+no inferred build commit, and refusal to overwrite an existing artifact.
+PowerShell 7 also collected the retained image's real unsigned metadata into
+`target/windows-security-review.json`. No file was submitted to Norton and
+no antivirus setting or quarantine was changed.
+
 Local application validation used JDK 22.0.2 with Java 17 compilation targets.
 The final full build is `target/farmer-patched-verify.log`; native build and
 execution evidence is in `target/farmer-native17-build.log`,

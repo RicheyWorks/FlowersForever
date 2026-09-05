@@ -108,6 +108,68 @@ class ReleaseContractTest {
     }
 
     @Test
+    @DisplayName("candidate installers contain the app image exercised by the smoke gates")
+    void candidateInstallersReuseTheSmokeTestedImage() throws Exception {
+        Map<?, ?> workflow = new Yaml().load(Files.readString(
+                Path.of(".github", "workflows", "release.yml")));
+        Map<?, ?> jobs = (Map<?, ?>) workflow.get("jobs");
+        Map<?, ?> installers = (Map<?, ?>) jobs.get("installers");
+        Map<?, ?> strategy = (Map<?, ?>) installers.get("strategy");
+        Map<?, ?> matrix = (Map<?, ?>) strategy.get("matrix");
+        for (Object entry : (List<?>) matrix.get("include")) {
+            Map<?, ?> platform = (Map<?, ?>) entry;
+            String image = String.valueOf(platform.get("app_image"));
+            assertThat(image).as("%s app image", platform.get("type"))
+                    .startsWith("smoke-dist/");
+            assertThat(String.valueOf(platform.get("launcher"))).startsWith(image + "/");
+            assertThat(String.valueOf(platform.get("ai_launcher"))).startsWith(image + "/");
+        }
+
+        List<?> steps = (List<?>) installers.get("steps");
+        int smokeIndex = -1;
+        int packageIndex = -1;
+        int imageBuilds = 0;
+        for (int index = 0; index < steps.size(); index++) {
+            Map<?, ?> step = (Map<?, ?>) steps.get(index);
+            String run = String.valueOf(step.get("run"));
+            if (run.contains("--type app-image")) {
+                imageBuilds++;
+                assertThat(run).contains("--dest smoke-dist");
+            }
+            if (run.contains("--release-smoke")) {
+                smokeIndex = index;
+                assertThat(run).contains("${{ matrix.launcher }}", "${{ matrix.ai_launcher }}",
+                        "scripts/test-mcp-launcher.ps1", "release-smoke.ok");
+            }
+            if (run.contains("--type ${{ matrix.type }}")) {
+                packageIndex = index;
+                assertThat(run).contains("--app-image \"${{ matrix.app_image }}\"")
+                        .doesNotContain("--input ", "--main-jar ", "--add-launcher ");
+            }
+        }
+        assertThat(imageBuilds).isEqualTo(1);
+        assertThat(smokeIndex).as("a smoke gate exists").isGreaterThanOrEqualTo(0);
+        assertThat(packageIndex).as("packaging follows the successful smoke gate")
+                .isGreaterThan(smokeIndex);
+    }
+
+    @Test
+    @DisplayName("local Windows MSI packaging preserves the smoke-tested launcher bytes")
+    void localMsiReusesTheSmokeTestedImage() throws Exception {
+        String build = Files.readString(Path.of("scripts", "build-release.ps1"));
+        int smokeIndex = build.indexOf("test-mcp-launcher.ps1");
+        int packageIndex = build.indexOf("& jpackage --type msi");
+
+        assertThat(smokeIndex).isGreaterThanOrEqualTo(0);
+        assertThat(packageIndex).isGreaterThan(smokeIndex);
+        String msiCommand = build.substring(packageIndex,
+                build.indexOf("if ($LASTEXITCODE", packageIndex));
+        assertThat(msiCommand).contains("--app-image $appImage", "--vendor RicheyWorks")
+                .doesNotContain("--input ", "--main-jar ", "--add-launcher ");
+        assertThat(build).contains("Compress-Archive -LiteralPath $appImage");
+    }
+
+    @Test
     @DisplayName("tagged publishing requires Windows signing and Apple notarization")
     void taggedPublishingRequiresPlatformTrust() throws Exception {
         String workflow = Files.readString(Path.of(".github", "workflows", "release.yml"));
@@ -124,6 +186,38 @@ class ReleaseContractTest {
                 "needs: [verify, windows-release, macos-release]");
         assertThat(workflow).doesNotContain("The native installers are not yet code-signed");
         assertThat(Path.of("docs", "SIGNING_SETUP.md")).isRegularFile();
+    }
+
+    @Test
+    @DisplayName("tagged MSI and both Windows launchers require one verified signing publisher")
+    void windowsReleaseRequiresConsistentPublisher() throws Exception {
+        Map<?, ?> workflow = new Yaml().load(Files.readString(
+                Path.of(".github", "workflows", "release.yml")));
+        Map<?, ?> jobs = (Map<?, ?>) workflow.get("jobs");
+        Map<?, ?> windows = (Map<?, ?>) jobs.get("windows-release");
+        boolean packagesSignedImage = false;
+        boolean verifiesPublishers = false;
+        for (Object entry : (List<?>) windows.get("steps")) {
+            Map<?, ?> step = (Map<?, ?>) entry;
+            String run = String.valueOf(step.get("run"));
+            if (run.contains("--type msi")) {
+                packagesSignedImage = true;
+                assertThat(run).contains("--app-image signed-app-image/FlowersForever",
+                        "--vendor RicheyWorks", "--app-version \"$VERSION\"")
+                        .doesNotContain("--input ", "--main-jar ", "--add-launcher ");
+            }
+            if (run.contains("Get-AuthenticodeSignature -LiteralPath $msi")) {
+                verifiesPublishers = true;
+                assertThat(run).contains("$signature.Status -ne 'Valid'",
+                        "$publisher = $signature.SignerCertificate.Subject",
+                        "@('FlowersForever.exe', 'FlowersForeverAI.exe')",
+                        "$launcherSignature.Status -ne 'Valid'",
+                        "$launcherSignature.SignerCertificate.Subject -cne $publisher",
+                        "throw \"$name and the MSI have different signing publishers.\"");
+            }
+        }
+        assertThat(packagesSignedImage).isTrue();
+        assertThat(verifiesPublishers).isTrue();
     }
 
     @Test
