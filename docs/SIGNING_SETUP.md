@@ -107,6 +107,7 @@ The release workflow intentionally behaves differently by event:
 |---|---|
 | Pull request | Unsigned Windows/macOS candidate builds and runtime smoke tests; no credentials and no publication |
 | Manual dispatch | Same non-publishing candidate bundle, optionally with an exact candidate version |
+| Manual dispatch with `preview_release_id` | Unsigned assets and completion evidence in a pre-created private draft; no publication or signing credentials |
 | Matching stable `vX.Y.Z` tag | Protected Windows signing and macOS signing/notarization; publication only after both pass |
 
 ## 5. Enrollment acceptance checklist

@@ -615,6 +615,7 @@ JVM in UTC while Los Angeles was still on the preceding date. These changes
 leave production date validation intact.
 
 Local application validation used JDK 22.0.2 with Java 17 compilation targets.
+
 The final full build is `target/farmer-patched-verify.log`; native build and
 execution evidence is in `target/farmer-native17-build.log`,
 `target/farmer-native17-observed.log`, and `target/farmer-jdk17-jar-smoke.log`.
@@ -629,3 +630,26 @@ technology, and native pointer/keyboard and file approval/overwrite still
 require their platform-specific checks. The headless modal tests use real
 Swing secondary event loops and mocked owned-window relationships; they do
 not establish OS focus or pointer coverage.
+
+## Private preview transport and checksum verification
+
+Actions artifact quota prevented the native jobs from receiving the verified
+JAR even after application verification passed. An explicit manual draft mode
+now calls a reusable workflow that stores the one Linux-verified JAR, metadata,
+and tested Windows/macOS installers in a prepared private unpublished draft.
+Source SHA, version, asset IDs, and SHA-256 hashes bind the transfers; a final
+completion record requires both platforms. Ordinary PR checks retain read-only
+repository permissions, and signed tagged releases keep their existing path.
+See the [private preview runbook](PRIVATE_PREVIEW.md).
+
+Backup of the retained August 28 preview exposed a manifest self-checksum bug.
+Its five original artifact ZIPs match GitHub's recorded archive digests; all six
+payload hashes and the duplicate standalone payloads also match. The original
+invalid manifest was preserved as evidence. New candidate/release checksum
+gates exclude the manifest itself and execute checksum verification before
+retaining outputs. The 19 focused release tests include actual Bash checks of
+payload hashes, paths with spaces, an existing-manifest rerun, corruption
+rejection, manual-mode isolation, and identical native gates across both paths.
+The asset helper passes 31 mocked tests, including the complete transfer,
+binary redirects without token forwarding, source/hash mismatches, existing
+asset preservation, checksum validation, and failed-upload recovery boundaries.

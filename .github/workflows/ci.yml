@@ -26,6 +26,8 @@ jobs:
           package-manager-cache: false
       - name: Test field forms and durable device queue
         run: node --test scripts/worker-ui.test.mjs
+      - name: Test private preview asset integrity and permissions
+        run: node --test scripts/preview-release-assets.test.mjs
 
   verify:
     name: mvn clean verify (JDK ${{ matrix.java }})

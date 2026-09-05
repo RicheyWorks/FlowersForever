@@ -1,5 +1,15 @@
 # FlowersForever private-preview notes
 
+## September 4, 2026 — Preview storage and checksum integrity
+
+- Adds an explicit manual [private draft preview path](PRIVATE_PREVIEW.md) for
+  native packaging when Actions artifact storage is exhausted. Both platforms
+  consume the same verified JAR; files remain in an unpublished private draft
+  and existing archives are preserved.
+- Excludes the output manifest from its own checksum list and verifies all
+  payload checksums before retaining candidate or release assets. Executable
+  regressions cover existing-manifest reruns and corrupted payloads.
+
 ## September 4, 2026 — Windows antivirus follow-up
 
 - Packages preview MSI/DMG installers and the local MSI from their tested app

@@ -2,17 +2,225 @@ package com.flowerfarm.release;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.yaml.snakeyaml.Yaml;
 
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.MessageDigest;
+import java.util.ArrayList;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 @DisplayName("Release artifact contracts")
 class ReleaseContractTest {
+
+    @ParameterizedTest
+    @ValueSource(strings = {"candidate", "publish"})
+    @DisplayName("release checksum gates exclude their manifest, survive reruns, and detect corruption")
+    void checksumGatesVerifyPayloads(String jobName, @TempDir Path tempDir) throws Exception {
+        Map<?, ?> workflow = new Yaml().load(Files.readString(
+                Path.of(".github", "workflows", "release.yml")));
+        Map<?, ?> jobs = (Map<?, ?>) workflow.get("jobs");
+        Map<?, ?> job = (Map<?, ?>) jobs.get(jobName);
+        String run = ((List<?>) job.get("steps")).stream()
+                .map(entry -> (Map<?, ?>) entry)
+                .filter(step -> String.valueOf(step.get("name")).contains("generate checksums"))
+                .map(step -> String.valueOf(step.get("run")))
+                .findFirst().orElseThrow()
+                .replace("${{ needs.verify.outputs.version }}", "1.2.0");
+        assertThat(run).contains("sha256sum --check SHA256SUMS.txt");
+
+        Path assets = Files.createDirectory(tempDir.resolve(
+                "candidate".equals(jobName) ? "candidate-assets" : "release-assets"));
+        List<String> expected = new ArrayList<>();
+        for (String name : List.of("flowerfarm-manager-1.2.0.jar", "bom.json", "bom.xml",
+                "THIRD-PARTY.txt", "Flowers Forever-1.2.0.msi", "FlowersForever-1.2.0.dmg")) {
+            Path asset = Files.writeString(assets.resolve(name), "fixture contents: " + name);
+            String digest = HexFormat.of().formatHex(
+                    MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(asset)));
+            expected.add(digest + " *./" + name);
+        }
+
+        BashResult initial = runBash(tempDir, run);
+        assertThat(initial.exitCode()).withFailMessage(initial.output()).isZero();
+        Path manifest = assets.resolve("SHA256SUMS.txt");
+        List<String> checksums = Files.readAllLines(manifest);
+        assertThat(checksums).containsExactlyInAnyOrderElementsOf(expected);
+
+        BashResult repeated = runBash(tempDir, run);
+        assertThat(repeated.exitCode()).withFailMessage(repeated.output()).isZero();
+        assertThat(Files.readAllLines(manifest)).isEqualTo(checksums);
+
+        Files.writeString(assets.resolve("Flowers Forever-1.2.0.msi"), "corrupted installer");
+        BashResult corrupted = runBash(assets, "sha256sum --check SHA256SUMS.txt");
+        assertThat(corrupted.exitCode()).isNotZero();
+        assertThat(corrupted.output()).contains("Flowers Forever-1.2.0.msi: FAILED");
+    }
+
+    private static BashResult runBash(Path directory, String script) throws Exception {
+        String bash = "bash";
+        if (System.getProperty("os.name").startsWith("Windows")) {
+            // Use Git Bash, not the Windows System32 WSL launcher.
+            Path gitBash = Path.of(System.getenv("ProgramFiles"), "Git", "bin", "bash.exe");
+            assertThat(gitBash).as("Git Bash is required to exercise release shell gates")
+                    .isRegularFile();
+            bash = gitBash.toString();
+        }
+        Path output = Files.createTempFile(directory, "bash-output-", ".log");
+        Process process = new ProcessBuilder(bash, "--noprofile", "--norc", "-e",
+                "-o", "pipefail", "-s")
+                .directory(directory.toFile())
+                .redirectErrorStream(true)
+                .redirectOutput(output.toFile())
+                .start();
+        try {
+            try (var input = process.getOutputStream()) {
+                input.write(script.getBytes(StandardCharsets.UTF_8));
+            }
+            assertThat(process.waitFor(30, TimeUnit.SECONDS)).as("release shell gate completes")
+                    .isTrue();
+            return new BashResult(process.exitValue(), Files.readString(output));
+        } finally {
+            if (process.isAlive()) {
+                process.destroyForcibly();
+            }
+        }
+    }
+
+    private record BashResult(int exitCode, String output) { }
+
+    @Test
+    @DisplayName("private draft storage requires an explicit manual choice and leaves the PR route active")
+    void privateDraftTransportRequiresAnExplicitManualChoice() throws Exception {
+        Map<?, ?> release = readWorkflow("release.yml");
+        assertThat(release.get("permissions")).isEqualTo(Map.of("contents", "read"));
+        Map<?, ?> events = workflowEvents(release);
+        Map<?, ?> dispatch = (Map<?, ?>) events.get("workflow_dispatch");
+        Map<?, ?> dispatchInputs = (Map<?, ?>) dispatch.get("inputs");
+        Map<?, ?> releaseId = (Map<?, ?>) dispatchInputs.get("preview_release_id");
+        assertThat(releaseId.get("required")).isEqualTo(false);
+        assertThat(releaseId.get("type")).isEqualTo("string");
+        assertThat(releaseId.get("default")).isNull();
+
+        Map<?, ?> jobs = (Map<?, ?>) release.get("jobs");
+        Map<?, ?> draft = (Map<?, ?>) jobs.get("private-preview");
+        assertThat(draft.get("if")).isEqualTo(
+                "github.event_name == 'workflow_dispatch' && inputs.preview_release_id != ''");
+        assertThat(draft.get("permissions")).isEqualTo(Map.of("contents", "write"));
+        assertThat(draft.get("uses")).isEqualTo("./.github/workflows/private-preview.yml");
+        assertThat(draft.get("with")).isEqualTo(Map.of(
+                "release_id", "${{ inputs.preview_release_id }}",
+                "expected_sha", "${{ github.sha }}",
+                "version", "${{ inputs.version }}"));
+        assertThat(draft.get("secrets")).isNull();
+
+        Map<?, ?> verify = (Map<?, ?>) jobs.get("verify");
+        assertThat(verify.get("if")).isEqualTo(
+                "github.event_name != 'workflow_dispatch' || inputs.preview_release_id == ''");
+        for (String ordinaryJob : List.of("verify", "installers", "candidate")) {
+            assertThat(((Map<?, ?>) jobs.get(ordinaryJob)).get("permissions"))
+                    .as("%s inherits contents read for ordinary PRs", ordinaryJob).isNull();
+        }
+        assertThat(((Map<?, ?>) jobs.get("installers")).get("needs")).isEqualTo("verify");
+        assertThat(((Map<?, ?>) jobs.get("candidate")).get("needs"))
+                .isEqualTo(List.of("verify", "installers"));
+        assertThat(workflowStep(verify, "Build and run every verification gate").get("run"))
+                .isEqualTo("mvn -B clean verify");
+    }
+
+    @Test
+    @DisplayName("draft jobs use exact source without artifact storage or signing credentials")
+    void privateDraftJobsPinSourceAndLimitCredentials() throws Exception {
+        String source = Files.readString(Path.of(".github", "workflows", "private-preview.yml"));
+        assertThat(source).doesNotContain("actions/upload-artifact@", "actions/download-artifact@",
+                "secrets.", "secrets:", "environment:", "azure/", "xcrun notarytool");
+        Map<?, ?> preview = readWorkflow("private-preview.yml");
+        assertThat(preview.get("permissions")).isEqualTo(Map.of("contents", "read"));
+        assertThat(workflowEvents(preview).keySet().stream().map(String::valueOf).toList())
+                .containsExactly("workflow_call");
+        Map<?, ?> call = (Map<?, ?>) workflowEvents(preview).get("workflow_call");
+        assertThat(call.get("secrets")).isNull();
+        Map<?, ?> jobs = (Map<?, ?>) preview.get("jobs");
+        assertThat(jobs.keySet().stream().map(String::valueOf).toList())
+                .containsExactly("verify", "installers", "candidate");
+        for (Object value : jobs.values()) {
+            Map<?, ?> job = (Map<?, ?>) value;
+            assertThat(job.get("if")).isEqualTo("github.event_name == 'workflow_dispatch'");
+            assertThat(job.get("permissions")).isEqualTo(Map.of("contents", "write"));
+            List<?> steps = (List<?>) job.get("steps");
+            List<? extends Map<?, ?>> checkouts = steps.stream().map(entry -> (Map<?, ?>) entry)
+                    .filter(step -> String.valueOf(step.get("uses")).startsWith("actions/checkout@"))
+                    .toList();
+            assertThat(checkouts).hasSize(1);
+            assertThat(steps.get(0)).isEqualTo(checkouts.get(0));
+            assertThat(checkouts.get(0).get("with")).isEqualTo(Map.of(
+                    "ref", "${{ inputs.expected_sha }}", "persist-credentials", false));
+        }
+        Map<?, ?> verify = (Map<?, ?>) jobs.get("verify");
+        assertThat(String.valueOf(workflowStep(verify, "Lock the source and candidate version").get("run")))
+                .contains("test \"$GITHUB_SHA\" = \"$EXPECTED_SHA\"",
+                        "test \"$(git rev-parse HEAD)\" = \"$EXPECTED_SHA\"");
+    }
+
+    @Test
+    @DisplayName("draft transport preserves the canonical native gates and complete candidate checksum gate")
+    void privateDraftPreservesCanonicalVerification() throws Exception {
+        Map<?, ?> releaseJobs = (Map<?, ?>) readWorkflow("release.yml").get("jobs");
+        Map<?, ?> previewJobs = (Map<?, ?>) readWorkflow("private-preview.yml").get("jobs");
+        Map<?, ?> canonicalInstallers = (Map<?, ?>) releaseJobs.get("installers");
+        Map<?, ?> draftInstallers = (Map<?, ?>) previewJobs.get("installers");
+        assertThat(draftInstallers.get("strategy")).isEqualTo(canonicalInstallers.get("strategy"));
+        assertThat(draftInstallers.get("needs")).isEqualTo("verify");
+        for (String gate : List.of("Build and smoke-test the candidate app image",
+                "Package the smoke-tested app image")) {
+            assertThat(workflowStep(draftInstallers, gate))
+                    .as("%s must exercise the same native bytes", gate)
+                    .isEqualTo(workflowStep(canonicalInstallers, gate));
+        }
+        Map<?, ?> canonicalCandidate = (Map<?, ?>) releaseJobs.get("candidate");
+        Map<?, ?> draftCandidate = (Map<?, ?>) previewJobs.get("candidate");
+        assertThat(draftCandidate.get("needs")).isEqualTo(List.of("verify", "installers"));
+        assertThat(workflowStep(draftCandidate, "Require the complete candidate and generate checksums"))
+                .isEqualTo(workflowStep(canonicalCandidate,
+                        "Require the complete candidate and generate checksums"));
+        Map<?, ?> canonicalVerify = (Map<?, ?>) releaseJobs.get("verify");
+        Map<?, ?> draftVerify = (Map<?, ?>) previewJobs.get("verify");
+        assertThat(workflowStep(draftVerify, "Build and run every application verification gate").get("run"))
+                .isEqualTo(workflowStep(canonicalVerify, "Build and run every verification gate").get("run"));
+        assertThat(workflowStep(draftVerify, "Verify field forms and offline replay"))
+                .isEqualTo(workflowStep(canonicalVerify, "Verify field forms and offline replay"));
+        List<?> verifySteps = (List<?>) draftVerify.get("steps");
+        assertThat(verifySteps.indexOf(workflowStep(draftVerify, "Store the verified inputs in the private draft")))
+                .isGreaterThan(verifySteps.indexOf(workflowStep(draftVerify,
+                        "Build and run every application verification gate")));
+        List<?> candidateSteps = (List<?>) draftCandidate.get("steps");
+        assertThat(candidateSteps.indexOf(workflowStep(draftCandidate,
+                "Record the completed preview in the private draft")))
+                .isGreaterThan(candidateSteps.indexOf(workflowStep(draftCandidate,
+                        "Require the complete candidate and generate checksums")));
+    }
+
+    private static Map<?, ?> readWorkflow(String file) throws Exception {
+        return new Yaml().load(Files.readString(Path.of(".github", "workflows", file)));
+    }
+
+    private static Map<?, ?> workflowEvents(Map<?, ?> workflow) {
+        // SnakeYAML's YAML 1.1 resolver treats an unquoted "on" key as boolean true.
+        return (Map<?, ?>) (workflow.containsKey("on") ? workflow.get("on") : workflow.get(true));
+    }
+
+    private static Map<?, ?> workflowStep(Map<?, ?> job, String name) {
+        return ((List<?>) job.get("steps")).stream().map(entry -> (Map<?, ?>) entry)
+                .filter(step -> name.equals(step.get("name"))).findFirst().orElseThrow();
+    }
 
     @Test
     @DisplayName("CycloneDX outputs match the files published by release automation")
@@ -28,7 +236,7 @@ class ReleaseContractTest {
         assertThat(release).contains(
                 "test -s target/bom.json", "test -s target/bom.xml",
                 "release-assets/bom.json", "release-assets/bom.xml",
-                "release-assets/SHA256SUMS.txt");
+                "cd release-assets", "SHA256SUMS.txt");
         assertThat(ci).contains("target/bom.*", "if-no-files-found: error");
     }
 

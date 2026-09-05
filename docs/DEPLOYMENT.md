@@ -127,6 +127,12 @@ Download a candidate before its review window ends. If intermediate artifacts
 expire before a delayed job or rerun consumes them, start a complete new run.
 These settings apply to future uploads; older artifacts require separate cleanup.
 
+When Actions artifact quota prevents preview packaging, maintainers can use the
+[private draft preview path](PRIVATE_PREVIEW.md). It transfers the single verified
+JAR and tested installers through an unpublished private draft release, preserving
+existing Actions archives. This is an explicit manual option; normal candidates
+and signed releases keep the existing path.
+
 An antivirus detection is a stop condition even when the checksum matches.
 Save the alert details and send them to RicheyWorks through the private support
 channel. Maintainers can collect hashes and publisher details without launching

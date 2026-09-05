@@ -8,9 +8,12 @@ on:
   pull_request:
     paths:
       - ".github/workflows/release.yml"
+      - ".github/workflows/private-preview.yml"
       - "pom.xml"
       - "scripts/build-release.ps1"
       - "scripts/test-mcp-launcher.ps1"
+      - "scripts/preview-release-assets.mjs"
+      - "scripts/preview-release-assets.test.mjs"
       - "scripts/worker-ui.test.mjs"
       - "src/main/resources/static/worker/**"
       - "packaging/**"
@@ -18,6 +21,10 @@ on:
     inputs:
       version:
         description: "Candidate version (blank uses the POM version without -SNAPSHOT)"
+        required: false
+        type: string
+      preview_release_id:
+        description: "Optional private draft release ID for preview storage instead of Actions artifacts"
         required: false
         type: string
 
@@ -29,8 +36,20 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  private-preview:
+    name: Build an unpublished private draft preview
+    if: github.event_name == 'workflow_dispatch' && inputs.preview_release_id != ''
+    permissions:
+      contents: write
+    uses: ./.github/workflows/private-preview.yml
+    with:
+      release_id: ${{ inputs.preview_release_id }}
+      expected_sha: ${{ github.sha }}
+      version: ${{ inputs.version }}
+
   verify:
     name: Verify version, tests, JAR, SBOM, and notices
+    if: github.event_name != 'workflow_dispatch' || inputs.preview_release_id == ''
     runs-on: ubuntu-latest
     timeout-minutes: 30
     outputs:
@@ -667,7 +686,12 @@ jobs:
           test -s candidate-assets/THIRD-PARTY.txt
           test "$(find candidate-assets -maxdepth 1 -type f -name '*.msi' | wc -l | tr -d ' ')" = "1"
           test "$(find candidate-assets -maxdepth 1 -type f -name '*.dmg' | wc -l | tr -d ' ')" = "1"
-          (cd candidate-assets && sha256sum *) > candidate-assets/SHA256SUMS.txt
+          (
+            cd candidate-assets
+            find . -maxdepth 1 -type f ! -name SHA256SUMS.txt -print0 \
+              | sort -z | xargs -0 sha256sum --binary -- > SHA256SUMS.txt
+            sha256sum --check SHA256SUMS.txt
+          )
 
       - name: Preserve the private candidate bundle
         uses: actions/upload-artifact@v7
@@ -716,7 +740,12 @@ jobs:
           test -s release-assets/THIRD-PARTY.txt
           test "$(find release-assets -maxdepth 1 -type f -name '*.msi' | wc -l | tr -d ' ')" = "1"
           test "$(find release-assets -maxdepth 1 -type f -name '*.dmg' | wc -l | tr -d ' ')" = "1"
-          (cd release-assets && sha256sum *) > release-assets/SHA256SUMS.txt
+          (
+            cd release-assets
+            find . -maxdepth 1 -type f ! -name SHA256SUMS.txt -print0 \
+              | sort -z | xargs -0 sha256sum --binary -- > SHA256SUMS.txt
+            sha256sum --check SHA256SUMS.txt
+          )
 
       - name: Create the release only after every platform passed
         uses: softprops/action-gh-release@v3
