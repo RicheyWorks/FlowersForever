@@ -9,7 +9,6 @@ import com.fasterxml.jackson.databind.ObjectReader;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -29,12 +28,19 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 /** Maps arbitrary spreadsheet or provider records into a discovered farm-data schema. */
 @Component
 public class FarmDataMappingService {
 
     private static final int MAX_SOURCE_KEY_LENGTH = 240;
+    private static final BigDecimal MIN_LONG = BigDecimal.valueOf(Long.MIN_VALUE);
+    private static final BigDecimal MAX_LONG = BigDecimal.valueOf(Long.MAX_VALUE);
+    private static final BigDecimal MAX_DATE_SERIAL = BigDecimal.valueOf(3_000_000);
+    private static final Pattern DECIMAL_TEXT = Pattern.compile(
+            "\\A[+-]?(?:(?:[0-9]++|[0-9]{1,3}(?:,[0-9]{3})++)(?:\\.[0-9]*+)?"
+                    + "|\\.[0-9]++)(?:[eE][+-]?[0-9]++)?\\z");
     private static final List<DateTimeFormatter> DATE_FORMATS = List.of(
             DateTimeFormatter.ISO_LOCAL_DATE,
             DateTimeFormatter.ofPattern("M/d/uuuu", Locale.ROOT)
@@ -270,9 +276,9 @@ public class FarmDataMappingService {
     private LocalDate dateValue(Object raw, String field) {
         if (raw instanceof Number number) {
             try {
-                long serial = new BigDecimal(number.toString()).longValueExact();
-                if (serial > 0 && serial < 3_000_000) {
-                    return LocalDate.of(1899, 12, 30).plusDays(serial);
+                BigDecimal serial = new BigDecimal(number.toString());
+                if (serial.signum() > 0 && serial.compareTo(MAX_DATE_SERIAL) < 0) {
+                    return LocalDate.of(1899, 12, 30).plusDays(serial.longValueExact());
                 }
             } catch (ArithmeticException | NumberFormatException ignored) {
                 // Fractional or nonfinite serials must not round into calendar dates.
@@ -291,9 +297,14 @@ public class FarmDataMappingService {
     }
 
     private static long integerValue(Object raw, String field) {
-        BigDecimal number = decimal(raw, field);
+        BigDecimal number = decimal(raw, field, false);
         try {
-            return number.setScale(0, RoundingMode.UNNECESSARY).longValueExact();
+            // Check magnitude before rescaling: a tiny text such as 1e2147483647
+            // must never allocate its expanded integer representation.
+            if (number.compareTo(MIN_LONG) < 0 || number.compareTo(MAX_LONG) > 0) {
+                throw new ArithmeticException("Outside the long integer range");
+            }
+            return number.longValueExact();
         } catch (ArithmeticException exception) {
             throw new IllegalArgumentException(
                     "Field '" + field + "' must be a whole number", exception);
@@ -301,23 +312,46 @@ public class FarmDataMappingService {
     }
 
     private static double numberValue(Object raw, String field) {
-        double value = decimal(raw, field).doubleValue();
+        BigDecimal number = decimal(raw, field, true);
+        double value = number.doubleValue();
         if (!Double.isFinite(value)) {
             throw new IllegalArgumentException("Field '" + field + "' must be finite");
+        }
+        if (value == 0 && number.signum() != 0) {
+            throw new IllegalArgumentException(
+                    "Field '" + field + "' is too small for the supported numeric range");
         }
         return value;
     }
 
-    private static BigDecimal decimal(Object raw, String field) {
-        if (raw instanceof Number number) {
-            return new BigDecimal(number.toString());
-        }
-        String value = String.valueOf(raw).trim()
-                .replace(",", "")
-                .replace("$", "")
-                .replace("%", "");
+    private static BigDecimal decimal(Object raw, String field, boolean allowNumericAffixes) {
         try {
-            return new BigDecimal(value);
+            if (raw instanceof BigDecimal number) {
+                return number;
+            }
+            if (raw instanceof Number number) {
+                return new BigDecimal(number.toString());
+            }
+            if (!(raw instanceof String text)) {
+                throw new NumberFormatException("Not a number or numeric text");
+            }
+            String value = text.trim();
+            // The number contract accepts a leading dollar sign OR a terminal
+            // percent sign; percentages retain percentage units (50% -> 50).
+            // Integer counts and identifiers never accept those decorations.
+            if (allowNumericAffixes) {
+                if (value.startsWith("$")) {
+                    value = value.substring(1);
+                } else if (value.startsWith("-$") || value.startsWith("+$")) {
+                    value = value.charAt(0) + value.substring(2);
+                } else if (value.endsWith("%")) {
+                    value = value.substring(0, value.length() - 1);
+                }
+            }
+            if (!DECIMAL_TEXT.matcher(value).matches()) {
+                throw new NumberFormatException("Invalid numeric punctuation or grouping");
+            }
+            return new BigDecimal(value.replace(",", ""));
         } catch (NumberFormatException exception) {
             throw new IllegalArgumentException(
                     "Field '" + field + "' must be numeric", exception);

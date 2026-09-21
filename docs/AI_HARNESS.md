@@ -134,11 +134,13 @@ MCP calls generate gateway request identities from the JSON-RPC request ID,
 tool name, and arguments. Responses provide the complete `HarnessResponse` as
 both `structuredContent` and serialized text for client compatibility. Tool
 validation and farm-domain errors return `isError=true` with actionable text;
-malformed MCP calls and unknown tools use JSON-RPC errors. A physical tool, if
-one is separately installed and enabled, adds `_expiresAt` to its MCP input
-schema and translates it to the harness command deadline.
+malformed MCP calls and unknown tools use JSON-RPC errors. Every tool accepts
+an optional ISO-8601 `_expiresAt` argument, which the transport moves into the
+harness command deadline. Physical tools require it and retain their 30-second
+maximum lifetime. Protocol error messages and unsupported-version echoes use
+the same bounded credential redaction as tool failures; correlation IDs stay intact.
 
-New request identities sort object fields, normalize the physical expiry to its
+New request identities sort object fields, normalize a supplied expiry to its
 UTC instant, and use fixed JSON serialization independent of application pretty
 printing or escaping. Ordinary argument strings and JSON types retain their
 identity. Exact retries of older envelopes also check existing receipts under
@@ -293,7 +295,10 @@ A completed effect is retained even if the following observation fails; an exact
 retry attempts observation again without repeating the effect. Revoked sensitive
 read permission also applies to cached observations and sensitive-read responses.
 
-Non-physical commands may omit `expiresAt`. A provider adapter submitting a
+Non-physical commands may omit `expiresAt`; when supplied, it must be strictly
+after the gateway's current time before fresh execution. Optional deadlines may
+be more than 30 seconds ahead. Rejection does not consume the request ID.
+A provider adapter submitting a
 tool whose `annotations.freshnessRequired` is true must add an ISO-8601
 `expiresAt` timestamp within the manifest's `physicalCommandMaxTtlSeconds`.
 The expiry belongs to the command envelope, not the model-generated action
@@ -466,6 +471,15 @@ validated strictly (for example, February 30 is rejected). Exact source path
 names take precedence; a normalized name matching several source fields must
 be disambiguated by supplying the exact spelling. Structured objects and arrays
 cannot silently become names or source IDs.
+
+Numeric text accepts decimal/scientific notation and correctly grouped thousands
+(for example, `1,200.50`). Number fields also accept a single leading dollar sign
+or terminal percent sign; `50%` retains the value 50. Integer counts and IDs reject
+currency/percent decorations. Malformed grouping (`1,5`), embedded currency
+(`1$2`), repeated or misplaced percent signs, and combined currency/percent values
+are rejected before imports write records or source receipts. Exact integer/date
+range checks avoid expanding enormous exponents; nonzero values that underflow
+the domain's double precision are rejected rather than silently becoming zero.
 
 JSON cells must contain exactly one complete value; duplicate object properties
 and content after that value are rejected. Harvest previews share the import
@@ -1437,6 +1451,23 @@ approval, network egress, and transcript retention remain responsibilities of
 that adapter and its operator.
 
 ## Verification
+
+Run `python -B scripts/verify_harness.py` for clean Maven tests, packaged MCP
+checks, coverage, Checkstyle, SpotBugs, and per-class regression floors. On a
+machine retaining native preview outputs, add `--isolated` to build only in
+`target/harness-verification`; `--offline` uses cached dependencies and skips
+SBOM generation. The JDK 17 CI job runs the same verification entry point.
+
+The report at `dist/harness-evidence/latest.json` binds passing evidence to SHA-256
+hashes of source/build inputs and test/quality reports. Run
+`python -B scripts/verify_harness.py --check` to reject stale evidence, changed
+reports, missing suites, skipped/failed/flaky tests, or a per-class count below
+`config/harness-test-floors.json`. A growing class cannot hide a deleted class.
+New tests can increase counts; intentionally removing or reorganizing tests
+requires an explicit review of the corresponding floor entries. The gate counts
+distinct nested testcase identities even when Surefire's suite header collapses
+identically named methods. Eighteen Python fault-injection checks exercise the
+evidence gate itself. See [CSRBT comparison and next steps](HARNESS_ECOSYSTEM.md).
 
 `mvn verify -Pquality` runs the ordinary unit, REST, and desktop journey suite,
 then runs the MCP process smoke again through Failsafe against the freshly

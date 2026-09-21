@@ -1,5 +1,18 @@
 # FlowersForever private-preview notes
 
+## September 21, 2026 — Ecosystem-inspired harness robustness
+
+- Honors optional command deadlines across REST, MCP, and embedded callers while
+  preserving receipt replay and stricter physical-action expiry rules.
+- Rejects malformed numeric grouping/currency/percent input before batch writes;
+  handles extreme exponents without expanding enormous integer values.
+- Redacts and bounds JSON-RPC protocol errors as well as tool failures.
+- Adds a clean verification runner, per-class test floors, source/report hashes,
+  quality-report checks, and fault injection for misleading pass evidence.
+- Supports isolated verification output alongside retained native preview builds.
+- Records CSRBT source references and follow-up acceptance criteria in
+  [the ecosystem comparison](HARNESS_ECOSYSTEM.md).
+
 ## September 13, 2026 — Exact numeric requests and recovery
 
 - Preserves decimal values and request identities through REST, MCP, and mapped

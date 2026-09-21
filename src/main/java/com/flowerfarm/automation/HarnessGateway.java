@@ -252,20 +252,23 @@ public class HarnessGateway {
 
     private void validateFreshness(
             HarnessCommand command, HarnessActionSpec action) {
-        if (!action.requiresFreshness()) {
-            return;
-        }
         Instant expiresAt = command.expiresAt();
         if (expiresAt == null) {
-            throw new IllegalArgumentException("Action '" + action.name()
-                    + "' requires expiresAt for stale-command protection");
+            if (action.requiresFreshness()) {
+                throw new IllegalArgumentException("Action '" + action.name()
+                        + "' requires expiresAt for stale-command protection");
+            }
+            return;
         }
+        // A supplied deadline limits every fresh command, even when optional.
+        // Completed receipts are recovered before this check because their effects already happened.
         Instant now = clock.instant();
         if (!expiresAt.isAfter(now)) {
             throw new IllegalArgumentException("Action '" + action.name()
                     + "' command has expired");
         }
-        if (expiresAt.isAfter(now.plusSeconds(PHYSICAL_COMMAND_MAX_TTL_SECONDS))) {
+        if (action.requiresFreshness()
+                && expiresAt.isAfter(now.plusSeconds(PHYSICAL_COMMAND_MAX_TTL_SECONDS))) {
             throw new IllegalArgumentException("Action '" + action.name()
                     + "' expiresAt must be within "
                     + PHYSICAL_COMMAND_MAX_TTL_SECONDS + " seconds");

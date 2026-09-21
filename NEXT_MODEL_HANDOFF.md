@@ -1,4 +1,52 @@
-# Latest direction — September 14, 2026 UTC
+# Latest direction — September 21, 2026
+
+## Latest completed work: GitHub sync and CSRBT-inspired harness hardening
+
+The owner explicitly requested local/GitHub synchronization and continued harness
+work informed by the CSRBT ecosystem. This supersedes the older entries' instruction
+to leave work uncommitted or avoid GitHub. The 88 previously dirty/untracked files
+were preserved, verified (1,394 tests plus two packaged MCP checks), committed as
+`d615837`, and pushed to `codex/recover-unpushed-work`, updating existing PR #21.
+The branch already contained every commit from `origin/main`.
+
+The new continuation adds optional deadlines across REST/MCP/embedded commands,
+bounded/redacted JSON-RPC protocol errors, strict mapped numeric punctuation and
+exponent/range handling, and 111 Java regressions. CSRBT local and GitHub HEAD
+matched `2a80194777f159cc4111467a282c199ff174effe`; source links and next-step
+acceptance criteria are in `docs/HARNESS_ECOSYSTEM.md`.
+
+New `scripts/verify_harness.py` performs clean quality verification, checks
+`config/harness-test-floors.json`, and stores source/report hashes and per-class
+counts in `dist/harness-evidence/latest.json`. Eighteen Python fault-injection
+tests pass. The JDK 17 CI job uses this entry point; JDK 21 remains advisory.
+Use `--isolated` locally: an older native executable under `target` prevented
+ordinary Maven clean. Isolated output is `target/harness-verification`, selected
+through the new optional `flowerfarm.build.directory` Maven property. Default
+Maven output remains `target`. No app process was stopped or installer rebuilt.
+
+Final online `python -B scripts/verify_harness.py --isolated` passed 1,505 tests
+plus two packaged MCP checks with zero failures/errors/skips, Checkstyle/SpotBugs
+with zero findings, and coverage gates at 86.33% lines / 68.98% branches. Both
+SBOM formats were generated. `--check` revalidated the exact source/report hashes.
+Full log: `dist/harness-evidence/robustness-quality.log`; baseline log:
+`dist/harness-evidence/baseline-quality.log`. The focused run found two assumptions
+in new numeric fixtures (BigDecimal exponent boundary and immediate defaults
+validation), both corrected before the successful final build. Independent
+reviews found no remaining blocking defect. All agents are done editing.
+
+Evidence review caught stale XML for old FarmProfileTest/InstalledDesktopSmoke
+and Surefire header counts collapsing equal method names in nested classes.
+The clean runner rejects stale reports and counts distinct testcase identities;
+do not regenerate floors from arbitrary accumulated `target` reports.
+
+GitHub Actions jobs for `d615837` could not start: account payments/spending limit
+block all jobs before any steps. CI run `35599303740` and release run `35599304181`
+carry the explicit billing annotation. Local success is not remote CI success.
+The PR description is updated with this limitation and the new validation.
+No stable release, native signing, external-account or physical-hardware work.
+
+Historical continuation notes follow; their uncommitted/no-GitHub statements
+describe earlier work and no longer govern the current request.
 
 ## Latest completed work: exact numeric requests and interrupted recovery
 

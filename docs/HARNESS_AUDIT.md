@@ -2,6 +2,42 @@
 
 Audit date: 2026-09-04
 
+## CSRBT ecosystem comparison and hardening — September 21, 2026
+
+Compared the harness contract and verification tools with CSRBT commit
+`2a80194777f159cc4111467a282c199ff174effe`; see the
+[implementation comparison and follow-up acceptance criteria](HARNESS_ECOSYSTEM.md).
+This pass enforces supplied deadlines on fresh nonphysical commands across all
+three transports, preserves replay-before-expiry semantics, closes JSON-RPC
+protocol diagnostic redaction gaps, and replaces permissive numeric punctuation
+stripping with a strict grammar. Batch regressions require malformed second rows
+to leave both farm records and source receipts unwritten. Exact range checks
+cover huge positive/negative exponents and floating-point underflow.
+
+The verification runner performs a clean build, checks per-class test floors,
+rejects stale/missing/failed/skipped/flaky reports, and hashes source/build inputs
+and JUnit/quality evidence. Independent review caught two evidence hazards:
+unchanged test counts did not prove unchanged reports, and Git-only enumeration
+missed ignored source files. The runner now hashes report contents and actual
+input files. Baseline reconciliation also found two stale XML reports and
+Surefire header collisions for identically named nested tests; clean reports and
+distinct testcase identities prevent either from inflating/losing test counts.
+
+The previously uncommitted work passed 1,394 tests plus two packaged MCP checks,
+coverage, Checkstyle, and SpotBugs before commit `d615837` was pushed. GitHub jobs
+for that revision did not start because of the account billing/spending limit.
+No remote build result is inferred from local verification.
+
+Final online `python -B scripts/verify_harness.py --isolated` passed 1,505 tests
+plus two packaged MCP checks with zero failures/errors/skips. Checkstyle and
+Medium-or-higher SpotBugs passed with zero findings; coverage was 86.33% lines
+and 68.98% branches. Both SBOM formats were generated. Eighteen Python evidence
+fault-injection tests passed, and `--check` confirmed unchanged source and report
+hashes. This pass adds 111 Java regressions. Evidence and logs are under
+`dist/harness-evidence/`; verified output is under `target/harness-verification`.
+The isolated build preserves an older native executable that prevented cleaning
+the ordinary target directory. No native app was stopped or installer rebuilt.
+
 ## Numeric precision and recovery after interruption — September 13, 2026
 
 REST command maps and MCP frames previously rounded decimal tokens through

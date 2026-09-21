@@ -30,6 +30,8 @@ jobs:
         run: node --test scripts/preview-release-assets.test.mjs
       - name: Test bounded native smoke behavior
         run: node --test scripts/test-macos-launchers.test.mjs
+      - name: Test harness evidence failure detection
+        run: python3 -B -m unittest discover -s scripts -p test_verify_harness.py
 
   verify:
     name: mvn clean verify (JDK ${{ matrix.java }})
@@ -53,7 +55,12 @@ jobs:
           java-version: ${{ matrix.java }}
           cache: maven
 
-      - name: Build and test
+      - name: Verify harness and source-bound evidence (JDK 17)
+        if: matrix.java == '17'
+        run: python3 -B scripts/verify_harness.py
+
+      - name: Build and test (advisory JDK 21)
+        if: matrix.java == '21'
         run: mvn -B clean verify
 
       - name: Upload coverage report (JDK 17 only)

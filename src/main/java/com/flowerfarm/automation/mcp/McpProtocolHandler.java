@@ -207,7 +207,7 @@ public class McpProtocolHandler {
                 ? mapper.createObjectNode() : (ObjectNode) suppliedArguments.deepCopy();
         ObjectNode argumentNode = originalArguments.deepCopy();
         try {
-            Instant expiresAt = expiration(tool, argumentNode);
+            Instant expiresAt = expiration(argumentNode);
             ObjectNode identityArguments = argumentNode.deepCopy();
             if (expiresAt != null) {
                 identityArguments.put("_expiresAt", expiresAt.toString());
@@ -357,13 +357,15 @@ public class McpProtocolHandler {
         result.put("title", title(tool.action()));
         result.put("description", tool.description());
         ObjectNode schema = mapper.valueToTree(tool.inputSchema());
+        ObjectNode schemaProperties = (ObjectNode) schema.withObject("properties");
+        ObjectNode expires = mapper.createObjectNode();
+        expires.put("type", "string");
+        expires.put("format", "date-time");
+        expires.put("description", tool.annotations().freshnessRequired()
+                ? "Required UTC expiry no more than 30 seconds in the future."
+                : "Optional command deadline; fresh execution is rejected at or after this instant.");
+        schemaProperties.set("_expiresAt", expires);
         if (tool.annotations().freshnessRequired()) {
-            ObjectNode schemaProperties = (ObjectNode) schema.withObject("properties");
-            ObjectNode expires = mapper.createObjectNode();
-            expires.put("type", "string");
-            expires.put("format", "date-time");
-            expires.put("description", "UTC expiry no more than 30 seconds in the future.");
-            schemaProperties.set("_expiresAt", expires);
             ArrayNode required = schema.withArray("required");
             required.add("_expiresAt");
         }
@@ -412,7 +414,7 @@ public class McpProtocolHandler {
         if (!CURRENT_PROTOCOL_VERSION.equals(requested.asText())) {
             ObjectNode data = mapper.createObjectNode();
             data.putArray("supported").add(CURRENT_PROTOCOL_VERSION);
-            data.put("requested", requested.asText());
+            data.put("requested", SecretRedactor.redact(requested.asText(), 240));
             throw protocol(UNSUPPORTED_PROTOCOL_VERSION,
                     "Unsupported protocol version", data);
         }
@@ -467,14 +469,10 @@ public class McpProtocolHandler {
         return (ObjectNode) params;
     }
 
-    private Instant expiration(HarnessToolDefinition tool, ObjectNode arguments) {
+    private Instant expiration(ObjectNode arguments) {
         JsonNode expiresAt = arguments.remove("_expiresAt");
         if (expiresAt == null) {
             return null;
-        }
-        if (!tool.annotations().freshnessRequired()) {
-            throw new IllegalArgumentException(
-                    "Tool '" + tool.name() + "' does not accept _expiresAt");
         }
         if (!expiresAt.isTextual()) {
             throw new IllegalArgumentException("_expiresAt must be an ISO-8601 timestamp");
@@ -572,7 +570,9 @@ public class McpProtocolHandler {
         response.set("id", id == null ? mapper.nullNode() : id);
         ObjectNode error = mapper.createObjectNode();
         error.put("code", code);
-        error.put("message", message);
+        String safeMessage = SecretRedactor.redact(message, 240);
+        error.put("message", safeMessage == null || safeMessage.isBlank()
+                ? "MCP request failed" : safeMessage);
         if (data != null) {
             error.set("data", data);
         }

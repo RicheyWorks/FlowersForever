@@ -201,13 +201,13 @@ class McpProtocolHandlerTest {
         assertThat(failed.path("result").path("content").get(0).path("text").asText())
                 .contains("correct the source row");
 
-        JsonNode reserved = handler.handle(mapper.readTree(modernRequest(
-                "reserved", "tools/call", ",\"name\":\"farm-data__catalog\","
+        JsonNode invalidDeadline = handler.handle(mapper.readTree(modernRequest(
+                "invalid-deadline", "tools/call", ",\"name\":\"farm-data__catalog\","
                         + "\"arguments\":{\"_expiresAt\":"
-                        + "\"2026-09-02T12:00:00Z\"}")));
-        assertThat(reserved.path("result").path("isError").asBoolean()).isTrue();
-        assertThat(reserved.path("result").path("content").get(0)
-                .path("text").asText()).contains("does not accept _expiresAt");
+                        + "\"not-a-timestamp\"}")));
+        assertThat(invalidDeadline.path("result").path("isError").asBoolean()).isTrue();
+        assertThat(invalidDeadline.path("result").path("content").get(0)
+                .path("text").asText()).contains("ISO-8601 UTC timestamp");
     }
 
     @Test
