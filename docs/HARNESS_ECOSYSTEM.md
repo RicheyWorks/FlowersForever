@@ -19,6 +19,14 @@ punctuation can no longer silently change imported values, exponent guards avoid
 unbounded integer expansion, and JSON-RPC protocol errors now receive the same
 credential redaction and length limit as tool errors.
 
+The following wiring pass connects MCP resources to full discovery/observation,
+including observation-only extensions. Reviewed inventory counts and order
+handoffs now reuse existing transactional worker services through the harness;
+their operation keys and durable results work across the phone API, REST, and
+MCP. This provides the existing worker review-token/quantity preconditions to
+agents without claiming domain-wide version preconditions. Packaged JVM checks
+exercise receipt recovery through these new connections.
+
 ## Next improvements, with acceptance criteria
 
 1. **Explicit uncertain execution receipts.** CSRBT retains unexpected failures

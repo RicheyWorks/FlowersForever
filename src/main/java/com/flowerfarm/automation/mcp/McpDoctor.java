@@ -38,7 +38,15 @@ public class McpDoctor {
             "farm-data__get-record-export",
             "farm-data__read-record-export",
             "farm-data__read-attachment-content",
-            "farm-data__lookup-harvest-lot");
+            "farm-data__lookup-harvest-lot",
+            "farm-data__get-season-settings",
+            "farm-data__get-production-costs",
+            "farm-data__preview-plantings",
+            "farm-data__estimate-recipe",
+            "farm-data__get-availability",
+            "farm-data__list-handoffs",
+            "farm-data__list-order-handoffs",
+            "farm-data__get-operation-receipt");
     private static final Set<String> WRITE_TOOLS = Set.of(
             "farm-data__import-mapped-records",
             "farm-data__upsert-inventory",
@@ -52,7 +60,14 @@ public class McpDoctor {
             "farm-data__create-orders",
             "farm-data__record-knowledge",
             "farm-data__complete-tasks",
-            "farm-data__upload-attachment");
+            "farm-data__upload-attachment",
+            "farm-data__upsert-season-settings",
+            "farm-data__commit-plantings",
+            "farm-data__regenerate-tasks",
+            "farm-data__update-task-status",
+            "farm-data__create-handoff",
+            "farm-data__count-inventory",
+            "farm-data__complete-order-handoff");
 
     private final HarnessGateway gateway;
     private final HarnessProperties properties;
@@ -87,13 +102,15 @@ public class McpDoctor {
         Set<String> farmTools = enabledTools.stream()
                 .filter(name -> name.startsWith(FARM_PREFIX))
                 .collect(java.util.stream.Collectors.toCollection(TreeSet::new));
+        boolean dataDirectoryReady = Files.isDirectory(dataDirectory)
+                && Files.isWritable(dataDirectory);
 
         boolean connectionReady = database.ready()
                 && enabledTools.containsAll(CONNECTION_TOOLS);
         boolean reconciliationReady = connectionReady
                 && enabledTools.containsAll(RECONCILIATION_TOOLS);
         boolean writesReady = connectionReady && enabledTools.containsAll(WRITE_TOOLS);
-        boolean ready = tokenConfigured && reconciliationReady && writesReady;
+        boolean ready = tokenConfigured && dataDirectoryReady && reconciliationReady && writesReady;
 
         Set<String> expectedTools = new TreeSet<>(CONNECTION_TOOLS);
         expectedTools.addAll(RECONCILIATION_TOOLS);
@@ -106,8 +123,7 @@ public class McpDoctor {
         report.put("serverVersion", McpProtocolHandler.SERVER_VERSION);
         report.put("protocolVersion", McpProtocolHandler.CURRENT_PROTOCOL_VERSION);
         report.put("dataDirectory", dataDirectory.toString());
-        report.put("dataDirectoryReady",
-                Files.isDirectory(dataDirectory) && Files.isWritable(dataDirectory));
+        report.put("dataDirectoryReady", dataDirectoryReady);
         report.put("databaseReady", database.ready());
         report.put("databaseProduct", database.product());
         report.put("schemaVersion", schemaVersion());
@@ -124,7 +140,7 @@ public class McpDoctor {
                 "readBackAndResume", reconciliationReady,
                 "migrateAndOperate", writesReady));
         report.put("missingFarmDataTools", List.copyOf(expectedTools));
-        report.put("nextSteps", nextSteps(tokenConfigured, database, dataDirectory,
+        report.put("nextSteps", nextSteps(tokenConfigured, database, dataDirectoryReady,
                 reconciliationReady, writesReady, expectedTools));
         return java.util.Collections.unmodifiableMap(report);
     }
@@ -147,7 +163,7 @@ public class McpDoctor {
     private List<String> nextSteps(
             boolean tokenConfigured,
             DatabaseStatus database,
-            Path dataDirectory,
+            boolean dataDirectoryReady,
             boolean reconciliationReady,
             boolean writesReady,
             Set<String> missingTools) {
@@ -155,7 +171,7 @@ public class McpDoctor {
         if (!tokenConfigured) {
             steps.add("Set FLOWERFARM_HARNESS_TOKEN to at least 24 characters.");
         }
-        if (!Files.isDirectory(dataDirectory) || !Files.isWritable(dataDirectory)) {
+        if (!dataDirectoryReady) {
             steps.add("Set FLOWERFARM_DATA_DIR to the writable FlowersForever data folder.");
         }
         if (!database.ready()) {

@@ -2,6 +2,56 @@
 
 Audit date: 2026-09-04
 
+## Transport, worker, and desktop wiring — September 21, 2026
+
+MCP previously exposed only action tools, so observation-only plugins and the
+gateway's full manifest had no MCP path. Resource discovery/read now connects
+those operations to the same authenticated gateway used by REST. The manifest
+retains typed observation schemas; snapshot reads are live and reapply disclosure policy;
+current-protocol reads have zero cache lifetime and private scope. Unknown URIs,
+commands-only plugins, unsupported cursors, serialization failures, legacy
+envelopes, permission revocation, and a real configured farm plugin are covered.
+
+Farm-data 1.10 connects five missing actions: `get-season-settings`,
+`list-order-handoffs`, `count-inventory`, `complete-order-handoff`, and
+`get-operation-receipt`. Counts and fulfillment reuse the worker service's
+review checks, atomic writes/receipts, and cross-surface operation-key identity.
+Gateway request IDs remain process-local; durable receipt recovery is explicit
+and requires sensitive-read permission. Fresh execution after restart still
+requires current mutation permission and honors any supplied deadline.
+
+Skipped-task previews now use the same pure state validation as locked actuals
+writes, returning row issues while keeping receipt-backed imports recoverable.
+The first focused run exposed a joined transactional validator marking a caught
+preview conflict rollback-only and producing HTTP 500. The validator is now a
+pure function invoked on an already loaded task and repeated after locking at
+commit. The other initial failure was a test comparing JSON integer node classes
+instead of their identical wire representations; the test now round-trips both.
+
+Swing's action journal checks deadlines at the actual EDT callback boundary,
+preserving the accepted receipt and publishing a failed status without invoking
+expired work. It does not interrupt already started callbacks. Production Studio
+refreshes cost/availability readouts after task/planting writes, preserves saved
+frost settings when the following read fails, and refreshes handoff links after
+recipe deletion. Unrelated drafts survive these targeted refreshes; post-write
+read failures report the saved action and the relevant refresh control.
+
+The readiness doctor now requires a usable data-directory path and independently
+checks all 38 farm action names, covering previously omitted production tools
+and the new worker operations. Its exit code follows aggregate readiness.
+The packaged process smoke also reads MCP resources and verifies stock-count
+receipt recovery between separate JVMs sharing the farm database.
+
+Focused verification passed 102 cases after the two corrections. This pass adds
+52 Java regression cases and raises the test floors to 163 suite/phase entries.
+Final online `python -B scripts/verify_harness.py --isolated` passed 1,557 tests
+plus two packaged MCP checks with zero failures/errors/skips. All 163 suite/phase
+floors passed; Checkstyle and SpotBugs reported zero findings. Coverage gates
+passed at 86.72% lines / 69.39% branches. XML/JSON SBOMs were generated, and
+18 Python evidence-gate tests passed. Evidence is in
+`dist/harness-evidence/latest.json`; the full log is
+`dist/harness-evidence/wiring-quality.log`.
+
 ## CSRBT ecosystem comparison and hardening — September 21, 2026
 
 Compared the harness contract and verification tools with CSRBT commit

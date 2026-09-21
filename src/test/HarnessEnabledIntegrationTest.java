@@ -102,7 +102,7 @@ class HarnessEnabledIntegrationTest {
         assertThat(manifest.getBody().path("replayCacheByteLimit").asLong())
                 .isEqualTo(8L * 1024 * 1024);
         JsonNode tools = manifest.getBody().path("tools");
-        assertThat(tools.size()).isEqualTo(63);
+        assertThat(tools.size()).isEqualTo(68);
         JsonNode actionStatus = find(tools, "name", "swing-desktop__action-status");
         assertThat(actionStatus.path("allowed").asBoolean()).isTrue();
         assertThat(actionStatus.path("inputSchema").path("properties")

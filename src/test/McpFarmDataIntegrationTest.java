@@ -35,6 +35,37 @@ class McpFarmDataIntegrationTest {
     ObjectMapper mapper;
 
     @Test
+    @DisplayName("MCP resources expose the configured farm plugin and typed gateway manifest")
+    void readsFarmObservationAndManifestResources() throws Exception {
+        JsonNode listed = handler.handle(mapper.readTree(request(
+                "resources", "resources/list", "")));
+        assertThat(listed.path("result").path("resources").findValuesAsText("uri"))
+                .containsExactly("flowersforever://harness/manifest",
+                        "flowersforever://harness/farm-data/observation");
+
+        JsonNode observation = handler.handle(mapper.readTree(request(
+                "observe", "resources/read",
+                ",\"uri\":\"flowersforever://harness/farm-data/observation\"")));
+        JsonNode snapshot = mapper.readTree(observation.path("result").path("contents")
+                .get(0).path("text").asText());
+        assertThat(snapshot.path("pluginId").asText()).isEqualTo("farm-data");
+        assertThat(snapshot.path("metadata").path("ready").asBoolean()).isTrue();
+        assertThat(snapshot.path("metadata").path("recordTypes")).hasSize(10);
+        assertThat(observation.path("result").path("ttlMs").asLong()).isZero();
+
+        JsonNode manifest = handler.handle(mapper.readTree(request(
+                "manifest", "resources/read", ",\"uri\":\"flowersforever://harness/manifest\"")));
+        JsonNode document = mapper.readTree(manifest.path("result").path("contents")
+                .get(0).path("text").asText());
+        assertThat(document.path("plugins").findValuesAsText("id")).containsExactly("farm-data");
+        assertThat(document.path("policy").path("SENSITIVE_READ").asBoolean()).isTrue();
+        assertThat(document.path("policy").path("MUTATE").asBoolean()).isFalse();
+        assertThat(document.path("tools").findValuesAsText("name"))
+                .contains("farm-data__get-data-catalog", "farm-data__upsert-inventory");
+        assertThat(document.toString()).doesNotContain("mcp-farm-data-token-123456");
+    }
+
+    @Test
     @DisplayName("discovers and calls the farm data catalog without REST glue")
     void callsFarmDataCatalog() throws Exception {
         JsonNode listed = handler.handle(mapper.readTree(request(

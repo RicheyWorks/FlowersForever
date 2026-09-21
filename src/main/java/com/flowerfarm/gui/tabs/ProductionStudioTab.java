@@ -621,10 +621,9 @@ public final class ProductionStudioTab implements FlowerFarmTab {
                 decimal(loadedLaborRate)));
         plantingYear.setText(Integer.toString(year));
         productionCostYear.setText(Integer.toString(year));
-        loadProductionCosts();
-        updateStatus("Saved frost anchors and loaded labor rate for " + year
+        refreshAfterWrite("Saved frost anchors and loaded labor rate for " + year
                         + "; selected that season in planning and cost reporting.",
-                FarmUi.Tone.SUCCESS);
+                new RefreshAction("Refresh costs", this::loadProductionCosts));
     }
 
     private void loadFrost() {
@@ -802,10 +801,12 @@ public final class ProductionStudioTab implements FlowerFarmTab {
             List<ProductionStudioService.CommittedPlanting> committed =
                     service.commitPlantings(template.getId(), year, plantingBed.getText(),
                             decimal(plantingFeet), successions, previewFingerprint);
-            loadTasks();
             int generatedTasks = committed.stream().mapToInt(row -> row.tasks().size()).sum();
-            updateStatus("Committed " + committed.size() + " planting block(s) and "
-                    + generatedTasks + " production task(s).", FarmUi.Tone.SUCCESS);
+            refreshAfterWrite("Committed " + committed.size() + " planting block(s) and "
+                            + generatedTasks + " production task(s).",
+                    new RefreshAction("Refresh work", this::loadTasks),
+                    new RefreshAction("Refresh availability", this::loadAvailability),
+                    new RefreshAction("Refresh costs", this::loadProductionCosts));
         } else {
             long frostRisks = drafts.stream().filter(
                     ProductionStudioService.PlantingDraft::fallFrostRisk).count();
@@ -855,10 +856,10 @@ public final class ProductionStudioTab implements FlowerFarmTab {
                 new ProductionStudioService.TaskActuals(
                         integer(taskActualMinutes), decimal(taskInputCost),
                         taskFieldObservation.getText()));
-        loadTasks();
-        updateStatus("Task “" + task.getTaskType()
+        refreshAfterWrite("Task “" + task.getTaskType()
                 + "” completed with labor, input cost, and field result saved.",
-                FarmUi.Tone.SUCCESS);
+                new RefreshAction("Refresh work", this::loadTasks),
+                new RefreshAction("Refresh costs", this::loadProductionCosts));
     }
 
     private void loadSelectedTaskActuals() {
@@ -909,9 +910,31 @@ public final class ProductionStudioTab implements FlowerFarmTab {
             return;
         }
         service.regenerateTasks(task.getSeasonPlanId(), task.getGrowingTemplateId());
-        loadTasks();
-        updateStatus("Open generated work was rebuilt; completed and skipped work was preserved.",
-                FarmUi.Tone.SUCCESS);
+        refreshAfterWrite("Open generated work was rebuilt; completed and skipped work was preserved.",
+                new RefreshAction("Refresh work", this::loadTasks),
+                new RefreshAction("Refresh costs", this::loadProductionCosts));
+    }
+
+    /** Update dependent readouts without reloading frost, template, recipe, or handoff drafts. */
+    private void refreshAfterWrite(String successMessage, RefreshAction... views) {
+        List<String> refreshActions = new ArrayList<>();
+        for (RefreshAction view : views) {
+            try {
+                view.refresh().run();
+            } catch (RuntimeException exception) {
+                if (!refreshActions.contains(view.recoveryAction())) {
+                    refreshActions.add(view.recoveryAction());
+                }
+            }
+        }
+        updateStatus(refreshActions.isEmpty() ? successMessage
+                        : successMessage + " Some views still show previous data. Use "
+                        + String.join(", ", refreshActions)
+                        + "; do not repeat the saved action.",
+                refreshActions.isEmpty() ? FarmUi.Tone.SUCCESS : FarmUi.Tone.WARNING);
+    }
+
+    private record RefreshAction(String recoveryAction, Runnable refresh) {
     }
 
     private void saveRecipe() {
@@ -996,7 +1019,9 @@ public final class ProductionStudioTab implements FlowerFarmTab {
         if (choice == JOptionPane.YES_OPTION) {
             service.deleteRecipe(recipe.getId());
             clearRecipe();
-            loadTemplatesAndRecipes();
+            refreshAfterWrite("Recipe deleted; handoffs linked to it were kept with their recipe links cleared.",
+                    new RefreshAction("Refresh All Tabs", this::loadTemplatesAndRecipes),
+                    new RefreshAction("Refresh All Tabs", this::loadHandoffs));
         }
     }
 

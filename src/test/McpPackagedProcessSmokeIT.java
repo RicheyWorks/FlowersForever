@@ -44,7 +44,7 @@ class McpPackagedProcessSmokeIT {
         assertThat(doctor.path("dataDirectory").asText())
                 .isEqualTo(dataDirectory.toAbsolutePath().normalize().toString());
         assertThat(doctor.path("schemaVersion").asText()).isEqualTo("21");
-        assertThat(doctor.path("enabledFarmDataToolCount").asInt()).isEqualTo(33);
+        assertThat(doctor.path("enabledFarmDataToolCount").asInt()).isEqualTo(38);
         assertThat(doctor.path("capabilities").path("readBackAndResume").asBoolean())
                 .isTrue();
         assertThat(doctor.path("capabilities").path("migrateAndOperate").asBoolean())
@@ -58,7 +58,21 @@ class McpPackagedProcessSmokeIT {
                             "farm-data__list-import-receipts",
                             "farm-data__list-records",
                             "farm-data__upsert-season-settings",
-                            "farm-data__get-production-costs");
+                            "farm-data__get-production-costs",
+                            "farm-data__get-season-settings",
+                            "farm-data__count-inventory",
+                            "farm-data__complete-order-handoff",
+                            "farm-data__get-operation-receipt");
+
+            JsonNode resources = process.call(request("resources", "resources/list", null));
+            assertThat(resources.path("result").path("resources").findValuesAsText("uri"))
+                    .contains("flowersforever://harness/manifest",
+                            "flowersforever://harness/farm-data/observation");
+            JsonNode observation = process.call(request("observe", "resources/read",
+                    mapper.createObjectNode().put("uri", "flowersforever://harness/farm-data/observation")));
+            JsonNode snapshot = mapper.readTree(observation.path("result").path("contents")
+                    .get(0).path("text").asText());
+            assertThat(snapshot.path("pluginId").asText()).isEqualTo("farm-data");
 
             ObjectNode invalidArguments = mapper.createObjectNode();
             invalidArguments.putArray("records").addObject()
@@ -100,6 +114,10 @@ class McpPackagedProcessSmokeIT {
             pageArguments.put("record-type", "inventory");
             pageArguments.put("offset", 0);
             pageArguments.put("limit", 200);
+            ObjectNode countArguments = mapper.createObjectNode()
+                    .put("operation-key", "packaged-count-operation-17")
+                    .put("reviewed-quantity", 12)
+                    .put("counted-quantity", 15);
             // A second JVM must connect while the first still owns the database.
             // This exercises H2 AUTO_SERVER rather than just sequential reopening.
             try (McpProcess peer = new McpProcess(startProcess("--mcp"))) {
@@ -112,6 +130,20 @@ class McpPackagedProcessSmokeIT {
                 assertThat(page.path("result").path("structuredContent")
                         .path("output").path("records").findValuesAsText("name"))
                         .noneMatch(name -> name.startsWith("Rejected UTF8"));
+
+                for (JsonNode record : page.path("result").path("structuredContent")
+                        .path("output").path("records")) {
+                    if ("Process Smoke Zinnia".equals(record.path("name").asText())) {
+                        countArguments.put("item-id", record.path("id").asLong());
+                    }
+                }
+                assertThat(countArguments.path("item-id").asLong()).isPositive();
+                JsonNode counted = peer.call(request("count", "tools/call",
+                        tool("farm-data__count-inventory", countArguments)));
+                JsonNode operation = counted.path("result").path("structuredContent")
+                        .path("output").path("operation");
+                assertThat(operation.path("replayed").asBoolean()).isFalse();
+                assertThat(operation.path("result").path("quantity").asInt()).isEqualTo(15);
 
                 ObjectNode receiptArguments = mapper.createObjectNode();
                 receiptArguments.put("source-system", "process-smoke-workbook");
@@ -129,6 +161,20 @@ class McpPackagedProcessSmokeIT {
             assertThat(afterPeerExit.path("result").path("structuredContent")
                     .path("output").path("records").findValuesAsText("name"))
                     .contains("Process Smoke Zinnia");
+
+            JsonNode countedAgain = process.call(request("retry-count", "tools/call",
+                    tool("farm-data__count-inventory", countArguments)));
+            JsonNode recoveredOperation = countedAgain.path("result").path("structuredContent")
+                    .path("output").path("operation");
+            assertThat(recoveredOperation.path("replayed").asBoolean()).isTrue();
+            assertThat(recoveredOperation.path("result").path("quantity").asInt()).isEqualTo(15);
+
+            JsonNode receipt = process.call(request("recover-count", "tools/call",
+                    tool("farm-data__get-operation-receipt", mapper.createObjectNode()
+                            .put("operation-key", "packaged-count-operation-17"))));
+            assertThat(receipt.path("result").path("structuredContent")
+                    .path("output").path("operation").path("result"))
+                    .isEqualTo(recoveredOperation.path("result"));
         }
 
         assertThat(dataDirectory.resolve("flowerfarm.mv.db")).isRegularFile();

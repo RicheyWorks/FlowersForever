@@ -240,7 +240,7 @@ public class FarmDataHarnessPlugin implements HarnessPlugin {
             ID,
             "FlowersForever farm data",
             "Read canonical farm records and migrate or record operational data without driving UI.",
-            "1.9",
+            "1.10",
             HarnessPluginKind.WORKFLOW,
             Set.of(HarnessPluginCapability.OBSERVATION,
                     HarnessPluginCapability.COMMANDS),
@@ -290,6 +290,39 @@ public class FarmDataHarnessPlugin implements HarnessPlugin {
                             HarnessRisk.SENSITIVE_READ, true, List.of(
                                     argument("lot-code", HarnessValueType.STRING,
                                             "Printed or scanned harvest lot code.", true))),
+                    action("get-season-settings",
+                            "Read saved frost anchors, source, and labor rate for one season.",
+                            HarnessRisk.SENSITIVE_READ, true, List.of(
+                                    argument("season-year", HarnessValueType.INTEGER,
+                                            "Season year from 2000 to 2200.", true))),
+                    action("list-order-handoffs",
+                            "Read confirmed due orders and review tokens for exact fulfillment.",
+                            HarnessRisk.SENSITIVE_READ, true, List.of(
+                                    argument("through", HarnessValueType.STRING,
+                                            "Optional ISO date; defaults to today in the farm zone.", false),
+                                    argument("limit", HarnessValueType.INTEGER,
+                                            "Maximum orders from 1 to 100; defaults to 100.", false))),
+                    action("count-inventory",
+                            "Record a physical stock count only if the reviewed quantity still matches.",
+                            HarnessRisk.MUTATE, true, List.of(
+                                    operationKeyArgument(),
+                                    argument("item-id", HarnessValueType.INTEGER,
+                                            "Inventory id returned by list-records.", true),
+                                    argument("reviewed-quantity", HarnessValueType.INTEGER,
+                                            "Non-negative quantity read before counting.", true),
+                                    argument("counted-quantity", HarnessValueType.INTEGER,
+                                            "Non-negative physical quantity counted.", true))),
+                    action("complete-order-handoff",
+                            "Fulfill an exactly reviewed order and deduct stock with a durable retry key.",
+                            HarnessRisk.MUTATE, true, List.of(
+                                    operationKeyArgument(),
+                                    argument("order-id", HarnessValueType.INTEGER,
+                                            "Confirmed order id from list-order-handoffs.", true),
+                                    argument("review-token", HarnessValueType.STRING,
+                                            "Exact reviewToken from the reviewed order handoff.", true))),
+                    action("get-operation-receipt",
+                            "Recover a stored worker operation result by its cross-surface retry key.",
+                            HarnessRisk.SENSITIVE_READ, true, List.of(operationKeyArgument())),
                     action("get-production-costs",
                             "Join task actuals and matched harvests into planting and season costs.",
                             HarnessRisk.SENSITIVE_READ, true, List.of(
@@ -578,9 +611,11 @@ public class FarmDataHarnessPlugin implements HarnessPlugin {
         // Export creation owns a repeatable-read transaction; wrapping it here
         // would hold a second connection while that transaction waits for one.
         // File reads and schema discovery do not need a database transaction.
+        // Worker writes commit their operation receipt before releasing their own lock.
         return switch (command.action()) {
             case "create-record-export", "get-record-export", "read-record-export",
-                    "get-data-catalog", "suggest-field-mapping" -> executeCommand(command);
+                    "get-data-catalog", "suggest-field-mapping",
+                    "count-inventory", "complete-order-handoff" -> executeCommand(command);
             default -> transactions.execute(() -> executeCommand(command));
         };
     }
@@ -594,6 +629,15 @@ public class FarmDataHarnessPlugin implements HarnessPlugin {
             case "list-records" -> listRecords(command);
             case "read-attachment-content" -> readAttachmentContent(command);
             case "lookup-harvest-lot" -> lookupHarvestLot(command);
+            case "get-season-settings" -> seasonSettings(command);
+            case "list-order-handoffs" -> HarnessExecution.success(
+                    "Read reviewed order handoffs", Map.of("handoffs", workerWorkflowService.orders(
+                            optionalDate(command, "through", null), optionalInteger(
+                                    command, "limit", 100, 1, WorkerWorkflowService.MAX_DUE_ORDERS))));
+            case "count-inventory" -> countInventory(command);
+            case "complete-order-handoff" -> completeOrderHandoff(command);
+            case "get-operation-receipt" -> workerOperationResult(
+                    workerWorkflowService.recover(command.text("operation-key")));
             case "get-production-costs" -> productionCosts(command);
             case "preview-plantings" -> previewPlantings(command);
             case "commit-plantings" -> commitPlantings(command);
@@ -682,6 +726,17 @@ public class FarmDataHarnessPlugin implements HarnessPlugin {
                         "sourceKeyField", "sourceKey",
                         "resumeAction", "list-import-receipts"),
                 "databaseBackedPaging", true,
+                "operationalWorkflow", Map.of(
+                        "readInventoryAction", "list-records",
+                        "countInventoryAction", "count-inventory",
+                        "readOrderHandoffsAction", "list-order-handoffs",
+                        "completeOrderHandoffAction", "complete-order-handoff",
+                        "recoverAction", "get-operation-receipt",
+                        "operationKeyArgument", "operation-key",
+                        "sharedWithWorkerApi", true),
+                "seasonSettingsWorkflow", Map.of(
+                        "readAction", "get-season-settings",
+                        "writeAction", "upsert-season-settings"),
                 "exportWorkflow", Map.of(
                         "createAction", "create-record-export",
                         "recoverAction", "get-record-export",
@@ -713,7 +768,7 @@ public class FarmDataHarnessPlugin implements HarnessPlugin {
     }
 
     private HarnessExecution previewMappedRecords(HarnessCommand command) {
-        ValidatedMapping mapped = validatedMapping(command);
+        ValidatedMapping mapped = validatedMapping(command, true);
         return HarnessExecution.success(
                 "Mapped " + mapped.preview().rowCount() + " source record(s); "
                         + mapped.invalidCount() + " invalid",
@@ -721,7 +776,7 @@ public class FarmDataHarnessPlugin implements HarnessPlugin {
     }
 
     private HarnessExecution importMappedRecords(HarnessCommand command) {
-        ValidatedMapping mapped = validatedMapping(command);
+        ValidatedMapping mapped = validatedMapping(command, false);
         if (!mapped.ready()) {
             FarmDataMappingService.MappingIssue first = mapped.issues().get(0);
             throw new IllegalArgumentException(
@@ -753,14 +808,14 @@ public class FarmDataHarnessPlugin implements HarnessPlugin {
                         + mapped.preview().recordType() + " record(s)", output);
     }
 
-    private ValidatedMapping validatedMapping(HarnessCommand command) {
+    private ValidatedMapping validatedMapping(HarnessCommand command, boolean previewOnly) {
         String type = mappingRecordType(command.text("record-type"));
         FarmDataMappingService.MappingPreview preview = mappingService.preview(
                 type, schemaFor(type), optionalObject(command, "field-mapping"),
                 sourceRecords(command), optionalObject(command, "defaults"),
                 optionalTexts(command, "source-key-fields"));
         List<FarmDataMappingService.MappingIssue> issues = new ArrayList<>(preview.issues());
-        issues.addAll(domainIssues(type, preview.records(), issues));
+        issues.addAll(domainIssues(type, preview.records(), issues, previewOnly));
         Set<Integer> invalidRows = new java.util.HashSet<>();
         issues.forEach(issue -> invalidRows.add(issue.row()));
         return new ValidatedMapping(
@@ -769,7 +824,7 @@ public class FarmDataHarnessPlugin implements HarnessPlugin {
 
     private List<FarmDataMappingService.MappingIssue> domainIssues(
             String type, List<Map<String, Object>> records,
-            List<FarmDataMappingService.MappingIssue> structuralIssues) {
+            List<FarmDataMappingService.MappingIssue> structuralIssues, boolean previewOnly) {
         Set<Integer> structurallyInvalid = new java.util.HashSet<>();
         structuralIssues.forEach(issue -> structurallyInvalid.add(issue.row()));
         List<FarmDataMappingService.MappingIssue> issues = new ArrayList<>();
@@ -779,7 +834,7 @@ public class FarmDataHarnessPlugin implements HarnessPlugin {
                 continue;
             }
             try {
-                validateMappedRecord(type, records.get(index));
+                validateMappedRecord(type, records.get(index), previewOnly);
             } catch (RuntimeException exception) {
                 issues.add(new FarmDataMappingService.MappingIssue(
                         row, "$record", rootMessage(exception)));
@@ -788,7 +843,8 @@ public class FarmDataHarnessPlugin implements HarnessPlugin {
         return List.copyOf(issues);
     }
 
-    private void validateMappedRecord(String type, Map<String, Object> record) {
+    private void validateMappedRecord(
+            String type, Map<String, Object> record, boolean previewOnly) {
         switch (type) {
             case "inventory" -> mapper.convertValue(record, InventoryRow.class).toItem();
             case "customers" -> mapper.convertValue(record, CustomerRow.class).toCustomer();
@@ -798,7 +854,7 @@ public class FarmDataHarnessPlugin implements HarnessPlugin {
                     mapper.convertValue(record, OrderRow.class));
             case "knowledge" -> mapper.convertValue(record, KnowledgeRow.class).toEntry();
             case "production-tasks" -> validateMappedTask(
-                    mapper.convertValue(record, TaskActualRow.class));
+                    mapper.convertValue(record, TaskActualRow.class), previewOnly);
             case "growing-templates" -> mapper.convertValue(
                     record, GrowingTemplateRow.class).toTemplate();
             case "planting-plans" -> mapper.convertValue(
@@ -818,16 +874,20 @@ public class FarmDataHarnessPlugin implements HarnessPlugin {
         row.orderLines().forEach(order::addLine);
     }
 
-    private void validateMappedTask(TaskActualRow row) {
+    private void validateMappedTask(TaskActualRow row, boolean previewOnly) {
         if (row.taskId() == null || row.taskId() <= 0) {
             throw new IllegalArgumentException("Production task id must be positive.");
         }
-        if (productionStudioService.findTask(row.taskId()).isEmpty()) {
-            throw new IllegalArgumentException(
-                    "No production task with id=" + row.taskId());
-        }
-        new ProductionStudioService.TaskActuals(
+        ProductionTask task = productionStudioService.findTask(row.taskId())
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "No production task with id=" + row.taskId()));
+        ProductionStudioService.TaskActuals actuals = new ProductionStudioService.TaskActuals(
                 row.actualMinutes(), value(row.inputCost(), 0), row.fieldObservation());
+        if (previewOnly) {
+            // Fresh previews check current state. Imports still allow exact source-receipt
+            // recovery after a task changes; fresh writes repeat this guard under lock.
+            ProductionStudioService.validateTaskActuals(task, actuals);
+        }
     }
 
     private Map<String, Object> mappingOutput(
@@ -926,6 +986,40 @@ public class FarmDataHarnessPlugin implements HarnessPlugin {
         output.put("labelPath", "/api/harvest/" + harvest.getId() + "/label.pdf");
         return HarnessExecution.success(
                 "Found harvest lot " + harvest.getLotCode(), output);
+    }
+
+    private HarnessExecution seasonSettings(HarnessCommand command) {
+        int year = command.integer("season-year");
+        Optional<FarmSeasonSettings> settings = productionStudioService.findSeasonSettings(year);
+        Map<String, Object> output = new LinkedHashMap<>();
+        output.put("seasonYear", year);
+        output.put("found", settings.isPresent());
+        settings.ifPresent(saved -> output.put("seasonSettings", saved));
+        return HarnessExecution.success(
+                settings.isPresent() ? "Read saved season settings" : "No saved settings for this season",
+                output);
+    }
+
+    private HarnessExecution countInventory(HarnessCommand command) {
+        return workerOperationResult(workerWorkflowService.countInventory(
+                requiredId(command, "item-id"),
+                new WorkerWorkflowService.WorkerInventoryCountRequest(
+                        command.text("operation-key"), command.integer("reviewed-quantity"),
+                        command.integer("counted-quantity"))));
+    }
+
+    private HarnessExecution completeOrderHandoff(HarnessCommand command) {
+        return workerOperationResult(workerWorkflowService.completeOrder(
+                requiredId(command, "order-id"),
+                new WorkerWorkflowService.WorkerOrderCompletionRequest(
+                        command.text("operation-key"), command.text("review-token"))));
+    }
+
+    private static HarnessExecution workerOperationResult(
+            WorkerWorkflowService.WorkerActionResult result) {
+        return HarnessExecution.success(
+                result.replayed() ? "Recovered stored worker operation" : "Recorded worker operation",
+                Map.of("operation", result));
     }
 
     private HarnessExecution productionCosts(HarnessCommand command) {
@@ -1782,6 +1876,12 @@ public class FarmDataHarnessPlugin implements HarnessPlugin {
     private static HarnessArgumentSpec argument(
             String name, HarnessValueType type, String description, boolean required) {
         return new HarnessArgumentSpec(name, type, description, required);
+    }
+
+    private static HarnessArgumentSpec operationKeyArgument() {
+        return argument("operation-key", HarnessValueType.STRING,
+                "Stable worker operation key shared with the phone/tablet API. "
+                        + "Reuse only with the same action and values; recover it after restart.", true);
     }
 
     private static HarnessArgumentSpec recordsArgument(

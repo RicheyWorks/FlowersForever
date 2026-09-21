@@ -1,5 +1,47 @@
 # Latest direction — September 21, 2026
 
+## Latest completed work: harness and application wiring gaps
+
+The owner's follow-up was: "now that the machine and github is updated. work on
+wiring gaps". This pass connects MCP resource discovery/read to the authenticated
+gateway manifest and live observations, including observation-only plugins.
+Sensitive snapshots use current disclosure policy; current-protocol reads are
+private with zero cache lifetime. Legacy and current envelopes remain supported.
+
+Farm-data is now version 1.10 with 38 tools (68 combined with Swing). New actions
+are `get-season-settings`, `list-order-handoffs`, `count-inventory`,
+`complete-order-handoff`, and `get-operation-receipt`. Counts and handoffs reuse
+the worker service's reviewed quantity/token checks and durable receipts shared
+with the phone API. Worker writes retain their own transaction/lock boundary.
+Gateway request replay and `output.operation.replayed` are distinct; after gateway
+cache loss, execution requires current mutation permission and honors any supplied
+deadline. Explicit receipt lookup requires sensitive-read permission.
+
+Skipped-task preview uses a pure state validator repeated under lock on commit.
+An initial transactional preflight caused a caught conflict to mark the preview
+rollback-only; focused tests caught and corrected it. Receipt-backed imports still
+recover after a task is subsequently skipped. Swing rechecks expiry at the queued
+EDT callback before starting work. Its frozen accepted receipt remains replayable;
+`action-status` reports the eventual expiry failure. Started callbacks are not
+interrupted. Production Studio refreshes dependent cost/availability/handoff views
+without replacing unrelated drafts and distinguishes saved writes from failed
+follow-up reads. Doctor readiness requires a usable directory and all 38 tools.
+
+This pass adds 52 Java cases. Focused verification passed 102 cases after the
+transaction correction and a JSON test wire-comparison correction. Independent
+reviews found no remaining blocking issue. Final online
+`python -B scripts/verify_harness.py --isolated` passed 1,557 tests plus two
+packaged MCP checks with no failures/errors/skips. All 163 suite/phase floors,
+Checkstyle, SpotBugs, and coverage gates passed (86.72% lines / 69.39% branches).
+Both SBOM formats were generated. Eighteen Python evidence-gate tests passed.
+Source/report hashes are in `dist/harness-evidence/latest.json`; the full log is
+`dist/harness-evidence/wiring-quality.log`. All agents are done editing and the
+verification process has exited successfully.
+
+Use the existing `codex/recover-unpushed-work` branch and PR #21. Source changes
+belong in the same local/GitHub continuation; earlier no-commit instructions remain
+superseded. Native installers have not been rebuilt in this wiring pass.
+
 ## Latest completed work: GitHub sync and CSRBT-inspired harness hardening
 
 The owner explicitly requested local/GitHub synchronization and continued harness

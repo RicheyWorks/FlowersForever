@@ -122,6 +122,8 @@ class FarmDataHarnessPluginTest {
                         "get-data-catalog", "suggest-field-mapping",
                         "preview-mapped-records", "import-mapped-records",
                         "list-records", "read-attachment-content", "lookup-harvest-lot",
+                        "get-season-settings", "list-order-handoffs", "count-inventory",
+                        "complete-order-handoff", "get-operation-receipt",
                         "get-production-costs",
                         "preview-plantings", "commit-plantings", "regenerate-tasks",
                         "update-task-status", "estimate-recipe", "get-availability",

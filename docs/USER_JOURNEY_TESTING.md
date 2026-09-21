@@ -4,6 +4,23 @@ See [HARNESS_AUDIT.md](HARNESS_AUDIT.md) for the current human-action matrix,
 recursive surface inventory, findings, verification evidence, and explicit
 OS-level smoke-test limits.
 
+## Wiring regressions
+
+`ProductionStudioDerivedRefreshTest` drives the real Production Studio tab and
+reads its rendered cost/availability tables after writes. Related drafts remain
+intact, and a failed read after a committed write reports saved work plus a
+refresh instruction. `SwingActionDeadlineTest` holds the event-dispatch thread
+busy and verifies that an expired queued callback never runs, while receipt
+status and replay remain stable.
+
+`FarmDataOperationsHarnessIntegrationTest` connects REST, MCP, worker services,
+and the database for reviewed counts, order handoffs, cross-surface receipt
+recovery, season-setting readback, policy gates, and skipped-task previews.
+`McpResourceTest` covers observation-only plugins and live disclosure policy;
+the packaged MCP process smoke also reads resources and replays a durable stock
+count across two separate JVMs. `McpDoctorReadinessTest` covers the real farm
+manifest plus unavailable data paths and missing production/worker tools.
+
 ## Phone and tablet entry checks
 
 Run `node --test scripts/worker-ui.test.mjs` with Node.js 24. These dependency-free

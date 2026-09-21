@@ -167,10 +167,11 @@ from field capture to cooler identification and AI read-back.
 **Packaged AI connection slice implemented.** Windows and macOS packages now
 ship a dedicated `FlowersForeverAI` stdio launcher using the packaged runtime
 and the same local store as the desktop. A one-shot `--mcp-doctor` verifies the
-resolved data directory, H2/Flyway state, farm plug-in, all 33 farm tools, and
+resolved data directory, H2/Flyway state, farm plug-in, all 38 farm tools, and
 the permissions needed for read-back/resume and writes. Child-process coverage
 performs mapping, durable import, canonical read-back, and receipt lookup against
-one file-backed store. Release jobs also exercise the native doctor and a real
+one file-backed store, plus MCP resource reads and inventory-count receipt replay
+between separate JVMs. Release jobs also exercise the native doctor and a real
 redirected protocol ping before retaining either installer.
 
 Next integration increments:

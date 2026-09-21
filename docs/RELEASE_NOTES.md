@@ -1,5 +1,18 @@
 # FlowersForever private-preview notes
 
+## September 21, 2026 — Close harness and application wiring gaps
+
+- Exposes the harness manifest and live plugin observations as MCP resources,
+  including plugins with no action tools and current sensitive-data filtering.
+- Connects reviewed inventory counts, reviewed order fulfillment, and durable
+  worker receipt recovery to the farm harness; adds saved season-setting readback.
+- Reports skipped-task preview issues without marking the preview transaction
+  rollback-only, while preserving existing import receipt recovery.
+- Checks queued Swing deadlines when callbacks actually begin and refreshes
+  Production Studio's dependent readouts after successful writes.
+- Requires usable data-directory configuration and all 38 farm tools before the
+  MCP readiness doctor reports READY.
+
 ## September 21, 2026 — Ecosystem-inspired harness robustness
 
 - Honors optional command deadlines across REST, MCP, and embedded callers while

@@ -106,10 +106,13 @@ Before registering the launcher, run the same executable once with
 `--mcp-doctor` in a terminal that has the three environment values above. It
 opens the real application graph and emits exactly one JSON result on stdout.
 `ready=true` confirms the resolved data directory, database connection, Flyway
-schema, `farm-data` plugin, all 33 farm tools, read-back/resume capability, and
+schema, `farm-data` plugin, all 38 farm tools, read-back/resume capability, and
 write capability. `ready=false` exits with code 2 and lists the exact missing
 settings without printing the token. Confirm that `dataDirectory` names the
-farm's intended store before connecting the AI.
+farm's intended store before connecting the AI. A missing, non-directory, or
+non-writable data path now prevents `READY`, even if the database connection
+and enabled tools work. The required-tool check includes production and worker
+operations as well as migration tools.
 
 ```text
 FlowersForeverAI.exe --mcp-doctor
@@ -153,6 +156,16 @@ Completed physical receipts can be replayed after their deadline or permission
 revocation. Fresh commands still require authorization, and revoked sensitive
 reads cannot recover cached values. Harness REST and MCP error messages use the
 shared credential redactor, remove line breaks, and are limited to 240 characters.
+
+MCP also wires the gateway's discovery and observation APIs through
+`resources/list` and `resources/read`. Read
+`flowersforever://harness/manifest` for complete plugin/action/observation schemas
+and current policy, or `flowersforever://harness/{plugin-id}/observation` for a
+fresh snapshot. Observation-only plugins are discoverable even when they expose
+no enabled action tools. Resources contain `application/json` as text; reads
+authenticate and apply current sensitive-data filtering every time. Current
+protocol reads advertise `ttlMs: 0` and `cacheScope: "private"`; legacy clients
+retain the ordinary resource envelopes. Subscriptions are not advertised.
 
 The MCP server transports farm tool calls; it does not log into Microsoft 365,
 Google, or a previous vendor account. The farm's chosen AI/connectors read those
@@ -367,6 +380,11 @@ into the farm-data plugin. The normal migration flow is:
 | `list-records` | Read a bounded page for AI context, export, or verification | none |
 | `read-attachment-content` | Read one verified bounded photo chunk | none |
 | `lookup-harvest-lot` | Read one harvest by exact printed/scanned lot code | none |
+| `get-season-settings` | Read saved frost anchors, source, and loaded labor rate; explicitly report absent years | none |
+| `list-order-handoffs` | Read confirmed due orders and their exact review tokens | none |
+| `count-inventory` | Save a physical count if the reviewed quantity still matches | inventory and durable worker receipt |
+| `complete-order-handoff` | Fulfill a reviewed confirmed order and deduct stock once | order, inventory, and durable worker receipt |
+| `get-operation-receipt` | Recover an existing worker result by operation key | none |
 | `get-production-costs` | Join task actuals and matched harvests for one season; optionally override labor rate | none |
 | `preview-plantings` | Review frost-aware succession drafts and receive a fingerprint | none |
 | `commit-plantings` | Save exactly the reviewed planting schedule and its work | planting blocks and tasks |
@@ -407,6 +425,9 @@ and gross-yield reporting but never increase sellable inventory. Use
 `lookup-harvest-lot` after reading a label; its result includes the canonical
 harvest and `/api/harvest/{id}/label.pdf` path for reprinting the QR label.
 
+Use `get-season-settings` with `season-year` before editing saved settings. Its
+output contains `seasonYear` and `found`; `seasonSettings` appears only when a
+saved row exists. Reading an absent year does not create default records.
 Use `upsert-season-settings` to save a season's two frost anchors, source, and
 loaded field-labor rate through MCP; repeated writes replace the same season
 instead of creating duplicates. Call `get-production-costs` with `season-year`.
@@ -417,9 +438,41 @@ missing task actuals, unlinked tasks, and unmatched harvests explicit. It does
 not include revenue because product-level order lines do not currently prove
 which planting block supplied a sale.
 
+### Reviewed counts and order handoffs
+
+Farm-data 1.10 connects the same durable worker workflows used by the phone API:
+
+1. Read an inventory item with `list-records`, then call `count-inventory` with
+   `item-id`, its observed `reviewed-quantity`, the `counted-quantity`, and a stable
+   `operation-key`. A changed quantity causes a conflict before any write.
+2. Call `list-order-handoffs` with optional `through` and `limit` (1–100). Review
+   the returned confirmed order and its `reviewToken`, then pass `order-id`,
+   `review-token`, and `operation-key` to `complete-order-handoff`. Changed order
+   details or insufficient stock prevent fulfillment and inventory deduction.
+3. Retain the operation key until acknowledged. `get-operation-receipt` reads the
+   original stored result after a lost response, restart, or permission change.
+
+Both mutations return `output.operation`, including `action`, `replayed`,
+`recordedAt`, and `result`. The same operation key and payload work across the
+worker HTTP API and harness; a different action or payload conflicts. Writes
+and their receipts commit together inside `WorkerWorkflowService` before its
+key lock is released. These tools do not call a payment, shipping, or provider API.
+
+Gateway request-ID replay remains process-local. After its cache is lost, an
+execution retry still requires current mutation permission and honors any supplied
+command deadline, even if the operation key already exists. Use `get-operation-receipt`
+with sensitive-read permission for read-only recovery instead. Its durable
+result is independent of the outer `HarnessResponse.replayed` flag. Never change
+an operation key merely because the response is uncertain.
+
+Task previews also check whether work is currently skipped and report the
+reopen requirement as a row issue. Fresh task writes repeat that check under the
+service lock. Exact source-receipt replay remains possible if task state changes
+after the original import; preview results are not a lock on later writes.
+
 ### Headless production workflow
 
-Farm-data version 1.9 carries the Production Studio workflow through MCP and
+Farm-data version 1.10 carries the Production Studio workflow through MCP and
 REST using the same application services as the desktop:
 
 1. Save season settings and a growing template with the existing upsert tools.
@@ -808,6 +861,13 @@ that receipt even after completion. Read `action-status` for the current state.
 Up to 256 receipts and 16 pending
 actions are retained; pending actions are not silently evicted. The journal is
 process-local, so domain receipts remain necessary for restart-safe mutations.
+
+Queued Swing actions recheck a supplied deadline on the event-dispatch thread
+immediately before their callback starts. An expired queued action performs no
+callback and reports `FAILED` with `failureType: DesktopCommandExpiredException`
+through `action-status`. Its original accepted receipt remains replayable; use
+a fresh request for a new attempt. This does not interrupt a callback already
+in progress or cancel a background worker started by that callback.
 
 Observation exposes `modalActive` and `pendingActions`. While an owned modal is
 visible, selectors, bounded control reads, and screenshots target the deepest

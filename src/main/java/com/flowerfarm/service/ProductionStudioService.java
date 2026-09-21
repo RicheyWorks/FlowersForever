@@ -314,13 +314,24 @@ public class ProductionStudioService {
         ProductionTask task = repository.findTaskForUpdate(id)
                 .orElseThrow(() -> new IndexOutOfBoundsException(
                         "No production task with id=" + id));
+        validateTaskActuals(task, actuals);
+        task.recordActuals(actuals.actualMinutes(), actuals.inputCost(),
+                actuals.fieldObservation(), java.time.Instant.now());
+        return repository.saveTask(task);
+    }
+
+    /** Pure preflight validation; the commit repeats it against the locked task. */
+    public static void validateTaskActuals(ProductionTask task, TaskActuals actuals) {
+        if (task == null) {
+            throw new IllegalArgumentException("Production task is required.");
+        }
+        if (actuals == null) {
+            throw new IllegalArgumentException("Production task actuals are required.");
+        }
         if (task.getStatus() == ProductionTaskStatus.SKIPPED) {
             throw new ProductionConflictException(
                     "Reopen skipped work before recording actual labor or inputs.");
         }
-        task.recordActuals(actuals.actualMinutes(), actuals.inputCost(),
-                actuals.fieldObservation(), java.time.Instant.now());
-        return repository.saveTask(task);
     }
 
     /**

@@ -4,9 +4,11 @@ import com.flowerfarm.automation.HarnessCommand;
 import com.flowerfarm.automation.HarnessExecution;
 
 import javax.swing.SwingUtilities;
+import java.time.Clock;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
@@ -20,16 +22,22 @@ final class SwingActionJournal {
     private static final int MAX_PENDING = 16;
     private final Map<String, Entry> entries = new LinkedHashMap<>();
     private final long dispatchGraceMillis;
+    private final Clock clock;
 
     SwingActionJournal() {
         this(150);
     }
 
     SwingActionJournal(long dispatchGraceMillis) {
+        this(dispatchGraceMillis, Clock.systemUTC());
+    }
+
+    SwingActionJournal(long dispatchGraceMillis, Clock clock) {
         if (dispatchGraceMillis < 0) {
             throw new IllegalArgumentException("Dispatch grace period cannot be negative");
         }
         this.dispatchGraceMillis = dispatchGraceMillis;
+        this.clock = Objects.requireNonNull(clock, "clock");
     }
 
     HarnessExecution dispatch(HarnessCommand command, Supplier<HarnessExecution> action) {
@@ -55,6 +63,11 @@ final class SwingActionJournal {
         }
         SwingUtilities.invokeLater(() -> {
             try {
+                // Gateway admission can precede the actual callback by an arbitrary EDT delay.
+                // Refuse stale queued work, while preserving its accepted receipt for retries.
+                if (command.expiresAt() != null && !command.expiresAt().isAfter(clock.instant())) {
+                    throw new DesktopCommandExpiredException();
+                }
                 entry.result.complete(action.get());
             } catch (Throwable failure) {
                 // Messages may contain private field values. Status exposes only the failure class.
@@ -153,5 +166,9 @@ final class SwingActionJournal {
         private Entry(HarnessCommand command) {
             this.command = command;
         }
+    }
+
+    private static final class DesktopCommandExpiredException extends IllegalStateException {
+        private static final long serialVersionUID = 1L;
     }
 }

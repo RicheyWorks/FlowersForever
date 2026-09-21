@@ -14,6 +14,8 @@ import com.fasterxml.jackson.databind.node.DoubleNode;
 import com.flowerfarm.automation.HarnessCommand;
 import com.flowerfarm.automation.HarnessGateway;
 import com.flowerfarm.automation.HarnessManifest;
+import com.flowerfarm.automation.HarnessPluginCapability;
+import com.flowerfarm.automation.HarnessPluginDescriptor;
 import com.flowerfarm.automation.HarnessPolicyException;
 import com.flowerfarm.automation.HarnessProperties;
 import com.flowerfarm.automation.HarnessResponse;
@@ -48,8 +50,12 @@ public class McpProtocolHandler {
     private static final int METHOD_NOT_FOUND = -32601;
     private static final int INVALID_PARAMS = -32602;
     private static final int INTERNAL_ERROR = -32603;
+    private static final int LEGACY_RESOURCE_NOT_FOUND = -32002;
     private static final int UNSUPPORTED_PROTOCOL_VERSION = -32022;
     private static final long DISCOVERY_TTL_MILLIS = 300_000;
+    private static final int MAX_RESOURCE_URI_LENGTH = 256;
+    private static final String RESOURCE_PREFIX = "flowersforever://harness/";
+    private static final String MANIFEST_URI = RESOURCE_PREFIX + "manifest";
     private static final String PROTOCOL_VERSION_KEY =
             "io.modelcontextprotocol/protocolVersion";
     private static final String CLIENT_CAPABILITIES_KEY =
@@ -98,6 +104,8 @@ public class McpProtocolHandler {
                 case "ping" -> result(id, emptyResult(isModern(params)));
                 case "tools/list" -> result(id, listTools(params));
                 case "tools/call" -> callTool(id, params);
+                case "resources/list" -> result(id, listResources(params));
+                case "resources/read" -> result(id, readResource(params));
                 default -> error(id, METHOD_NOT_FOUND,
                         "Method not found: " + method, null);
             };
@@ -131,7 +139,8 @@ public class McpProtocolHandler {
         result.set("capabilities", capabilities());
         result.put("instructions", "Use farm-data tools to inspect schemas, map prior-app "
                 + "or spreadsheet rows, preview imports, and operate farm records. "
-                + "Only tools enabled by the farm operator are listed.");
+                + "Only tools enabled by the farm operator are listed. Read harness resources "
+                + "for plugin discovery, observation schemas, and fresh snapshots.");
         result.put("ttlMs", DISCOVERY_TTL_MILLIS);
         result.put("cacheScope", "private");
         return result;
@@ -151,7 +160,8 @@ public class McpProtocolHandler {
         result.set("capabilities", capabilities());
         result.set("serverInfo", serverInfo());
         result.put("instructions", "Use the farm-data tools to inspect, map, preview, "
-                + "import, and maintain farm records.");
+                + "import, and maintain farm records. Read harness resources for plugin "
+                + "discovery, observation schemas, and fresh snapshots.");
         return result;
     }
 
@@ -171,6 +181,85 @@ public class McpProtocolHandler {
             result.put("cacheScope", "private");
         }
         return result;
+    }
+
+    private ObjectNode listResources(ObjectNode params) {
+        boolean modern = requireSupportedEra(params);
+        if (params.has("cursor")) {
+            throw protocol(INVALID_PARAMS, "resources/list does not accept a cursor");
+        }
+        HarnessManifest manifest = gateway.manifest(properties.getToken());
+        ArrayNode resources = mapper.createArrayNode();
+        resources.add(resource(MANIFEST_URI, "harness-manifest", "FlowersForever harness manifest",
+                "Installed plugins, observation schemas, action schemas, and current operator policy."));
+        manifest.plugins().stream()
+                .filter(plugin -> plugin.capabilities().contains(HarnessPluginCapability.OBSERVATION))
+                .sorted(Comparator.comparing(HarnessPluginDescriptor::id))
+                .map(plugin -> resource(observationUri(plugin), plugin.id() + "-observation",
+                        plugin.name() + " observation",
+                        "Read the current plugin snapshot with operator disclosure policy applied."))
+                .forEach(resources::add);
+        ObjectNode result = resourceResult(modern, DISCOVERY_TTL_MILLIS);
+        result.set("resources", resources);
+        return result;
+    }
+
+    private ObjectNode readResource(ObjectNode params) {
+        boolean modern = requireSupportedEra(params);
+        JsonNode uriNode = params.get("uri");
+        if (uriNode == null || !uriNode.isTextual() || uriNode.asText().isBlank()
+                || uriNode.asText().length() > MAX_RESOURCE_URI_LENGTH) {
+            throw protocol(INVALID_PARAMS, "resources/read requires a resource URI of at most "
+                    + MAX_RESOURCE_URI_LENGTH + " characters");
+        }
+        String uri = uriNode.asText();
+        HarnessManifest manifest = gateway.manifest(properties.getToken());
+        Object value;
+        if (MANIFEST_URI.equals(uri)) {
+            value = manifest;
+        } else {
+            HarnessPluginDescriptor plugin = manifest.plugins().stream()
+                    .filter(candidate -> candidate.capabilities().contains(HarnessPluginCapability.OBSERVATION))
+                    .filter(candidate -> observationUri(candidate).equals(uri))
+                    .findFirst().orElseThrow(() -> protocol(
+                            modern ? INVALID_PARAMS : LEGACY_RESOURCE_NOT_FOUND, "Resource not found"));
+            value = gateway.observe(properties.getToken(), plugin.id());
+        }
+        ObjectNode content = mapper.createObjectNode();
+        content.put("uri", uri);
+        content.put("mimeType", "application/json");
+        try {
+            content.put("text", mapper.writeValueAsString(value));
+        } catch (JsonProcessingException exception) {
+            throw new IllegalStateException("Could not serialize harness resource", exception);
+        }
+        // Snapshots and manifest policy are live. Never retain an older disclosure decision.
+        ObjectNode result = resourceResult(modern, 0);
+        result.putArray("contents").add(content);
+        return result;
+    }
+
+    private ObjectNode resourceResult(boolean modern, long ttlMillis) {
+        ObjectNode result = modern ? modernResult() : mapper.createObjectNode();
+        if (modern) {
+            result.put("ttlMs", ttlMillis);
+            result.put("cacheScope", "private");
+        }
+        return result;
+    }
+
+    private ObjectNode resource(String uri, String name, String title, String description) {
+        ObjectNode resource = mapper.createObjectNode();
+        resource.put("uri", uri);
+        resource.put("name", name);
+        resource.put("title", title);
+        resource.put("description", description);
+        resource.put("mimeType", "application/json");
+        return resource;
+    }
+
+    private static String observationUri(HarnessPluginDescriptor plugin) {
+        return RESOURCE_PREFIX + plugin.id() + "/observation";
     }
 
     private ObjectNode callTool(JsonNode id, ObjectNode params) {
@@ -531,6 +620,7 @@ public class McpProtocolHandler {
         ObjectNode tools = mapper.createObjectNode();
         tools.put("listChanged", false);
         capabilities.set("tools", tools);
+        capabilities.set("resources", mapper.createObjectNode());
         return capabilities;
     }
 
