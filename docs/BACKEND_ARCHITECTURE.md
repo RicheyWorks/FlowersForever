@@ -19,6 +19,13 @@ boundaries remain the stable entry points for Swing, REST, and CLI.
 
 ## Reliability boundaries
 
+Farm harness batch commands run through `FarmDataCommandTransactions`, which
+keeps every row and durable import receipt in one transaction. The dispatcher
+acquires its command monitor before opening that transaction. Export creation
+instead owns a dedicated repeatable-read transaction, avoiding a suspended
+outer transaction that would consume another pool connection. Catalog discovery,
+mapping suggestions, and completed export-file reads do not open transactions.
+
 - Inventory, harvest edits, customer edits, and order state transitions lock the
   affected database rows before mutation.
 - Order fulfillment runs in its own transaction. It is idempotent after an order
@@ -57,6 +64,16 @@ REST failures keep the legacy `error` property and add a stable envelope:
 Unexpected exception messages and stack traces are logged server-side and are
 not returned to clients. Persistence races map to `409 DATA_CONFLICT` with a
 refresh-and-retry instruction. Malformed JSON maps to `400 MALFORMED_BODY`.
+Unsupported request content types map to `415 UNSUPPORTED_MEDIA_TYPE`, and
+missing required multipart parts map to `400 INVALID_REQUEST`. An unacceptable
+response media type returns an empty `406` response, avoiding a second failed
+attempt to negotiate a JSON error body or a false internal-error incident.
+
+Enabled harness command endpoints use a scoped JSON mapper that rejects
+duplicate fields, trailing content, unknown envelope fields, coerced command
+names/request IDs, and non-string expiry timestamps before dispatch. Ordinary
+API DTOs retain the application mapper's existing behavior. Both JSON media
+types and vendor `+json` types retain the configured attachment string allowance.
 
 Every PDF and CSV endpoint uses `DownloadResponse`, which applies one validated
 attachment-filename policy and consistent media type, content length, and

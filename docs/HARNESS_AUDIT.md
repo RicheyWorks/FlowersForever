@@ -2,6 +2,531 @@
 
 Audit date: 2026-09-04
 
+## Numeric precision and recovery after interruption — September 13, 2026
+
+REST command maps and MCP frames previously rounded decimal tokens through
+`Double`. Raw-wire regressions reproduced changed values, underflow to zero,
+overflow rejection, changed REST arguments replaying as identical, and distinct
+MCP numeric IDs or arguments collapsing into one execution. Scoped decimal
+binding now preserves those values; command copies normalize decimal scale
+without accepting decimal tokens as canonical integers. MCP canonical hashes
+retain the earlier double spelling only when that decimal spelling is exact.
+
+Migration handling preserves explicit negative floating zero with a second
+streaming token scan of an already validated frame, including nested arrays and
+escaped object keys. It builds no second full tree. Bounded replay-only probes
+check supported historical rounded identities before new precise execution. A
+known ambiguous legacy receipt produces a tool error, rather than an exact
+replay claim or repeated effect. Ordinary lossless decimal and negative-zero
+receipts retain their existing identities. This cannot recover an evicted
+non-durable receipt or an unsupported historical formatter. Domain numeric
+ranges still apply after transport parsing; exact transport storage does not
+expand those ranges.
+
+Mapped JSON cells now preserve decimal precision as well. Near-integer recipe
+pack sizes can no longer round into accepted integers, full-width whole values
+remain exact, and fractional spreadsheet dates fail an exact integer check.
+HTTP/database tests prove rejected recipe imports save neither recipes nor
+source receipts. The separate permissive numeric text punctuation parser remains
+a follow-up candidate: malformed grouping/currency/percent placement can still
+be stripped into a different numeric value. This pass does not change that text
+conversion grammar or documented live-offset pagination semantics.
+
+Optimus durable receipt recovery conditionally clears only the matching pending
+execution claim, using a locked persistence operation and read-back. Cleanup
+failure leaves the accepted receipt accessible and reports its persistence
+status. Cached responses retain their original status; fresh staging and discard
+paths retry cleanup only when a fresh adapter sample and durable receipt agree
+on operation ID, plan fingerprint, request, and robot. Tests protect newer plans,
+changed claims, wrong robots, silent no-op cleanup, and ongoing outages. An
+independent review found no additional defect in those cleanup boundaries.
+The related staging/safe-pose regression showed that replacing the adapter's
+current operation could erase a completion already observed by the plugin.
+Plugin 0.23 now journals that terminal sample before either replacement. A
+failed append prevents the new staging/dispatch until retry; emergency-stop
+behavior is unchanged. Two initial tests reproduced lost `SUCCEEDED` history
+and dispatch despite failed history persistence.
+
+Composed Swing controls previously bypassed standalone password-field rejection:
+password renderers could disclose raw model values and password combo editors
+could be read or changed through their parent. Recursive renderer guards and
+editor checks now reject those reads/actions without including the secret in
+errors. Discovery keeps the known password-backed combo as unsupported, without
+reading its draft or discarding the whole snapshot. Fifteen tests cover these
+boundaries and normal-control recovery. These are supported extension-control
+fixtures; no current production screen uses the affected compositions. The
+separate lifecycle cancellation review found no new actionable defect.
+
+This pass adds 59 regression cases. The initial 14 transport cases reproduced
+11 failures (`target/harness-numeric-red.log`). Combined initial recovery and
+password tests reproduced 16 failures in 19 cases
+(`target/harness-recovery-password-red.log`). Mapping reproduced seven failures
+in a 24-case run after the transport fixes (`target/harness-mapping-precision-red.log`).
+Follow-on recovery cases reproduced the cached-response block and terminal-history
+loss (`target/harness-recovery-cached-red.log`,
+`target/harness-terminal-history-red.log`). The isolated migration red used an
+older prior-pass handler because a review output directory shadowed the intended
+classes; its sixth failure is not counted as a new defect. A fresh isolated
+seven-case run passed against the current classes
+(`target/harness-numeric-migration-isolated-green.log`). Maven focused runs passed
+74 initial precision/contract cases and 82 combined numeric/migration/mapping/
+framing/password cases (`target/harness-precision-focused.log`,
+`target/harness-numeric-migration-focused.log`). The Optimus-focused run passed
+40 of 41 cases; its new persistence fixture compared nanosecond timestamps
+against the database's rounded values. The fixture now uses millisecond-aligned
+timestamps (`target/harness-optimus-recovery-focused.log`).
+
+Final offline `mvn -o -Pquality verify` passed **1,394 tests plus two packaged-JAR
+MCP checks**, with zero failures/errors/skips
+(`target/harness-numeric-recovery-final-quality.log`). All 69 worker journeys
+and the 35-route catalog passed. Coverage gates passed at 86.71% lines and
+69.27% branches. Checkstyle reports zero violations; Medium-or-higher SpotBugs
+reports zero findings/errors. The build completed in 5:17. Offline mode skipped
+SBOM generation. Native installer, external-service, and hardware acceptance
+were not performed. Changes remain local and uncommitted.
+
+## Recovery contracts and MCP framing — September 13, 2026
+
+`McpFrameReader` replaces lossy UTF-8 decoding before JSON parsing. Malformed
+bytes previously became replacement characters and reached the handler. Each
+frame now has a strict decoder with fixed byte/character buffers; incomplete
+code points survive buffer boundaries, while malformed or oversized frames are
+drained before the next request. Existing decoded UTF-16 size accounting and
+LF/CRLF/CR framing remain supported. Seven tests cover invalid byte sequences,
+valid multibyte and replacement-character text, decoder boundaries, size limits,
+and EOF recovery. The real MCP process smoke sends an invalid-byte inventory
+request, expects a parse error, and verifies it created no record.
+
+`create-orders` now advertises and validates only DRAFT/CONFIRMED. Historical
+imports and mapped history retain all four statuses. The orders catalog adds
+`operationalWriteSchema` while retaining its historical `writeSchema`. Thirteen
+cases check discovery through REST/MCP, the catalog, batch preflight,
+defaults, live states, and historical terminal states.
+
+Corrected source rows whose targets were deleted previously escaped as service
+404 responses, while unchanged retries returned the documented import conflict.
+Only receipt-backed target updates now translate the locked service's missing
+target exception to 409. Five real REST/database cases cover inventory, customers,
+growing templates, planting plans, and floral recipes; receipts remain unchanged
+and deleted targets are not recreated. Ordinary update/domain errors retain
+their existing behavior.
+
+New export part names use ASCII digits. Older localized names are accepted only
+for the exact padded index in one decimal-digit alphabet. Fixed metadata
+serialization replaces application-dependent hashes and date output. Strict
+metadata reads preserve decimal scale and use standard Jackson timestamp units:
+fractional seconds and integral milliseconds. Up to eight streamed checksum
+candidates use stored raw values with supported map ordering, indentation, and
+Unicode escaping. Existing files and checksums are never rewritten; exact create
+replay compares normalized request fields only after integrity validation.
+Thirteen new export cases cover locales, legacy metadata, nanosecond/millisecond
+precision, new formatting independence, and altered metadata rejection.
+
+Legacy recovery supports compact JSON and default pretty JSON using the current
+host newline style. Custom date formats, custom integral epoch-second serializers,
+and older pretty hashes with a different newline style remain outside this
+compatibility contract. New metadata has a fixed compact checksum representation.
+
+The action journal needed no production change. Three new deterministic tests
+prove that its limit of 16 pending actions rejects only fresh work, a pending modal survives
+eviction at 256 receipts, and an interrupted caller keeps one execution and a
+stable receipt through retries. An independent frame-decoder review added the
+two large-buffer regressions; independent export review caught the integer
+timestamp unit issue before final verification.
+
+This pass adds 41 regression cases. Initial failure evidence is in
+`target/harness-next-utf8-red.log` (two malformed-input failures),
+`target/harness-next-contract-red.log` (four schema failures; journal tests pass),
+`target/harness-next-resume-red.log` (five 404 conflicts and three locale failures),
+`target/harness-next-export-format-red.log` (six metadata recovery failures), and
+`target/harness-next-export-millis-red.log` (an incorrect far-future timestamp).
+Focused runs passed 21 framing/journal cases, 47 combined cases including the real
+MCP process, and 16 export cases before the last millisecond rule. Logs:
+`target/harness-next-framing-journal-green.log`,
+`target/harness-next-focused-green.log`, and
+`target/harness-next-export-format-green.log`.
+
+Final offline `mvn -o -Pquality verify` passed **1,335 tests plus two packaged-JAR
+MCP checks**, with zero failures/errors/skips
+(`target/harness-next-final-quality.log`). This includes all 69 worker journeys
+and the 35-route catalog. Checkstyle and Medium-or-higher SpotBugs report zero
+violations/findings/errors. Reported coverage is 86.65% lines and 69.04% branches;
+both gates passed. Offline mode skipped SBOM generation. Native installer,
+external-service, and hardware acceptance were not performed.
+
+## Deep harness and API follow-up — September 13, 2026
+
+MCP no longer filters a known tool out before attempting safe receipt recovery.
+The shared gateway replay-only entry point authenticates, checks sensitive-read
+policy, validates exact command identity, and recovers cached or durable receipts
+without executing a fresh plugin action. Expired physical receipts survive policy
+revocation, while fresh denied actions and cached sensitive reads remain blocked.
+Recovered observations are filtered against current disclosure policy.
+
+New MCP identities canonicalize expiry instants and use a fixed JSON writer,
+independent of pretty printing and Unicode escaping. Exact historical envelopes
+also check current/compact/default-pretty legacy hashes through replay-only calls.
+Recovered legacy responses retain their original request IDs. Old arbitrary
+formatters and changed spellings of old noncanonical expiry values remain outside
+that bounded migration; replay does not create a persistent alias for those hashes.
+Harness-specific REST and MCP error paths now apply the shared redactor and the
+same 240-character bound, including blank-message fallbacks.
+
+Mapped JSON cells reject duplicate properties and trailing JSON/garbage instead
+of silently discarding content. REST coverage verifies a malformed second recipe
+prevents all rows and receipts from being written. Harvest preview calls the
+same side-effect-free batch validation as import for farm-zone dates and rounded
+inventory quantities.
+
+The plugin's encompassing transaction previously held a connection while export
+creation opened its own REQUIRES_NEW transaction. With one available connection,
+creation timed out. `FarmDataCommandTransactions` now wraps only commands needing
+the outer boundary; export creation retains its dedicated repeatable-read
+transaction, while file reads/catalog/mapping suggestions open none. A real H2
+pool-size-one test covers creation, receipt/key replay, and file reads while the
+sole connection is deliberately held. Another verifies later-row failure rolls
+back earlier writes and import receipts. Flyway uses a separate test datasource
+because H2 migrations themselves require more than one connection. This does not
+claim unsupported database isolation modes or caller-owned outer transactions work.
+
+Snapshots bind context before descriptor construction and verify attachment,
+active root, and tracked state afterward. A change produces `ready=false` without
+controls/token. The synchronous alias-retargeting probe uses an explicitly custom
+Swing getter; no production getter with that callback was identified. Screenshot
+tests use ordinary attachment/root replacement during a blocked paint and verify
+rejection plus stable recovery. Renamed/reordered table columns are read and sorted
+by `TableColumn.headerValue`, including duplicate-label rejection.
+
+This pass adds 32 regressions. Failure evidence is in
+`target/harness-deep-red.log` (transport/parser failures plus an initial fixture
+startup failure), `target/harness-deep-observation-transaction-red.log` (six Swing
+failures and two reproduced connection timeouts after correcting the fixture),
+and `target/harness-deep-harvest-red.log` (two incorrect ready previews).
+Focused offline validation passed 110 tests with zero failures/errors/skips
+in `target/harness-deep-focused.log`.
+
+The first full run completed 1,294 tests with one existing date-sensitive CRM
+fixture failure and no errors/skips (`target/harness-deep-full-quality.log`).
+That fixture expected September 12 to remain in the future; it now captures a
+date seven days ahead using the same default-zone clock as the review helper.
+Production early/overdue warning behavior is unchanged.
+
+Final offline `mvn -o -Pquality verify` passed **1,294 tests plus two packaged
+executable-JAR MCP process checks**, with zero failures, errors, or skipped tests
+(`target/harness-deep-final-quality.log`). This includes all 69 worker journeys
+and the 35-route catalog. Checkstyle has zero violations; Medium-or-higher
+SpotBugs reports zero bugs/errors. Reported coverage is 86.44% lines and 68.81%
+branches, exceeding the 75%/55% gates. Offline mode skipped SBOM generation;
+that artifact was not verified by this run. No native installer or external
+service acceptance was performed.
+
+The singleton gateway still serializes command execution. Native OS input,
+external services, custom header-renderer pixels, and independent hardware
+emergency stops remain separate acceptance concerns.
+
+## Harness and API follow-up — September 13, 2026
+
+Attachment content reads and uploads now preserve positive signed 64-bit IDs.
+Both commands previously narrowed IDs to 32 bits despite the domain using
+`Long`. Regressions cover values above `Integer.MAX_VALUE`, `Long.MAX_VALUE`,
+overflow, fractional values, and exact REST/MCP responses and receipt replay.
+Invalid IDs fail before invoking the attachment services.
+
+Desktop text edits now fail if a synchronous listener replaces the field's
+document; checking the detached document had allowed a false success receipt.
+Queued failure/replay and fresh-request recovery are covered. Option-label
+matching now observes the original combo model for replacement or notifications
+from renderers and rejects a refresh before selecting from the changed model.
+The temporary listener is removed before normal selection callbacks so CRM's
+rebuilds of equal option records continue to work.
+
+The REST harness now registers a strict mapper specifically for command bodies.
+Duplicate keys, trailing input, unknown envelope fields, coerced request IDs or
+action names, and invalid expiry types/formats receive `400 MALFORMED_BODY`
+before dispatch. Missing/null optional fields, valid offset timestamps, vendor
+JSON media types, and the attachment parser allowance are preserved. Ordinary
+API DTO binding remains unchanged. Actual server integration checks exercise
+the registered converter and its attachment allowance.
+
+The common API error handler now returns 415 for unsupported request media and
+400 for missing required multipart parts. Unacceptable response media returns
+an empty 406, avoiding a false internal-error incident and a second failed
+attempt to serialize a JSON error that the client cannot accept.
+
+The eight attachment/Swing regressions failed before their fixes: 33 tests,
+six assertion failures and two old ID-range errors in
+`target/harness-api-boundary-red.log`. The initial focused Maven pass succeeded
+with 54 tests, zero failures/errors/skips
+(`target/harness-api-boundary-focused.log`).
+
+The broader offline run passed **515 tests with zero failures, errors, or skips**,
+including all 69 worker journeys, the 35-route catalog, REST/MCP, controller,
+attachment-service, worker workflow, and Optimus simulator checks
+(`target/harness-api-boundary-validation.log`). The final stringified-epoch
+expiry guard was added after that run compiled; the recompiled API suite passed
+**32 tests**, including all 18 strict command-body cases and actual REST
+integration, with zero failures/errors/skips
+(`target/harness-api-boundary-final-api.log`). This pass adds 31 regressions.
+Checkstyle and the Medium-or-higher SpotBugs gate passed with zero violations,
+findings, or analysis errors (`target/harness-api-boundary-quality.log`).
+Changes remain uncommitted locally; native installers, OS input, external
+services, and GitHub work were not exercised.
+
+## Local follow-up — September 7, 2026
+
+The desktop test driver now checks visibility through every ancestor to its
+root. An inactive tab's controls or old success message cannot satisfy the
+active journey. Repeated selectors resolve on the visible screen, nested-tab
+selection ignores hidden tab sets, and disabled tabs or tab sets reject
+navigation. Structural `named` assertions still inspect the component tree;
+actions on those components enforce the same visibility boundary.
+
+The runtime desktop snapshot now checks each published selector against the
+same name aliases accepted by commands, retaining the discovery contract's
+uniqueness requirement across component types. A selector that collides with
+another visible component's name or button text uses an existing unique
+production component name when available; otherwise it remains unaddressable.
+Disabled aliases remain ambiguous; hiding the conflicting component makes the
+remaining selector usable again.
+
+The full catalog check now collects addressability failures across every route
+before reporting them together. It found six label collisions: Dashboard's
+More farm tools, CRM's More order actions, the three Activity History filters,
+and the Inventory rose product selector. Existing component names resolve three;
+the history filters now have stable names without changing their display labels.
+
+The stricter visibility boundary also exposed a real Market Day handoff defect:
+opening an order selected the outer CRM screen but left its Customers workspace
+active. The handoff now opens Orders and reveals the selected row. The empty
+Trend Analysis journey now opens Model details before reading that hidden panel.
+
+Focused visibility, disabled-navigation, alias, and fallback regressions cover
+these cases. The original implementation failed the four initial visibility
+regressions and the alias regression before their fixes. These changes concern
+deterministic Swing behavior; native input and assistive-technology limits below
+still apply.
+
+Local validation passed **366 tests with zero failures, errors, or skips**,
+including all 69 desktop journeys, all 35 published runtime routes, surrounding
+priority/production workflows, rendered entry contracts, the REST-to-Swing
+bridge, gateway policy/replay, and MCP protocol checks. The offline Maven log
+is `target/harness-local-final-validation.log`. This pass does not rebuild the
+native installers or claim new native pointer/keyboard coverage.
+Checkstyle reports zero violations and the Medium-or-higher SpotBugs gate
+reports zero findings/errors; see `target/harness-local-quality.log`.
+
+## Continued local audit — input bounds and retry behavior
+
+The human driver's `setSpinner` no longer bypasses model bounds through direct
+`setValue` calls. Numeric inputs retain the model's existing type and must be
+exactly representable; date limits and list membership are also checked before
+changing the editor, model, or listeners. Three regressions cover accepted
+endpoints, invalid values, and recovery.
+
+Desktop action receipts now freeze their first published response atomically.
+A duplicate call that first receives `PENDING` cannot later receive a different
+original receipt because the callback completed during the dispatch grace
+period. Live `action-status` still reports completion. A deterministic concurrent
+regression verifies the same receipt for all callers and a single callback.
+The usual singleton gateway already serializes requests; direct plugin callers
+and separate gateways sharing a plugin also now receive stable receipts.
+
+Live farm-data paging now rejects an empty page whose reported total indicates
+more records. Such a page previously returned `hasMore=true` with the same
+offset, allowing a client to loop indefinitely after concurrent writes. The
+explicit error requests a retry instead of reporting false completion. Two
+regressions cover the database page contract and the published plugin action;
+legitimate terminal pages remain valid. Complete exports retain their existing
+repeatable-read snapshot semantics.
+
+The three paging/receipt regressions failed before the fixes. Final offline
+validation passed **190 tests, zero failures/errors/skips**, including all 69
+desktop journeys and 35 routes, modal lifecycle, domain exports, gateway, and
+MCP integration. Logs: `target/harness-continuation-red.log` and
+`target/harness-continuation-validation.log`.
+Checkstyle and the Medium-or-higher SpotBugs gate also passed with zero
+violations/findings/errors; see `target/harness-continuation-quality.log`.
+
+## Continued local audit — observation-bound actions
+
+Swing desktop plugin 1.7 adds `metadata.contextToken` to ready observations and
+the optional `expected-context` string to all 18 queued actions. The bridge
+checks it on the EDT immediately before invoking the action. A changed active
+dialog, replaced component, altered control state, or notified model change
+rejects the callback with `DesktopContextChangedException`. Unchanged
+observations keep the token, and unavailable observations omit it. The token is
+random and contains neither field values nor hashes of them.
+
+The tracker records visible component/model identities and subscribes to Swing
+change notifications, without enumerating table rows or rendering domain data.
+It releases subscriptions when components leave the active tree and when the
+desktop attachment is replaced or detached. Once a compared state invalidates
+an observation, returning to an older tree cannot revive its token.
+
+Replay continues to precede this check. A completed action remains replayable
+after the screen changes; a rejected action requires a new observation and new
+request ID to retry. Commands without the optional argument keep their existing
+selector-at-execution semantics. Model notifications and event-thread UI
+mutation remain prerequisites; this is not a transaction over hidden domain
+state or a guarantee of completed background persistence. See the
+observation-binding section in `AI_HARNESS.md`.
+
+Twenty-four new regressions cover the context contract: 10 helper cases,
+13 plugin/gateway cases, and one REST-wire case. They include same-selector
+replacement, reordered/updated rows, modal replacement, listener cleanup,
+legacy commands, stale/successful replay, and attachment replacement both before
+dispatch and during context resolution. A million-row virtual table throws on
+cell access to verify that context tracking does not read its records.
+
+Offline validation passed **222 tests with zero failures, errors, or skips**,
+including all 69 desktop journeys and 35 runtime routes. Logs:
+`target/harness-context-focused.log` (30 focused tests) and
+`target/harness-context-validation.log` (complete selected suite). This pass
+remains local and does not rebuild or exercise native installers.
+Checkstyle reports zero violations, and the Medium-or-higher SpotBugs gate
+reports zero findings/errors; see `target/harness-context-quality.log`.
+
+## Continued local audit — runtime interaction and perception coverage
+
+The runtime desktop plugin is now version 1.8 with 30 commands. This pass closes
+gaps between the deterministic journey driver's reach and the live API:
+
+- `scroll` and `set-divider` use the real scrollbar/divider models, with bounds
+  and availability read through `read-layout`. A named pane or a named control
+  inside it can identify the target. Lookup stops at the current active root.
+- `set-toggle` requests an exact selected state and only clicks when needed.
+  Grouped deselection, wrong control types, and unavailable controls are rejected.
+  Its menu-path form, shared with `read-control`, handles closed popup toggles
+  such as Dark Mode without opening a native menu. Enabled state is checked
+  through the logical menu hierarchy. MCP coverage verifies menu reads, changes,
+  unchanged-state no-ops, and receipt replay.
+- `choose-option-index` can choose distinct model entries with identical rendered
+  labels; `clear-selection` removes table/list selection through normal models.
+  Selection clearing checks the final row/column state and fails if synchronous
+  listeners restore it, with regression coverage for failure and recovery.
+- `read-control` can page beyond the former first 200 items, 50 columns, or 8,000
+  text characters. Table pages retain a 2,000-cell cap. `read-item` recovers text
+  beyond clipped cell/option summaries. Absolute view indexes and explicit
+  continuation fields let callers traverse all available entries.
+- Snapshot metadata publishes uniquely addressable read-only outputs and layout
+  panes without their values. `read-screen` pages visible labels, dialog messages,
+  and text documents, including outputs without unique selectors. It excludes
+  hidden tabs/passwords and avoids full-document copies; custom chart pixels
+  still use `capture-screen`.
+- `edit-text` handles long drafts through bounded insert/replace/delete segments.
+  Range checks happen before mutation, normal document filters still run, and
+  refused replacements fail instead of being reported as successful edits.
+- Structured reads can bind to `expected-context` and return the actual read's
+  `contextToken`. Scrollbar-model and viewport notifications now invalidate that
+  context, including changes that are subsequently reversed. Old request IDs
+  continue to replay old reads; new IDs are required for fresh pages or status.
+
+The 35-route runtime catalog now reads every published supplemental output and
+layout selector in addition to checking every interactive selector. The new
+runtime tests also use the production Event Services page, exercise policy
+denials, and keep modal target resolution inside its active root. This extends
+application-level coverage; native input, external account integration, and
+assistive-technology limitations listed below remain distinct acceptance work.
+
+Final offline validation passed 279 tests with zero failures, errors, or skips,
+including all 69 journeys and the expanded 35-route catalog. This continuation
+adds 57 regressions and verifies discovery of 30 desktop actions among 63 total
+manifest tools. Evidence: `target/harness-capability-validation.log`; the earlier
+focused 93-test pass is in `target/harness-capability-focused.log`.
+Checkstyle passed with zero violations and the Medium-or-higher SpotBugs gate
+passed with zero findings/errors (`target/harness-capability-quality.log`).
+All changes remain local; native installers were not rebuilt or launched.
+
+## Continued local audit — verify application outcomes
+
+The 30-command desktop API now verifies older state-setting operations after
+synchronous listeners run. Reverted combo choices, tabs, table/list selections,
+sliders, and sort orders report failure. Combo checks compare value equality so
+CRM can rebuild its product-choice model using fresh equal records.
+
+The runtime spinner path parses with its installed formatter and validates
+standard model constraints before changing the editor. Invalid values leave
+drafts and listeners untouched; disabled/read-only editors cannot be bypassed.
+The final model value is checked after the ordinary editor commit, catching
+DefaultEditor's silent model rejection and application-driven reversion.
+The JDK's default integer formatter can narrow `4294967297` to `1` or `2.9`
+to `2` before checking its range. An exact decimal preflight rejects such
+overflow/truncation and trailing text before touching the draft. It preserves
+localized grouping and explicitly overridden custom parsers.
+
+Harvest's actual double-click handler loads the currently selected record.
+Previously, a synchronous selection listener could redirect that selection and
+the harness would still deliver a double-click. It now checks the selected row,
+original table model and model-row mapping, and intervening model notifications
+before delivering the mouse event. Tests cover redirect/clear, record changes,
+sorting that keeps the same selected view index, failed replay, and recovery.
+
+Observation now tracks each table column's effective default renderer. Without
+that binding, a renderer replacement could mix different rendered text across
+pages while the old context remained accepted. Column-specific overrides do
+not invalidate for unused default changes. Tracking reads no table cells, and
+runtime paging verifies stale rejection and a fresh full-cell read.
+
+This continuation adds 29 regressions. Final offline validation passed 308 tests
+with zero failures, errors, or skips, including all 69 journeys and the 35-route
+catalog (`target/harness-outcome-final-validation.log`). Earlier passes are
+recorded in `target/harness-outcome-focused.log` (85 tests) and
+`target/harness-outcome-validation.log` (305 tests before the exact integer
+preflight and its three additional regressions).
+Checkstyle passed with zero violations and the Medium-or-higher SpotBugs gate
+passed with zero findings/errors (`target/harness-outcome-quality.log`). All
+changes remain local; native installers and external services were not exercised.
+
+## Continued local audit — consistent reads and replay accounting
+
+The shortcut command now falls back from explicit visible input-map bindings to
+enabled logical menu accelerators. Production F1/PNW Plant Guide, Dark Mode, and
+My access had accelerators but no traversed component input-map binding, making
+them unreachable through `invoke-shortcut`. Explicit F5 retains priority over
+its menu alias. Disabled bindings are excluded, allowing a usable menu
+accelerator to handle the shortcut. Disabled menu ancestry and ambiguous
+accelerators or paths are rejected, with normal `doClick` effects, modal scoping,
+and MCP replay tests.
+
+All four structured reads now bind both ends of the read to one context and
+recheck the active root and attachment. A standard renderer's text-property
+callback can synchronously refresh a model: previously the response could
+contain old first-row text and new second-row text with a newly valid token.
+Such reads now fail before publishing the mixed output. Stable retries still
+run, and rejected reads create neither a successful cache entry nor a desktop
+action-journal receipt. Lazy Swing binding and accessibility initialization
+complete before recording the component revision so ordinary first table reads
+remain usable.
+
+The replay cache previously counted entity/DTO objects as 16 bytes, despite
+`list-records` returning real populated Item objects. A reproduction retained
+more than 10 MB of notes while accounting for only about 80 KB, bypassing the
+8 MiB eviction target. Bounded JSON byte accounting now includes these fields,
+command inputs, execution messages, and complete snapshots using the configured
+serializer. Receipt preservation precedes fallible accounting; sizing failures
+receive a conservative oversized weight while the newest receipt stays replayable.
+Completion updates also move an incomplete receipt to the newest position before
+eviction. Otherwise an older receipt retried after a newer command could evict
+itself when accounting fails or the recovered snapshot exceeds the budget,
+allowing its completed effect to run again on the next retry.
+
+On September 13, the resumed validation reproduced both receipt-retention
+failures before fixing the completion update order. An additional regression
+fills the 256-entry cache and confirms ordinary response replay does not refresh
+eviction order. All 13 replay-budget tests now pass, including failed accounting
+and oversized snapshot recovery. Evidence: `target/harness-resume-replay-red.log`
+(12 tests, two failures before the fix) and `target/harness-resume-focused.log`
+(87 tests passed).
+
+The final offline regression passed **374 tests with zero failures, errors, or
+skips**, including all 69 worker journeys, the 35-route runtime catalog, farm-data
+exports, REST/MCP integration, application context, and the Optimus simulator.
+The log is `target/harness-resume-validation.log`. These are application-level
+checks; native installers, OS input, and external services were not exercised.
+Checkstyle and the Medium-or-higher SpotBugs gate passed with zero violations,
+findings, or analysis errors (`target/harness-resume-quality.log`). The work
+remains uncommitted locally, and GitHub work remains paused.
+
 ## Completion audit
 
 This pass checks the current working tree, including Production Studio's new
@@ -508,7 +1033,8 @@ real MCP ping before retaining installers.
 
 ## Runtime creation and export coverage
 
-The desktop plugin publishes 21 commands. Its editable-option path now enters
+The earlier desktop plugin published 21 commands (the current 1.8 plugin has
+30). Its editable-option path enters
 custom Category and Selling Unit values through the production combo editor
 and selection listeners. A gateway journey fills the real Add Item form, saves
 through InventoryItemPresenter and InventoryService, reads back the stored

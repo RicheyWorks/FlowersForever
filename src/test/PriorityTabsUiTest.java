@@ -7405,10 +7405,11 @@ class PriorityTabsUiTest {
     @Test
     @DisplayName("direct completion reviews exact customer load and rounded inventory deduction")
     void crmCompletionReviewShowsExactMultiProductInventoryImpact() {
+        LocalDate scheduledDate = LocalDate.now().plusDays(7);
         Customer customer = new Customer(7L, "Kitsap Blooms", "Sam Rivera",
                 "sam@kitsap.test", "360-555-0142", "FLORIST", "Use side gate");
         CustomerOrder order = new CustomerOrder(
-                customer, LocalDate.of(2026, 9, 12), "CONFIRMED", "Keep upright");
+                customer, scheduledDate, "CONFIRMED", "Keep upright");
         order.setId(52L);
         order.addLine(new OrderLine("Dahlia Mix", 12, "stems", 3.5));
         order.addLine(new OrderLine("Rose Bunch", 1.6, "bunches", 18));
@@ -7419,8 +7420,8 @@ class PriorityTabsUiTest {
         assertThat(review.heading()).contains(
                 "Complete order #52", "Kitsap Blooms", "$70.80");
         assertThat(review.details()).contains(
-                "Pickup / delivery date: 2026-09-12",
-                "EARLY COMPLETION WARNING", "scheduled for 2026-09-12",
+                "Pickup / delivery date: " + scheduledDate,
+                "EARLY COMPLETION WARNING", "scheduled for " + scheduledDate,
                 "physical handoff already happened",
                 "Customer contact: Sam Rivera · 360-555-0142 · sam@kitsap.test",
                 "Account delivery note: Use side gate",

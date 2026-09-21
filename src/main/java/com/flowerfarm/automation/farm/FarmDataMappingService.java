@@ -1,7 +1,10 @@
 package com.flowerfarm.automation.farm;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.JsonParser;
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.ObjectReader;
 
 import org.springframework.stereotype.Component;
 
@@ -42,10 +45,13 @@ public class FarmDataMappingService {
                     .withResolverStyle(ResolverStyle.STRICT));
     private static final Map<String, List<String>> ALIASES = aliases();
 
-    private final ObjectMapper mapper;
+    private final ObjectReader jsonCellReader;
 
     public FarmDataMappingService(ObjectMapper mapper) {
-        this.mapper = mapper.copy();
+        this.jsonCellReader = mapper.copy().reader()
+                .with(DeserializationFeature.FAIL_ON_TRAILING_TOKENS)
+                .with(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS)
+                .with(JsonParser.Feature.STRICT_DUPLICATE_DETECTION);
     }
 
     public MappingSuggestion suggest(
@@ -263,10 +269,13 @@ public class FarmDataMappingService {
 
     private LocalDate dateValue(Object raw, String field) {
         if (raw instanceof Number number) {
-            long serial = number.longValue();
-            if (serial > 0 && serial < 3_000_000
-                    && Double.compare(number.doubleValue(), serial) == 0) {
-                return LocalDate.of(1899, 12, 30).plusDays(serial);
+            try {
+                long serial = new BigDecimal(number.toString()).longValueExact();
+                if (serial > 0 && serial < 3_000_000) {
+                    return LocalDate.of(1899, 12, 30).plusDays(serial);
+                }
+            } catch (ArithmeticException | NumberFormatException ignored) {
+                // Fractional or nonfinite serials must not round into calendar dates.
             }
         }
         String value = String.valueOf(raw).trim();
@@ -384,7 +393,7 @@ public class FarmDataMappingService {
 
     private Object parseJson(String value, Class<?> type, String field) {
         try {
-            return mapper.readValue(value, type);
+            return jsonCellReader.forType(type).readValue(value);
         } catch (JsonProcessingException exception) {
             throw new IllegalArgumentException(
                     "Field '" + field + "' contains invalid JSON", exception);

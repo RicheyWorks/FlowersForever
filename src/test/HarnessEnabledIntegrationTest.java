@@ -1,6 +1,8 @@
 package com.flowerfarm;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.flowerfarm.automation.HarnessCommand;
+import com.flowerfarm.config.HarnessJsonConfig;
 import com.flowerfarm.controller.HarnessController;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -14,6 +16,10 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
+import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerAdapter;
+
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -39,6 +45,9 @@ class HarnessEnabledIntegrationTest {
     @Autowired
     TestRestTemplate rest;
 
+    @Autowired
+    RequestMappingHandlerAdapter handlerAdapter;
+
     @Test
     @DisplayName("publishes typed discovery only to the independent harness token")
     void publishesTokenProtectedTypedDiscovery() {
@@ -59,6 +68,10 @@ class HarnessEnabledIntegrationTest {
                 .contains("OBSERVATION", "COMMANDS", "VISUAL_PERCEPTION");
         assertThat(desktop.findValuesAsText("type"))
                 .contains("string", "integer");
+        assertThat(desktop.path("actions")).hasSize(30);
+        assertThat(desktop.path("actions").findValuesAsText("name"))
+                .contains("scroll", "set-divider", "set-toggle", "choose-option-index",
+                        "clear-selection", "read-screen", "read-layout", "read-item", "edit-text");
         JsonNode farmData = find(discovery.getBody(), "id", "farm-data");
         assertThat(farmData.path("kind").asText()).isEqualTo("WORKFLOW");
         assertThat(farmData.findValuesAsText("name"))
@@ -89,7 +102,7 @@ class HarnessEnabledIntegrationTest {
         assertThat(manifest.getBody().path("replayCacheByteLimit").asLong())
                 .isEqualTo(8L * 1024 * 1024);
         JsonNode tools = manifest.getBody().path("tools");
-        assertThat(tools.size()).isEqualTo(54);
+        assertThat(tools.size()).isEqualTo(63);
         JsonNode actionStatus = find(tools, "name", "swing-desktop__action-status");
         assertThat(actionStatus.path("allowed").asBoolean()).isTrue();
         assertThat(actionStatus.path("inputSchema").path("properties")
@@ -100,6 +113,16 @@ class HarnessEnabledIntegrationTest {
         assertThat(find(tools, "name", "swing-desktop__replace-text")
                 .path("allowed").asBoolean()).isFalse();
         assertThat(find(tools, "name", "swing-desktop__read-control")
+                .path("allowed").asBoolean()).isFalse();
+        assertThat(find(tools, "name", "swing-desktop__read-screen")
+                .path("allowed").asBoolean()).isFalse();
+        assertThat(find(tools, "name", "swing-desktop__read-item")
+                .path("allowed").asBoolean()).isFalse();
+        assertThat(find(tools, "name", "swing-desktop__read-layout")
+                .path("allowed").asBoolean()).isTrue();
+        assertThat(find(tools, "name", "swing-desktop__set-toggle")
+                .path("allowed").asBoolean()).isFalse();
+        assertThat(find(tools, "name", "swing-desktop__edit-text")
                 .path("allowed").asBoolean()).isFalse();
         assertThat(find(tools, "name", "swing-desktop__choose-file")
                 .path("allowed").asBoolean()).isFalse();
@@ -133,6 +156,38 @@ class HarnessEnabledIntegrationTest {
         assertThat(catalog.getBody().path("output").path("recordTypes")
                 .path("orders").path("operationalAction").asText())
                 .isEqualTo("create-orders");
+    }
+
+    @Test
+    void rejectsAmbiguousCommandBodiesThroughTheConfiguredRestTransport() {
+        HttpHeaders headers = new HttpHeaders();
+        headers.set(HarnessController.TOKEN_HEADER, TOKEN);
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        for (String body : List.of(
+                "{\"requestId\":\"one\",\"requestId\":\"two\",\"action\":\"get-data-catalog\"}",
+                "{\"requestId\":\"trailing\",\"action\":\"get-data-catalog\"} {}",
+                "{\"requestId\":123,\"action\":\"get-data-catalog\"}",
+                "{\"requestId\":\"unknown\",\"action\":\"get-data-catalog\",\"argumentz\":{}}",
+                "{\"requestId\":\"expiry\",\"action\":\"get-data-catalog\",\"expiresAt\":42}")) {
+            ResponseEntity<JsonNode> response = rest.exchange(
+                    url("/api/harness/farm-data/commands"), HttpMethod.POST,
+                    new HttpEntity<>(body, headers), JsonNode.class);
+            assertThat(response.getStatusCode()).as("body: %s", body)
+                    .isEqualTo(HttpStatus.BAD_REQUEST);
+            assertThat(response.getBody().path("code").asText()).isEqualTo("MALFORMED_BODY");
+        }
+    }
+
+    @Test
+    void registeredCommandMappersRetainTheAdvertisedAttachmentAllowance() {
+        var commandMappers = handlerAdapter.getMessageConverters().stream()
+                .filter(MappingJackson2HttpMessageConverter.class::isInstance)
+                .map(MappingJackson2HttpMessageConverter.class::cast)
+                .flatMap(converter -> converter.getObjectMappersForType(HarnessCommand.class)
+                        .values().stream()).toList();
+        assertThat(commandMappers).isNotEmpty().allSatisfy(mapper ->
+                assertThat(mapper.getFactory().streamReadConstraints().getMaxStringLength())
+                        .isGreaterThanOrEqualTo(HarnessJsonConfig.MAX_ATTACHMENT_BASE64_CHARACTERS));
     }
 
     private static JsonNode find(JsonNode array, String field, String value) {

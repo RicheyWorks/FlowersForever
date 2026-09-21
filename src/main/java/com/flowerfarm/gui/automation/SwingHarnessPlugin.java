@@ -18,6 +18,7 @@ import org.springframework.stereotype.Component;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Stream;
 
 /** Default provider-neutral adapter for the installed FlowersForever desktop. */
 @Component
@@ -30,7 +31,7 @@ public class SwingHarnessPlugin implements HarnessPlugin {
             ID,
             "FlowersForever Swing desktop",
             "Observe and operate the installed desktop through accessible selectors.",
-            "1.6",
+            "1.8",
             HarnessPluginKind.APPLICATION,
             Set.of(HarnessPluginCapability.OBSERVATION,
                     HarnessPluginCapability.COMMANDS,
@@ -131,10 +132,20 @@ public class SwingHarnessPlugin implements HarnessPlugin {
                             argument("shortcut", HarnessValueType.STRING,
                                     "Swing keystroke such as F5 or ctrl ENTER."))),
                     new HarnessActionSpec("read-control",
-                            "Read one visible non-password control through a bounded structure.",
+                            "Read a bounded page of one visible non-password control.",
                             HarnessRisk.SENSITIVE_READ, List.of(
-                            argument("selector", HarnessValueType.STRING,
-                                    "Unique accessible control selector."))),
+                            optional("selector", HarnessValueType.STRING,
+                                    "Unique accessible control selector; provide this or a menu path."),
+                            new HarnessArgumentSpec("path", HarnessValueType.ARRAY,
+                                    "Exact terminal menu path; an alternative to selector.", false, HarnessValueType.STRING),
+                            optional("offset", HarnessValueType.INTEGER,
+                                    "Zero-based row, item, or UTF-16 text offset; defaults to zero."),
+                            optional("limit", HarnessValueType.INTEGER,
+                                    "Page size: 1-200 collection items or 1-8000 text characters."),
+                            optional("column-offset", HarnessValueType.INTEGER,
+                                    "First current-view table column, defaults to zero."),
+                            optional("column-limit", HarnessValueType.INTEGER,
+                                    "Table column page size, 1-50; at most 2000 cells per response."))),
                     new HarnessActionSpec("capture-screen",
                             "Capture a bounded PNG of the attached application window.",
                             HarnessRisk.SENSITIVE_READ, List.of()),
@@ -159,7 +170,58 @@ public class SwingHarnessPlugin implements HarnessPlugin {
                             "Cancel the active application file dialog without approving a path.",
                             HarnessRisk.NAVIGATE, List.of(
                             argument("selector", HarnessValueType.STRING,
-                                    "Accessible file-chooser selector from the active dialog.")))));
+                                    "Accessible file-chooser selector from the active dialog."))),
+                    new HarnessActionSpec("scroll", "Move one application scroll area to an exact position.",
+                            HarnessRisk.NAVIGATE, List.of(
+                            argument("selector", HarnessValueType.STRING,
+                                    "Scroll-area selector or a uniquely named control inside it."),
+                            argument("axis", HarnessValueType.STRING, "HORIZONTAL or VERTICAL."),
+                            argument("value", HarnessValueType.INTEGER,
+                                    "Position within the bounds returned by read-layout."))),
+                    new HarnessActionSpec("set-divider", "Position one workspace divider.",
+                            HarnessRisk.NAVIGATE, List.of(
+                            argument("selector", HarnessValueType.STRING,
+                                    "Split-pane selector or a uniquely named control inside it."),
+                            argument("value", HarnessValueType.INTEGER,
+                                    "Divider position within the bounds returned by read-layout."))),
+                    new HarnessActionSpec("set-toggle", "Set a checkbox or toggle through its normal click listener.",
+                            HarnessRisk.DESTRUCTIVE, List.of(
+                            optional("selector", HarnessValueType.STRING, "Unique toggle selector; provide this or a menu path."),
+                            new HarnessArgumentSpec("path", HarnessValueType.ARRAY,
+                                    "Exact toggle menu path; an alternative to selector.", false, HarnessValueType.STRING),
+                            argument("selected", HarnessValueType.BOOLEAN, "Desired checked or selected state."))),
+                    new HarnessActionSpec("choose-option-index", "Choose an exact option when labels are repeated.",
+                            HarnessRisk.DRAFT, List.of(
+                            argument("selector", HarnessValueType.STRING, "Unique combo-box selector."),
+                            argument("index", HarnessValueType.INTEGER,
+                                    "Zero-based current option index returned by read-control."))),
+                    new HarnessActionSpec("clear-selection", "Clear all selected rows in a table or list.",
+                            HarnessRisk.NAVIGATE, List.of(
+                            argument("selector", HarnessValueType.STRING, "Unique table or list selector."))),
+                    new HarnessActionSpec("read-screen", "Read a page of visible application text and status messages.",
+                            HarnessRisk.SENSITIVE_READ, List.of(
+                            optional("offset", HarnessValueType.INTEGER,
+                                    "Zero-based UTF-16 offset in visible screen text; defaults to zero."),
+                            optional("limit", HarnessValueType.INTEGER, "Text page size, 1-8000 characters."))),
+                    new HarnessActionSpec("read-layout", "Read scroll or divider positions and usable bounds.",
+                            HarnessRisk.READ, List.of(
+                            argument("selector", HarnessValueType.STRING,
+                                    "Named layout pane or a uniquely named control inside it."),
+                            argument("kind", HarnessValueType.STRING, "scroll or split."))),
+                    new HarnessActionSpec("read-item", "Read a complete cell or option label in bounded text pages.",
+                            HarnessRisk.SENSITIVE_READ, List.of(
+                            argument("selector", HarnessValueType.STRING, "Unique table, list, or combo selector."),
+                            argument("index", HarnessValueType.INTEGER, "Zero-based current-view row or option index."),
+                            optional("column", HarnessValueType.INTEGER, "Required zero-based view column for tables."),
+                            optional("offset", HarnessValueType.INTEGER, "UTF-16 text offset; defaults to zero."),
+                            optional("limit", HarnessValueType.INTEGER, "Text page size, 1-8000 characters."))),
+                    new HarnessActionSpec("edit-text", "Insert, append, or replace a bounded segment of an editable draft.",
+                            HarnessRisk.DRAFT, List.of(
+                            argument("selector", HarnessValueType.STRING, "Unique non-password field selector."),
+                            argument("offset", HarnessValueType.INTEGER, "Zero-based UTF-16 insertion/replacement offset."),
+                            argument("length", HarnessValueType.INTEGER, "Number of existing characters to replace; zero inserts."),
+                            argument("value", HarnessValueType.STRING, "Replacement text, at most 8000 characters."))))
+                    .stream().map(SwingHarnessPlugin::withObservationContext).toList());
 
     private final SwingHarnessBridge bridge;
 
@@ -180,9 +242,9 @@ public class SwingHarnessPlugin implements HarnessPlugin {
     @Override
     public HarnessExecution execute(HarnessCommand command) {
         if (lifecycleAction(command.action())) {
-            return bridge.dispatch(command, () -> executeNow(command));
+            return bridge.dispatch(command, target -> executeNow(command, target));
         }
-        return executeNow(command);
+        return executeNow(command, bridge);
     }
 
     @Override
@@ -196,13 +258,63 @@ public class SwingHarnessPlugin implements HarnessPlugin {
                     "invoke-shortcut", "navigate", "navigate-route", "replace-text",
                     "choose-option", "select-tab", "select-row", "select-rows", "sort-table",
                     "select-list-row", "set-spinner", "set-slider", "choose-file",
-                    "cancel-file-dialog" -> true;
+                    "cancel-file-dialog", "scroll", "set-divider", "set-toggle",
+                    "choose-option-index", "clear-selection", "edit-text" -> true;
             default -> false;
         };
     }
 
-    private HarnessExecution executeNow(HarnessCommand command) {
+    private static HarnessActionSpec withObservationContext(HarnessActionSpec action) {
+        if (!lifecycleAction(action.name()) && !Set.of("read-control", "read-screen", "read-layout", "read-item")
+                .contains(action.name())) {
+            return action;
+        }
+        HarnessArgumentSpec context = new HarnessArgumentSpec(
+                "expected-context", HarnessValueType.STRING,
+                "Optional contextToken from a ready observation or structured read; reject changed UI before execution.",
+                false);
+        return new HarnessActionSpec(action.name(), action.description(), action.risk(),
+                action.effect(), action.idempotent(), action.requiresFreshness(),
+                Stream.concat(action.arguments().stream(), Stream.of(context)).toList());
+    }
+
+    private HarnessExecution executeNow(HarnessCommand command, SwingHarnessBridge bridge) {
         return switch (command.action()) {
+            case "edit-text" -> {
+                Object value = command.arguments().get("value");
+                if (!(value instanceof String text)) {
+                    throw new IllegalArgumentException("Text value must be a string");
+                }
+                bridge.editText(command.text("selector"), command.integer("offset"), command.integer("length"), text);
+                yield HarnessExecution.success("Edited application draft segment");
+            }
+            case "read-item" -> HarnessExecution.success("Read application collection item", bridge.readItem(command));
+            case "scroll" -> {
+                bridge.scroll(command.text("selector"), command.text("axis"), command.integer("value"));
+                yield HarnessExecution.success("Positioned application scroll area");
+            }
+            case "set-divider" -> {
+                bridge.setDivider(command.text("selector"), command.integer("value"));
+                yield HarnessExecution.success("Positioned application workspace divider");
+            }
+            case "set-toggle" -> {
+                Object selected = command.arguments().get("selected");
+                if (!(selected instanceof Boolean state)) {
+                    throw new IllegalArgumentException("selected must be a boolean");
+                }
+                bridge.setToggle(command, state);
+                yield HarnessExecution.success("Set application toggle state");
+            }
+            case "choose-option-index" -> {
+                bridge.chooseOptionIndex(command.text("selector"), command.integer("index"));
+                yield HarnessExecution.success("Selected application option by index");
+            }
+            case "clear-selection" -> {
+                bridge.clearSelection(command.text("selector"));
+                yield HarnessExecution.success("Cleared application row selection");
+            }
+            case "read-screen" -> HarnessExecution.success("Read visible application text", bridge.readScreen(command));
+            case "read-layout" -> HarnessExecution.success("Read application layout", bridge.readLayout(command));
             case "action-status" -> bridge.actionStatus(command.text("request-id"));
             case "choose-file" -> {
                 bridge.chooseFile(command.text("selector"), command.text("path"));
@@ -305,9 +417,8 @@ public class SwingHarnessPlugin implements HarnessPlugin {
                 yield HarnessExecution.success("Invoked shortcut '" + shortcut + "'");
             }
             case "read-control" -> {
-                String selector = command.text("selector");
-                yield HarnessExecution.success("Read control '" + selector + "'",
-                        bridge.readControl(selector));
+                yield HarnessExecution.success("Read application control",
+                        bridge.readControl(command));
             }
             case "capture-screen" -> {
                 SwingHarnessBridge.ScreenCapture capture = bridge.captureScreen();
@@ -331,6 +442,11 @@ public class SwingHarnessPlugin implements HarnessPlugin {
     private static HarnessArgumentSpec argument(
             String name, HarnessValueType type, String description) {
         return new HarnessArgumentSpec(name, type, description, true);
+    }
+
+    private static HarnessArgumentSpec optional(
+            String name, HarnessValueType type, String description) {
+        return new HarnessArgumentSpec(name, type, description, false);
     }
 
     private static HarnessArgumentSpec arrayArgument(

@@ -4490,6 +4490,7 @@ public class CrmTab implements FlowerFarmTab {
         if (panel == null) {
             getUIComponent();
         }
+        crmWorkspace.setSelectedIndex(1);
         configureOrderHandoff(orderId, returnTab, returnLabel);
         pendingOrderSelectionId = orderId;
         handoffOrderSelectionId = orderId;
@@ -4508,7 +4509,7 @@ public class CrmTab implements FlowerFarmTab {
             reportOrderHandoff(orderId, restored);
         }
         if (orderTable != null) {
-            orderTable.requestFocusInWindow();
+            FarmUi.revealAndFocus(orderTable);
         }
     }
 

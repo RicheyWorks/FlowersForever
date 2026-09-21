@@ -2,6 +2,8 @@ package com.flowerfarm;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.flowerfarm.automation.optimus.OptimusHarnessPlugin;
+import com.flowerfarm.automation.optimus.OptimusRobotAdapter;
+import com.flowerfarm.automation.optimus.OptimusStagedPlanStore;
 import com.flowerfarm.controller.HarnessController;
 import com.flowerfarm.repository.RobotOperationEventJpaRepository;
 import com.flowerfarm.repository.RobotControlLeaseJpaRepository;
@@ -62,6 +64,42 @@ class OptimusHarnessRestIntegrationTest {
 
     @Autowired
     RobotStagedPlanJpaRepository stagedPlans;
+
+    @Autowired
+    OptimusStagedPlanStore stagedPlanStore;
+
+    @Test
+    void conditionallyClearsOnlyTheExactDurableExecutionClaim() {
+        var identity = new OptimusRobotAdapter.RobotIdentity(OptimusRobotAdapter.AdapterMode.SIMULATOR,
+                "cleanup-store-simulator", "Cleanup simulator", "test", "safe-home");
+        var draft = new OptimusRobotAdapter.TaskDraft("Carry a tote", "packing", 60, List.of());
+        Instant now = Instant.now().truncatedTo(java.time.temporal.ChronoUnit.MILLIS);
+        var first = new OptimusRobotAdapter.TaskPlan("first-reviewed-token", draft, now);
+        stagedPlanStore.replace(identity, "cleanup-lease", first);
+        var claimed = stagedPlanStore.claimExecution(identity, "cleanup-lease",
+                first.planToken(), "first-execution", now);
+        String firstFingerprint = OptimusRobotAdapter.planFingerprint(first.planToken());
+        try {
+            stagedPlanStore.clearExecution(identity, "different-request", firstFingerprint);
+            stagedPlanStore.clearExecution(identity, "first-execution", "different-token");
+            assertThat(stagedPlanStore.current(identity)).contains(claimed);
+
+            stagedPlanStore.clearExecution(identity, "first-execution", firstFingerprint);
+            assertThat(stagedPlanStore.current(identity)).isEmpty();
+
+            var next = new OptimusRobotAdapter.TaskPlan("next-reviewed-token", draft, now);
+            var reviewed = stagedPlanStore.replace(identity, "cleanup-lease", next);
+            stagedPlanStore.clearExecution(identity, "first-execution", firstFingerprint);
+            assertThat(stagedPlanStore.current(identity)).contains(reviewed);
+            var nextClaim = stagedPlanStore.claimExecution(identity, "cleanup-lease",
+                    next.planToken(), "next-execution", now);
+            stagedPlanStore.clearExecution(identity, "first-execution",
+                    OptimusRobotAdapter.planFingerprint(next.planToken()));
+            assertThat(stagedPlanStore.current(identity)).contains(nextClaim);
+        } finally {
+            stagedPlanStore.clear(identity);
+        }
+    }
 
     @Test
     @DisplayName("publishes and executes the reviewed simulator flow over JSON")

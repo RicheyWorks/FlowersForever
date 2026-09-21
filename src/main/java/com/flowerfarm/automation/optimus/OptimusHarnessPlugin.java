@@ -60,7 +60,7 @@ public final class OptimusHarnessPlugin implements HarnessPlugin {
             new HarnessPluginDescriptor(
                     ID, "Tesla Optimus integration boundary",
                     "High-level supervised tasks through a replaceable robot adapter.",
-                    "0.22", HarnessPluginKind.ROBOT,
+                    "0.23", HarnessPluginKind.ROBOT,
                     Set.of(HarnessPluginCapability.OBSERVATION,
                             HarnessPluginCapability.COMMANDS,
                             HarnessPluginCapability.PHYSICAL_SENSING,
@@ -448,6 +448,7 @@ public final class OptimusHarnessPlugin implements HarnessPlugin {
         }
         String reconciliation = exactLive ? "LIVE"
                 : event.terminal() ? "TERMINAL_HISTORY" : "UNCONFIRMED";
+        boolean stagedPlanCleanupPersisted = clearReplayedExecutionClaim(command);
         return Optional.of(HarnessExecution.success(
                 "Recovered durable Optimus execution response", Map.of(
                         "commandId", event.operationId(),
@@ -456,7 +457,39 @@ public final class OptimusHarnessPlugin implements HarnessPlugin {
                         "recovered", true,
                         "adapterConfirmed", exactLive,
                         "reconciliationPersisted", reconciliationPersisted,
+                        "stagedPlanCleanupPersisted", stagedPlanCleanupPersisted,
                         "reconciliation", reconciliation)));
+    }
+
+    private boolean clearReplayedExecutionClaim(HarnessCommand command) {
+        // Acceptance is already durable. Retry failed metadata cleanup without
+        // deleting a newer plan or making the accepted receipt depend on a write.
+        try {
+            return clearExecutionClaim(command.requestId(),
+                    OptimusRobotAdapter.planFingerprint(command.text("plan-token")));
+        } catch (RuntimeException cleanupUnavailable) {
+            return false;
+        }
+    }
+
+    private boolean clearExecutionClaim(String requestId, String planFingerprint) {
+        stagedPlans.clearExecution(identity, requestId, planFingerprint);
+        return stagedPlans.current(identity).filter(plan ->
+                plan.claimedBy(requestId) && plan.matchesFingerprint(planFingerprint)).isEmpty();
+    }
+
+    private boolean reconcileAcceptedExecutionClaim(StoredPlan stored, RobotState current) {
+        if (!isFresh(current, clock.instant()) || !adapterConfirmsExecution(current, stored)) {
+            return false;
+        }
+        OperationEvent receipt = operationJournal.latestByRequest(
+                ID, stored.executionRequestId()).orElse(null);
+        if (receipt == null || !"execute-staged-task".equals(receipt.action())
+                || !receipt.operationId().equals(current.taskCommandId())) {
+            return false;
+        }
+        requireCurrentRobot(receipt);
+        return clearExecutionClaim(stored.executionRequestId(), stored.planTokenHash());
     }
 
     private OperationEvent unconfirmedReplayEvent(
@@ -495,6 +528,7 @@ public final class OptimusHarnessPlugin implements HarnessPlugin {
                 requireLease(command);
                 RobotState current = requireOperationalState("return to a safe pose");
                 requireDispatchAuthorization(command, current);
+                preserveTerminalOperation(current);
                 if (stagedPlans.current(identity).isPresent()
                         || adapterReportsStaged(current)) {
                     discardStagedPlan(current);
@@ -551,7 +585,12 @@ public final class OptimusHarnessPlugin implements HarnessPlugin {
     private HarnessExecution stage(HarnessCommand command) {
         LeaseAuthorization authorization = requireLease(command);
         RobotState current = requireOperationalState("stage a task");
+        preserveTerminalOperation(current);
         StoredPlan existing = stagedPlans.current(identity).orElse(null);
+        if (existing != null && existing.executionPending()
+                && reconcileAcceptedExecutionClaim(existing, current)) {
+            existing = stagedPlans.current(identity).orElse(null);
+        }
         if (existing != null) {
             if (existing.executionPending()) {
                 throw new IllegalStateException(
@@ -972,6 +1011,18 @@ public final class OptimusHarnessPlugin implements HarnessPlugin {
         return state;
     }
 
+    private void preserveTerminalOperation(RobotState current) {
+        boolean terminal = switch (current.taskStatus()) {
+            case SUCCEEDED, FAILED, CANCELLED, STOPPED -> true;
+            default -> false;
+        };
+        if (terminal && !current.taskCommandId().isEmpty()) {
+            // Staging and safe-pose dispatch replace the adapter's last operation ID.
+            // Keep its observed completion durable before that evidence is lost.
+            operationJournal.recordState(ID, identity, current);
+        }
+    }
+
     private static void requireOperational(RobotState state, String action) {
         if (state.emergencyStopped()) {
             throw new IllegalStateException("Cannot " + action
@@ -1166,6 +1217,9 @@ public final class OptimusHarnessPlugin implements HarnessPlugin {
         StoredPlan stored = stagedPlans.current(identity).orElse(null);
         if (stored != null && stored.executionPending()
                 && !adapterConfirmsStaged(state, stored)) {
+            if (reconcileAcceptedExecutionClaim(stored, state)) {
+                return;
+            }
             throw new IllegalStateException(
                     "Pending Optimus execution must be recovered before its record is discarded");
         }

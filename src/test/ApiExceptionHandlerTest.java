@@ -15,14 +15,20 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
+
+import java.util.Map;
 
 import static org.hamcrest.Matchers.not;
 import static org.hamcrest.Matchers.containsString;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @DisplayName("API exception contract")
@@ -58,6 +64,41 @@ class ApiExceptionHandlerTest {
                 .andExpect(jsonPath("$.code").value("MALFORMED_BODY"))
                 .andExpect(jsonPath("$.error").value(
                         "Request body is malformed or contains invalid values."));
+    }
+
+    @Test
+    void unsupportedRequestMediaIsAClientError() throws Exception {
+        mockMvc.perform(post("/test/item").contentType(MediaType.TEXT_PLAIN).content("Rose"))
+                .andExpect(status().isUnsupportedMediaType())
+                .andExpect(jsonPath("$.code").value("UNSUPPORTED_MEDIA_TYPE"))
+                .andExpect(jsonPath("$.status").value(415))
+                .andExpect(jsonPath("$.incidentId").doesNotExist());
+    }
+
+    @Test
+    void missingAttachmentPartIsAClientError() throws Exception {
+        mockMvc.perform(multipart("/test/attachment"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"))
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.incidentId").doesNotExist());
+    }
+
+    @Test
+    void unacceptableResponseMediaDoesNotCreateAnInternalIncident() throws Exception {
+        Logger logger = (Logger) LoggerFactory.getLogger(ApiExceptionHandler.class);
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        logger.addAppender(appender);
+        try {
+            mockMvc.perform(get("/test/json").accept(MediaType.APPLICATION_XML))
+                    .andExpect(status().isNotAcceptable())
+                    .andExpect(content().string(""));
+            assertThat(appender.list).isEmpty();
+        } finally {
+            logger.detachAppender(appender);
+            appender.stop();
+        }
     }
 
     @Test
@@ -106,6 +147,16 @@ class ApiExceptionHandlerTest {
         @PostMapping("/test/item")
         Item item(@RequestBody Item item) {
             return item;
+        }
+
+        @PostMapping("/test/attachment")
+        String attachment(@RequestPart("file") MultipartFile file) {
+            return file.getOriginalFilename();
+        }
+
+        @GetMapping("/test/json")
+        Map<String, String> json() {
+            return Map.of("name", "Rose");
         }
 
         @GetMapping("/test/unexpected")

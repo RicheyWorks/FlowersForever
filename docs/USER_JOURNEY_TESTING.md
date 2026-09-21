@@ -27,7 +27,104 @@ The harness selects form controls by accessible name instead of private fields
 or component position. A renamed or unlabeled control therefore produces a
 useful product/accessibility failure instead of silently driving the wrong UI.
 
+User actions and visible-text waits require the entire ancestor path to the
+harness root to be visible. Controls and old success messages inside inactive
+tabs cannot satisfy a journey, and disabled tabs cannot be selected through
+the driver. The `named` helper remains available for structural assertions;
+actions on a component found that way still check visibility and enabled state.
+`SwingUserHarnessFailureTest` covers these boundaries with duplicate selectors,
+hidden controls, nested tabs, and a success message revealed only by navigation.
+
+The driver's Object-based `setSpinner` helper validates before changing the
+model: numeric values must be exactly representable in the existing numeric
+type and within its bounds; dates must respect their range; list values must
+exist in the model. Invalid input does not change the editor or trigger change
+listeners. This prevents programmatic `setValue` from bypassing restrictions
+that the ordinary spinner editor enforces.
+
 ## Current journey coverage
+
+`HarnessNumericTransportTest` exercises real REST binding and MCP framing with
+precise decimals, numeric request IDs, overflow/underflow, replay, and changed
+arguments. `HarnessNumericMigrationTest` seeds historical physical receipts to
+verify safe rejection of ambiguous rounded identities and exact negative-zero
+recovery. `FarmDataMappingPrecisionTest` and its HTTP integration counterpart
+verify fractional fields fail before records or source receipts are saved.
+
+`OptimusReplayCleanupTest` verifies accepted receipts, cleanup outages, cached
+responses, lifecycle retries, and newer-plan preservation with the simulator.
+`OptimusHarnessRestIntegrationTest` also exercises conditional deletion against
+the real persistence store. `SwingPasswordCompositionTest` covers masked
+renderers and password combo editors, safe failed-action replay, and discovery.
+Those Swing fixtures exercise supported extension controls; current production
+screens do not use these password compositions.
+
+`SwingActionJournalBoundaryTest` exercises queue saturation, preservation of a
+pending modal during completed-receipt eviction, and interrupted caller retries
+using EDT barriers and a secondary event loop. `McpUtf8FramingTest` checks strict
+decoding and recovery across malformed, oversized, fragmented, and multibyte frames;
+the process smoke verifies malformed input cannot create an inventory record.
+
+`FarmDataOrderSchemaTest` separates fresh-order states from historical migration
+states across discovery, catalog, and dispatch. `FarmDataImportResumeIntegrationTest`
+checks missing-target conflicts for unchanged and corrected source rows across
+five types, including preserved receipts. `FarmDataExportServiceTest` now covers
+host locale changes, supported old metadata encodings, timestamp precision, and
+tampered-manifest rejection without checksum rewriting.
+
+`SwingSnapshotConsistencyTest` and `SwingCaptureConsistencyTest` verify that
+control metadata/tokens and captured pixels cannot silently survive a changed
+attachment or active root. The alias-capture test explicitly uses a custom
+getter callback as an invariant probe. `SwingTableHeaderTest` covers renamed
+and reordered visible column titles, sorting, and duplicate-title rejection.
+
+`McpTransportReplayContractTest` checks equivalent expiry instants, stable JSON
+identity, exact legacy recovery without fresh execution, policy revocation, and
+snapshot filtering. `HarnessTransportErrorSafetyTest` checks bounded/redacted
+REST and MCP errors. `FarmDataHarnessTransactionTest` uses a one-connection H2
+pool to verify exports and database-free reads alongside atomic write rollback.
+Mapped-import tests reject ambiguous JSON cells before writing any row and use
+the same harvest date/quantity rules during preview and import.
+
+Runtime capability tests include `SwingControlActionsTest`,
+`SwingControlReaderTest`, `SwingScreenReaderTest`, `SwingRuntimeCoverageTest`,
+`SwingTextEditingTest`, `SwingMenuTargetTest`, and `SwingMenuRuntimeTest`. They
+exercise long documents/collections, real Event Services layout and output,
+toggle/no-op behavior, renderer labels, input bounds, policy gates, and closed
+menu paths through MCP. The all-route catalog also reads each published
+read-only output and layout selector on all 35 routes.
+
+`SwingActionOutcomeTest`, `SwingSpinnerActionsTest`, and
+`SwingRowActivationTest` cover application listeners that refuse or redirect an
+action, invalid spinner input preserving a draft, failed receipt replay, and
+recovery. Double-click checks prevent loading a different record after selection
+changes the target. Runtime paging also rejects an effective table-renderer
+replacement between pages without inspecting table records during observation.
+Text-edit regressions also replace the field's document from a listener and
+verify failed receipt replay and recovery. Option-choice regressions refresh
+the model from a renderer and verify rejection before the harness selects from
+the changed options, including editable selectors and a stable retry.
+
+`HarnessCommandJsonBoundaryTest` checks malformed REST envelopes, strict expiry
+types, both JSON media types, and unchanged ordinary API binding.
+`HarnessEnabledIntegrationTest` checks command parsing on the running server.
+`FarmDataHarnessPluginTest` verifies full-width attachment IDs, rejected invalid
+IDs, and exact REST/MCP round trips and replay. `ApiExceptionHandlerTest` covers
+unsupported content types, missing upload parts, and response negotiation.
+
+The runtime plugin's optional observation binding is covered separately by
+`SwingContextBindingTest` and `SwingObservationContextTest`. These use EDT
+barriers and model notifications to check queued replacements, row changes,
+modal and attachment changes, unchanged-token reuse, subscription cleanup,
+and replay/recovery behavior. They do not add native pointer/keyboard coverage.
+
+`SwingShortcutResolverTest` and the MCP menu runtime tests cover closed-menu
+accelerators, explicit input-map priority, disabled sources and menu ancestors,
+ambiguous paths, and active-modal isolation. `SwingReadConsistencyTest` checks
+refreshes during rendering, mixed-page rejection, stable first reads, and
+same-request recovery without caching a partial page. `HarnessReplayBudgetTest`
+uses populated farm-record pages to verify byte eviction, configured serializers,
+and receipt protection if accounting fails.
 
 `UserJourneyHarnessTest` currently exercises:
 

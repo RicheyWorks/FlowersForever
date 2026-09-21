@@ -201,8 +201,9 @@ public final class SwingUserHarness {
         JSpinner spinner = uniqueAccessible(accessibleName, JSpinner.class);
         onEdt(() -> {
             requireUsable(spinner, "spinner", accessibleName);
+            Object accepted = validatedSpinnerValue(spinner, value);
             spinner.requestFocusInWindow();
-            spinner.setValue(value);
+            spinner.setValue(accepted);
             return null;
         });
         transcript.add("SPINNER " + accessibleName + " = " + value);
@@ -407,7 +408,7 @@ public final class SwingUserHarness {
     /** Changes the selected tab through its visible title. */
     public SwingUserHarness selectTab(String title) {
         List<JTabbedPane> candidates = onEdt(() -> components(JTabbedPane.class).stream()
-                .filter(Component::isVisible)
+                .filter(this::visibleThroughRoot)
                 .filter(tabs -> tabIndex(tabs, title) >= 0)
                 .toList());
         if (candidates.size() != 1) {
@@ -416,7 +417,15 @@ public final class SwingUserHarness {
         }
         onEdt(() -> {
             JTabbedPane tabs = candidates.get(0);
-            tabs.setSelectedIndex(tabIndex(tabs, title));
+            requireUsable(tabs, "tab set", title);
+            int index = tabIndex(tabs, title);
+            if (index < 0) {
+                throw new AssertionError("Tab is no longer available: " + title);
+            }
+            if (!tabs.isEnabledAt(index)) {
+                throw new AssertionError("The tab is disabled: " + title);
+            }
+            tabs.setSelectedIndex(index);
             return null;
         });
         transcript.add("TAB " + title);
@@ -1010,6 +1019,47 @@ public final class SwingUserHarness {
         return sweep(route, kind, field, available, exercised, restored);
     }
 
+    private static Object validatedSpinnerValue(JSpinner spinner, Object value) {
+        try {
+            if (spinner.getModel() instanceof SpinnerNumberModel number) {
+                if (!(value instanceof Number input)) {
+                    throw new IllegalArgumentException("a numeric value is required");
+                }
+                BigDecimal requested = new BigDecimal(input.toString());
+                Number accepted = convertNumber(requested, number.getNumber());
+                if (accepted.getClass() != number.getNumber().getClass()
+                        || requested.compareTo(new BigDecimal(accepted.toString())) != 0) {
+                    throw new IllegalArgumentException("the numeric model cannot represent this value exactly");
+                }
+                requireSpinnerBounds(accepted, number.getMinimum(), number.getMaximum());
+                return accepted;
+            }
+            if (spinner.getModel() instanceof SpinnerDateModel date) {
+                if (!(value instanceof java.util.Date)) {
+                    throw new IllegalArgumentException("a date value is required");
+                }
+                requireSpinnerBounds(value, date.getStart(), date.getEnd());
+            } else if (spinner.getModel() instanceof SpinnerListModel list
+                    && !list.getList().contains(value)) {
+                throw new IllegalArgumentException("the value is not an available list option");
+            }
+            return value;
+        } catch (RuntimeException exception) {
+            throw new AssertionError("Invalid value for spinner '" + componentSelector(spinner)
+                    + "': " + value, exception);
+        }
+    }
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private static void requireSpinnerBounds(Object value, Comparable minimum, Comparable maximum) {
+        // Swing's number and date models accept out-of-range values in setValue;
+        // validate before any production change listener can see the candidate.
+        if ((minimum != null && minimum.compareTo(value) > 0)
+                || (maximum != null && maximum.compareTo(value) < 0)) {
+            throw new IllegalArgumentException("the value is outside the spinner bounds");
+        }
+    }
+
     private static List<Object> spinnerValues(JSpinner spinner) {
         Object current = spinner.getValue();
         LinkedHashSet<Object> values = new LinkedHashSet<>();
@@ -1284,7 +1334,7 @@ public final class SwingUserHarness {
 
     private <T extends Component> T uniqueAccessible(String accessibleName, Class<T> type) {
         List<T> matches = onEdt(() -> components(type).stream()
-                .filter(Component::isVisible)
+                .filter(this::visibleThroughRoot)
                 .filter(component -> accessibleName.equals(accessibleName(component)))
                 .toList());
         if (matches.size() != 1) {
@@ -1297,7 +1347,7 @@ public final class SwingUserHarness {
 
     private AbstractButton uniqueButton(String text) {
         List<AbstractButton> matches = onEdt(() -> components(AbstractButton.class).stream()
-                .filter(Component::isVisible)
+                .filter(this::visibleThroughRoot)
                 .filter(button -> text.equals(button.getText()))
                 .toList());
         if (matches.size() != 1) {
@@ -1309,7 +1359,7 @@ public final class SwingUserHarness {
 
     private AbstractButton uniqueToggle(String accessibleName) {
         List<AbstractButton> matches = onEdt(() -> components(AbstractButton.class).stream()
-                .filter(Component::isVisible)
+                .filter(this::visibleThroughRoot)
                 .filter(button -> accessibleName.equals(accessibleName(button))
                         || accessibleName.equals(button.getText()))
                 .toList());
@@ -1322,7 +1372,7 @@ public final class SwingUserHarness {
 
     private List<String> visibleTexts() {
         return onEdt(() -> components(Component.class).stream()
-                .filter(Component::isVisible)
+                .filter(this::visibleThroughRoot)
                 .flatMap(component -> List.of(
                         textOf(component), accessibleName(component)).stream())
                 .filter(text -> text != null && !text.isBlank())
@@ -1556,8 +1606,8 @@ public final class SwingUserHarness {
         return firstNonBlank(accessibleName(button), button.getText());
     }
 
-    private static void requireUsable(Component component, String kind, String selector) {
-        if (!component.isVisible()) {
+    private void requireUsable(Component component, String kind, String selector) {
+        if (!visibleThroughRoot(component)) {
             throw new AssertionError("The " + kind + " is hidden: " + selector);
         }
         if (!component.isEnabled()) {

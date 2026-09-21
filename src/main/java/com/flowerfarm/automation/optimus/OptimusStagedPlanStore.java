@@ -22,6 +22,9 @@ public interface OptimusStagedPlanStore {
 
     void clear(RobotIdentity identity);
 
+    /** Atomically clears only the pending execution with this exact request and plan fingerprint. */
+    void clearExecution(RobotIdentity identity, String requestId, String planFingerprint);
+
     record StoredPlan(
             String robotId, boolean simulated, String leaseId,
             String planTokenHash, Instant stagedAt, Instant expiresAt,

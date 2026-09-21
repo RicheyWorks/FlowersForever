@@ -4,12 +4,18 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.flowerfarm.automation.HarnessActionSpec;
 import com.flowerfarm.automation.HarnessCommand;
 import com.flowerfarm.automation.HarnessExecution;
+import com.flowerfarm.automation.HarnessGateway;
 import com.flowerfarm.automation.HarnessPluginKind;
+import com.flowerfarm.automation.HarnessProperties;
+import com.flowerfarm.automation.HarnessRegistry;
 import com.flowerfarm.automation.HarnessToolDefinition;
+import com.flowerfarm.automation.mcp.McpProtocolHandler;
+import com.flowerfarm.controller.HarnessController;
 import com.flowerfarm.model.Customer;
 import com.flowerfarm.model.CustomerOrder;
 import com.flowerfarm.model.FarmDataImportReceipt;
 import com.flowerfarm.model.FarmSeasonSettings;
+import com.flowerfarm.model.FieldAttachmentTargetType;
 import com.flowerfarm.model.FloralRecipe;
 import com.flowerfarm.model.GrowingTemplate;
 import com.flowerfarm.model.HarvestEntry;
@@ -41,6 +47,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.LocalDate;
+import java.time.Instant;
 import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.List;
@@ -57,7 +64,11 @@ import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.setup.MockMvcBuilders.standaloneSetup;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("Domain-level AI farm data bridge")
@@ -87,6 +98,17 @@ class FarmDataHarnessPluginTest {
                 new FarmDataMappingService(objectMapper), pageService, exportService,
                 attachmentService, workerWorkflowService,
                 objectMapper);
+    }
+
+    @Test
+    void neverReturnsTheSameContinuationOffsetForAnEmptyPage() {
+        doReturn(new FarmDataPageService.RecordPage<>(List.of(), 25, 25, 26))
+                .when(pageService).list(eq("inventory"), eq(25), eq(25), isNull(), isNull());
+
+        assertThatThrownBy(() -> plugin.execute(command("empty-page", "list-records", Map.of(
+                "record-type", "inventory", "offset", 25, "limit", 25))))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("retry this read");
     }
 
     @Test
@@ -566,6 +588,121 @@ class FarmDataHarnessPluginTest {
         assertThat(result.output().get("handoffs")).asList().containsExactly(second);
         assertThat(result.output()).containsEntry("total", 2)
                 .containsEntry("nextOffset", 2).containsEntry("hasMore", false);
+    }
+
+    @Test
+    void readsAttachmentContentWithFullWidthIds() {
+        for (Object id : List.of(1L + Integer.MAX_VALUE, BigInteger.valueOf(Long.MAX_VALUE))) {
+            long expected = ((Number) id).longValue();
+            var attachment = attachmentRecord(expected);
+            when(attachmentService.readChunk(expected, 0, 2)).thenReturn(
+                    new FieldAttachmentService.AttachmentContentChunk(attachment, 0, new byte[]{1, 2}, -1));
+
+            HarnessExecution result = plugin.execute(command("wide-read-" + id, "read-attachment-content",
+                    Map.of("attachment-id", id, "max-bytes", 2)));
+
+            assertThat(result.output()).containsEntry("attachment", attachment)
+                    .containsEntry("contentBase64", "AQI=").containsEntry("hasMore", false);
+            verify(attachmentService).readChunk(expected, 0, 2);
+        }
+        verifyNoMoreInteractions(attachmentService);
+    }
+
+    @Test
+    void uploadsAttachmentToFullWidthTargetIds() {
+        ObjectMapper mapper = new ObjectMapper().findAndRegisterModules();
+        for (Object id : List.of(1L + Integer.MAX_VALUE, BigInteger.valueOf(Long.MAX_VALUE))) {
+            long expected = ((Number) id).longValue();
+            var request = new WorkerWorkflowService.WorkerAttachmentRequest(
+                    "photo-" + id, "PRODUCTION_TASK", expected, "crop.png", "image/png", "", null);
+            when(workerWorkflowService.addAttachment(eq(request), any(byte[].class))).thenReturn(
+                    new WorkerWorkflowService.WorkerActionResult("ATTACHMENT", false, Instant.EPOCH,
+                            mapper.valueToTree(attachmentRecord(expected))));
+
+            HarnessExecution result = plugin.execute(command("wide-upload-" + id, "upload-attachment",
+                    uploadArguments(id, "photo-" + id)));
+
+            assertThat(result.success()).isTrue();
+            verify(workerWorkflowService).addAttachment(request, new byte[]{1, 2});
+        }
+        verifyNoMoreInteractions(workerWorkflowService);
+    }
+
+    @Test
+    void rejectsInvalidAttachmentIdsBeforeCallingServices() {
+        for (Object id : List.of(BigInteger.valueOf(Long.MAX_VALUE).add(BigInteger.ONE),
+                BigInteger.valueOf(Long.MIN_VALUE).subtract(BigInteger.ONE), 0L, -1L, 1.0, 1.5, "1")) {
+            assertThatThrownBy(() -> plugin.execute(command("bad-read", "read-attachment-content",
+                    Map.of("attachment-id", id))))
+                    .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("attachment-id");
+            assertThatThrownBy(() -> plugin.execute(command("bad-upload", "upload-attachment",
+                    uploadArguments(id, "bad-photo"))))
+                    .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("target-id");
+        }
+        verifyNoInteractions(attachmentService, workerWorkflowService);
+    }
+
+    @Test
+    void retainsExactAttachmentIdsAndReplayAcrossRestAndMcp() throws Exception {
+        long id = Long.MAX_VALUE;
+        ObjectMapper mapper = new ObjectMapper().findAndRegisterModules();
+        HarnessProperties properties = new HarnessProperties();
+        properties.setEnabled(true);
+        properties.setToken("attachment-wire-token-123456");
+        properties.setAllowSensitiveRead(true);
+        properties.setAllowMutations(true);
+        HarnessGateway gateway = new HarnessGateway(new HarnessRegistry(List.of(plugin)), properties, mapper);
+        var mvc = standaloneSetup(new HarnessController(gateway)).build();
+        McpProtocolHandler mcp = new McpProtocolHandler(gateway, properties, mapper);
+        when(attachmentService.readChunk(id, 0, 2)).thenReturn(
+                new FieldAttachmentService.AttachmentContentChunk(attachmentRecord(id), 0, new byte[]{1, 2}, -1));
+        when(workerWorkflowService.addAttachment(any(), any(byte[].class))).thenReturn(
+                new WorkerWorkflowService.WorkerActionResult("ATTACHMENT", false, Instant.EPOCH,
+                        mapper.valueToTree(attachmentRecord(id))));
+
+        for (String action : List.of("read-attachment-content", "upload-attachment")) {
+            Map<String, Object> arguments = action.equals("read-attachment-content")
+                    ? Map.of("attachment-id", id, "max-bytes", 2) : uploadArguments(id, "wire-photo");
+            String restBody = mapper.writeValueAsString(command("rest-" + action, action, arguments));
+            String mcpBody = mapper.writeValueAsString(Map.of("jsonrpc", "2.0", "id", "mcp-" + action,
+                    "method", "tools/call", "params", Map.of("name", "farm-data__" + action,
+                            "arguments", arguments, "_meta", Map.of(
+                                    "io.modelcontextprotocol/protocolVersion", McpProtocolHandler.CURRENT_PROTOCOL_VERSION,
+                                    "io.modelcontextprotocol/clientCapabilities", Map.of()))));
+            for (boolean replay : List.of(false, true)) {
+                String response = mvc.perform(post("/api/harness/farm-data/commands")
+                                .header(HarnessController.TOKEN_HEADER, properties.getToken())
+                                .contentType(org.springframework.http.MediaType.APPLICATION_JSON).content(restBody))
+                        .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+                var restResult = mapper.readTree(response);
+                var mcpResponse = mcp.handle(mapper.readTree(mcpBody));
+                assertThat(mcpResponse.path("result").path("isError").asBoolean()).isFalse();
+                var mcpResult = mcpResponse.path("result").path("structuredContent");
+                for (var result : List.of(restResult, mcpResult)) {
+                    assertThat(result.path("success").asBoolean()).isTrue();
+                    assertThat(result.path("replayed").asBoolean()).isEqualTo(replay);
+                    assertThat(result.path("output").path("attachment").path("id").longValue()).isEqualTo(id);
+                    assertThat(result.path("output").path("attachment").path("targetRecordId").longValue())
+                            .isEqualTo(id);
+                }
+            }
+        }
+        verify(attachmentService, org.mockito.Mockito.times(2)).readChunk(id, 0, 2);
+        var requests = ArgumentCaptor.forClass(WorkerWorkflowService.WorkerAttachmentRequest.class);
+        verify(workerWorkflowService, org.mockito.Mockito.times(2)).addAttachment(requests.capture(), eq(new byte[]{1, 2}));
+        assertThat(requests.getAllValues()).extracting(WorkerWorkflowService.WorkerAttachmentRequest::targetId)
+                .containsExactly(id, id);
+        verifyNoMoreInteractions(attachmentService, workerWorkflowService);
+    }
+
+    private static Map<String, Object> uploadArguments(Object id, String key) {
+        return Map.of("operation-key", key, "target-type", "PRODUCTION_TASK", "target-id", id,
+                "filename", "crop.png", "media-type", "image/png", "content-base64", "AQI=");
+    }
+
+    private static FieldAttachmentService.AttachmentRecord attachmentRecord(long id) {
+        return new FieldAttachmentService.AttachmentRecord(id, FieldAttachmentTargetType.PRODUCTION_TASK,
+                id, "crop.png", "image/png", 2, "0".repeat(64), "", Instant.EPOCH, Instant.EPOCH);
     }
 
     private static HarnessCommand command(

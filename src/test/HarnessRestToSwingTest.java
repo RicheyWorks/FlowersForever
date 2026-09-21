@@ -1,5 +1,6 @@
 package com.flowerfarm.controller;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.flowerfarm.automation.HarnessGateway;
 import com.flowerfarm.automation.HarnessPlugin;
 import com.flowerfarm.automation.HarnessProperties;
@@ -24,6 +25,7 @@ import javax.swing.JTabbedPane;
 import javax.swing.JTable;
 import javax.swing.JTextField;
 import javax.swing.KeyStroke;
+import javax.swing.SwingUtilities;
 import javax.swing.table.DefaultTableModel;
 import java.awt.BorderLayout;
 import java.awt.event.ActionEvent;
@@ -46,6 +48,52 @@ import static org.springframework.test.web.servlet.setup.MockMvcBuilders.standal
 class HarnessRestToSwingTest {
 
     private static final String TOKEN = "end-to-end-harness-token-123456";
+
+    @Test
+    void rejectsAStaleObservationThroughTheRestWire() throws Exception {
+        AtomicInteger clicks = new AtomicInteger();
+        JPanel root = new JPanel();
+        SwingUtilities.invokeAndWait(() -> root.add(new JButton("Save")));
+        SwingHarnessBridge bridge = new SwingHarnessBridge();
+        bridge.attach(root, title -> false);
+        HarnessGateway gateway = new HarnessGateway(
+                new HarnessRegistry(List.of(new SwingHarnessPlugin(bridge))), enabledProperties());
+        MockMvc mvc = standaloneSetup(new HarnessController(gateway)).build();
+        String observed = mvc.perform(get("/api/harness/swing-desktop/observe")
+                        .header(HarnessController.TOKEN_HEADER, TOKEN))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        String context = new ObjectMapper().readTree(observed)
+                .path("metadata").path("contextToken").asText();
+        assertThat(context).isNotBlank();
+        SwingUtilities.invokeAndWait(() -> {
+            root.removeAll();
+            JButton replacement = new JButton("Save");
+            replacement.addActionListener(event -> clicks.incrementAndGet());
+            root.add(replacement);
+        });
+        mvc.perform(post("/api/harness/swing-desktop/commands")
+                        .header(HarnessController.TOKEN_HEADER, TOKEN)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"requestId":"wire-stale-context","action":"activate-button",
+                                 "arguments":{"selector":"Save","expected-context":"%s"}}
+                                """.formatted(context)))
+                .andExpect(status().isOk());
+        SwingUtilities.invokeAndWait(() -> { });
+        mvc.perform(post("/api/harness/swing-desktop/commands")
+                        .header(HarnessController.TOKEN_HEADER, TOKEN)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"requestId":"wire-stale-status","action":"action-status",
+                                 "arguments":{"request-id":"wire-stale-context"}}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.output.status").value("FAILED"))
+                .andExpect(jsonPath("$.output.failureType").value("DesktopContextChangedException"));
+        assertThat(clicks).hasValue(0);
+        bridge.detach();
+    }
 
     @Test
     @DisplayName("generates tools, edits a draft, and replays one real button click")
@@ -113,7 +161,7 @@ class HarnessRestToSwingTest {
                 .andExpect(jsonPath("$.policy.SENSITIVE_READ").value(true))
                 .andExpect(jsonPath("$.policy.DESTRUCTIVE").value(true))
                 .andExpect(jsonPath("$.replayCacheByteLimit").value(8388608))
-                .andExpect(jsonPath("$.tools.length()").value(21))
+                .andExpect(jsonPath("$.tools.length()").value(30))
                 .andExpect(jsonPath("$.tools[1].name")
                         .value("swing-desktop__replace-text"))
                 .andExpect(jsonPath("$.tools[1].inputSchema.properties.value.type")

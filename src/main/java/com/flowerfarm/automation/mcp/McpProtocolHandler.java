@@ -1,20 +1,29 @@
 package com.flowerfarm.automation.mcp;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.util.DefaultPrettyPrinter;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.ObjectWriter;
+import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.fasterxml.jackson.databind.node.DecimalNode;
+import com.fasterxml.jackson.databind.node.DoubleNode;
 import com.flowerfarm.automation.HarnessCommand;
 import com.flowerfarm.automation.HarnessGateway;
 import com.flowerfarm.automation.HarnessManifest;
+import com.flowerfarm.automation.HarnessPolicyException;
 import com.flowerfarm.automation.HarnessProperties;
 import com.flowerfarm.automation.HarnessResponse;
 import com.flowerfarm.automation.HarnessToolAnnotations;
 import com.flowerfarm.automation.HarnessToolDefinition;
+import com.flowerfarm.security.SecretRedactor;
 import org.springframework.stereotype.Component;
 
 import java.nio.charset.StandardCharsets;
+import java.math.BigDecimal;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
@@ -22,7 +31,9 @@ import java.time.format.DateTimeParseException;
 import java.util.Comparator;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.Map;
+import java.util.Set;
 
 /** Maps MCP JSON-RPC messages to the transport-neutral automation gateway. */
 @Component
@@ -47,10 +58,15 @@ public class McpProtocolHandler {
             "io.modelcontextprotocol/serverInfo";
     private static final String EXTENSION_PREFIX =
             "com.richeyworks.flowersforever/";
+    private static final ObjectWriter CANONICAL_IDENTITY_WRITER = new ObjectMapper().writer();
 
     private final HarnessGateway gateway;
     private final HarnessProperties properties;
     private final ObjectMapper mapper;
+    private final ObjectMapper argumentMapper;
+    private final ObjectWriter legacyIdentityWriter;
+    private final ObjectWriter legacyCompactIdentityWriter;
+    private final ObjectWriter legacyPrettyIdentityWriter;
     private boolean legacyInitialized;
 
     public McpProtocolHandler(
@@ -58,6 +74,12 @@ public class McpProtocolHandler {
         this.gateway = gateway;
         this.properties = properties;
         this.mapper = mapper;
+        this.argumentMapper = mapper.copy()
+                .disable(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS);
+        this.legacyIdentityWriter = mapper.writer();
+        this.legacyCompactIdentityWriter = mapper.writer()
+                .without(SerializationFeature.INDENT_OUTPUT);
+        this.legacyPrettyIdentityWriter = mapper.writer(new DefaultPrettyPrinter());
     }
 
     /** Handles one parsed JSON-RPC message, returning null for notifications. */
@@ -175,37 +197,138 @@ public class McpProtocolHandler {
             return toolError(id, modern, name, exception);
         }
         HarnessToolDefinition tool = manifest.tools().stream()
-                .filter(HarnessToolDefinition::allowed)
                 .filter(candidate -> candidate.name().equals(name))
                 .findFirst().orElse(null);
         if (tool == null) {
             return error(id, INVALID_PARAMS, "Unknown or unavailable tool: " + name, null);
         }
 
-        ObjectNode argumentNode = suppliedArguments == null
+        ObjectNode originalArguments = suppliedArguments == null
                 ? mapper.createObjectNode() : (ObjectNode) suppliedArguments.deepCopy();
-        Instant expiresAt;
+        ObjectNode argumentNode = originalArguments.deepCopy();
         try {
-            String requestId = requestId(id, name, argumentNode);
-            expiresAt = expiration(tool, argumentNode);
-            Map<String, Object> arguments = mapper.convertValue(argumentNode,
+            Instant expiresAt = expiration(tool, argumentNode);
+            ObjectNode identityArguments = argumentNode.deepCopy();
+            if (expiresAt != null) {
+                identityArguments.put("_expiresAt", expiresAt.toString());
+            }
+            String requestId = requestId(id, name, identityArguments, CANONICAL_IDENTITY_WRITER);
+            Map<String, Object> arguments = argumentMapper.convertValue(numericArguments(argumentNode, false),
                     mapper.getTypeFactory().constructMapType(
                             LinkedHashMap.class, String.class, Object.class));
             HarnessCommand command = new HarnessCommand(
                     requestId, tool.action(), arguments, expiresAt);
-            HarnessResponse response = gateway.execute(
-                    properties.getToken(), tool.pluginId(), command);
+            HarnessResponse response = replayCommand(id, name, tool, originalArguments, command);
+            if (response == null) {
+                if (!tool.allowed()) {
+                    return unavailableTool(id, name);
+                }
+                rejectAmbiguousNumericReplay(id, name, tool, originalArguments, command);
+                response = gateway.execute(properties.getToken(), tool.pluginId(), command);
+            }
             return result(id, toolResult(modern, mapper.valueToTree(response),
                     !response.success()));
+        } catch (HarnessPolicyException exception) {
+            return unavailableTool(id, name);
         } catch (RuntimeException exception) {
+            if (!tool.allowed()) {
+                return unavailableTool(id, name);
+            }
             return toolError(id, modern, name, exception);
         }
     }
 
+    private HarnessResponse replayCommand(JsonNode id, String name, HarnessToolDefinition tool,
+                                          ObjectNode originalArguments, HarnessCommand command) {
+        HarnessResponse canonical = gateway.replay(properties.getToken(), tool.pluginId(), command)
+                .orElse(null);
+        if (canonical != null) {
+            return canonical;
+        }
+        Set<String> legacyIds = new LinkedHashSet<>();
+        legacyIds.add(requestId(id, name, originalArguments, legacyIdentityWriter));
+        legacyIds.add(requestId(id, name, originalArguments, legacyCompactIdentityWriter));
+        legacyIds.add(requestId(id, name, originalArguments, legacyPrettyIdentityWriter));
+        legacyIds.remove(command.requestId());
+        for (String legacyId : legacyIds) {
+            HarnessCommand legacyCommand = new HarnessCommand(legacyId, command.action(),
+                    command.arguments(), command.expiresAt());
+            HarnessResponse legacy = gateway.replay(
+                    properties.getToken(), tool.pluginId(), legacyCommand).orElse(null);
+            if (legacy != null) {
+                return legacy;
+            }
+        }
+        return null;
+    }
+
+    private ObjectNode unavailableTool(JsonNode id, String name) {
+        return error(id, INVALID_PARAMS, "Unknown or unavailable tool: " + name, null);
+    }
+
+    private void rejectAmbiguousNumericReplay(JsonNode id, String name, HarnessToolDefinition tool,
+                                             ObjectNode originalArguments, HarnessCommand command) {
+        JsonNode roundedId = numericArguments(id, true);
+        ObjectNode roundedArguments = (ObjectNode) numericArguments(originalArguments, true);
+        // Old parsers rounded before hashing. Such receipts cannot establish which exact
+        // decimal request was accepted, but must still prevent repeating an existing effect.
+        if (canonical(id).equals(canonical(roundedId))
+                && canonical(originalArguments).equals(canonical(roundedArguments))) {
+            return;
+        }
+        Set<String> ambiguousIds = new LinkedHashSet<>();
+        ambiguousIds.add(requestId(roundedId, name, roundedArguments, legacyIdentityWriter));
+        ambiguousIds.add(requestId(roundedId, name, roundedArguments, legacyCompactIdentityWriter));
+        ambiguousIds.add(requestId(roundedId, name, roundedArguments, legacyPrettyIdentityWriter));
+        roundedArguments.remove("_expiresAt");
+        Map<String, Object> legacyArguments = argumentMapper.convertValue(roundedArguments,
+                mapper.getTypeFactory().constructMapType(LinkedHashMap.class, String.class, Object.class));
+        for (String legacyId : ambiguousIds) {
+            HarnessCommand legacyCommand;
+            try {
+                legacyCommand = new HarnessCommand(legacyId, command.action(),
+                        legacyArguments, command.expiresAt());
+            } catch (IllegalArgumentException exception) {
+                // Old nonfinite argument values could not pass the command boundary.
+                return;
+            }
+            if (gateway.replay(properties.getToken(), tool.pluginId(), legacyCommand).isPresent()) {
+                throw new IllegalArgumentException("A legacy rounded numeric request has an existing receipt; "
+                        + "review that receipt before submitting a new request id");
+            }
+        }
+    }
+
+    private JsonNode numericArguments(JsonNode value, boolean rounded) {
+        if (value.isObject()) {
+            ObjectNode copy = mapper.createObjectNode();
+            value.properties().forEach(entry ->
+                    copy.set(entry.getKey(), numericArguments(entry.getValue(), rounded)));
+            return copy;
+        }
+        if (value.isArray()) {
+            ArrayNode copy = mapper.createArrayNode();
+            value.forEach(item -> copy.add(numericArguments(item, rounded)));
+            return copy;
+        }
+        if (value.isFloatingPointNumber()) {
+            return rounded || isNegativeZero(value)
+                    ? DoubleNode.valueOf(value.doubleValue()) : DecimalNode.valueOf(value.decimalValue());
+        }
+        return value;
+    }
+
+    private static boolean isNegativeZero(JsonNode value) {
+        return value.isDouble() && Double.doubleToRawLongBits(value.doubleValue())
+                == Double.doubleToRawLongBits(-0.0d);
+    }
+
     private ObjectNode toolError(
             JsonNode id, boolean modern, String toolName, RuntimeException exception) {
-        String message = exception.getMessage() == null
-                ? "Tool execution failed" : exception.getMessage();
+        String message = SecretRedactor.redact(exception.getMessage(), 240);
+        if (message == null || message.isBlank()) {
+            message = "Tool execution failed";
+        }
         ObjectNode structured = mapper.createObjectNode();
         structured.put("success", false);
         structured.put("tool", toolName);
@@ -364,10 +487,10 @@ public class McpProtocolHandler {
         }
     }
 
-    private String requestId(JsonNode id, String name, ObjectNode arguments) {
+    private String requestId(JsonNode id, String name, ObjectNode arguments, ObjectWriter writer) {
         try {
-            String material = id.toString() + '\u0000' + name + '\u0000'
-                    + mapper.writeValueAsString(canonical(arguments));
+            String material = canonical(id).toString() + '\u0000' + name + '\u0000'
+                    + writer.writeValueAsString(canonical(arguments));
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
             return "mcp-" + HexFormat.of().formatHex(
                     digest.digest(material.getBytes(StandardCharsets.UTF_8)));
@@ -377,6 +500,17 @@ public class McpProtocolHandler {
     }
 
     private JsonNode canonical(JsonNode value) {
+        if (value.isFloatingPointNumber()) {
+            if (isNegativeZero(value) || value.isDouble() && !Double.isFinite(value.doubleValue())) {
+                return value;
+            }
+            BigDecimal decimal = value.decimalValue().stripTrailingZeros();
+            double legacy = decimal.doubleValue();
+            // Keep established identities where the ordinary double spelling is exact.
+            // Higher precision, overflow, and underflow retain the full decimal value.
+            return Double.isFinite(legacy) && BigDecimal.valueOf(legacy).compareTo(decimal) == 0
+                    ? DoubleNode.valueOf(legacy) : DecimalNode.valueOf(decimal);
+        }
         if (value.isObject()) {
             ObjectNode sorted = mapper.createObjectNode();
             java.util.TreeSet<String> names = new java.util.TreeSet<>();

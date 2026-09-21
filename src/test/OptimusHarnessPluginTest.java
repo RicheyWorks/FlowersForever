@@ -71,7 +71,7 @@ class OptimusHarnessPluginTest {
                     HarnessPluginCapability.PHYSICAL_SENSING,
                     HarnessPluginCapability.PHYSICAL_ACTUATION,
                     HarnessPluginCapability.EMERGENCY_STOP);
-            assertThat(plugin.version()).isEqualTo("0.22");
+        assertThat(plugin.version()).isEqualTo("0.23");
             assertThat(plugin.observations()).hasSize(27);
         });
         assertThat(manifest.tools())

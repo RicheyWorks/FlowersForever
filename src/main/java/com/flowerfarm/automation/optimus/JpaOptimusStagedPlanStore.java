@@ -82,6 +82,20 @@ public class JpaOptimusStagedPlanStore implements OptimusStagedPlanStore {
         }
     }
 
+    @Override
+    @Transactional
+    public void clearExecution(
+            RobotIdentity identity, String requestId, String planFingerprint) {
+        RobotStagedPlan stored = repository.findForUpdate(robotKey(identity)).orElse(null);
+        requireIdentity(stored, identity);
+        if (stored != null) {
+            StoredPlan current = fromEntity(stored);
+            if (current.claimedBy(requestId) && current.matchesFingerprint(planFingerprint)) {
+                repository.delete(stored);
+            }
+        }
+    }
+
     private static StoredPlan fromEntity(RobotStagedPlan stored) {
         return new StoredPlan(
                 stored.getRobotId(), stored.isSimulated(), stored.getLeaseId(),

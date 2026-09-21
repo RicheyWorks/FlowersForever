@@ -138,6 +138,20 @@ malformed MCP calls and unknown tools use JSON-RPC errors. A physical tool, if
 one is separately installed and enabled, adds `_expiresAt` to its MCP input
 schema and translates it to the harness command deadline.
 
+New request identities sort object fields, normalize the physical expiry to its
+UTC instant, and use fixed JSON serialization independent of application pretty
+printing or escaping. Ordinary argument strings and JSON types retain their
+identity. Exact retries of older envelopes also check existing receipts under
+the current, compact, and default-pretty legacy encodings without executing a
+new action. A recovered legacy receipt retains its original request ID.
+Arbitrary historical formatters, or a different spelling of an older
+noncanonical expiry, cannot be inferred from those old opaque hashes.
+
+Completed physical receipts can be replayed after their deadline or permission
+revocation. Fresh commands still require authorization, and revoked sensitive
+reads cannot recover cached values. Harness REST and MCP error messages use the
+shared credential redactor, remove line breaks, and are limited to 240 characters.
+
 The MCP server transports farm tool calls; it does not log into Microsoft 365,
 Google, or a previous vendor account. The farm's chosen AI/connectors read those
 sources and send their rows through `suggest-field-mapping`,
@@ -205,6 +219,22 @@ before dispatch, including required fields and unknown properties. Canonical
 commands reject fractional integers and implicit scalar coercion; spreadsheet
 conversion belongs in the mapped preview/import workflow.
 
+REST and MCP preserve decimal arguments without binary floating-point rounding.
+Equivalent decimal spellings retain request identity, but distinct values such as
+`5.0000000000000001` and `5.0000000000000002` remain distinct. Decimal tokens still
+do not satisfy canonical integer arguments. Mapped JSON cells also preserve exact
+decimals; fractional integer fields and fractional spreadsheet dates are rejected
+before import rather than rounded into accepted whole values.
+
+MCP preserves existing ordinary-decimal and negative-zero identities. Before a
+new precise request executes, bounded replay-only probes check supported older
+rounded identities. If an older receipt exists, the tool reports a legacy
+numeric ambiguity for review instead of claiming an exact replay or repeating
+the effect. This protection depends on a retained gateway or plugin receipt;
+evicted non-durable receipts and unsupported historical formatters cannot be
+recovered. Callers should retain the original response and use a new request ID
+only after reviewing any ambiguous prior result.
+
 `allowed=false` is an instruction to omit or disable that tool for the current
 session; it is not merely advisory. The gateway independently enforces the
 same policy if a client submits the command anyway.
@@ -234,14 +264,29 @@ paths contain exact visible labels, never editable field values. The current
 
 ## Send typed commands
 
+REST command bodies require unambiguous JSON: duplicate keys, unknown envelope
+fields, trailing content, and numeric/boolean `requestId` or `action` values
+are rejected as `400 MALFORMED_BODY` before dispatch. A supplied non-null
+`expiresAt` must be an ISO-8601 timestamp string. These parsing rules apply to
+`HarnessCommand` bodies for both `application/json` and `application/*+json`;
+ordinary API DTOs keep their configured JSON behavior. Omitted or null
+`arguments` and `expiresAt` retain their existing defaults.
+
 Each command requires a caller-generated `requestId`. Retrying the exact same
 command ID returns the cached response with `replayed=true` and does not operate
 the UI twice. Reusing that ID with different command contents is rejected. The
 current-process replay cache retains at most 256 completed commands. It evicts
 older entries when estimated argument, output, and observation data exceeds
-8 MiB. The newest completed receipt is retained even when it alone exceeds that
-target, preserving retry protection for a large attachment upload. This is an
-eviction target, not a strict heap-memory limit. Durable job orchestration should
+8 MiB. Accounting uses bounded serialized JSON sizes, including entity/DTO
+fields, execution messages, and the complete snapshot. It uses the application's
+configured serializer without building a duplicate JSON string. If sizing
+fails, the receipt receives a conservative oversized weight; a completed effect
+is recorded before accounting begins. Retrying an incomplete receipt refreshes
+its eviction position before accounting and observation, so it cannot evict
+itself while completing the retry. Ordinary response replay does not refresh
+the position. The newest completed receipt is retained even when it alone
+exceeds that target, preserving retry protection for a large attachment upload.
+This is an eviction target, not a strict heap-memory limit. Durable job orchestration should
 keep its own audit and retry state. Nested command arguments are copied into
 immutable JSON values so later caller edits cannot change a receipt's identity.
 A completed effect is retained even if the following observation fails; an exact
@@ -274,6 +319,13 @@ It calls the same transactional application services as the desktop and REST
 controllers; it does not need a visible Swing window or imitate taps and
 keystrokes. This makes it suitable for a farm AI serving workers on phones,
 tablets, or computers, including a headless container deployment.
+
+`create-orders` accepts initial statuses `DRAFT` and `CONFIRMED`; omission retains
+the service's draft default. `import-order-history` and mapped historical orders
+also accept `FULFILLED` and `CANCELLED`. The orders catalog keeps its historical
+`writeSchema` and adds `operationalWriteSchema` for fresh orders. Discovery and
+MCP publish the appropriate schema for each action, and invalid statuses fail
+before any row in a batch reaches the order service.
 
 The AI's Excel, Google Sheets, CSV, or previous-app reader remains upstream of
 FlowersForever. Column interpretation and canonical validation are now built
@@ -415,6 +467,11 @@ names take precedence; a normalized name matching several source fields must
 be disambiguated by supplying the exact spelling. Structured objects and arrays
 cannot silently become names or source IDs.
 
+JSON cells must contain exactly one complete value; duplicate object properties
+and content after that value are rejected. Harvest previews share the import
+service's farm-timezone date and inventory-quantity validation, so future dates
+and quantities that round below one inventory unit appear as preview issues.
+
 `source-key-fields` can name one source ID or several columns that together
 identify a row. Explicit key fields override inferred or mapped source IDs.
 The plugin writes the resulting stable key into `sourceKey`;
@@ -455,8 +512,9 @@ identity, and recipes use design type plus name as their natural keys. Harvests,
 orders, knowledge entries, and completed-task actuals are treated as historical
 events: reusing their source key with changed content or a different action
 returns HTTP 409 instead of silently duplicating or rewriting history. A
-receipt whose target was removed also returns 409 so the operator can reconcile
-it deliberately.
+receipt whose target was removed also returns 409 for both unchanged and
+corrected retries so the operator can reconcile it deliberately. The rejected
+retry preserves the receipt and does not recreate the deleted target.
 
 `list-import-receipts` uses database-backed paging and can filter by
 `source-system` and canonical `record-type`. Its response includes the target
@@ -499,6 +557,11 @@ A non-final response includes continuation metadata alongside the real rows:
 
 A client should use the returned `nextOffset` rather than inventing
 `offset + limit`; this also handles a short final page correctly.
+Live reads can observe concurrent changes between the page and count queries.
+If an empty page precedes the reported total, the read fails with an explicit
+retry message instead of returning a continuation that repeats the same offset
+or falsely marking the traversal complete. Retry that read; use
+`create-record-export` when a complete, stable snapshot is required.
 
 Production-task photo metadata is available as the `attachments` record type.
 Metadata pages expose the target task ID, original filename, detected media
@@ -507,6 +570,9 @@ of the contract. Use `read-attachment-content` with an attachment ID, byte
 offset, and `max-bytes` no greater than 262,144. The result includes base64
 bytes, `nextOffset`, and `hasMore`, and FlowersForever verifies the complete
 file size and SHA-256 before releasing any chunk.
+Attachment IDs and upload target IDs accept positive signed 64-bit JSON integers,
+including values beyond the 32-bit range. Fractional, string, nonpositive, and
+overflowing IDs are rejected before the attachment service is called.
 
 Use `upload-attachment` for AI-supplied task evidence. It requires a stable
 `operation-key`, `target-type` of `PRODUCTION_TASK`, an existing task ID,
@@ -541,6 +607,12 @@ The export uses a dedicated repeatable-read transaction and releases each
 serialized page from the JPA persistence context, so a complete farm snapshot
 does not retain every loaded entity until the final page.
 
+The command dispatcher does not wrap export creation in another transaction.
+This allows an ordinary gateway export to run with a single database connection
+on databases supporting repeatable-read isolation. Reading completed export files,
+the data catalog, and field-mapping suggestions requires no database transaction.
+Canonical and mapped batch writes still share one transaction with their receipts.
+
 The caller supplies an `export-key` that is stable for one logical snapshot.
 FlowersForever stores only a deterministic opaque export ID, not the raw key.
 An exact create retry returns the original manifest with `replayed=true`, even
@@ -557,9 +629,26 @@ beneath the configured FlowersForever export directory, so normal data-directory
 backup retains them. A zero-record snapshot has no parts and its manifest is the
 complete result.
 
+New part filenames use ASCII digits regardless of host locale. Existing localized
+filenames remain readable only when their digits identify the exact padded part
+index in one digit alphabet; path fragments and mismatched indexes are rejected.
+New export metadata uses fixed ISO dates and JSON settings, independent of the
+application mapper used for record payloads. Legacy snapshots keep their original
+checksums and files. Recovery supports standard Jackson ISO dates, fractional
+epoch seconds, integer epoch milliseconds, normal/sorted metadata maps, and
+ordinary/escaped Unicode. Compact output and default pretty output using the
+current host newline style are supported. Custom date formats, integral epoch
+second serializers, and historical pretty output with a different newline style
+are outside that compatibility contract. Changed export parameters still return
+409 after the stored manifest passes integrity validation.
+
 The stdio transport accepts one JSON document per line, with at most 32 Mi
 characters per frame. It drains an oversized frame, reports the limit, and
-continues with the next line. Its parser allowance includes a full 15 MiB
+continues with the next line. Frames are decoded as strict UTF-8; malformed
+bytes return a parse error before dispatch instead of becoming replacement
+characters. Decoder state resets between frames, so a later valid request still
+runs. The limit counts decoded UTF-16 units, preserving the existing allowance
+for multibyte text. Its parser allowance includes a full 15 MiB
 attachment encoded as base64; enabled REST harness parsing uses the same
 attachment allowance. Existing larger REST parser limits are retained.
 
@@ -568,7 +657,7 @@ local-model, and other MCP-capable clients. Provider-specific spreadsheet or
 previous-app readers still supply source rows; they no longer need custom
 column-mapping or farm-domain conversion code.
 
-The Swing plugin publishes 21 commands through discovery. Every
+The Swing plugin publishes 30 commands through discovery. Every
 argument also includes its JSON type, description, and required flag so an AI
 tool can derive its own function/tool schema without hard-coded knowledge:
 
@@ -591,10 +680,61 @@ tool can derive its own function/tool schema without hard-coded knowledge:
 | `activate-menu` | `path` (string array) | `DESTRUCTIVE` |
 | `invoke-shortcut` | `shortcut` | `DESTRUCTIVE` |
 | `action-status` | `request-id` (the original desktop action ID) | `READ` |
-| `read-control` | `selector` | `SENSITIVE_READ` |
+| `read-control` | `selector` or menu `path`; optional paging arguments | `SENSITIVE_READ` |
 | `capture-screen` | none | `SENSITIVE_READ` |
 | `choose-file` | `selector`, `path` (absolute local path) | `DESTRUCTIVE` |
 | `cancel-file-dialog` | `selector` | `NAVIGATE` |
+| `scroll` | `selector`, `axis`, `value` | `NAVIGATE` |
+| `set-divider` | `selector`, `value` | `NAVIGATE` |
+| `set-toggle` | `selector` or menu `path`, `selected` (boolean) | `DESTRUCTIVE` |
+| `choose-option-index` | `selector`, `index` | `DRAFT` |
+| `clear-selection` | `selector` | `NAVIGATE` |
+| `read-screen` | optional `offset`, `limit` | `SENSITIVE_READ` |
+| `read-layout` | `selector`, `kind` (`scroll` or `split`) | `READ` |
+| `read-item` | `selector`, `index`, table `column`; optional text `offset`, `limit` | `SENSITIVE_READ` |
+| `edit-text` | `selector`, `offset`, `length`, `value` | `DRAFT` |
+
+Snapshot metadata includes `readableControls` for uniquely named read-only text
+and status labels, and `layoutControls` for named scroll/split panes. These lists
+publish selectors rather than current values. `read-screen` also reads visible
+messages that have no unique selector. Text inside hidden tabs and password
+fields is excluded. Text inside the active scroll view remains readable even
+when it is outside the current viewport. This is logical application text;
+`capture-screen` remains the way to inspect custom charts and painted pixels.
+
+`read-layout` returns geometry only and does not require sensitive-read policy.
+For scroll areas, each axis reports its current value, `minimum`, raw `maximum`,
+`extent`, usable `maximumValue`, and availability/enabled flags. `scroll` accepts
+`HORIZONTAL` or `VERTICAL` and an integer in `minimum..maximumValue`. A split
+pane exposes divider `value`, `minimum`, and `maximum`. A selector may name the
+layout pane itself or a uniquely named control inside it; the nearest matching
+ancestor within the active application root is used. Named layout panes appear
+in `layoutControls`; unnamed panes remain reachable through named content.
+
+`set-toggle` clicks only when the current selected state differs from the
+requested boolean. Grouped radio buttons are selected by choosing the desired
+button; clearing the selected member alone is rejected. Menu toggles can use
+an exact `path` instead of `selector`, as can `read-control`; provide exactly one
+target form. Menu reads report effective enabled state through their ancestors.
+`choose-option-index` disambiguates equal rendered labels, such as customers
+with the same name, using the index published by `read-control`. Use a context
+token with positional commands. `clear-selection` clears a table or list's
+selection through its production selection model and reports failure if a
+synchronous listener restores selected rows or columns.
+`choose-option` rejects a model replacement or model notification during
+renderer label matching before selecting from the changed options. Normal
+selection callbacks can still rebuild equal option records after matching.
+
+`edit-text` supports long drafts by inserting or replacing at a UTF-16 offset;
+`length=0` inserts, and an offset equal to the current document length appends.
+Each replacement chunk is limited to 8,000 characters. Invalid ranges are
+rejected before mutation. Both text-edit actions use normal document filters
+and fail if the requested replacement is refused; they do not bypass field
+validation. Observe/read again between dependent edits and keep the original
+request ID when retrying an uncertain response.
+`edit-text` also fails if a synchronous listener replaces the field's document,
+even when the detached document contains the requested text. Read the current
+field and use a fresh request ID to recover from that failed action.
 
 `choose-option` accepts the exact visible text of a fixed option. When
 `read-control` reports `editable=true`, it also accepts custom text and commits
@@ -605,12 +745,37 @@ client add an inventory item with a new category or selling unit. Use
 ID for retries and confirm the background save through farm-data read-back.
 Fixed option lists continue to reject unknown values.
 
+State-setting commands verify their result after synchronous application
+listeners run. A reverted option, tab, row selection, slider value, or sort
+order produces `FAILED` with `failureType=IllegalStateException`. Option checks
+allow fresh equal records when the application rebuilds a choice model; indexed
+choices additionally require the requested index. These checks report the
+application's outcome and do not undo listener effects.
+
+`set-spinner` parses through the installed editor formatter before changing its
+text and checks standard number/date/list model constraints. Invalid input
+leaves the existing draft intact. Standard integral decimal editors additionally
+require the entire formatted number to equal the parsed model value, rejecting
+integer wraparound, fractional truncation, and trailing junk while retaining
+localized grouping. Explicit custom parsers retain their own grammar.
+Disabled, hidden, or read-only editors are
+rejected. Custom models use their normal commit path, with final model-value
+verification to catch silent refusal or reversion.
+
+`double-click-row` verifies selection and the original model-row mapping before
+delivering the mouse event. A synchronous selection callback that replaces or
+updates the table model, redirects selection, or sorts another record into that
+view row prevents the opening callback from running. Read the current table and
+use a fresh request ID to retry.
+
 ### Dialogs and action completion
 
-Desktop actions run through a process-local action journal. A quick callback
-returns `status=COMPLETED`; an action still running after the short dispatch
-grace period returns `accepted=true`, `completed=false`, `status=PENDING`, and
-`actionRequestId`. A successful acceptance does not mean the farm operation is
+Desktop actions run through a process-local action journal. A callback that
+finishes before the first receipt is published returns `status=COMPLETED`;
+otherwise the receipt returns `accepted=true`, `completed=false`,
+`status=PENDING`, and `actionRequestId`. The first caller normally allows a
+short dispatch grace period before returning. A successful acceptance does not
+mean the farm operation is
 complete. This allows an action to open a real modal dialog without holding the
 gateway lock until the dialog closes. `COMPLETED` means the command callback
 returned successfully. A background SwingWorker started by that callback may
@@ -622,7 +787,11 @@ poll a fresh envelope `requestId` so the gateway does not replay an older poll.
 The response reports `PENDING`, `COMPLETED`, or `FAILED`; failures expose only
 their exception class. Status reads omit control values and prior result text.
 Retrying the original action returns its original accepted receipt and never
-clicks twice while that receipt is retained. Up to 256 receipts and 16 pending
+clicks twice while that receipt is retained. The first published receipt is
+frozen atomically, including for concurrent direct plugin callers: if a
+duplicate publishes `PENDING` first, the original call and later replays keep
+that receipt even after completion. Read `action-status` for the current state.
+Up to 256 receipts and 16 pending
 actions are retained; pending actions are not silently evicted. The journal is
 process-local, so domain receipts remain necessary for restart-safe mutations.
 
@@ -634,6 +803,76 @@ Unrelated application windows are outside this attachment. If the event loop
 is busy, observation returns `ready=false` and pending action IDs instead of
 waiting indefinitely. A queued action cannot move into a newly attached
 desktop session.
+
+### Bind actions to an observation
+
+Swing desktop plugin version 1.8 publishes an opaque `metadata.contextToken`
+with each ready observation. All 24 queued actions accept an optional string
+argument, `expected-context`. Copy the token from the observation whose screen
+you reviewed into the command. For example:
+
+```json
+{
+  "requestId": "select-reviewed-harvest-1",
+  "action": "select-row",
+  "arguments": {
+    "table": "Harvest history",
+    "row": 0,
+    "expected-context": "<contextToken from the ready observation>"
+  }
+}
+```
+
+The table selector in this example is illustrative; use the exact selector
+published by the current observation. Immediately before execution on the Swing
+event thread, the harness checks the attachment, active root or modal, visible
+component identities and control state, and revisions of their Swing models.
+Replacing a control with the same selector, updating or sorting table rows,
+editing a draft, or replacing the active dialog invalidates the old token.
+Table columns also bind their effective default renderers, so replacing one
+invalidates paged rendered text; changing an unused default under a column
+override leaves its effective renderer unchanged. This binding reads no cells.
+Unchanged observations retain their token. Busy or unattached observations do
+not publish one. Tokens contain no field values or value-derived hashes.
+Once started, a callback keeps its captured attachment and active root; a later
+attachment replacement cannot redirect its target lookups.
+
+Observation binds context before describing controls and verifies it afterward.
+An attachment, active-root, or tracked context change returns `ready=false` with
+no controls or token. Screenshots check attachment and active root before and
+after painting and reject a replacement during capture. Table reads and sorting
+use the current `TableColumn.headerValue` in visible column order; arbitrary
+custom header-renderer pixels are outside this textual header contract.
+
+A stale action fails without running its callback. Its final receipt or
+`action-status` reports `status=FAILED` and
+`failureType=DesktopContextChangedException`. Observe again, review the current
+screen, then issue a new request ID with the new token. Replaying the rejected
+request keeps its original receipt; replaying a completed request remains valid
+after later context changes and does not execute the action again.
+
+Commands that omit `expected-context` retain existing behavior: selectors and
+row indexes resolve when the queued callback executes. Serialize dependent UI
+work and obtain a fresh observation after each change. The guard is deliberately
+conservative: unrelated visible control/model updates can require another
+observation. It relies on normal Swing model notifications and event-thread UI
+changes; it does not bind arbitrary service state or make background farm writes
+transactional. Sensitive control reads and screenshots keep their existing
+policy requirements. Screenshots do not themselves issue a context token.
+
+The four structured reads (`read-control`, `read-item`, `read-screen`, and
+`read-layout`) also accept `expected-context` and return the token corresponding
+to the data they actually read. Use it for subsequent pages with fresh request
+IDs. If a model changes, a fresh read with the old token raises
+`DesktopContextChangedException` instead of mixing pages from different states.
+Each structured read also compares its starting and ending context, attachment,
+and active root, even when `expected-context` is omitted. A refresh or dialog
+change during a renderer callback rejects the read before returning a mixed
+page or publishing a replacement token. A failed read creates no successful
+replay entry; a stable retry can run again.
+Read commands are synchronous and do not create action-journal entries.
+Reusing a read request ID still replays its earlier response; use a new ID to
+obtain current data.
 
 Export dialogs publish the stable `Farm export file chooser` selector
 (`farm.exportFileChooser` also works). With sensitive reads enabled,
@@ -649,12 +888,35 @@ depend on operating-system pointer or keyboard input.
 
 Ordinary observation stays value-redacted. If an operator explicitly enables
 `FLOWERFARM_HARNESS_ALLOW_SENSITIVE_READ=true`, `read-control` returns a bounded,
-JSON-compatible view of one visible non-password control. Text is capped at
-8,000 characters; option collections and table cells have smaller item and
-count limits and report `truncated=true` when either a collection or an individual
-value is clipped. Selected rows and tab titles are also bounded. Tables use their current
+JSON-compatible view of one visible non-password control. Password-backed combo
+editors and password renderers inside table/list/combo controls are also rejected
+before returning model values or changing a selection. Known password-backed
+combos remain visible in discovery as unsupported. Text is capped at
+8,000 characters per page; option collections and table cells have smaller item
+and count limits and report `truncated=true` when either a collection or an
+individual value is clipped. Selected rows and tab titles are also bounded. Tables use their current
 sorted view and renderer-visible cell text. Password controls are rejected even
 when this policy is enabled.
+
+`read-control` accepts optional `offset` and `limit`: offsets address UTF-16
+characters for text/labels, rows for tables, or indexes for lists, combo options,
+and tabs. Defaults preserve the previous first-page behavior. Collection limits
+are 1–200 and text limits are 1–8,000. Tables also accept `column-offset` and
+`column-limit` (1–50) and cap each response at 2,000 cells. Responses publish
+absolute indexes, `hasMore`, and `nextOffset` when more entries remain; tables
+also publish `hasMoreColumns` and `nextColumnOffset`. An offset at the exact end
+returns an empty final page; an offset past the end fails. Follow continuation
+flags rather than `truncated`, which also describes per-value clipping and a
+nonzero starting offset.
+
+`read-item` reads one complete renderer-visible table cell, list item, or combo
+option in text pages, including the portion beyond the 500-character summaries
+in collection pages. Table rows and columns use current view indexes. For text
+without an addressable control, `read-screen` pages the active screen's labels,
+buttons, selected-tab titles, and text documents in traversal order. It returns
+`text`, `offset`, `nextOffset`, `totalCharacters`, and `hasMore`; tables and option
+models are read separately through the collection tools. Every page is bounded
+without copying an entire long text document first.
 
 `capture-screen` returns an `image/png` payload encoded as base64 with width,
 height, and SHA-256 metadata. It captures the attached FlowersForever
@@ -683,6 +945,12 @@ transport, logs, and transcripts have an acceptable retention policy.
 
 Selectors come from accessible names, production component names, or visible
 button text and must be unique across all control kinds on the current screen.
+Snapshot commandability checks all visible components against the name aliases
+accepted by command execution. If an accessible name also matches another
+visible component's name or button text, the snapshot uses the control's existing
+unique production component name when available. Otherwise the control remains
+unaddressable, even if a type-specific action could distinguish it. Use the
+returned selector verbatim; the display label itself does not change.
 Buttons without a production action or item listener are not advertised as
 commandable. Combo choices are matched
 to renderer-visible text; table columns and tabs use their exact displayed
@@ -707,10 +975,22 @@ The live contract covers application-owned text, selectors, primary and nested
 tabs, single and multiple table selection, table sorting, list selection,
 spinners, sliders, buttons/toggles, single-line Enter submission, table
 double-click routes, terminal menus, and installed application shortcuts.
-Native dialogs, file choosers, the OS clipboard, arbitrary pointer coordinates,
-and process exit remain explicit plugin or transport extensions because they
-need platform-specific focus and approval policy. The installed-desktop test
-profile covers native pointer, keyboard, focus, and pixels independently.
+`invoke-shortcut` first resolves one enabled visible application input-map
+binding. If none is usable, it resolves one enabled menu accelerator through
+the logical menu hierarchy and invokes the normal menu click without opening
+the popup. This supports F1 for PNW Plant Guide, Ctrl+Shift+D for Dark Mode, and
+Ctrl+Shift+M for My access. Existing explicit bindings retain priority over a
+duplicate menu accelerator, including F5. Ambiguous bindings or menu paths are
+rejected; the active modal root limits both searches. An action shared by
+different component sources remains ambiguous because its source can affect
+the operation. This uses installed application bindings and does not emulate
+native focus or arbitrary keyboard input.
+Application-owned modal dialogs and file choosers are handled by the existing
+active-root and chooser commands. OS clipboard access, arbitrary pointer
+coordinates, and process exit remain platform extensions. The installed-desktop
+test profile covers native pointer, keyboard, focus, and pixels independently;
+the deterministic API does not claim screen-reader speech or cross-platform
+window-management coverage.
 
 ## AI adapter and future robot contract
 
@@ -932,6 +1212,11 @@ it to return to `RUNNING` or `STAGED`. A later forward adapter sample can reconc
 an `UNKNOWN` event normally. Cancellation, failure, and stop receipts preserve the
 latest known progress; only `SUCCEEDED` implies 100 percent.
 
+Plugin 0.23 retries cleanup of accepted execution claims without deleting newer
+plans. Staging and return-to-pose also persist an observed terminal operation
+before replacing the adapter's current operation. If that journal append fails,
+the new staging/dispatch waits for a retry; emergency-stop remains independent.
+
 Every staged-plan cleanup path reconciles the durable record with current
 adapter state. Explicit cancellation, lease release, plan expiry, restaging,
 and return-to-pose call the adapter's staged-task cancellation only when it
@@ -977,6 +1262,14 @@ Cursors are JSON strings so large database IDs are not rounded by JavaScript;
 clients should store and replay them unchanged. A response also reports
 `hasMore`, allowing a reconnecting AI to drain a backlog without polling each
 operation separately.
+
+An accepted execution can outlive a failed staged-plan cleanup. Exact durable
+replay retries cleanup of only the matching request and plan fingerprint, with
+`stagedPlanCleanupPersisted` reporting its result. The accepted receipt remains
+available during an outage. A cached response retains its original cleanup flag;
+subsequent staging and discard operations can retry cleanup when a fresh adapter
+sample and durable receipt agree on the operation ID and plan fingerprint. A
+different reviewed plan, claim, or robot is never cleared by that recovery.
 
 The plugin publishes observation plus thirteen bounded actions:
 

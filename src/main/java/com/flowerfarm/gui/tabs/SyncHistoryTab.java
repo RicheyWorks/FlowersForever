@@ -451,8 +451,11 @@ public class SyncHistoryTab implements FlowerFarmTab {
         filterBar.setLayout(new BoxLayout(filterBar, BoxLayout.Y_AXIS));
 
         connectorFilter = new JComboBox<>(new String[]{"All sources"});
+        connectorFilter.setName("activity.sourceFilter");
         operationFilter = new JComboBox<>(new String[]{"All activities"});
+        operationFilter.setName("activity.operationFilter");
         resultFilter = new JComboBox<>(new String[]{"Any result", "Completed only", "Needs attention only"});
+        resultFilter.setName("activity.resultFilter");
         messageSearch = FarmUi.searchField(
                 "Activity message search", "Search messages or details", 18);
         FarmUi.initialFocus(messageSearch);

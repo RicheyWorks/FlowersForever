@@ -19,6 +19,18 @@ final class SwingActionJournal {
     private static final int MAX_RECEIPTS = 256;
     private static final int MAX_PENDING = 16;
     private final Map<String, Entry> entries = new LinkedHashMap<>();
+    private final long dispatchGraceMillis;
+
+    SwingActionJournal() {
+        this(150);
+    }
+
+    SwingActionJournal(long dispatchGraceMillis) {
+        if (dispatchGraceMillis < 0) {
+            throw new IllegalArgumentException("Dispatch grace period cannot be negative");
+        }
+        this.dispatchGraceMillis = dispatchGraceMillis;
+    }
 
     HarnessExecution dispatch(HarnessCommand command, Supplier<HarnessExecution> action) {
         Entry entry;
@@ -52,7 +64,7 @@ final class SwingActionJournal {
         });
         if (!SwingUtilities.isEventDispatchThread()) {
             try {
-                entry.result.get(150, TimeUnit.MILLISECONDS);
+                entry.result.get(dispatchGraceMillis, TimeUnit.MILLISECONDS);
             } catch (TimeoutException ignored) {
                 // Accepted work remains tracked; a modal loop is expected to outlive this grace period.
             } catch (InterruptedException exception) {
@@ -62,8 +74,7 @@ final class SwingActionJournal {
                 throw new IllegalStateException("Could not inspect desktop action", exception);
             }
         }
-        entry.acceptedReceipt = receipt(entry);
-        return entry.acceptedReceipt;
+        return acceptedReceipt(entry);
     }
 
     Optional<HarnessExecution> replay(HarnessCommand command) {
@@ -125,14 +136,19 @@ final class SwingActionJournal {
                 ? "Accepted; action still pending, poll action-status" : result.message(), output);
     }
 
-    private static HarnessExecution acceptedReceipt(Entry entry) {
-        return entry.acceptedReceipt == null ? receipt(entry) : entry.acceptedReceipt;
+    private HarnessExecution acceptedReceipt(Entry entry) {
+        synchronized (entries) {
+            if (entry.acceptedReceipt == null) {
+                entry.acceptedReceipt = receipt(entry);
+            }
+            return entry.acceptedReceipt;
+        }
     }
 
     private static final class Entry {
         private final HarnessCommand command;
         private final CompletableFuture<HarnessExecution> result = new CompletableFuture<>();
-        private volatile HarnessExecution acceptedReceipt;
+        private HarnessExecution acceptedReceipt;
 
         private Entry(HarnessCommand command) {
             this.command = command;

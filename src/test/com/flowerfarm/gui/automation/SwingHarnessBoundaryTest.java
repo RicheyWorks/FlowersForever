@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 import javax.swing.JMenu;
 import javax.swing.JButton;
 import javax.swing.JComboBox;
+import javax.swing.JLabel;
 import javax.swing.JList;
 import javax.swing.JMenuBar;
 import javax.swing.JMenuItem;
@@ -25,6 +26,95 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class SwingHarnessBoundaryTest {
+
+    @Test
+    void publishesExistingComponentNameWhenAccessibleLabelIsAmbiguous() throws Exception {
+        SwingUtilities.invokeAndWait(() -> {
+            JLabel label = new JLabel("Harvest unit");
+            JComboBox<String> units = new JComboBox<>(new String[]{"stems", "bunches"});
+            units.getAccessibleContext().setAccessibleName("Harvest unit");
+            units.setName("harvest.unit");
+            JPanel root = new JPanel();
+            root.add(label);
+            root.add(units);
+            SwingHarnessBridge bridge = attach(root);
+
+            assertThat(bridge.snapshot(SwingHarnessPlugin.ID).controls())
+                    .singleElement().matches(control -> control.selector().equals("harvest.unit")
+                            && control.commandable());
+            assertThat(label.getAccessibleContext().getAccessibleName()).isEqualTo("Harvest unit");
+            assertThat(units.getAccessibleContext().getAccessibleName()).isEqualTo("Harvest unit");
+            bridge.chooseOption("harvest.unit", "bunches");
+            assertThat(bridge.readControl("harvest.unit")).containsEntry("selected", "bunches");
+
+            JLabel nameCollision = new JLabel("Another field");
+            nameCollision.setName("harvest.unit");
+            root.add(nameCollision);
+            assertThat(bridge.snapshot(SwingHarnessPlugin.ID).controls())
+                    .singleElement().matches(control -> control.selector().equals("Harvest unit")
+                            && !control.commandable());
+            assertThatThrownBy(() -> bridge.readControl("harvest.unit"))
+                    .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("found 2");
+        });
+    }
+
+    @Test
+    void reportsSelectorCollisionsWithButtonTextAndComponentNames() throws Exception {
+        SwingUtilities.invokeAndWait(() -> {
+            AtomicInteger originalActivations = new AtomicInteger();
+            AtomicInteger textAliasActivations = new AtomicInteger();
+            AtomicInteger nameAliasActivations = new AtomicInteger();
+            JButton original = new JButton("Save");
+            original.getAccessibleContext().setAccessibleName("Save item");
+            original.setName("Submit");
+            original.addActionListener(event -> originalActivations.incrementAndGet());
+            JButton textAlias = new JButton("Save draft");
+            textAlias.getAccessibleContext().setAccessibleName("Save");
+            textAlias.addActionListener(event -> textAliasActivations.incrementAndGet());
+            JButton nameAlias = new JButton("Finish");
+            nameAlias.getAccessibleContext().setAccessibleName("Submit");
+            nameAlias.addActionListener(event -> nameAliasActivations.incrementAndGet());
+            JPanel root = new JPanel();
+            root.add(original);
+            root.add(textAlias);
+            root.add(nameAlias);
+            SwingHarnessBridge bridge = attach(root);
+
+            assertThat(bridge.snapshot(SwingHarnessPlugin.ID).controls())
+                    .filteredOn(control -> List.of("Save", "Submit").contains(control.selector()))
+                    .hasSize(2).allMatch(control -> !control.commandable());
+            assertThatThrownBy(() -> bridge.activateButton("Save"))
+                    .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("found 2");
+            assertThatThrownBy(() -> bridge.activateButton("Submit"))
+                    .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("found 2");
+            assertThat(bridge.snapshot(SwingHarnessPlugin.ID).controls())
+                    .filteredOn(control -> control.selector().equals("Save item"))
+                    .singleElement().matches(control -> control.commandable() && control.enabled());
+            bridge.activateButton("Save item");
+            assertThat(originalActivations).hasValue(1);
+            assertThat(textAliasActivations).hasValue(0);
+            assertThat(nameAliasActivations).hasValue(0);
+
+            original.setEnabled(false);
+            assertThat(bridge.snapshot(SwingHarnessPlugin.ID).controls())
+                    .filteredOn(control -> List.of("Save", "Submit").contains(control.selector()))
+                    .hasSize(2).allMatch(control -> !control.commandable());
+            assertThat(bridge.snapshot(SwingHarnessPlugin.ID).controls())
+                    .filteredOn(control -> control.selector().equals("Save item"))
+                    .singleElement().matches(control -> control.commandable() && !control.enabled());
+            assertThatThrownBy(() -> bridge.activateButton("Save item"))
+                    .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("disabled");
+
+            original.setVisible(false);
+            assertThat(bridge.snapshot(SwingHarnessPlugin.ID).controls())
+                    .hasSize(2).allMatch(control -> control.commandable() && control.enabled());
+            bridge.activateButton("Save");
+            bridge.activateButton("Submit");
+            assertThat(originalActivations).hasValue(1);
+            assertThat(textAliasActivations).hasValue(1);
+            assertThat(nameAliasActivations).hasValue(1);
+        });
+    }
 
     @Test
     void reportsIndividualValueClippingEvenWhenCollectionsAreSmall() throws Exception {

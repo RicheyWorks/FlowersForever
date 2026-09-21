@@ -167,7 +167,8 @@ public class HarvestService {
         return List.copyOf(saved);
     }
 
-    private void validateBatch(List<HarvestEntry> entries) {
+    /** Validates a proposed harvest batch without saving records or adjusting inventory. */
+    public void validateBatch(List<HarvestEntry> entries) {
         if (entries == null || entries.isEmpty()) {
             throw new IllegalArgumentException("Batch must contain at least one harvest row.");
         }

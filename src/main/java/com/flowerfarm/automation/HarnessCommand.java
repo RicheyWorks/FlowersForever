@@ -120,6 +120,10 @@ public record HarnessCommand(String requestId, String action,
     }
 
     private static Object immutableValue(Object value, IdentityHashMap<Object, Boolean> visiting) {
+        if (value instanceof java.math.BigDecimal decimal) {
+            // Decimal spelling must not change exact request identity; retain its JSON number type.
+            return decimal.stripTrailingZeros();
+        }
         if (value instanceof Map<?, ?> map) {
             return immutableArguments(map, visiting);
         }

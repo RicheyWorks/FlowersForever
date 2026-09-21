@@ -60,6 +60,21 @@ class McpPackagedProcessSmokeIT {
                             "farm-data__upsert-season-settings",
                             "farm-data__get-production-costs");
 
+            ObjectNode invalidArguments = mapper.createObjectNode();
+            invalidArguments.putArray("records").addObject()
+                    .put("name", "Rejected UTF8 ? crop").put("quantity", 1);
+            byte[] invalidFrame = mapper.writeValueAsBytes(request(
+                    "invalid-utf8", "tools/call",
+                    tool("farm-data__upsert-inventory", invalidArguments)));
+            for (int index = 0; index < invalidFrame.length; index++) {
+                if (invalidFrame[index] == '?') {
+                    invalidFrame[index] = (byte) 0xff;
+                    break;
+                }
+            }
+            JsonNode rejected = process.callRaw(invalidFrame);
+            assertThat(rejected.path("error").path("code").asInt()).isEqualTo(-32700);
+
             ObjectNode source = mapper.createObjectNode();
             source.put("Legacy Key", "inventory-row-17");
             source.put("Crop", "Process Smoke Zinnia");
@@ -94,6 +109,9 @@ class McpPackagedProcessSmokeIT {
                 assertThat(page.path("result").path("structuredContent")
                         .path("output").path("records").findValuesAsText("name"))
                         .contains("Process Smoke Zinnia");
+                assertThat(page.path("result").path("structuredContent")
+                        .path("output").path("records").findValuesAsText("name"))
+                        .noneMatch(name -> name.startsWith("Rejected UTF8"));
 
                 ObjectNode receiptArguments = mapper.createObjectNode();
                 receiptArguments.put("source-system", "process-smoke-workbook");
@@ -270,6 +288,18 @@ class McpPackagedProcessSmokeIT {
             input.write(mapper.writeValueAsString(request));
             input.newLine();
             input.flush();
+            return readResponse();
+        }
+
+        private JsonNode callRaw(byte[] request) throws Exception {
+            input.flush();
+            process.getOutputStream().write(request);
+            process.getOutputStream().write('\n');
+            process.getOutputStream().flush();
+            return readResponse();
+        }
+
+        private JsonNode readResponse() throws Exception {
             String line = CompletableFuture.supplyAsync(() -> {
                 try {
                     return output.readLine();

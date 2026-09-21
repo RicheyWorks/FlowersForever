@@ -2963,6 +2963,7 @@ class UserJourneyHarnessTest {
         assertThat(user.text("trend.forecast")).isEqualTo("Needs history");
         assertThat(user.text("trend.context")).contains("No crop series recorded");
         assertThat(user.tableRows("trend.weeklyTable")).isZero();
+        user.selectTab("Model details");
         assertThat(user.fieldValue("Harvest trend model details"))
                 .contains("Record at least 3 separate weeks")
                 .doesNotContain("forecast ready");
@@ -3555,25 +3556,57 @@ class UserJourneyHarnessTest {
                 .contains(List.of("Reference & Planning", "Growth visualizer"));
 
         int observedControls = 0;
+        int observedReadables = 0;
+        int observedLayouts = 0;
+        org.assertj.core.api.SoftAssertions selectorAssertions =
+                new org.assertj.core.api.SoftAssertions();
         for (int index = 0; index < routes.size(); index++) {
             List<String> route = routes.get(index);
             plugin.execute(new HarnessCommand("whole-app-route-" + index,
                     "navigate-route", Map.of("path", route)));
             HarnessSnapshot snapshot = plugin.observe();
             assertThat(snapshot.route()).as("selected route").isEqualTo(route);
-            assertThat(snapshot.controls()).as("controls on %s", route).isNotEmpty()
-                    .allSatisfy(control -> {
-                        assertThat(control.selector()).isNotBlank();
-                        assertThat(control.commandable())
-                                .as("commandable %s on %s", control.selector(), route)
-                                .isTrue();
-                    });
-            assertThat(snapshot.metadata()).containsEntry("unaddressableControlCount", 0L);
+            selectorAssertions.assertThat(snapshot.controls())
+                    .as("controls on %s", route).isNotEmpty();
+            for (var control : snapshot.controls()) {
+                selectorAssertions.assertThat(control.selector())
+                        .as("selector on %s", route).isNotBlank();
+                selectorAssertions.assertThat(control.commandable())
+                        .as("commandable %s on %s", control.selector(), route)
+                        .isTrue();
+            }
+            selectorAssertions.assertThat(snapshot.metadata())
+                    .as("addressability on %s", route)
+                    .containsEntry("unaddressableControlCount", 0L);
             observedControls += snapshot.controls().size();
+            List<com.flowerfarm.automation.HarnessControl> readableControls =
+                    (List<com.flowerfarm.automation.HarnessControl>) snapshot.metadata().get("readableControls");
+            for (int readableIndex = 0; readableIndex < readableControls.size(); readableIndex++) {
+                var readable = readableControls.get(readableIndex);
+                var result = plugin.execute(new HarnessCommand("catalog-read-" + index + "-" + readableIndex,
+                        "read-control", Map.of("selector", readable.selector())));
+                selectorAssertions.assertThat(result.success()).as("readable %s on %s", readable.selector(), route)
+                        .isTrue();
+                selectorAssertions.assertThat(result.output()).containsKey("contextToken");
+            }
+            List<com.flowerfarm.automation.HarnessControl> layoutControls =
+                    (List<com.flowerfarm.automation.HarnessControl>) snapshot.metadata().get("layoutControls");
+            for (int layoutIndex = 0; layoutIndex < layoutControls.size(); layoutIndex++) {
+                var layout = layoutControls.get(layoutIndex);
+                var result = plugin.execute(new HarnessCommand("catalog-layout-" + index + "-" + layoutIndex,
+                        "read-layout", Map.of("selector", layout.selector(), "kind", layout.kind())));
+                selectorAssertions.assertThat(result.success()).as("layout %s on %s", layout.selector(), route)
+                        .isTrue();
+            }
+            observedReadables += readableControls.size();
+            observedLayouts += layoutControls.size();
         }
+        selectorAssertions.assertAll();
         assertThat(observedControls)
                 .as("runtime controls observed across every published route")
                 .isGreaterThanOrEqualTo(180);
+        assertThat(observedReadables).as("addressable read-only outputs across all routes").isPositive();
+        assertThat(observedLayouts).as("addressable layouts across all routes").isPositive();
     }
 
     @Test

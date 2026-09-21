@@ -1,5 +1,114 @@
 # FlowersForever private-preview notes
 
+## September 13, 2026 — Exact numeric requests and recovery
+
+- Preserves decimal values and request identities through REST, MCP, and mapped
+  JSON cells; rejects fractions in integer fields and spreadsheet dates.
+- Prevents supported older rounded MCP receipts from silently repeating effects,
+  while retaining ordinary-decimal and negative-zero replay identities.
+- Recovers accepted robot executions after staged-plan cleanup failures without
+  clearing newer plans or losing access to accepted receipts; preserves observed
+  completion before another task replaces the adapter's current operation.
+- Blocks password-backed Swing editors and masked renderer values through their
+  parent controls; discovery marks known password-backed combos unsupported.
+
+## September 13, 2026 — Harness recovery and wire contracts
+
+- Rejects malformed UTF-8 MCP input before dispatch and recovers on the next frame.
+- Publishes separate fresh-order and historical-order status schemas.
+- Returns consistent import conflicts when a source receipt points to a deleted
+  target, including corrected retries across all five upsert types.
+- Keeps export filenames and new metadata independent of host locale and application
+  JSON settings; recovers supported older formats without rewriting checksums.
+- Verifies action-queue saturation, interrupted retry identity, and pending-action
+  retention during receipt eviction.
+
+## September 13, 2026 — Deeper harness and API consistency
+
+- Keeps new MCP retry identities stable across equivalent expiry timestamps and
+  application JSON formatting; recovers exact older receipts without execution.
+- Replays completed physical commands after permission revocation while continuing
+  to block fresh actions and revoked sensitive reads.
+- Redacts credentials and bounds REST/MCP harness error messages.
+- Rejects malformed JSON cells and harvest dates/quantities during mapped preview.
+- Runs exports with one database connection while retaining atomic batch imports.
+- Rejects changed desktop observations and captures; reads and sorts renamed table
+  headers using their current visible values.
+
+## September 13, 2026 — Harness and API request boundaries
+
+- Rejects ambiguous REST command bodies before dispatch and reports unsupported
+  media types and missing upload parts as client errors.
+- Preserves full 64-bit attachment and target IDs through REST and MCP commands.
+- Detects document replacement during text edits and option-model refreshes
+  during label matching, preventing false success or selection of another item.
+
+## September 13, 2026 — Preserve receipts during completion retries
+
+- Keeps an older completed action's receipt when a retry encounters failed
+  size accounting or an oversized snapshot, preventing the action from running
+  again. Ordinary response replay retains its existing eviction order.
+
+## September 8, 2026 — Consistent reads, menu shortcuts, and cache accounting
+
+- Supports closed-menu accelerators such as F1, Dark Mode, and My access through
+  the existing shortcut command, preserving explicit application bindings.
+- Rejects structured reads if the table, active dialog, or attachment changes
+  while the read is running.
+- Counts complete farm-record payloads toward the replay cache's byte budget
+  while preserving completed-action receipts if accounting fails.
+
+## September 8, 2026 — Verify runtime action outcomes
+
+- Reports failed state changes when application listeners revert an option,
+  selection, tab, slider, or sort order.
+- Validates spinner text before changing an existing draft and catches silent
+  editor/model rejection, integer wraparound, and fractional truncation.
+- Stops table double-clicks when selection changes the record being opened.
+- Rejects stale paged reads after an effective table renderer is replaced.
+
+## September 8, 2026 — Broader runtime harness coverage
+
+- Expands the desktop API to 30 commands, including scrolling, workspace
+  dividers, exact toggle states, selection clearing, and indexed option choices.
+- Reads status labels, dialog text, full collection entries, and long reports
+  through bounded pages; exposes read-only and layout selectors in discovery.
+- Edits long drafts in bounded segments through the normal document filters.
+- Supports closed menu toggles through exact paths and binds structured reads
+  to observation contexts, preventing changed screens from silently mixing pages.
+
+## September 8, 2026 — Reject actions against a changed desktop
+
+- Publishes an opaque observation token that AI clients can optionally attach
+  to queued desktop actions. Changed controls, table models, or active dialogs
+  cause rejection before the action runs, so an old selector or row index cannot
+  silently target a replacement screen when the token is supplied.
+- Preserves existing commands and receipt replay. Clients recover from a stale
+  context by reviewing a fresh observation and sending a new request ID.
+
+## September 7, 2026 — Harness input bounds and retry behavior
+
+- Checks spinner bounds and numeric types before test-driver input can alter
+  a model or notify application listeners; date and list spinners are covered.
+- Freezes the first published desktop-action receipt for concurrent retries,
+  while status polling continues to report current completion or failure.
+- Rejects a live AI record page that would return the same continuation offset
+  indefinitely, with a clear retry message instead of a misleading result.
+
+## September 7, 2026 — Harness visibility and selector accuracy
+
+- Makes desktop journey actions and success-message waits respect hidden
+  ancestors and inactive tabs, and prevents the test driver from selecting
+  disabled tabs. Hidden copies of controls can no longer mask missing navigation.
+- Makes the runtime desktop snapshot account for selector collisions with
+  component names and button text, so an ambiguous control is not advertised
+  to AI clients as commandable. An existing unique component name can keep a
+  control addressable when its accessible label is shared with another component.
+- Fixes the Market Day order handoff to open the nested Orders workspace,
+  making the selected order and its handoff message immediately visible.
+- Collects selector failures across every published desktop route in one
+  catalog check, making multiple addressability defects visible together.
+
 ## September 4, 2026 — macOS shared-database startup
 
 - Avoids a machine-hostname lookup that stalled H2 startup on macOS by binding

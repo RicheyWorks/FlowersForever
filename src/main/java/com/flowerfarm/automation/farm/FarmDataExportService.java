@@ -1,8 +1,16 @@
 package com.flowerfarm.automation.farm;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.StreamReadFeature;
+import com.fasterxml.jackson.core.json.JsonWriteFeature;
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.ObjectWriter;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.databind.cfg.JsonNodeFeature;
+import com.fasterxml.jackson.databind.json.JsonMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import jakarta.persistence.EntityManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -13,6 +21,7 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.io.IOException;
+import java.io.OutputStream;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.AccessDeniedException;
@@ -21,6 +30,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
+import java.security.DigestOutputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
@@ -47,6 +57,20 @@ public class FarmDataExportService {
     private static final String MANIFEST_FILE = "manifest.json";
     private static final String EXPORT_ID_PATTERN = "farm-export-[0-9a-f]{32}";
     private static final long MAX_MANIFEST_BYTES = 32L * 1024 * 1024;
+    // Durable metadata must not change with the application's record serializers or JSON settings.
+    private static final ObjectMapper METADATA_MAPPER = JsonMapper.builder()
+            .addModule(new JavaTimeModule())
+            .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
+            .disable(DeserializationFeature.READ_DATE_TIMESTAMPS_AS_NANOSECONDS)
+            .enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS)
+            .enable(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS)
+            .disable(JsonNodeFeature.STRIP_TRAILING_BIGDECIMAL_ZEROES)
+            .enable(StreamReadFeature.STRICT_DUPLICATE_DETECTION)
+            .build();
+    private static final List<String> SNAPSHOT_FIELDS = List.of(
+            "formatVersion", "exportId", "requestFingerprint", "createdAt", "recordTypes",
+            "chunkRecords", "taskFrom", "taskTo", "recordCounts", "totalRecords", "parts");
+    private static final List<ObjectWriter> METADATA_DIGEST_WRITERS = metadataDigestWriters();
 
     private final FarmDataPageService pageService;
     private final ObjectMapper mapper;
@@ -89,7 +113,7 @@ public class FarmDataExportService {
 
         Path destination = exportDirectory(exportId);
         if (Files.exists(destination)) {
-            return replayExisting(exportId, fingerprint);
+            return replayExisting(exportId, request);
         }
 
         Path staging = null;
@@ -254,7 +278,7 @@ public class FarmDataExportService {
             List<JsonNode> records,
             List<ExportPart> parts) throws IOException {
         int partNumber = parts.size();
-        String fileName = "part-%06d.json".formatted(partNumber);
+        String fileName = partFileName(partNumber);
         byte[] bytes = jsonBytes(records);
         if (bytes.length > MAX_CHUNK_BYTES) {
             throw new IllegalStateException(
@@ -269,9 +293,11 @@ public class FarmDataExportService {
                 exportId, partNumber, records.size(), type);
     }
 
-    private CreatedExport replayExisting(String exportId, String fingerprint) {
+    private CreatedExport replayExisting(String exportId, ExportRequest request) {
         ExportManifest existing = readManifest(exportId);
-        if (!existing.requestFingerprint().equals(fingerprint)) {
+        ExportRequest stored = normalizeRequest(existing.recordTypes(), existing.chunkRecords(),
+                existing.taskFrom(), existing.taskTo());
+        if (!stored.equals(request)) {
             throw new FarmDataExportConflictException(
                     "Export key already identifies a different completed snapshot.");
         }
@@ -292,9 +318,9 @@ public class FarmDataExportService {
             if (Files.size(manifestPath) > MAX_MANIFEST_BYTES) {
                 throw corrupt(exportId, "manifest is too large");
             }
-            ExportManifest manifest = mapper.readValue(
-                    Files.readAllBytes(manifestPath), ExportManifest.class);
-            validateManifest(exportId, manifest);
+            JsonNode stored = METADATA_MAPPER.readTree(Files.readAllBytes(manifestPath));
+            ExportManifest manifest = METADATA_MAPPER.treeToValue(stored, ExportManifest.class);
+            validateManifest(exportId, manifest, stored);
             return manifest;
         } catch (JsonProcessingException exception) {
             throw corrupt(exportId, "manifest is not valid JSON", exception);
@@ -304,7 +330,7 @@ public class FarmDataExportService {
         }
     }
 
-    private void validateManifest(String exportId, ExportManifest manifest) {
+    private void validateManifest(String exportId, ExportManifest manifest, JsonNode stored) {
         if (manifest == null
                 || !FORMAT_VERSION.equals(manifest.formatVersion())
                 || !exportId.equals(manifest.exportId())
@@ -331,9 +357,8 @@ public class FarmDataExportService {
         manifest.recordTypes().forEach(type -> counted.put(type, 0L));
         for (int index = 0; index < manifest.parts().size(); index++) {
             ExportPart part = manifest.parts().get(index);
-            String expectedFile = "part-%06d.json".formatted(index);
             if (part == null || part.partNumber() != index
-                    || !expectedFile.equals(part.fileName())
+                    || !isPartFileName(part.fileName(), index)
                     || !counted.containsKey(part.recordType())
                     || part.recordOffset() < 0
                     || part.recordCount() < 1
@@ -349,7 +374,7 @@ public class FarmDataExportService {
         long countedTotal = counted.values().stream().mapToLong(Long::longValue).sum();
         if (!counted.equals(manifest.recordCounts())
                 || countedTotal != manifest.totalRecords()
-                || !snapshotDigest(manifest).equals(manifest.snapshotSha256())) {
+                || !matchesSnapshotDigest(manifest, stored)) {
             throw corrupt(exportId, "manifest totals or checksum do not match");
         }
     }
@@ -398,7 +423,44 @@ public class FarmDataExportService {
         canonical.put("chunkRecords", request.chunkRecords());
         canonical.put("taskFrom", request.taskFrom());
         canonical.put("taskTo", request.taskTo());
-        return sha256(jsonBytes(canonical));
+        return metadataDigest(METADATA_MAPPER.writer(), canonical);
+    }
+
+    private static String partFileName(int partNumber) {
+        return String.format(Locale.ROOT, "part-%06d.json", partNumber);
+    }
+
+    private static boolean isPartFileName(String fileName, int partNumber) {
+        String expected = partFileName(partNumber);
+        if (expected.equals(fileName)) {
+            return true;
+        }
+        int digitCount = expected.length() - "part-.json".length();
+        if (fileName == null || !fileName.startsWith("part-") || !fileName.endsWith(".json")
+                || fileName.length() < expected.length()
+                || fileName.length() > "part-.json".length() + digitCount * 2) {
+            return false;
+        }
+        // Legacy Formatter output used the host's decimal digits. Accept only
+        // the same padded index in one digit alphabet, retaining its stored path.
+        int[] digits = fileName.substring(5, fileName.length() - 5).codePoints().toArray();
+        if (digits.length != digitCount) {
+            return false;
+        }
+        int zeroDigit = -1;
+        for (int index = 0; index < digits.length; index++) {
+            int digit = Character.digit(digits[index], 10);
+            if (Character.getType(digits[index]) != Character.DECIMAL_DIGIT_NUMBER
+                    || digit != expected.charAt(5 + index) - '0') {
+                return false;
+            }
+            if (zeroDigit < 0) {
+                zeroDigit = digits[index] - digit;
+            } else if (digits[index] - digit != zeroDigit) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private String snapshotDigest(ExportManifest manifest) {
@@ -417,7 +479,61 @@ public class FarmDataExportService {
         canonical.put("recordCounts", orderedCounts);
         canonical.put("totalRecords", manifest.totalRecords());
         canonical.put("parts", manifest.parts());
-        return sha256(jsonBytes(canonical));
+        return metadataDigest(METADATA_MAPPER.writer(), canonical);
+    }
+
+    private static boolean matchesSnapshotDigest(ExportManifest manifest, JsonNode stored) {
+        Map<String, Object> canonical = new LinkedHashMap<>();
+        SNAPSHOT_FIELDS.forEach(field -> canonical.put(field, stored.get(field)));
+        Map<String, JsonNode> orderedCounts = new LinkedHashMap<>();
+        manifest.recordTypes().forEach(type ->
+                orderedCounts.put(type, stored.path("recordCounts").get(type)));
+        canonical.put("recordCounts", orderedCounts);
+        // Older versions hashed with the application mapper. Preserve stored date/numeric
+        // representations and try only its standard order, indentation, and escaping variants.
+        // The first writer is the fixed format used by newly created exports.
+        for (ObjectWriter writer : METADATA_DIGEST_WRITERS) {
+            if (metadataDigest(writer, canonical).equals(manifest.snapshotSha256())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static List<ObjectWriter> metadataDigestWriters() {
+        List<ObjectWriter> writers = new ArrayList<>();
+        for (boolean sorted : List.of(false, true)) {
+            for (boolean pretty : List.of(false, true)) {
+                for (boolean escaped : List.of(false, true)) {
+                    ObjectWriter writer = METADATA_MAPPER.writer();
+                    if (sorted) {
+                        writer = writer.with(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS);
+                    }
+                    if (pretty) {
+                        writer = writer.withDefaultPrettyPrinter();
+                    }
+                    if (escaped) {
+                        writer = writer.with(JsonWriteFeature.ESCAPE_NON_ASCII);
+                    }
+                    writers.add(writer);
+                }
+            }
+        }
+        return List.copyOf(writers);
+    }
+
+    private static String metadataDigest(ObjectWriter writer, Object value) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            try (DigestOutputStream output = new DigestOutputStream(OutputStream.nullOutputStream(), digest)) {
+                writer.writeValue(output, value);
+            }
+            return HexFormat.of().formatHex(digest.digest());
+        } catch (IOException exception) {
+            throw new IllegalStateException("Could not serialize record export metadata.", exception);
+        } catch (NoSuchAlgorithmException exception) {
+            throw new IllegalStateException("SHA-256 is unavailable", exception);
+        }
     }
 
     private ExportSummary summary(ExportManifest manifest) {
@@ -429,7 +545,7 @@ public class FarmDataExportService {
     }
 
     private void writeManifest(Path staging, ExportManifest manifest) throws IOException {
-        byte[] bytes = mapper.writerWithDefaultPrettyPrinter().writeValueAsBytes(manifest);
+        byte[] bytes = METADATA_MAPPER.writerWithDefaultPrettyPrinter().writeValueAsBytes(manifest);
         if (bytes.length > MAX_MANIFEST_BYTES) {
             throw new IllegalStateException("Record export manifest exceeds its size limit.");
         }

@@ -10,6 +10,7 @@ import com.flowerfarm.automation.HarnessResponse;
 import com.flowerfarm.automation.HarnessSnapshot;
 import com.flowerfarm.automation.farm.FarmDataImportConflictException;
 import com.flowerfarm.automation.farm.FarmDataExportConflictException;
+import com.flowerfarm.security.SecretRedactor;
 
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Profile;
@@ -95,9 +96,11 @@ public class HarnessController {
 
     private static ResponseEntity<Map<String, Object>> error(
             HttpStatus status, String message) {
+        String safeMessage = SecretRedactor.redact(message, 240);
         return ResponseEntity.status(status).body(Map.of(
                 "status", status.value(),
                 "error", status.getReasonPhrase(),
-                "message", message == null ? "Harness request failed" : message));
+                "message", safeMessage == null || safeMessage.isBlank()
+                        ? "Harness request failed" : safeMessage));
     }
 }

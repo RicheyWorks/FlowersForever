@@ -225,6 +225,74 @@ class FarmDataMappingServiceTest {
     }
 
     @Test
+    @DisplayName("reports trailing JSON cell content instead of importing only its first value")
+    void rejectsTrailingContentInJsonCells() {
+        String ingredient = "{\"itemName\":\"Tulip\",\"stemsPerDesign\":5,\"packSize\":10}";
+        for (Object materials : List.of(
+                "[" + ingredient + "] [" + ingredient + "]",
+                "[" + ingredient + "] NOT_JSON",
+                List.of(ingredient + " {}"),
+                List.of(ingredient + " NOT_JSON"))) {
+            FarmDataMappingService.MappingPreview preview = previewMaterials(materials);
+
+            assertThat(preview.ready()).as("Materials: %s", materials).isFalse();
+            assertThat(preview.invalidCount()).isEqualTo(1);
+            assertThat(preview.issues()).anySatisfy(issue -> {
+                assertThat(issue.row()).isEqualTo(1);
+                assertThat(issue.field()).isEqualTo("ingredients");
+                assertThat(issue.message()).contains("invalid JSON");
+            });
+        }
+    }
+
+    @Test
+    @DisplayName("reports duplicate JSON cell properties instead of silently replacing materials")
+    void rejectsDuplicatePropertiesInJsonCells() {
+        String ingredient = "{\"itemName\":\"Tulip\",\"itemName\":\"Rose\","
+                + "\"stemsPerDesign\":5,\"packSize\":10}";
+        for (Object materials : List.of("[" + ingredient + "]", List.of(ingredient))) {
+            FarmDataMappingService.MappingPreview preview = previewMaterials(materials);
+
+            assertThat(preview.ready()).as("Materials: %s", materials).isFalse();
+            assertThat(preview.invalidCount()).isEqualTo(1);
+            assertThat(preview.issues()).anySatisfy(issue -> {
+                assertThat(issue.row()).isEqualTo(1);
+                assertThat(issue.field()).isEqualTo("ingredients");
+                assertThat(issue.message()).contains("invalid JSON");
+            });
+        }
+    }
+
+    @Test
+    @DisplayName("accepts complete JSON cells with whitespace and preserves provider object arrays")
+    void acceptsCompleteJsonAndProviderCells() {
+        String ingredient = "{\"itemName\":\"Tulip\",\"stemsPerDesign\":5,\"packSize\":10}";
+        for (Object materials : List.of(
+                " \n[" + ingredient + "] \t",
+                List.of(" \n" + ingredient + " \t"),
+                List.of(Map.of("itemName", "Tulip", "stemsPerDesign", 5, "packSize", 10)))) {
+            FarmDataMappingService.MappingPreview preview = previewMaterials(materials);
+
+            assertThat(preview.ready()).as("Materials: %s", materials).isTrue();
+            assertThat(preview.records().get(0).get("ingredients"))
+                    .isEqualTo(List.of(Map.of("itemName", "Tulip",
+                            "stemsPerDesign", 5.0, "packSize", 10L)));
+        }
+    }
+
+    private FarmDataMappingService.MappingPreview previewMaterials(Object materials) {
+        Map<String, Object> ingredient = objectSchema(
+                List.of("itemName", "stemsPerDesign", "packSize"), Map.of(
+                        "itemName", field("string"),
+                        "stemsPerDesign", field("number"),
+                        "packSize", field("integer")));
+        Map<String, Object> recipe = objectSchema(List.of("ingredients"), Map.of(
+                "ingredients", Map.of("type", "array", "items", ingredient)));
+        return service.preview("floral-recipes", recipe, Map.of("ingredients", "Materials"),
+                List.of(Map.of("Materials", materials)), Map.of(), List.of());
+    }
+
+    @Test
     @DisplayName("returns row-specific coercion and required-field issues")
     void reportsInvalidRows() {
         FarmDataMappingService.MappingPreview preview = service.preview(

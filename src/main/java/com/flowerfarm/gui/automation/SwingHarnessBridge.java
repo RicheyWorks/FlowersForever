@@ -7,12 +7,12 @@ import com.flowerfarm.automation.HarnessSnapshot;
 
 import javax.imageio.ImageIO;
 import javax.swing.AbstractButton;
-import javax.swing.Action;
+import javax.swing.ComboBoxModel;
 import javax.swing.DefaultRowSorter;
-import javax.swing.InputMap;
 import javax.swing.JComboBox;
 import javax.swing.JComponent;
 import javax.swing.JFileChooser;
+import javax.swing.JLabel;
 import javax.swing.JList;
 import javax.swing.JMenu;
 import javax.swing.JMenuBar;
@@ -22,6 +22,7 @@ import javax.swing.JRootPane;
 import javax.swing.JScrollPane;
 import javax.swing.JSlider;
 import javax.swing.JSpinner;
+import javax.swing.JSplitPane;
 import javax.swing.JTabbedPane;
 import javax.swing.JTable;
 import javax.swing.JTextField;
@@ -31,8 +32,14 @@ import javax.swing.RowSorter;
 import javax.swing.RootPaneContainer;
 import javax.swing.SortOrder;
 import javax.swing.SwingUtilities;
+import javax.swing.event.ListDataEvent;
+import javax.swing.event.ListDataListener;
+import javax.swing.event.TableModelListener;
 import javax.swing.plaf.basic.BasicArrowButton;
+import javax.swing.table.TableModel;
 import javax.swing.text.JTextComponent;
+import javax.swing.text.AbstractDocument;
+import javax.swing.text.Document;
 import java.awt.Component;
 import java.awt.Container;
 import java.awt.Dialog;
@@ -41,7 +48,6 @@ import java.awt.Rectangle;
 import java.awt.RenderingHints;
 import java.awt.Window;
 import java.awt.image.BufferedImage;
-import java.awt.event.ActionEvent;
 import java.awt.event.MouseEvent;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -51,6 +57,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Base64;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
@@ -64,7 +71,6 @@ import java.util.concurrent.FutureTask;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Function;
-import java.util.function.Supplier;
 
 import org.springframework.context.annotation.Profile;
 
@@ -73,17 +79,13 @@ import org.springframework.context.annotation.Profile;
 @Profile("!cli & !container & !mcp & !release-smoke")
 public class SwingHarnessBridge {
 
-    private static final int MAX_COLLECTION_ITEMS = 200;
-    private static final int MAX_TABLE_CELLS = 2000;
-    private static final int MAX_SELECTION_SCAN = 10000;
-    private static final int MAX_ITEM_CHARS = 500;
     private static final int MAX_TEXT_CHARS = 8000;
     private static final int MAX_SCREEN_DIMENSION = 2048;
     private static final int MAX_SCREEN_PIXELS = 2_000_000;
     private static final int MAX_SCREEN_PNG_BYTES = 4 * 1024 * 1024;
 
     private volatile Attachment attachment;
-    private final SwingActionJournal actions = new SwingActionJournal();
+    private final SwingActionJournal actions;
     private final Function<JComponent, JComponent> activeRootResolver;
 
     public SwingHarnessBridge() {
@@ -92,16 +94,58 @@ public class SwingHarnessBridge {
 
     SwingHarnessBridge(Function<JComponent, JComponent> activeRootResolver) {
         this.activeRootResolver = Objects.requireNonNull(activeRootResolver, "activeRootResolver");
+        actions = new SwingActionJournal();
     }
 
-    HarnessExecution dispatch(HarnessCommand command, Supplier<HarnessExecution> action) {
+    /** An execution view pins target resolution without holding a lock through modal callbacks. */
+    private SwingHarnessBridge(Attachment current, JComponent active, SwingActionJournal actions) {
+        attachment = current;
+        activeRootResolver = ignored -> active;
+        this.actions = actions;
+    }
+
+    HarnessExecution dispatch(HarnessCommand command, Function<SwingHarnessBridge, HarnessExecution> action) {
+        Optional<HarnessExecution> replay = actions.replay(command);
+        if (replay.isPresent()) {
+            return replay.get();
+        }
+        String expectedContext = expectedContext(command);
         Attachment current = requireAttachment();
         return actions.dispatch(command, () -> {
-            if (attachment != current) {
-                throw new IllegalStateException("Desktop attachment changed before dispatch");
+            requireCurrentAttachment(current, expectedContext);
+            JComponent active = activeRoot(current);
+            if (expectedContext != null
+                    && !current.context().matches(expectedContext, active)) {
+                throw new DesktopContextChangedException();
             }
-            return action.get();
+            synchronized (this) {
+                // Attachment replacement is allowed off the EDT. Linearize the start,
+                // then keep every target lookup on the reviewed attachment/root.
+                requireCurrentAttachment(current, expectedContext);
+            }
+            return action.apply(new SwingHarnessBridge(current, active, actions));
         });
+    }
+
+    private void requireCurrentAttachment(Attachment current, String expectedContext) {
+        if (attachment != current) {
+            if (expectedContext != null) {
+                throw new DesktopContextChangedException();
+            }
+            throw new IllegalStateException("Desktop attachment changed before dispatch");
+        }
+    }
+
+    private static String expectedContext(HarnessCommand command) {
+        if (!command.arguments().containsKey("expected-context")) {
+            return null;
+        }
+        Object value = command.arguments().get("expected-context");
+        if (!(value instanceof String token) || token.isBlank() || token.length() > 160) {
+            throw new IllegalArgumentException(
+                    "expected-context must be a non-blank string of at most 160 characters");
+        }
+        return token;
     }
 
     Optional<HarnessExecution> replay(HarnessCommand command) {
@@ -112,14 +156,29 @@ public class SwingHarnessBridge {
         return actions.status(requestId);
     }
 
-    public void attach(JComponent root, Function<String, Boolean> navigation) {
+    public synchronized void attach(JComponent root, Function<String, Boolean> navigation) {
+        Attachment previous = attachment;
         attachment = new Attachment(
                 Objects.requireNonNull(root, "root"),
-                Objects.requireNonNull(navigation, "navigation"));
+                Objects.requireNonNull(navigation, "navigation"), new SwingObservationContext());
+        clearContext(previous);
     }
 
-    public void detach() {
+    public synchronized void detach() {
+        Attachment previous = attachment;
         attachment = null;
+        clearContext(previous);
+    }
+
+    private static void clearContext(Attachment previous) {
+        if (previous == null) {
+            return;
+        }
+        if (SwingUtilities.isEventDispatchThread()) {
+            previous.context().clear();
+        } else {
+            SwingUtilities.invokeLater(previous.context()::clear);
+        }
     }
 
     public HarnessSnapshot snapshot(String pluginId) {
@@ -138,17 +197,22 @@ public class SwingHarnessBridge {
     }
 
     private HarnessSnapshot snapshot(Attachment current, String pluginId) {
+        if (attachment != current) {
+            return changedObservation(current, pluginId);
+        }
         JComponent active = activeRoot(current);
+        if (!hasCurrentRoot(current, active)) {
+            return changedObservation(current, pluginId);
+        }
+        // Initialize lazy Swing state and bind identities before describing controls.
+        String context = current.context().observe(active);
+        if (!hasCurrentRoot(current, active)) {
+            return changedObservation(current, pluginId);
+        }
         List<RawControl> raw = new ArrayList<>();
         collectInteractive(active, raw);
-        Map<String, Integer> selectorCounts = new LinkedHashMap<>();
-        raw.stream().filter(control -> !control.selector().isBlank())
-                .forEach(control -> selectorCounts.merge(control.selector(), 1, Integer::sum));
-        List<HarnessControl> controls = raw.stream().map(control ->
-                new HarnessControl(control.kind(), control.selector(), control.enabled(),
-                        control.focusable(), control.supported()
-                        && !control.selector().isBlank()
-                        && selectorCounts.getOrDefault(control.selector(), 0) == 1))
+        List<HarnessControl> controls = raw.stream()
+                .map(control -> observedControl(active, control))
                 .toList();
         long enabled = controls.stream().filter(HarnessControl::enabled).count();
         long ambiguous = controls.stream().filter(control -> !control.commandable()).count();
@@ -160,7 +224,30 @@ public class SwingHarnessBridge {
                 "menuPaths", menuPaths(active), "fieldValuesIncluded", false));
         metadata.put("modalActive", active != current.root());
         metadata.put("pendingActions", actions.pendingIds());
-        return new HarnessSnapshot(pluginId, Instant.now(), route(current.root()), controls, metadata);
+        List<RawControl> supplemental = new ArrayList<>();
+        collectSupplemental(active, supplemental);
+        List<HarnessControl> readable = supplemental.stream()
+                .map(control -> observedControl(active, control))
+                .filter(HarnessControl::commandable).toList();
+        metadata.put("readableControls", readable.stream()
+                .filter(control -> !isLayoutKind(control.kind())).toList());
+        metadata.put("layoutControls", readable.stream()
+                .filter(control -> isLayoutKind(control.kind())).toList());
+        List<String> selectedRoute = route(current.root());
+        if (!hasCurrentRoot(current, active) || !current.context().matches(context, active)
+                || attachment != current) {
+            return changedObservation(current, pluginId);
+        }
+        metadata.put("contextToken", context);
+        return new HarnessSnapshot(pluginId, Instant.now(), selectedRoute, controls, metadata);
+    }
+
+    private static HarnessSnapshot changedObservation(Attachment current, String pluginId) {
+        // Capture callbacks can reattach synchronously, after the old context was cleared.
+        // Release any subscriptions that the interrupted capture installed afterward.
+        current.context().clear();
+        return new HarnessSnapshot(pluginId, Instant.now(), List.of(), List.of(),
+                Map.of("ready", false, "reason", "Desktop changed during observation"));
     }
 
     public void navigate(String tabTitle) {
@@ -246,6 +333,40 @@ public class SwingHarnessBridge {
                 throw new IllegalArgumentException("Field '" + selector + "' is not editable");
             }
             field.setText(value);
+            if (!field.getText().equals(value)) {
+                throw new IllegalStateException("Field did not retain the requested replacement text");
+            }
+            return null;
+        });
+    }
+
+    /** Changes a bounded segment through the field's normal document/filter path. */
+    public void editText(String selector, int offset, int length, String value) {
+        if (value == null || value.length() > MAX_TEXT_CHARS) {
+            throw new IllegalArgumentException("Replacement text must contain at most 8000 characters");
+        }
+        onEdt(() -> {
+            JTextComponent field = unique(selector, JTextComponent.class);
+            if (field instanceof JPasswordField || !field.isEditable() || !field.isEnabled()) {
+                throw new IllegalArgumentException("Field is not editable through the harness");
+            }
+            Document document = field.getDocument();
+            int size = document.getLength();
+            if (offset < 0 || length < 0 || (long) offset + length > size
+                    || (long) size - length + value.length() > Integer.MAX_VALUE) {
+                throw new IllegalArgumentException("Text edit range is outside the current document");
+            }
+            if (document instanceof AbstractDocument abstractDocument) {
+                abstractDocument.replace(offset, length, value, null);
+            } else {
+                document.remove(offset, length);
+                document.insertString(offset, value, null);
+            }
+            if (field.getDocument() != document
+                    || document.getLength() != size - length + value.length()
+                    || !document.getText(offset, value.length()).equals(value)) {
+                throw new IllegalStateException("Field did not retain the requested text segment");
+            }
             return null;
         });
     }
@@ -258,16 +379,10 @@ public class SwingHarnessBridge {
         JComboBox<?> combo = unique(selector, JComboBox.class);
         onEdt(() -> {
             requireEnabled(combo, "Selector", selector);
-            int match = -1;
-            for (int index = 0; index < combo.getItemCount(); index++) {
-                if (displayedValue.equals(comboItemText(combo, index))) {
-                    if (match >= 0) {
-                        throw new IllegalArgumentException(
-                                "Several options are displayed as '" + displayedValue + "'");
-                    }
-                    match = index;
-                }
-            }
+            SwingPasswordGuard.requireNoPasswordEditor(combo);
+            int match = matchingOptionIndex(combo, displayedValue);
+            // A renderer callback can replace the editor while matching labels.
+            SwingPasswordGuard.requireNoPasswordEditor(combo);
             if (match < 0) {
                 if (!combo.isEditable()) {
                     throw new IllegalArgumentException(
@@ -278,12 +393,111 @@ public class SwingHarnessBridge {
                     throw new IllegalArgumentException("Selector editor '" + selector + "' is not editable");
                 }
                 combo.getEditor().setItem(displayedValue);
-                combo.setSelectedItem(combo.getEditor().getItem());
+                Object requested = combo.getEditor().getItem();
+                if (editor instanceof JTextComponent field && !displayedValue.equals(field.getText())) {
+                    throw new IllegalStateException("Selector editor did not retain the requested text");
+                }
+                combo.setSelectedItem(requested);
+                if (!Objects.equals(combo.getSelectedItem(), requested)) {
+                    throw new IllegalStateException("Selector did not retain the requested custom option");
+                }
             } else {
+                Object requested = combo.getItemAt(match);
                 combo.setSelectedIndex(match);
+                if (!Objects.equals(combo.getSelectedItem(), requested)) {
+                    throw new IllegalStateException("Selector did not retain the requested option");
+                }
             }
             return null;
         });
+    }
+
+    /** Selects an exact observed option even when displayed labels are repeated. */
+    public void chooseOptionIndex(String selector, int index) {
+        onEdt(() -> {
+            JComboBox<?> combo = unique(selector, JComboBox.class);
+            requireEnabled(combo, "Selector", selector);
+            if (index < 0 || index >= combo.getItemCount()) {
+                throw new IllegalArgumentException("Option index is outside the selector's current model");
+            }
+            Object requested = combo.getItemAt(index);
+            SwingPasswordGuard.requireNoPasswordEditor(combo);
+            combo.setSelectedIndex(index);
+            if (combo.getSelectedIndex() != index || !Objects.equals(combo.getSelectedItem(), requested)) {
+                throw new IllegalStateException("Selector did not retain the requested option index");
+            }
+            return null;
+        });
+    }
+
+    public void setToggle(String selector, boolean selected) {
+        onEdt(() -> {
+            SwingControlActions.setToggle(unique(selector, AbstractButton.class), selected);
+            return null;
+        });
+    }
+
+    void setToggle(HarnessCommand command, boolean selected) {
+        onEdt(() -> {
+            ControlTarget target = controlTarget(command, true);
+            if (!(target.component() instanceof AbstractButton button)) {
+                throw new IllegalArgumentException("The control is not a toggle");
+            }
+            SwingControlActions.setToggle(button, selected);
+            return null;
+        });
+    }
+
+    public void scroll(String selector, String axis, int value) {
+        onEdt(() -> {
+            SwingControlActions.scroll(layoutTarget(selector, JScrollPane.class), axis, value);
+            return null;
+        });
+    }
+
+    public void setDivider(String selector, int value) {
+        onEdt(() -> {
+            SwingControlActions.setDivider(layoutTarget(selector, JSplitPane.class), value);
+            return null;
+        });
+    }
+
+    public void clearSelection(String selector) {
+        onEdt(() -> {
+            JComponent control = unique(selector, JComponent.class);
+            requireEnabled(control, "Control", selector);
+            if (control instanceof JTable table) {
+                table.clearSelection();
+                if (!table.getSelectionModel().isSelectionEmpty()
+                        || !table.getColumnModel().getSelectionModel().isSelectionEmpty()) {
+                    throw new IllegalStateException("Table did not retain the cleared selection");
+                }
+            } else if (control instanceof JList<?> list) {
+                list.clearSelection();
+                if (!list.isSelectionEmpty()) {
+                    throw new IllegalStateException("List did not retain the cleared selection");
+                }
+            } else {
+                throw new IllegalArgumentException("Selection can only be cleared on a table or list");
+            }
+            return null;
+        });
+    }
+
+    private <T extends JComponent> T layoutTarget(String selector, Class<T> type) {
+        Component candidate = unique(selector, JComponent.class);
+        JComponent active = activeRoot(requireAttachment());
+        while (candidate != null) {
+            if (type.isInstance(candidate)) {
+                return type.cast(candidate);
+            }
+            if (candidate == active) {
+                break;
+            }
+            candidate = candidate.getParent();
+        }
+        throw new IllegalArgumentException("No active " + type.getSimpleName()
+                + " contains control '" + selector + "'");
     }
 
     /** Completes the active application chooser through its normal approval callback. */
@@ -345,7 +559,11 @@ public class SwingHarnessBridge {
             if (!tabs.isEnabledAt(match)) {
                 throw new IllegalArgumentException("Tab '" + tabTitle + "' is disabled");
             }
+            Component requested = tabs.getComponentAt(match);
             tabs.setSelectedIndex(match);
+            if (tabs.getSelectedComponent() != requested) {
+                throw new IllegalStateException("Tab set did not retain the requested tab");
+            }
             return null;
         });
     }
@@ -360,6 +578,7 @@ public class SwingHarnessBridge {
             }
             table.setRowSelectionInterval(viewRow, viewRow);
             table.scrollRectToVisible(table.getCellRect(viewRow, 0, true));
+            requireSelectedRows(table, List.of(viewRow));
             return null;
         });
     }
@@ -402,6 +621,7 @@ public class SwingHarnessBridge {
             }
             int finalRow = viewRows.get(viewRows.size() - 1);
             table.scrollRectToVisible(table.getCellRect(finalRow, 0, true));
+            requireSelectedRows(table, rows);
             return null;
         });
     }
@@ -417,7 +637,7 @@ public class SwingHarnessBridge {
             }
             int modelColumn = -1;
             for (int viewColumn = 0; viewColumn < table.getColumnCount(); viewColumn++) {
-                if (columnTitle.equals(table.getColumnName(viewColumn))) {
+                if (columnTitle.equals(SwingControlReader.tableColumnTitle(table, viewColumn))) {
                     if (modelColumn >= 0) {
                         throw new IllegalArgumentException(
                                 "Several columns are titled '" + columnTitle + "'");
@@ -445,7 +665,11 @@ public class SwingHarnessBridge {
                 throw new IllegalArgumentException(
                         "Sort direction must be ASCENDING or DESCENDING");
             }
-            sorter.setSortKeys(List.of(new RowSorter.SortKey(modelColumn, order)));
+            List<RowSorter.SortKey> requested = List.of(new RowSorter.SortKey(modelColumn, order));
+            sorter.setSortKeys(requested);
+            if (table.getRowSorter() != sorter || !sorter.getSortKeys().equals(requested)) {
+                throw new IllegalStateException("Table did not retain the requested sort order");
+            }
             return null;
         });
     }
@@ -460,6 +684,9 @@ public class SwingHarnessBridge {
             }
             list.setSelectedIndex(row);
             list.ensureIndexIsVisible(row);
+            if (!Arrays.equals(list.getSelectedIndices(), new int[]{row})) {
+                throw new IllegalStateException("List did not retain the requested row selection");
+            }
             return null;
         });
     }
@@ -467,20 +694,7 @@ public class SwingHarnessBridge {
     public void setSpinner(String selector, String displayedValue) {
         JSpinner spinner = unique(selector, JSpinner.class);
         onEdt(() -> {
-            if (!spinner.isEnabled()) {
-                throw new IllegalArgumentException("Spinner '" + selector + "' is disabled");
-            }
-            if (!(spinner.getEditor() instanceof JSpinner.DefaultEditor editor)) {
-                throw new IllegalArgumentException(
-                        "Spinner '" + selector + "' has no text editor");
-            }
-            editor.getTextField().setText(displayedValue);
-            try {
-                spinner.commitEdit();
-            } catch (java.text.ParseException exception) {
-                throw new IllegalArgumentException("Value '" + displayedValue
-                        + "' is invalid for spinner '" + selector + "'", exception);
-            }
+            SwingSpinnerActions.setValue(spinner, displayedValue);
             return null;
         });
     }
@@ -497,6 +711,9 @@ public class SwingHarnessBridge {
                         + slider.getMaximum());
             }
             slider.setValue(value);
+            if (slider.getValue() != value) {
+                throw new IllegalStateException("Slider did not retain the requested value");
+            }
             return null;
         });
     }
@@ -531,9 +748,24 @@ public class SwingHarnessBridge {
         JTable table = unique(tableSelector, JTable.class);
         onEdt(() -> {
             requireTableRow(table, tableSelector, viewRow);
-            table.setRowSelectionInterval(viewRow, viewRow);
-            Rectangle cell = table.getCellRect(viewRow, 0, true);
-            table.scrollRectToVisible(cell);
+            TableModel model = table.getModel();
+            int modelRow = table.convertRowIndexToModel(viewRow);
+            boolean[] changed = {false};
+            TableModelListener listener = event -> changed[0] = true;
+            model.addTableModelListener(listener);
+            Rectangle cell;
+            try {
+                table.setRowSelectionInterval(viewRow, viewRow);
+                cell = table.getCellRect(viewRow, 0, true);
+                table.scrollRectToVisible(cell);
+                requireSelectedRows(table, List.of(viewRow));
+                if (changed[0] || table.getModel() != model
+                        || viewRow >= table.getRowCount() || table.convertRowIndexToModel(viewRow) != modelRow) {
+                    throw new IllegalStateException("Table row changed before the double-click could be delivered");
+                }
+            } finally {
+                model.removeTableModelListener(listener);
+            }
             MouseEvent event = new MouseEvent(table, MouseEvent.MOUSE_CLICKED,
                     System.currentTimeMillis(), 0,
                     cell.x + Math.max(1, cell.width / 2),
@@ -544,47 +776,19 @@ public class SwingHarnessBridge {
         });
     }
 
-    public void activateMenu(List<String> path) {
-        if (path == null || path.size() < 2) {
-            throw new IllegalArgumentException(
-                    "Menu path must contain a top-level menu and a command");
+    private static void requireSelectedRows(JTable table, List<Integer> requested) {
+        if (!Arrays.stream(table.getSelectedRows()).boxed().toList().equals(requested)) {
+            throw new IllegalStateException("Table did not retain the requested row selection");
         }
+    }
+
+    public void activateMenu(List<String> path) {
         Attachment current = requireAttachment();
         onEdt(() -> {
-            JMenuBar menuBar = requireMenuBar(activeRoot(current));
-            requireVisibleMenuComponent(menuBar, "Menu bar");
-            JMenuItem item = uniqueTopMenu(menuBar, path.get(0));
-            requireVisibleMenuComponent(item, "Menu '" + item.getText() + "'");
-            for (int index = 1; index < path.size(); index++) {
-                if (!(item instanceof JMenu menu)) {
-                    throw new IllegalArgumentException("Menu path continues after command '"
-                            + item.getText() + "'");
-                }
-                item = uniqueMenuItem(menu, path.get(index));
-                requireVisibleMenuComponent(item, "Menu command '" + item.getText() + "'");
-            }
-            if (item instanceof JMenu) {
-                throw new IllegalArgumentException(
-                        "Menu path must end at a command, not a submenu");
-            }
-            if (!item.isEnabled()) {
-                throw new IllegalArgumentException("Menu command '" + item.getText()
-                        + "' is disabled");
-            }
-            item.doClick();
+            SwingMenuTarget.resolve(activeRoot(current), path, true).item().doClick();
             return null;
         });
     }
-
-    private static void requireVisibleMenuComponent(JComponent component, String label) {
-        if (!component.isVisible()) {
-            throw new IllegalArgumentException(label + " is hidden");
-        }
-        if (!component.isEnabled()) {
-            throw new IllegalArgumentException(label + " is disabled");
-        }
-    }
-
     public void invokeShortcut(String shortcut) {
         KeyStroke keyStroke = KeyStroke.getKeyStroke(shortcut);
         if (keyStroke == null) {
@@ -593,31 +797,121 @@ public class SwingHarnessBridge {
         }
         Attachment current = requireAttachment();
         onEdt(() -> {
-            List<ShortcutBinding> matches = new ArrayList<>();
-            collectShortcutBindings(activeRoot(current), keyStroke, matches);
-            if (matches.size() != 1) {
-                throw new IllegalArgumentException("Expected one visible installed shortcut '"
-                        + shortcut + "' but found " + matches.size());
-            }
-            ShortcutBinding binding = matches.get(0);
-            if (!binding.action().isEnabled()) {
-                throw new IllegalArgumentException(
-                        "Installed shortcut '" + shortcut + "' is disabled");
-            }
-            binding.action().actionPerformed(new ActionEvent(binding.source(),
-                    ActionEvent.ACTION_PERFORMED, keyStroke.toString(),
-                    System.currentTimeMillis(), keyStroke.getModifiers()));
+            SwingShortcutResolver.invoke(activeRoot(current), keyStroke);
             return null;
         });
     }
 
     public Map<String, Object> readControl(String selector) {
-        return onEdtBounded(() -> controlValue(unique(selector, JComponent.class), selector));
+        return onEdtBounded(() -> SwingControlReader.read(
+                unique(selector, JComponent.class), selector, null, null, null, null));
+    }
+
+    Map<String, Object> readControl(HarnessCommand command) {
+        return readBound(command, target -> {
+            ControlTarget control = target.controlTarget(command, false);
+            Map<String, Object> result = new LinkedHashMap<>(SwingControlReader.read(
+                    control.component(), control.selector(),
+                    optionalInteger(command, "offset"), optionalInteger(command, "limit"),
+                    optionalInteger(command, "column-offset"), optionalInteger(command, "column-limit")));
+            result.put("enabled", control.enabled());
+            return result;
+        });
+    }
+
+    private ControlTarget controlTarget(HarnessCommand command, boolean requireEnabled) {
+        boolean hasSelector = command.arguments().containsKey("selector");
+        boolean hasPath = command.arguments().containsKey("path");
+        if (hasSelector == hasPath) {
+            throw new IllegalArgumentException("Provide exactly one of selector or menu path");
+        }
+        if (hasPath) {
+            List<String> path = command.texts("path");
+            SwingMenuTarget.Target target = SwingMenuTarget.resolve(
+                    activeRoot(requireAttachment()), path, requireEnabled);
+            return new ControlTarget(target.item(), String.join(" > ", path), target.enabled());
+        }
+        String selector = command.text("selector");
+        JComponent component = unique(selector, JComponent.class);
+        if (requireEnabled) {
+            requireEnabled(component, "Control", selector);
+        }
+        return new ControlTarget(component, selector, component.isEnabled());
+    }
+
+    Map<String, Object> readScreen(HarnessCommand command) {
+        return readBound(command, target -> {
+            Integer offset = optionalInteger(command, "offset");
+            Integer limit = optionalInteger(command, "limit");
+            return SwingScreenReader.read(target.activeRoot(target.requireAttachment()),
+                    offset == null ? 0 : offset, limit == null ? MAX_TEXT_CHARS : limit);
+        });
+    }
+
+    Map<String, Object> readItem(HarnessCommand command) {
+        return readBound(command, target -> {
+            String selector = command.text("selector");
+            return SwingControlReader.readItem(target.unique(selector, JComponent.class), selector,
+                    command.integer("index"), optionalInteger(command, "column"),
+                    optionalInteger(command, "offset"), optionalInteger(command, "limit"));
+        });
+    }
+
+    Map<String, Object> readLayout(HarnessCommand command) {
+        return readBound(command, target -> {
+            String selector = command.text("selector");
+            JComponent pane = switch (command.text("kind").toLowerCase(java.util.Locale.ROOT)) {
+                case "scroll" -> target.layoutTarget(selector, JScrollPane.class);
+                case "split" -> target.layoutTarget(selector, JSplitPane.class);
+                default -> throw new IllegalArgumentException("Layout kind must be scroll or split");
+            };
+            return SwingControlReader.read(pane, selector, null, null, null, null);
+        });
+    }
+
+    private Map<String, Object> readBound(HarnessCommand command,
+                                         Function<SwingHarnessBridge, Map<String, Object>> read) {
+        String expected = expectedContext(command);
+        Attachment current = requireAttachment();
+        return onEdtBounded(() -> {
+            requireCurrentAttachment(current, expected);
+            JComponent active = activeRoot(current);
+            if (expected != null && !current.context().matches(expected, active)) {
+                throw new DesktopContextChangedException();
+            }
+            String readContext = current.context().observe(active);
+            Map<String, Object> output = new LinkedHashMap<>(
+                    read.apply(new SwingHarnessBridge(current, active, actions)));
+            requireCurrentAttachment(current, readContext);
+            if (activeRoot(current) != active || !current.context().matches(readContext, active)) {
+                throw new DesktopContextChangedException();
+            }
+            requireCurrentAttachment(current, readContext);
+            output.put("contextToken", readContext);
+            return Map.copyOf(output);
+        });
+    }
+
+    private static Integer optionalInteger(HarnessCommand command, String name) {
+        return command.arguments().containsKey(name) ? command.integer(name) : null;
     }
 
     public ScreenCapture captureScreen() {
         Attachment current = requireAttachment();
-        return onEdtBounded(() -> capture(activeRoot(current)));
+        return onEdtBounded(() -> {
+            if (attachment != current) {
+                throw new DesktopContextChangedException();
+            }
+            JComponent active = activeRoot(current);
+            if (!hasCurrentRoot(current, active)) {
+                throw new DesktopContextChangedException();
+            }
+            ScreenCapture result = capture(active);
+            if (!hasCurrentRoot(current, active)) {
+                throw new DesktopContextChangedException();
+            }
+            return result;
+        });
     }
 
     private Attachment requireAttachment() {
@@ -650,6 +944,10 @@ public class SwingHarnessBridge {
 
     private JComponent activeRoot(Attachment current) {
         return activeRootResolver.apply(current.root());
+    }
+
+    private boolean hasCurrentRoot(Attachment current, JComponent active) {
+        return attachment == current && activeRoot(current) == active && attachment == current;
     }
 
     private static JComponent ownedModalRoot(JComponent root) {
@@ -727,6 +1025,27 @@ public class SwingHarnessBridge {
         }
     }
 
+    private static HarnessControl observedControl(JComponent root, RawControl control) {
+        String selector = control.selector();
+        boolean unique = !selector.isBlank()
+                && hasUniqueSelector(root, control.component(), selector);
+        String componentName = control.component().getName();
+        if (!unique && componentName != null && !componentName.isBlank()
+                && hasUniqueSelector(root, control.component(), componentName)) {
+            selector = componentName;
+            unique = true;
+        }
+        return new HarnessControl(control.kind(), selector, control.enabled(),
+                control.focusable(), control.supported() && unique);
+    }
+
+    private static boolean hasUniqueSelector(
+            JComponent root, JComponent component, String selector) {
+        List<JComponent> matches = new ArrayList<>();
+        collectMatches(root, selector, JComponent.class, matches);
+        return matches.size() == 1 && matches.get(0) == component;
+    }
+
     private static void requireTableRow(
             JTable table, String selector, int viewRow) {
         requireEnabled(table, "Table", selector);
@@ -734,14 +1053,6 @@ public class SwingHarnessBridge {
             throw new IllegalArgumentException("Row " + viewRow + " is outside table '"
                     + selector + "' with " + table.getRowCount() + " row(s)");
         }
-    }
-
-    private static JMenuBar requireMenuBar(JComponent root) {
-        JMenuBar menuBar = findMenuBar(root);
-        if (menuBar == null) {
-            throw new IllegalStateException("Desktop window has no menu bar");
-        }
-        return menuBar;
     }
 
     private static JMenuBar findMenuBar(Component component) {
@@ -760,36 +1071,6 @@ public class SwingHarnessBridge {
             }
         }
         return null;
-    }
-
-    private static JMenu uniqueTopMenu(JMenuBar menuBar, String label) {
-        List<JMenu> matches = new ArrayList<>();
-        for (int index = 0; index < menuBar.getMenuCount(); index++) {
-            JMenu menu = menuBar.getMenu(index);
-            if (menu != null && label.equals(menu.getText())) {
-                matches.add(menu);
-            }
-        }
-        if (matches.size() != 1) {
-            throw new IllegalArgumentException("Expected one top-level menu named '"
-                    + label + "' but found " + matches.size());
-        }
-        return matches.get(0);
-    }
-
-    private static JMenuItem uniqueMenuItem(JMenu menu, String label) {
-        List<JMenuItem> matches = new ArrayList<>();
-        for (Component component : menu.getMenuComponents()) {
-            if (component instanceof JMenuItem item && label.equals(item.getText())) {
-                matches.add(item);
-            }
-        }
-        if (matches.size() != 1) {
-            throw new IllegalArgumentException("Expected one menu command named '"
-                    + label + "' below '" + menu.getText() + "' but found "
-                    + matches.size());
-        }
-        return matches.get(0);
     }
 
     private static List<List<String>> menuPaths(JComponent root) {
@@ -821,223 +1102,6 @@ public class SwingHarnessBridge {
                 paths.add(List.copyOf(path));
             }
         }
-    }
-
-    private static void collectShortcutBindings(
-            Component component, KeyStroke keyStroke, List<ShortcutBinding> matches) {
-        if (!component.isVisible()) {
-            return;
-        }
-        if (component instanceof JComponent swing) {
-            addShortcutBinding(swing, JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT,
-                    keyStroke, matches);
-            addShortcutBinding(swing, JComponent.WHEN_IN_FOCUSED_WINDOW,
-                    keyStroke, matches);
-        }
-        if (component instanceof Container container) {
-            for (Component child : container.getComponents()) {
-                collectShortcutBindings(child, keyStroke, matches);
-            }
-        }
-    }
-
-    private static void addShortcutBinding(
-            JComponent component, int condition, KeyStroke keyStroke,
-            List<ShortcutBinding> matches) {
-        InputMap inputMap = component.getInputMap(condition);
-        Object actionKey = inputMap == null ? null : inputMap.get(keyStroke);
-        Action action = actionKey == null ? null : component.getActionMap().get(actionKey);
-        if (action == null || matches.stream().anyMatch(binding -> binding.action() == action)) {
-            return;
-        }
-        matches.add(new ShortcutBinding(component, action));
-    }
-
-    private static Map<String, Object> controlValue(
-            JComponent component, String selector) {
-        if (!component.isVisible()) {
-            throw new IllegalArgumentException("Control '" + selector + "' is not visible");
-        }
-        Map<String, Object> value = new LinkedHashMap<>();
-        if (component instanceof JPasswordField) {
-            throw new IllegalArgumentException(
-                    "Password fields are never readable through the automation harness");
-        }
-        if (component instanceof JTextComponent text) {
-            value.put("kind", "text");
-            putText(value, "value", text.getText(), MAX_TEXT_CHARS);
-        } else if (component instanceof JComboBox<?> combo) {
-            value.put("kind", "selector");
-            value.put("editable", combo.isEditable());
-            value.put("selectedIndex", combo.getSelectedIndex());
-            Object editorItem = combo.isEditable() ? combo.getEditor().getItem() : null;
-            putText(value, "selected", combo.isEditable()
-                    ? editorItem == null ? "" : String.valueOf(editorItem)
-                    : combo.getSelectedIndex() < 0 ? ""
-                    : comboItemText(combo, combo.getSelectedIndex()), MAX_ITEM_CHARS);
-            value.put("options", comboOptions(combo, value));
-            value.put("optionCount", combo.getItemCount());
-            markTruncated(value, combo.getItemCount() > MAX_COLLECTION_ITEMS);
-        } else if (component instanceof JFileChooser chooser) {
-            value.put("kind", "file-chooser");
-            value.put("dialogType", chooser.getDialogType() == JFileChooser.SAVE_DIALOG ? "SAVE" : "OPEN");
-            putText(value, "title", chooser.getDialogTitle(), MAX_ITEM_CHARS);
-            putText(value, "selectedPath", chooser.getSelectedFile() == null ? ""
-                    : chooser.getSelectedFile().getAbsolutePath(), MAX_TEXT_CHARS);
-            putText(value, "directory", chooser.getCurrentDirectory() == null ? ""
-                    : chooser.getCurrentDirectory().getAbsolutePath(), MAX_TEXT_CHARS);
-        } else if (component instanceof JTable table) {
-            tableValue(table, value);
-        } else if (component instanceof JList<?> list) {
-            listValue(list, value);
-        } else if (component instanceof JSpinner spinner) {
-            value.put("kind", "spinner");
-            putText(value, "value", String.valueOf(spinner.getValue()), MAX_ITEM_CHARS);
-        } else if (component instanceof JSlider slider) {
-            value.put("kind", "slider");
-            value.put("value", slider.getValue());
-            value.put("minimum", slider.getMinimum());
-            value.put("maximum", slider.getMaximum());
-        } else if (component instanceof JTabbedPane tabs) {
-            value.put("kind", "tabs");
-            value.put("selectedIndex", tabs.getSelectedIndex());
-            putText(value, "selected", tabs.getSelectedIndex() < 0
-                    ? "" : tabs.getTitleAt(tabs.getSelectedIndex()), MAX_ITEM_CHARS);
-            List<String> titles = new ArrayList<>();
-            int count = Math.min(tabs.getTabCount(), MAX_COLLECTION_ITEMS);
-            for (int index = 0; index < count; index++) {
-                titles.add(boundedItem(value, tabs.getTitleAt(index)));
-            }
-            value.put("tabs", List.copyOf(titles));
-            value.put("tabCount", tabs.getTabCount());
-            markTruncated(value, count < tabs.getTabCount());
-        } else if (component instanceof AbstractButton button) {
-            value.put("kind", "button");
-            value.put("selected", button.isSelected());
-            putText(value, "label", button.getText(), MAX_ITEM_CHARS);
-        } else {
-            throw new IllegalArgumentException("Control '" + selector
-                    + "' has no supported readable value");
-        }
-        value.put("enabled", component.isEnabled());
-        return Map.copyOf(value);
-    }
-
-    private static List<String> comboOptions(JComboBox<?> combo, Map<String, Object> value) {
-        int count = Math.min(combo.getItemCount(), MAX_COLLECTION_ITEMS);
-        List<String> options = new ArrayList<>(count);
-        for (int index = 0; index < count; index++) {
-            options.add(boundedItem(value, comboItemText(combo, index)));
-        }
-        return List.copyOf(options);
-    }
-
-    private static void tableValue(JTable table, Map<String, Object> value) {
-        value.put("kind", "table");
-        int columnCount = table.getColumnCount();
-        int returnedColumns = Math.min(columnCount, 50);
-        List<String> columns = new ArrayList<>(returnedColumns);
-        for (int column = 0; column < returnedColumns; column++) {
-            columns.add(boundedItem(value, table.getColumnName(column)));
-        }
-        int cellBoundRows = returnedColumns == 0
-                ? MAX_COLLECTION_ITEMS : MAX_TABLE_CELLS / returnedColumns;
-        int returnedRows = Math.min(table.getRowCount(),
-                Math.min(MAX_COLLECTION_ITEMS, cellBoundRows));
-        List<List<String>> rows = new ArrayList<>(returnedRows);
-        for (int row = 0; row < returnedRows; row++) {
-            List<String> cells = new ArrayList<>(returnedColumns);
-            for (int column = 0; column < returnedColumns; column++) {
-                cells.add(boundedItem(value, tableCellText(table, row, column)));
-            }
-            rows.add(List.copyOf(cells));
-        }
-        value.put("columns", List.copyOf(columns));
-        value.put("rows", List.copyOf(rows));
-        value.put("rowCount", table.getRowCount());
-        value.put("columnCount", columnCount);
-        value.put("selectedRows", selectedRows(table.getSelectionModel(), table.getRowCount(), value));
-        markTruncated(value, returnedRows < table.getRowCount()
-                || returnedColumns < columnCount);
-    }
-
-    private static void listValue(JList<?> list, Map<String, Object> value) {
-        value.put("kind", "list");
-        int count = Math.min(list.getModel().getSize(), MAX_COLLECTION_ITEMS);
-        List<String> items = new ArrayList<>(count);
-        for (int index = 0; index < count; index++) {
-            items.add(boundedItem(value, listItemText(list, index)));
-        }
-        value.put("items", List.copyOf(items));
-        value.put("itemCount", list.getModel().getSize());
-        value.put("selectedRows", selectedRows(list.getSelectionModel(), list.getModel().getSize(), value));
-        markTruncated(value, count < list.getModel().getSize());
-    }
-
-    private static List<Integer> selectedRows(
-            ListSelectionModel selection, int itemCount, Map<String, Object> value) {
-        int first = selection.getMinSelectionIndex();
-        int last = Math.min(selection.getMaxSelectionIndex(), itemCount - 1);
-        if (first < 0 || first > last) {
-            return List.of();
-        }
-        List<Integer> rows = new ArrayList<>();
-        int scanned = 0;
-        for (int index = first; index <= last && scanned < MAX_SELECTION_SCAN; index++, scanned++) {
-            if (selection.isSelectedIndex(index)) {
-                if (rows.size() == MAX_COLLECTION_ITEMS) {
-                    markTruncated(value, true);
-                    return List.copyOf(rows);
-                }
-                rows.add(index);
-            }
-        }
-        markTruncated(value, (long) last - first + 1 > scanned);
-        return List.copyOf(rows);
-    }
-
-    private static String boundedItem(Map<String, Object> value, String text) {
-        markTruncated(value, text != null && text.length() > MAX_ITEM_CHARS);
-        return truncate(text, MAX_ITEM_CHARS);
-    }
-
-    private static void markTruncated(Map<String, Object> value, boolean clipped) {
-        value.put("truncated", clipped || Boolean.TRUE.equals(value.get("truncated")));
-    }
-
-    @SuppressWarnings({"rawtypes", "unchecked"})
-    private static String listItemText(JList<?> list, int index) {
-        Object item = list.getModel().getElementAt(index);
-        javax.swing.ListCellRenderer renderer = list.getCellRenderer();
-        Component rendered = renderer == null ? null : renderer.getListCellRendererComponent(
-                list, item, index, false, false);
-        if (rendered instanceof javax.swing.JLabel label && label.getText() != null) {
-            return label.getText();
-        }
-        return String.valueOf(item);
-    }
-
-    private static String tableCellText(JTable table, int row, int column) {
-        Component rendered = table.prepareRenderer(table.getCellRenderer(row, column),
-                row, column);
-        if (rendered instanceof javax.swing.JLabel label && label.getText() != null) {
-            return label.getText();
-        }
-        return String.valueOf(table.getValueAt(row, column));
-    }
-
-    private static void putText(
-            Map<String, Object> output, String key, String text, int limit) {
-        String safe = text == null ? "" : text;
-        output.put(key, truncate(safe, limit));
-        markTruncated(output, safe.length() > limit);
-    }
-
-    private static String truncate(String text, int limit) {
-        if (text == null || text.length() <= limit) {
-            return text == null ? "" : text;
-        }
-        return text.substring(0, limit);
     }
 
     private static ScreenCapture capture(JComponent root) {
@@ -1127,7 +1191,8 @@ public class SwingHarnessBridge {
             return;
         }
         if (component instanceof JComboBox<?> combo) {
-            controls.add(raw("selector", combo, accessibleName(combo)));
+            controls.add(raw("selector", combo, accessibleName(combo),
+                    !SwingPasswordGuard.hasPasswordEditor(combo)));
             return;
         }
         if (component instanceof JTextComponent text && text.isEditable()) {
@@ -1164,6 +1229,64 @@ public class SwingHarnessBridge {
         }
     }
 
+    private static boolean isLayoutKind(String kind) {
+        return kind.equals("scroll") || kind.equals("split");
+    }
+
+    /** Supplemental selectors never use a label's current text as a public name. */
+    private static void collectSupplemental(Component component, List<RawControl> controls) {
+        if (!component.isVisible() || component instanceof JPasswordField
+                || component instanceof JMenuItem || component instanceof BasicArrowButton) {
+            return;
+        }
+        if (component instanceof JLabel label) {
+            if (label.getName() != null && !label.getName().isBlank()) {
+                controls.add(raw("label", label, label.getName()));
+            }
+            return;
+        }
+        if (component instanceof JTextComponent text) {
+            String selector = firstNonBlank(accessibleName(text), text.getName());
+            if (!text.isEditable() && !selector.isBlank()) {
+                controls.add(raw("text", text, selector));
+            }
+            return;
+        }
+        if (component instanceof AbstractButton || component instanceof JTable
+                || component instanceof JList<?> || component instanceof JComboBox<?>
+                || component instanceof JSpinner || component instanceof JSlider
+                || component instanceof JFileChooser) {
+            return;
+        }
+        if (component instanceof JTabbedPane tabs) {
+            if (tabs.getSelectedComponent() != null) {
+                collectSupplemental(tabs.getSelectedComponent(), controls);
+            }
+            return;
+        }
+        if (component instanceof JScrollPane scroll) {
+            String selector = firstNonBlank(accessibleName(scroll), scroll.getName());
+            if (!selector.isBlank()) {
+                controls.add(raw("scroll", scroll, selector));
+            }
+            if (scroll.getViewport().getView() != null) {
+                collectSupplemental(scroll.getViewport().getView(), controls);
+            }
+            return;
+        }
+        if (component instanceof JSplitPane split) {
+            String selector = firstNonBlank(accessibleName(split), split.getName());
+            if (!selector.isBlank()) {
+                controls.add(raw("split", split, selector));
+            }
+        }
+        if (component instanceof Container container) {
+            for (Component child : container.getComponents()) {
+                collectSupplemental(child, controls);
+            }
+        }
+    }
+
     private static RawControl raw(String kind, JComponent component, String selector) {
         return raw(kind, component, selector, true);
     }
@@ -1178,7 +1301,7 @@ public class SwingHarnessBridge {
     private static RawControl raw(
             String kind, JComponent component, String selector, boolean supported) {
         return new RawControl(kind, selector == null ? "" : selector.trim(),
-                component.isEnabled(), component.isFocusable(), supported);
+                component.isEnabled(), component.isFocusable(), supported, component);
     }
 
     private static List<String> route(Component root) {
@@ -1316,6 +1439,38 @@ public class SwingHarnessBridge {
                 : second == null ? "" : second.trim();
     }
 
+    private static int matchingOptionIndex(JComboBox<?> combo, String displayedValue) {
+        ComboBoxModel<?> model = combo.getModel();
+        boolean[] changed = {false};
+        ListDataListener listener = new ListDataListener() {
+            @Override public void intervalAdded(ListDataEvent event) { changed[0] = true; }
+            @Override public void intervalRemoved(ListDataEvent event) { changed[0] = true; }
+            @Override public void contentsChanged(ListDataEvent event) { changed[0] = true; }
+        };
+        model.addListDataListener(listener);
+        try {
+            int match = -1;
+            int count = model.getSize();
+            for (int index = 0; index < count; index++) {
+                String rendered = comboItemText(combo, index);
+                if (changed[0] || combo.getModel() != model) {
+                    throw new IllegalStateException("Selector options changed while matching the requested label");
+                }
+                if (displayedValue.equals(rendered)) {
+                    if (match >= 0) {
+                        throw new IllegalArgumentException(
+                                "Several options are displayed as '" + displayedValue + "'");
+                    }
+                    match = index;
+                }
+            }
+            return match;
+        } finally {
+            // Selection listeners may legitimately rebuild equal records after matching finishes.
+            model.removeListDataListener(listener);
+        }
+    }
+
     @SuppressWarnings({"rawtypes", "unchecked"})
     private static String comboItemText(JComboBox<?> combo, int index) {
         Object item = combo.getItemAt(index);
@@ -1323,6 +1478,7 @@ public class SwingHarnessBridge {
         if (renderer != null) {
             Component rendered = renderer.getListCellRendererComponent(
                     new JList<>(), item, index, false, false);
+            SwingPasswordGuard.requireNoPassword(rendered);
             if (rendered instanceof javax.swing.JLabel label && label.getText() != null) {
                 return label.getText();
             }
@@ -1374,10 +1530,11 @@ public class SwingHarnessBridge {
         }
     }
 
-    private record Attachment(JComponent root, Function<String, Boolean> navigation) {
+    private record Attachment(JComponent root, Function<String, Boolean> navigation,
+                              SwingObservationContext context) {
     }
 
-    private record ShortcutBinding(JComponent source, Action action) {
+    private record ControlTarget(JComponent component, String selector, boolean enabled) {
     }
 
     private record TabTarget(JTabbedPane tabs, int index) {
@@ -1388,6 +1545,7 @@ public class SwingHarnessBridge {
     }
 
     private record RawControl(String kind, String selector,
-                              boolean enabled, boolean focusable, boolean supported) {
+                              boolean enabled, boolean focusable, boolean supported,
+                              JComponent component) {
     }
 }

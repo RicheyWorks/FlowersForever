@@ -1,6 +1,7 @@
 package com.flowerfarm;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.flowerfarm.controller.HarnessController;
 import com.flowerfarm.model.ProductionTask;
 import com.flowerfarm.model.ProductionTaskStatus;
@@ -24,6 +25,10 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+
+import java.util.List;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -560,6 +565,92 @@ class FarmDataHarnessIntegrationTest {
                 .isEqualTo(itemId);
         assertThat(inventoryService.findById(itemId).orElseThrow().getQuantity())
                 .isEqualTo(95);
+    }
+
+    @Test
+    @DisplayName("rejects malformed material JSON before saving any mapped recipes or source receipts")
+    void rejectsMalformedJsonCellsBeforeImportingAnyRows() throws Exception {
+        ObjectMapper json = new ObjectMapper();
+        String ingredient = "{\"itemName\":\"Tulip\",\"stemsPerDesign\":5,\"packSize\":10}";
+        List<String> invalidCells = List.of(
+                "[" + ingredient + "] [" + ingredient + "]",
+                "[{\"itemName\":\"Tulip\",\"itemName\":\"Rose\","
+                        + "\"stemsPerDesign\":5,\"packSize\":10}]");
+        for (int index = 0; index < invalidCells.size(); index++) {
+            String identity = "invalid-material-json-" + index;
+            String validName = "JSON Cell Valid Recipe " + index;
+            String invalidName = "JSON Cell Invalid Recipe " + index;
+            Map<String, Object> arguments = new LinkedHashMap<>(Map.of(
+                    "record-type", "floral-recipes",
+                    "source-key-fields", List.of("Legacy Key"),
+                    "field-mapping", Map.of("name", "Recipe Name", "ingredients", "Materials"),
+                    "defaults", Map.of("designType", "Bouquet"),
+                    "source-records", List.of(
+                            Map.of("Legacy Key", "first", "Recipe Name", validName,
+                                    "Materials", "[" + ingredient + "]"),
+                            Map.of("Legacy Key", "second", "Recipe Name", invalidName,
+                                    "Materials", invalidCells.get(index)))));
+
+            JsonNode preview = command(identity + "-preview", "preview-mapped-records",
+                    json.writeValueAsString(arguments)).path("output");
+            assertThat(preview.path("ready").asBoolean()).isFalse();
+            assertThat(preview.path("invalidCount").asInt()).isEqualTo(1);
+            assertThat(preview.path("issues")).anySatisfy(issue -> {
+                assertThat(issue.path("row").asInt()).isEqualTo(2);
+                assertThat(issue.path("field").asText()).isEqualTo("ingredients");
+                assertThat(issue.path("message").asText()).contains("invalid JSON");
+            });
+
+            arguments.put("source-system", identity);
+            ResponseEntity<JsonNode> rejected = commandResponse(
+                    identity + "-import", "import-mapped-records", json.writeValueAsString(arguments));
+            assertThat(rejected.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+            assertThat(rejected.getBody().path("message").asText()).contains("Row 2", "ingredients");
+            assertThat(productionStudioService.listRecipes())
+                    .noneMatch(recipe -> recipe.getName().equals(validName)
+                            || recipe.getName().equals(invalidName));
+            JsonNode receipts = command(identity + "-receipts", "list-import-receipts",
+                    json.writeValueAsString(Map.of("source-system", identity,
+                            "record-type", "floral-recipes"))).path("output");
+            assertThat(receipts.path("total").asLong()).isZero();
+            assertThat(receipts.path("receipts")).isEmpty();
+        }
+    }
+
+    @Test
+    @DisplayName("mapped harvest preview rejects future dates using the same rule as import")
+    void mappedHarvestPreviewRejectsFutureDates() {
+        JsonNode preview = command("mapped-future-harvest-preview", "preview-mapped-records", """
+                {"record-type":"harvests","source-records":[
+                 {"Legacy Key":"future-harvest","harvestDate":"2199-01-01",
+                  "cropName":"Future Preview Crop","quantity":5}],
+                 "source-key-fields":["Legacy Key"]}
+                """).path("output");
+
+        assertThat(preview.path("ready").asBoolean()).isFalse();
+        assertThat(preview.path("invalidCount").asInt()).isEqualTo(1);
+        assertThat(preview.path("issues")).anySatisfy(issue -> {
+            assertThat(issue.path("row").asInt()).isEqualTo(1);
+            assertThat(issue.path("message").asText()).contains("Harvest date cannot be after today");
+        });
+    }
+
+    @Test
+    @DisplayName("mapped harvest preview rejects quantities too small for the import rule")
+    void mappedHarvestPreviewRejectsQuantitiesBelowOneInventoryUnit() {
+        JsonNode preview = command("mapped-small-harvest-preview", "preview-mapped-records", """
+                {"record-type":"harvests","source-records":[
+                 {"Legacy Key":"small-harvest","harvestDate":"2020-01-01",
+                  "cropName":"Small Preview Crop","quantity":0.1}],
+                 "source-key-fields":["Legacy Key"]}
+                """).path("output");
+
+        assertThat(preview.path("ready").asBoolean()).isFalse();
+        assertThat(preview.path("invalidCount").asInt()).isEqualTo(1);
+        assertThat(preview.path("issues")).anySatisfy(issue -> {
+            assertThat(issue.path("row").asInt()).isEqualTo(1);
+            assertThat(issue.path("message").asText()).contains("Quantity must round to at least one inventory unit");
+        });
     }
 
     @Test

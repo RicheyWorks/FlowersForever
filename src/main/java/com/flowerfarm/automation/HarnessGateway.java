@@ -1,20 +1,19 @@
 package com.flowerfarm.automation;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Component;
 import org.springframework.beans.factory.annotation.Autowired;
 
-import java.lang.reflect.Array;
-import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.Clock;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.EnumMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -32,18 +31,29 @@ public class HarnessGateway {
     private final HarnessRegistry registry;
     private final HarnessProperties properties;
     private final Clock clock;
+    private final HarnessPayloadSizer payloadSizer;
     private final Map<String, CompletedCommand> completed = new LinkedHashMap<>();
     private long completedOutputBytes;
 
     @Autowired
+    public HarnessGateway(HarnessRegistry registry, HarnessProperties properties, ObjectMapper mapper) {
+        this(registry, properties, Clock.systemUTC(), mapper);
+    }
+
     public HarnessGateway(HarnessRegistry registry, HarnessProperties properties) {
-        this(registry, properties, Clock.systemUTC());
+        this(registry, properties, Clock.systemUTC(), new ObjectMapper().findAndRegisterModules());
     }
 
     public HarnessGateway(HarnessRegistry registry, HarnessProperties properties, Clock clock) {
+        this(registry, properties, clock, new ObjectMapper().findAndRegisterModules());
+    }
+
+    private HarnessGateway(HarnessRegistry registry, HarnessProperties properties, Clock clock,
+                           ObjectMapper mapper) {
         this.registry = registry;
         this.properties = properties;
         this.clock = Objects.requireNonNull(clock, "clock");
+        this.payloadSizer = new HarnessPayloadSizer(mapper, REPLAY_CACHE_BYTE_LIMIT);
     }
 
     public List<HarnessPluginDescriptor> discover(String token) {
@@ -86,12 +96,36 @@ public class HarnessGateway {
         }
         HarnessPlugin plugin = plugin(pluginId);
         HarnessActionSpec action = plugin.descriptor().action(command.action());
+        Optional<HarnessResponse> replay = replayExisting(plugin, action, command);
+        if (replay.isPresent()) {
+            return replay.get();
+        }
+        validateFreshness(command, action);
+        properties.authorize(action.risk());
+        HarnessExecution execution = plugin.execute(command);
+        return complete(cacheKey(plugin, command), plugin, command, execution, false);
+    }
+
+    /** Recovers an exact existing receipt without executing a fresh plugin action. */
+    public synchronized Optional<HarnessResponse> replay(
+            String token, String pluginId, HarnessCommand command) {
+        properties.authenticate(token);
+        if (command == null) {
+            throw new IllegalArgumentException("command is required");
+        }
+        HarnessPlugin plugin = plugin(pluginId);
+        HarnessActionSpec action = plugin.descriptor().action(command.action());
+        return replayExisting(plugin, action, command);
+    }
+
+    private Optional<HarnessResponse> replayExisting(
+            HarnessPlugin plugin, HarnessActionSpec action, HarnessCommand command) {
         // Replaying a physical receipt is safe after actions are disabled, but
         // a cached sensitive read must never bypass a revoked read permission.
         if (action.risk() == HarnessRisk.SENSITIVE_READ) {
             properties.authorize(action.risk());
         }
-        String cacheKey = plugin.descriptor().id() + "\u0000" + command.requestId();
+        String cacheKey = cacheKey(plugin, command);
         CompletedCommand cached = completed.get(cacheKey);
         if (cached != null) {
             if (!cached.command().equals(command)) {
@@ -99,45 +133,49 @@ public class HarnessGateway {
                         + "' was already used for a different command");
             }
             if (cached.response() == null) {
-                return complete(cacheKey, plugin, command, cached.execution(), true);
+                return Optional.of(complete(cacheKey, plugin, command, cached.execution(), true));
             }
             HarnessResponse response = cached.response();
-            return new HarnessResponse(response.protocolVersion(), response.requestId(),
+            return Optional.of(new HarnessResponse(response.protocolVersion(), response.requestId(),
                     response.pluginId(), response.success(), true, response.message(),
-                    filterSnapshot(plugin.descriptor(), response.snapshot()), response.output());
+                    filterSnapshot(plugin.descriptor(), response.snapshot()), response.output()));
         }
 
         validateArguments(command, action);
         HarnessExecution durableReplay = plugin.replay(command).orElse(null);
         if (durableReplay != null) {
-            return complete(cacheKey, plugin, command, durableReplay, true);
+            return Optional.of(complete(cacheKey, plugin, command, durableReplay, true));
         }
-        validateFreshness(command, action);
-        properties.authorize(action.risk());
-        HarnessExecution execution = plugin.execute(command);
-        return complete(cacheKey, plugin, command, execution, false);
+        return Optional.empty();
+    }
+
+    private static String cacheKey(HarnessPlugin plugin, HarnessCommand command) {
+        return plugin.descriptor().id() + "\u0000" + command.requestId();
     }
 
     private HarnessResponse complete(
             String cacheKey, HarnessPlugin plugin, HarnessCommand command,
             HarnessExecution execution, boolean replayed) {
         Objects.requireNonNull(execution, "Harness plugin returned no execution result");
-        // Record the completed effect before observation: an unavailable sensor or
-        // UI must not cause an already performed mutation to run again on retry.
-        long executionBytes = estimateBytes(execution.output()) + estimateBytes(command.arguments());
+        // Record the completed effect before accounting or observation: serializer,
+        // sensor, or UI failures must not repeat an already performed mutation.
+        cache(cacheKey, new CompletedCommand(command, execution, null, 0));
+        long executionBytes = payloadSizer.size(command, execution);
         cache(cacheKey, new CompletedCommand(command, execution, null, executionBytes));
         HarnessResponse response = new HarnessResponse(
                 HarnessResponse.PROTOCOL_VERSION, command.requestId(),
                 plugin.descriptor().id(), execution.success(), replayed,
                 execution.message(), observePlugin(plugin), execution.output());
-        long outputBytes = executionBytes
-                + estimateBytes(response.snapshot().metadata());
+        long outputBytes = payloadSizer.combined(executionBytes, payloadSizer.size(response.snapshot()));
         cache(cacheKey, new CompletedCommand(command, execution, response, outputBytes));
         return response;
     }
 
     private void cache(String key, CompletedCommand entry) {
-        CompletedCommand previous = completed.put(key, entry);
+        // A receipt being completed must survive its own accounting/observation
+        // retry even when it was inserted before other completed commands.
+        CompletedCommand previous = completed.remove(key);
+        completed.put(key, entry);
         completedOutputBytes += entry.outputBytes()
                 - (previous == null ? 0 : previous.outputBytes());
         trimReplayCache();
@@ -242,33 +280,6 @@ public class HarnessGateway {
             CompletedCommand removed = completed.remove(first);
             completedOutputBytes -= removed.outputBytes();
         }
-    }
-
-    private static long estimateBytes(Object value) {
-        if (value == null) {
-            return 0;
-        }
-        if (value instanceof String text) {
-            return text.getBytes(StandardCharsets.UTF_8).length;
-        }
-        if (value instanceof Map<?, ?> map) {
-            long bytes = 0;
-            for (Map.Entry<?, ?> entry : map.entrySet()) {
-                bytes += estimateBytes(entry.getKey()) + estimateBytes(entry.getValue());
-            }
-            return bytes;
-        }
-        if (value instanceof Collection<?> collection) {
-            return collection.stream().mapToLong(HarnessGateway::estimateBytes).sum();
-        }
-        if (value.getClass().isArray()) {
-            long bytes = 0;
-            for (int index = 0; index < Array.getLength(value); index++) {
-                bytes += estimateBytes(Array.get(value, index));
-            }
-            return bytes;
-        }
-        return 16;
     }
 
     private record CompletedCommand(HarnessCommand command, HarnessExecution execution,

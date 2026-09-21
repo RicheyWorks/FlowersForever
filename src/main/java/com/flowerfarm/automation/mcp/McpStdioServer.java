@@ -2,6 +2,8 @@ package com.flowerfarm.automation.mcp;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.JsonParser;
+import com.fasterxml.jackson.core.JsonPointer;
+import com.fasterxml.jackson.core.JsonToken;
 import com.fasterxml.jackson.core.StreamReadConstraints;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -10,14 +12,15 @@ import com.fasterxml.jackson.databind.ObjectReader;
 import com.fasterxml.jackson.databind.ObjectWriter;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.DoubleNode;
+import com.fasterxml.jackson.databind.cfg.JsonNodeFeature;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
-import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.io.PrintStream;
@@ -55,29 +58,33 @@ public class McpStdioServer {
         protocolMapper.getFactory().setStreamReadConstraints(constraints);
         this.jsonReader = protocolMapper.reader()
                 .with(DeserializationFeature.FAIL_ON_TRAILING_TOKENS)
+                .with(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS)
+                .without(JsonNodeFeature.STRIP_TRAILING_BIGDECIMAL_ZEROES)
                 .with(JsonParser.Feature.STRICT_DUPLICATE_DETECTION);
     }
 
     /** Serves until the client closes stdin. Stdout remains protocol-only. */
     public void serve(InputStream input, OutputStream output, PrintStream diagnostics)
             throws IOException {
-        BufferedReader reader = new BufferedReader(
-                new InputStreamReader(input, StandardCharsets.UTF_8));
+        McpFrameReader reader = new McpFrameReader(input, maxFrameCharacters);
         BufferedWriter writer = new BufferedWriter(
                 new OutputStreamWriter(output, StandardCharsets.UTF_8));
         ObjectWriter jsonWriter = mapper.writer().without(SerializationFeature.INDENT_OUTPUT);
         diagnostics.println("FlowersForever MCP stdio adapter ready");
-        InputFrame frame;
-        while ((frame = readFrame(reader)) != null) {
-            if (!frame.oversized() && frame.contents().isBlank()) {
+        McpFrameReader.InputFrame frame;
+        while ((frame = reader.read()) != null) {
+            if (!frame.oversized() && !frame.malformed() && frame.contents().isBlank()) {
                 continue;
             }
             ObjectNode response;
             try {
                 if (frame.oversized()) {
                     response = handler.inputLimitExceeded(maxFrameCharacters);
+                } else if (frame.malformed()) {
+                    response = handler.parseError();
                 } else {
                     JsonNode request = jsonReader.readTree(frame.contents());
+                    request = preserveNegativeZero(frame.contents(), request);
                     response = handler.handle(request);
                 }
             } catch (JsonProcessingException exception) {
@@ -94,34 +101,34 @@ public class McpStdioServer {
         }
     }
 
-    /** Drains an oversized frame before accepting the client's next message. */
-    private InputFrame readFrame(BufferedReader reader) throws IOException {
-        StringBuilder contents = new StringBuilder(Math.min(maxFrameCharacters, 4096));
-        boolean consumed = false;
-        boolean oversized = false;
-        int next;
-        while ((next = reader.read()) != -1) {
-            consumed = true;
-            if (next == '\n') {
-                break;
-            }
-            if (next == '\r') {
-                reader.mark(1);
-                int following = reader.read();
-                if (following != -1 && following != '\n') {
-                    reader.reset();
+    private JsonNode preserveNegativeZero(String contents, JsonNode request) throws IOException {
+        // BigDecimal retains precision and scale but loses zero's sign. Scan the
+        // validated frame with the same constrained parser, without a second tree.
+        try (JsonParser parser = jsonReader.createParser(contents)) {
+            while (parser.nextToken() != null) {
+                if (parser.currentToken() != JsonToken.VALUE_NUMBER_FLOAT
+                        || !parser.getText().startsWith("-")
+                        || parser.getDecimalValue().signum() != 0) {
+                    continue;
                 }
-                break;
-            }
-            if (contents.length() < maxFrameCharacters) {
-                contents.append((char) next);
-            } else {
-                oversized = true;
+                JsonPointer pointer = parser.getParsingContext().pathAsPointer();
+                DoubleNode negativeZero = DoubleNode.valueOf(-0.0d);
+                if (pointer.matches()) {
+                    request = negativeZero;
+                } else {
+                    JsonNode parent = request.at(pointer.head());
+                    JsonPointer leaf = pointer.last();
+                    if (parent instanceof ObjectNode object) {
+                        object.replace(leaf.getMatchingProperty(), negativeZero);
+                    } else if (parent instanceof ArrayNode array) {
+                        array.set(leaf.getMatchingIndex(), negativeZero);
+                    } else {
+                        throw new IllegalStateException("Validated JSON number has no container");
+                    }
+                }
             }
         }
-        return consumed ? new InputFrame(oversized ? "" : contents.toString(), oversized) : null;
+        return request;
     }
 
-    private record InputFrame(String contents, boolean oversized) {
-    }
 }

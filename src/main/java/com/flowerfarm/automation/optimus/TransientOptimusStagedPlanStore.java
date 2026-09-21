@@ -70,6 +70,17 @@ final class TransientOptimusStagedPlanStore
         plans.remove(robotKey(identity));
     }
 
+    @Override
+    public synchronized void clearExecution(
+            RobotIdentity identity, String requestId, String planFingerprint) {
+        String key = robotKey(identity);
+        StoredPlan stored = plans.get(key);
+        requireIdentity(stored, identity);
+        if (stored != null && stored.claimedBy(requestId) && stored.matchesFingerprint(planFingerprint)) {
+            plans.remove(key);
+        }
+    }
+
     private static void requireIdentity(
             StoredPlan stored, RobotIdentity identity) {
         if (stored != null && (!stored.robotId().equals(identity.robotId())

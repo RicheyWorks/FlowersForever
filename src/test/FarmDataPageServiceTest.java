@@ -135,6 +135,24 @@ class FarmDataPageServiceTest {
     }
 
     @Test
+    void refusesANonAdvancingContinuationWhenRecordsChangeBetweenQueries() {
+        // The page is empty, but a concurrent insert is visible to the later count.
+        when(items.findAll(any(Pageable.class))).thenReturn(Page.empty());
+        when(items.count()).thenReturn(26L);
+
+        FarmDataPageService.RecordPage<?> page = service.list(
+                "inventory", 25, 25, null, null);
+
+        assertThatThrownBy(page::hasMore)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("retry this read");
+        assertThat(new FarmDataPageService.RecordPage<>(List.of(), 26, 25, 26).hasMore())
+                .isFalse();
+        assertThat(new FarmDataPageService.RecordPage<>(List.of(), 30, 25, 26).hasMore())
+                .isFalse();
+    }
+
+    @Test
     @DisplayName("rejects record types outside the published catalog")
     void rejectsUnknownType() {
         assertThatThrownBy(() -> service.list(

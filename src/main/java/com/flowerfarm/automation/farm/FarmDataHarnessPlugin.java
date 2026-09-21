@@ -44,8 +44,8 @@ import com.flowerfarm.service.SeasonPlanService;
 import com.flowerfarm.service.WorkerWorkflowService;
 
 import org.springframework.data.domain.Page;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -62,6 +62,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Supplier;
 
 /**
  * Domain-level AI bridge for data migration and ongoing farm operations.
@@ -128,19 +129,9 @@ public class FarmDataHarnessPlugin implements HarnessPlugin {
                     entry("unit", textField("Order unit; defaults to bunch.")),
                     entry("unitPrice", numberField("Non-negative price per unit."))));
 
-    private static final Map<String, Object> ORDER_SCHEMA = objectSchema(
-            List.of("orderDate"), Map.ofEntries(
-                    entry("sourceKey", sourceKeyField()),
-                    entry("customerId", integerField("FlowersForever customer id.")),
-                    entry("customerName", textField(
-                            "Exact customer name when customerId is unavailable.")),
-                    entry("orderDate", dateField("ISO-8601 order date.")),
-                    entry("status", enumField(
-                            "DRAFT", "CONFIRMED", "FULFILLED", "CANCELLED")),
-                    entry("handoffType", enumField(
-                            "PICKUP", "DELIVERY", "MARKET", "UNSPECIFIED")),
-                    entry("notes", textField("Order notes.")),
-                    entry("lines", arrayField("Order product lines.", ORDER_LINE_SCHEMA))));
+    private static final Map<String, Object> ORDER_SCHEMA = orderSchema(
+            "DRAFT", "CONFIRMED", "FULFILLED", "CANCELLED");
+    private static final Map<String, Object> CREATE_ORDER_SCHEMA = orderSchema("DRAFT", "CONFIRMED");
 
     private static final Map<String, Object> KNOWLEDGE_SCHEMA = objectSchema(
             List.of("observedOn", "summary", "observation"), Map.ofEntries(
@@ -289,7 +280,7 @@ public class FarmDataHarnessPlugin implements HarnessPlugin {
                             "Read one verified, bounded base64 chunk of a field attachment.",
                             HarnessRisk.SENSITIVE_READ, true, List.of(
                                     argument("attachment-id", HarnessValueType.INTEGER,
-                                            "Attachment id returned by list-records.", true),
+                                            "Positive signed 64-bit attachment id returned by list-records.", true),
                                     argument("offset", HarnessValueType.INTEGER,
                                             "Zero-based byte offset; defaults to 0.", false),
                                     argument("max-bytes", HarnessValueType.INTEGER,
@@ -419,7 +410,7 @@ public class FarmDataHarnessPlugin implements HarnessPlugin {
                                     argument("target-type", HarnessValueType.STRING,
                                             "PRODUCTION_TASK.", true),
                                     argument("target-id", HarnessValueType.INTEGER,
-                                            "Existing production task id.", true),
+                                            "Positive signed 64-bit id of an existing production task.", true),
                                     argument("filename", HarnessValueType.STRING,
                                             "Original user-facing filename.", true),
                                     argument("media-type", HarnessValueType.STRING,
@@ -482,7 +473,7 @@ public class FarmDataHarnessPlugin implements HarnessPlugin {
                     action("create-orders",
                             "Create draft or confirmed orders for existing customers atomically.",
                             HarnessRisk.MUTATE, false,
-                            writeArguments("Canonical order records.", ORDER_SCHEMA)),
+                            writeArguments("Canonical order records.", CREATE_ORDER_SCHEMA)),
                     action("record-knowledge",
                             "Append farm observations and lessons atomically.",
                             HarnessRisk.MUTATE, false,
@@ -506,7 +497,9 @@ public class FarmDataHarnessPlugin implements HarnessPlugin {
     private final FieldAttachmentService attachmentService;
     private final WorkerWorkflowService workerWorkflowService;
     private final ObjectMapper mapper;
+    private final FarmDataCommandTransactions transactions;
 
+    /** Retains unproxied construction for embedded callers and isolated service tests. */
     public FarmDataHarnessPlugin(
             InventoryService inventoryService,
             CustomerService customerService,
@@ -522,6 +515,29 @@ public class FarmDataHarnessPlugin implements HarnessPlugin {
             FieldAttachmentService attachmentService,
             WorkerWorkflowService workerWorkflowService,
             ObjectMapper mapper) {
+        this(inventoryService, customerService, harvestService, orderService,
+                knowledgeService, productionStudioService, seasonPlanService,
+                receiptService, mappingService, pageService, exportService,
+                attachmentService, workerWorkflowService, mapper, new FarmDataCommandTransactions());
+    }
+
+    @Autowired
+    public FarmDataHarnessPlugin(
+            InventoryService inventoryService,
+            CustomerService customerService,
+            HarvestService harvestService,
+            OrderService orderService,
+            KnowledgeService knowledgeService,
+            ProductionStudioService productionStudioService,
+            SeasonPlanService seasonPlanService,
+            FarmDataImportReceiptService receiptService,
+            FarmDataMappingService mappingService,
+            FarmDataPageService pageService,
+            FarmDataExportService exportService,
+            FieldAttachmentService attachmentService,
+            WorkerWorkflowService workerWorkflowService,
+            ObjectMapper mapper,
+            FarmDataCommandTransactions transactions) {
         this.inventoryService = inventoryService;
         this.customerService = customerService;
         this.harvestService = harvestService;
@@ -536,6 +552,7 @@ public class FarmDataHarnessPlugin implements HarnessPlugin {
         this.attachmentService = attachmentService;
         this.workerWorkflowService = workerWorkflowService;
         this.mapper = mapper.copy().enable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
+        this.transactions = transactions;
     }
 
     @Override
@@ -557,8 +574,18 @@ public class FarmDataHarnessPlugin implements HarnessPlugin {
     }
 
     @Override
-    @Transactional
     public synchronized HarnessExecution execute(HarnessCommand command) {
+        // Export creation owns a repeatable-read transaction; wrapping it here
+        // would hold a second connection while that transaction waits for one.
+        // File reads and schema discovery do not need a database transaction.
+        return switch (command.action()) {
+            case "create-record-export", "get-record-export", "read-record-export",
+                    "get-data-catalog", "suggest-field-mapping" -> executeCommand(command);
+            default -> transactions.execute(() -> executeCommand(command));
+        };
+    }
+
+    private HarnessExecution executeCommand(HarnessCommand command) {
         return switch (command.action()) {
             case "get-data-catalog" -> catalog();
             case "suggest-field-mapping" -> suggestFieldMapping(command);
@@ -616,7 +643,7 @@ public class FarmDataHarnessPlugin implements HarnessPlugin {
         types.put("harvests", historyCatalogEntry(
                 "import-harvest-history", "log-harvests", HARVEST_SCHEMA));
         types.put("orders", historyCatalogEntry(
-                "import-order-history", "create-orders", ORDER_SCHEMA));
+                "import-order-history", "create-orders", ORDER_SCHEMA, CREATE_ORDER_SCHEMA));
         types.put("knowledge", catalogEntry(
                 "record-knowledge", "APPEND", KNOWLEDGE_SCHEMA));
         types.put("production-tasks", Map.of(
@@ -765,7 +792,8 @@ public class FarmDataHarnessPlugin implements HarnessPlugin {
         switch (type) {
             case "inventory" -> mapper.convertValue(record, InventoryRow.class).toItem();
             case "customers" -> mapper.convertValue(record, CustomerRow.class).toCustomer();
-            case "harvests" -> mapper.convertValue(record, HarvestRow.class).toHarvest();
+            case "harvests" -> harvestService.validateBatch(List.of(
+                    mapper.convertValue(record, HarvestRow.class).toHarvest()));
             case "orders" -> validateMappedOrder(
                     mapper.convertValue(record, OrderRow.class));
             case "knowledge" -> mapper.convertValue(record, KnowledgeRow.class).toEntry();
@@ -869,14 +897,13 @@ public class FarmDataHarnessPlugin implements HarnessPlugin {
     }
 
     private HarnessExecution readAttachmentContent(HarnessCommand command) {
-        int attachmentId = optionalInteger(
-                command, "attachment-id", -1, 1, Integer.MAX_VALUE);
+        long attachmentId = requiredId(command, "attachment-id");
         int offset = optionalInteger(command, "offset", 0, 0, Integer.MAX_VALUE);
         int maxBytes = optionalInteger(
                 command, "max-bytes", FieldAttachmentService.MAX_CONTENT_CHUNK_BYTES,
                 1, FieldAttachmentService.MAX_CONTENT_CHUNK_BYTES);
         FieldAttachmentService.AttachmentContentChunk chunk =
-                attachmentService.readChunk((long) attachmentId, offset, maxBytes);
+                attachmentService.readChunk(attachmentId, offset, maxBytes);
         Map<String, Object> output = new LinkedHashMap<>();
         output.put("attachment", chunk.attachment());
         output.put("offset", chunk.offset());
@@ -1026,11 +1053,11 @@ public class FarmDataHarnessPlugin implements HarnessPlugin {
             throw new IllegalArgumentException(
                     "content-base64 must contain valid base64 image bytes.", exception);
         }
-        int targetId = optionalInteger(command, "target-id", -1, 1, Integer.MAX_VALUE);
+        long targetId = requiredId(command, "target-id");
         WorkerWorkflowService.WorkerAttachmentRequest request =
                 new WorkerWorkflowService.WorkerAttachmentRequest(
                         command.text("operation-key"), command.text("target-type"),
-                        (long) targetId, command.text("filename"),
+                        targetId, command.text("filename"),
                         command.text("media-type"), optionalText(command, "caption"),
                         optionalInstant(command, "captured-at"));
         WorkerWorkflowService.WorkerActionResult result =
@@ -1136,8 +1163,9 @@ public class FarmDataHarnessPlugin implements HarnessPlugin {
                 continue;
             }
             if (source.hasReceipt()) {
-                Item item = inventoryService.updateById(
-                        source.receipt().getTargetRecordId(), row.toItem());
+                Item incoming = row.toItem();
+                Item item = updateMappedTarget(source, () -> inventoryService.updateById(
+                        source.receipt().getTargetRecordId(), incoming));
                 saved.add(item);
                 receipts.add(receiptService.update(source.receipt(), command.action(),
                         source.fingerprint(), item.getId()));
@@ -1174,8 +1202,9 @@ public class FarmDataHarnessPlugin implements HarnessPlugin {
                 continue;
             }
             if (source.hasReceipt()) {
-                Customer customer = customerService.update(
-                        source.receipt().getTargetRecordId(), row.toCustomer());
+                Customer incoming = row.toCustomer();
+                Customer customer = updateMappedTarget(source, () -> customerService.update(
+                        source.receipt().getTargetRecordId(), incoming));
                 saved.add(customer);
                 receipts.add(receiptService.update(source.receipt(), command.action(),
                         source.fingerprint(), customer.getId()));
@@ -1215,8 +1244,9 @@ public class FarmDataHarnessPlugin implements HarnessPlugin {
             }
             GrowingTemplate incoming = row.toTemplate();
             if (source.hasReceipt()) {
-                GrowingTemplate template = productionStudioService.updateTemplate(
-                        source.receipt().getTargetRecordId(), incoming);
+                GrowingTemplate template = updateMappedTarget(source,
+                        () -> productionStudioService.updateTemplate(
+                                source.receipt().getTargetRecordId(), incoming));
                 saved.add(template);
                 receipts.add(receiptService.update(source.receipt(), command.action(),
                         source.fingerprint(), template.getId()));
@@ -1259,8 +1289,8 @@ public class FarmDataHarnessPlugin implements HarnessPlugin {
             }
             SeasonPlanEntry incoming = row.toPlan();
             if (source.hasReceipt()) {
-                SeasonPlanEntry plan = seasonPlanService.update(
-                        source.receipt().getTargetRecordId(), incoming);
+                SeasonPlanEntry plan = updateMappedTarget(source, () -> seasonPlanService.update(
+                        source.receipt().getTargetRecordId(), incoming));
                 saved.add(plan);
                 receipts.add(receiptService.update(source.receipt(), command.action(),
                         source.fingerprint(), plan.getId()));
@@ -1304,8 +1334,9 @@ public class FarmDataHarnessPlugin implements HarnessPlugin {
             }
             FloralRecipe incoming = row.toRecipe();
             if (source.hasReceipt()) {
-                FloralRecipe recipe = productionStudioService.updateRecipe(
-                        source.receipt().getTargetRecordId(), incoming);
+                FloralRecipe recipe = updateMappedTarget(source,
+                        () -> productionStudioService.updateRecipe(
+                                source.receipt().getTargetRecordId(), incoming));
                 saved.add(recipe);
                 receipts.add(receiptService.update(source.receipt(), command.action(),
                         source.fingerprint(), recipe.getId()));
@@ -1551,6 +1582,18 @@ public class FarmDataHarnessPlugin implements HarnessPlugin {
                 source.fingerprint(), targetRecordId));
     }
 
+    private <T> T updateMappedTarget(SourceState source, Supplier<T> update) {
+        try {
+            return update.get();
+        } catch (IndexOutOfBoundsException exception) {
+            // These updates lock the receipt's target before changing it. A deletion
+            // remains an import conflict for corrected rows as well as exact retries.
+            FarmDataImportConflictException conflict = missingTarget(source);
+            conflict.initCause(exception);
+            throw conflict;
+        }
+    }
+
     private FarmDataImportConflictException missingTarget(SourceState source) {
         return new FarmDataImportConflictException(
                 "Source record '" + source.sourceSystem() + "/" + source.sourceKey()
@@ -1720,6 +1763,15 @@ public class FarmDataHarnessPlugin implements HarnessPlugin {
                 "writeSchema", schema);
     }
 
+    private static Map<String, Object> historyCatalogEntry(
+            String migrationAction, String operationalAction, Map<String, Object> migrationSchema,
+            Map<String, Object> operationalSchema) {
+        Map<String, Object> entry = new LinkedHashMap<>(
+                historyCatalogEntry(migrationAction, operationalAction, migrationSchema));
+        entry.put("operationalWriteSchema", operationalSchema);
+        return Map.copyOf(entry);
+    }
+
     private static HarnessActionSpec action(
             String name, String description, HarnessRisk risk, boolean idempotent,
             List<HarnessArgumentSpec> arguments) {
@@ -1849,6 +1901,19 @@ public class FarmDataHarnessPlugin implements HarnessPlugin {
     private static Map.Entry<String, Object> entry(
             String name, Map<String, Object> schema) {
         return Map.entry(name, schema);
+    }
+
+    private static Map<String, Object> orderSchema(String... statuses) {
+        return objectSchema(List.of("orderDate"), Map.ofEntries(
+                entry("sourceKey", sourceKeyField()),
+                entry("customerId", integerField("FlowersForever customer id.")),
+                entry("customerName", textField(
+                        "Exact customer name when customerId is unavailable.")),
+                entry("orderDate", dateField("ISO-8601 order date.")),
+                entry("status", enumField(statuses)),
+                entry("handoffType", enumField("PICKUP", "DELIVERY", "MARKET", "UNSPECIFIED")),
+                entry("notes", textField("Order notes.")),
+                entry("lines", arrayField("Order product lines.", ORDER_LINE_SCHEMA))));
     }
 
     private static Map<String, Object> objectSchema(

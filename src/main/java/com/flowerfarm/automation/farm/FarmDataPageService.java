@@ -148,6 +148,12 @@ public class FarmDataPageService {
         }
 
         public boolean hasMore() {
+            if (records.isEmpty() && offset < total) {
+                // Separate live page/count queries can see different concurrent
+                // writes. Never publish a cursor that would repeat this empty page.
+                throw new IllegalStateException(
+                        "Farm record page did not advance before the reported total; retry this read.");
+            }
             return (long) offset + records.size() < total;
         }
     }
