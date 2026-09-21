@@ -1,5 +1,42 @@
 # Latest direction — September 21, 2026
 
+## Latest completed work: README marketing and Production Studio shipping usability
+
+The owner requested stronger README marketing, then the next significant shipping
+issue, emphasizing human-interface polish. README now leads with grower value,
+two clear CTAs, actual app screens, and a shorter connected-work story. It retains
+private-preview/distribution limits and labels the illustrative hero. A new real
+Production Studio screenshot shows the current field-work editor with sample data.
+
+The selected shipping issue was Production Studio: compact layouts hid forms and
+tables, while refresh/navigation replaced frost settings and task drafts. It now
+has separate Plan plantings/Field work views, full-width scrolling forms, readable
+tables, human labels, field validation, wrapped status messages, and selected-task
+context next to actuals. Discovery now has 36 leaf routes.
+
+Full refresh, frost reload, and actuals save run off the EDT with captured inputs.
+Generation/query checks discard superseded reads. Frost baselines and task-ID
+draft maps preserve unsaved edits; changed/missing tasks and failed/interrupted
+reads require review before further task writes. Explicit reload/discard actions
+and Studio exit protection complete the recovery path. Successful writes remain
+clearly saved if follow-up reads fail. Exiting mid-save cannot imply rollback.
+Other template, recipe, and handoff writes remain synchronous.
+
+Independent review corrected two premature task-write enablement paths. Visual
+tests found and corrected actual Swing label width inflation collapsing a table.
+Focused verification passed 42 tests, including 15 new safety cases and four
+rendered cases covering eight views at two sizes in both themes. The final visual
+cases also assert complete wrapped recovery messages and task identity. Test
+floors now include 165 suite/phase entries. Full clean isolated quality verification
+passed 1,576 tests plus two packaged-JAR checks, with no failures, errors, or skips.
+Line coverage is 86.88%, branch coverage 69.62%, and all quality gates passed.
+A subsequent `--check` confirmed source/report evidence still matches.
+Log: `dist/harness-evidence/ship-ui-quality.log`; evidence:
+`dist/harness-evidence/latest.json`. Agents have finished editing.
+
+Keep using `codex/recover-unpushed-work` and PR #21. This pass does not rebuild
+native installers or resolve the GitHub account's CI billing block.
+
 ## Latest completed work: harness and application wiring gaps
 
 The owner's follow-up was: "now that the machine and github is updated. work on

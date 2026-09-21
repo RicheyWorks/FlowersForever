@@ -43,21 +43,38 @@ import static org.mockito.Mockito.when;
 class ProductionStudioTabTest {
 
     @Test
-    @DisplayName("keeps task filters and every task action visible at compact desktop size")
+    @DisplayName("keeps task filters, table, and every action reachable at compact desktop size")
     void keepsTaskControlsVisible() throws Exception {
         ProductionStudioTab tab = new ProductionStudioTab(mock(ProductionStudioService.class),
                 new SwingDialogHarness().safelyCancelUnscripted());
         JComponent root = tab.getUIComponent();
         JTabbedPane workspace = (JTabbedPane) named(root, "productionStudio.workspace");
-        SwingUtilities.invokeAndWait(() -> workspace.setSelectedIndex(1));
+        SwingUtilities.invokeAndWait(() -> {
+            workspace.setSelectedIndex(1);
+            ((JTabbedPane) named(root, "production.plantingWorkspace")).setSelectedIndex(1);
+        });
         SwingUserHarness user = SwingUserHarness.on(root).layoutAt(1050, 700);
 
-        assertThat(user.visibleExtent("production.taskStatusFilter").width()).isGreaterThan(55);
-        assertThat(user.visibleExtent("production.markTaskDone").width()).isGreaterThan(100);
-        assertThat(user.visibleExtent("production.skipTask").width()).isGreaterThan(80);
-        assertThat(user.visibleExtent("production.reopenTask").width()).isGreaterThan(80);
-        assertThat(user.visibleExtent("production.regenerateTasks").width()).isGreaterThan(100);
-        assertThat(user.visibleExtent("production.taskTable").height()).isGreaterThan(35);
+        for (String name : List.of("production.taskStatusFilter", "production.taskTable",
+                "production.markTaskDone", "production.skipTask", "production.reopenTask",
+                "production.regenerateTasks")) {
+            JComponent control = (JComponent) named(root, name);
+            SwingUtilities.invokeAndWait(() -> {
+                java.awt.Rectangle requested = new java.awt.Rectangle(0, 0,
+                        Math.min(control.getWidth(), 140),
+                        Math.min(control.getHeight(), control instanceof JTable ? 80 : 30));
+                for (Container parent = control.getParent(); parent != null;
+                     parent = parent.getParent()) {
+                    if (parent instanceof JComponent component) {
+                        component.scrollRectToVisible(SwingUtilities.convertRectangle(
+                                control, requested, component));
+                    }
+                }
+            });
+            assertThat(user.visibleExtent(name).width()).as(name).isGreaterThan(55);
+            assertThat(user.visibleExtent(name).height()).as(name)
+                    .isGreaterThan(control instanceof JTable ? 70 : 27);
+        }
     }
 
     @Test
@@ -79,6 +96,7 @@ class ProductionStudioTabTest {
                 service, new SwingDialogHarness().safelyCancelUnscripted());
         JComponent root = tab.getUIComponent();
         SwingUtilities.invokeAndWait(tab::initialize);
+        awaitRefresh(root);
         JComboBox<?> planting = (JComboBox<?>) named(root, "production.plantingTemplate");
         JComboBox<?> estimates = (JComboBox<?>) named(root, "production.estimateRecipe");
 
@@ -94,6 +112,7 @@ class ProductionStudioTabTest {
             tab.refreshData();
         });
 
+        awaitRefresh(root);
         assertThat(((GrowingTemplate) planting.getSelectedItem()).getId()).isEqualTo(2L);
         assertThat(((FloralRecipe) estimates.getSelectedItem()).getId()).isEqualTo(11L);
     }
@@ -119,6 +138,7 @@ class ProductionStudioTabTest {
         JComponent root = tab.getUIComponent();
 
         SwingUtilities.invokeAndWait(tab::initialize);
+        awaitRefresh(root);
 
         JTable costs = (JTable) named(root, "production.costTable");
         assertThat(costs.getRowCount()).isEqualTo(1);
@@ -143,6 +163,7 @@ class ProductionStudioTabTest {
                 service, new SwingDialogHarness().safelyCancelUnscripted());
         JComponent root = tab.getUIComponent();
         SwingUtilities.invokeAndWait(tab::initialize);
+        awaitRefresh(root);
         JTextField year = (JTextField) named(root, "production.seasonYear");
 
         SwingUtilities.invokeAndWait(() -> {
@@ -150,6 +171,7 @@ class ProductionStudioTabTest {
             year.postActionEvent();
         });
 
+        SwingUserHarness.on(root).awaitText("No saved frost anchors");
         assertThat(((JTextField) named(root, "production.springFrost")).getText())
                 .isEqualTo(nextYear + "-04-15");
         assertThat(((JTextField) named(root, "production.fallFrost")).getText())
@@ -178,6 +200,7 @@ class ProductionStudioTabTest {
                 service, new SwingDialogHarness().safelyCancelUnscripted());
         JComponent root = tab.getUIComponent();
         SwingUtilities.invokeAndWait(tab::initialize);
+        awaitRefresh(root);
         JTable table = (JTable) named(root, "production.taskTable");
         JButton skip = (JButton) named(root, "production.skipTask");
         JButton reopen = (JButton) named(root, "production.reopenTask");
@@ -229,6 +252,7 @@ class ProductionStudioTabTest {
                 service, new SwingDialogHarness().safelyCancelUnscripted());
         JComponent root = tab.getUIComponent();
         SwingUtilities.invokeAndWait(tab::initialize);
+        awaitRefresh(root);
         JTable table = (JTable) named(root, "production.taskTable");
         JTextField minutes = (JTextField) named(root, "production.taskActualMinutes");
         JTextField cost = (JTextField) named(root, "production.taskInputCost");
@@ -244,6 +268,7 @@ class ProductionStudioTabTest {
             complete.doClick();
         });
 
+        SwingUserHarness.on(root).awaitText("field result saved");
         var captor = org.mockito.ArgumentCaptor.forClass(
                 ProductionStudioService.TaskActuals.class);
         verify(service).recordTaskActuals(
@@ -272,6 +297,7 @@ class ProductionStudioTabTest {
         ProductionStudioTab tab = new ProductionStudioTab(service, dialogs);
         JComponent root = tab.getUIComponent();
         SwingUtilities.invokeAndWait(tab::initialize);
+        awaitRefresh(root);
         JTable table = (JTable) named(root, "production.taskTable");
         JButton regenerate = (JButton) named(root, "production.regenerateTasks");
 
@@ -303,6 +329,7 @@ class ProductionStudioTabTest {
                 service, new SwingDialogHarness().safelyCancelUnscripted());
         JComponent root = tab.getUIComponent();
         SwingUtilities.invokeAndWait(tab::initialize);
+        awaitRefresh(root);
         JButton preview = (JButton) named(root, "production.draftPlantings");
         JTable table = (JTable) named(root, "production.draftTable");
         JTextField bed = (JTextField) named(root, "production.plantingBed");
@@ -351,8 +378,9 @@ class ProductionStudioTabTest {
         ProductionStudioTab tab = new ProductionStudioTab(
                 service, new SwingDialogHarness().safelyCancelUnscripted());
         JComponent root = tab.getUIComponent();
+        SwingUtilities.invokeAndWait(tab::initialize);
+        awaitRefresh(root);
         SwingUtilities.invokeAndWait(() -> {
-            tab.initialize();
             tab.applyRolePermissions(false);
             ((JTable) named(root, "production.templateTable"))
                     .setRowSelectionInterval(0, 0);
@@ -401,6 +429,7 @@ class ProductionStudioTabTest {
         ProductionStudioTab tab = new ProductionStudioTab(service, dialogs);
         JComponent root = tab.getUIComponent();
         SwingUtilities.invokeAndWait(tab::initialize);
+        awaitRefresh(root);
         JButton commit = (JButton) named(root, "production.commitPlantings");
 
         SwingUtilities.invokeAndWait(commit::doClick);
@@ -410,6 +439,10 @@ class ProductionStudioTabTest {
         assertThat(((JLabel) named(root, "production.status")).getText())
                 .isEqualTo("Committed 1 planting block(s) and 1 production task(s).");
         dialogs.assertComplete();
+    }
+
+    private static void awaitRefresh(JComponent root) {
+        SwingUserHarness.on(root).awaitText("Production Studio refreshed.");
     }
 
     private static GrowingTemplate template(Long id, String name, String crop) {

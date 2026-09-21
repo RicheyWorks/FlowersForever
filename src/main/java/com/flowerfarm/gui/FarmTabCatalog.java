@@ -136,14 +136,14 @@ public final class FarmTabCatalog {
                 new SyncHistoryTab(syncHistoryService, host, dialogs, files),
                 reference);
         return new Catalog(tabs, dashboard, trend, inventory, addItem,
-                harvestLog, marketDay, irrigation, crm, seasonPlanner);
+                harvestLog, marketDay, irrigation, crm, seasonPlanner, productionStudio);
     }
 
     public record Catalog(List<FlowerFarmTab> tabs, DashboardTab dashboard,
                           TrendAnalysisTab trend, InventoryTab inventory,
                           AddItemTab addItem, HarvestLogTab harvest,
                           MarketDayTab marketDay, IrrigationInfoTab irrigation,
-                          CrmTab crm, SeasonPlannerTab seasonPlanner) {
+                          CrmTab crm, SeasonPlannerTab seasonPlanner, ProductionStudioTab productionStudio) {
         public Catalog {
             tabs = List.copyOf(tabs);
         }

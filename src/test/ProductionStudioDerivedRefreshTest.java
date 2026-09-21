@@ -53,24 +53,24 @@ class ProductionStudioDerivedRefreshTest {
             return task;
         });
         SwingUserHarness user = build(service, new SwingDialogHarness().safelyCancelUnscripted());
-        user.type("production.frostSource", "Unsaved farm observation")
-                .type("production.loadedLaborRate", "37.50")
-                .selectTab("Design recipes").type("production.recipeName", "Unfinished bouquet")
-                .selectTab("Plantings & work")
+        user.type("Source / station", "Unsaved farm observation")
+                .type("Labor cost per hour ($)", "37.50")
+                .selectTab("Design recipes").type("Recipe name", "Unfinished bouquet")
+                .selectTab("Plantings & work").selectTab("Field work")
                 .selectRow("production.taskTable", 0)
-                .type("production.taskActualMinutes", "60")
-                .type("production.taskInputCost", "25")
-                .type("production.taskFieldObservation", "Bed amended")
-                .click("Save actuals + done")
+                .type("Crew minutes", "60")
+                .type("Input cost ($)", "25")
+                .type("Field result or observation", "Bed amended")
+                .click("Save actuals + done").awaitText("field result saved")
                 .selectTab("Economics & handoffs").selectTab("Production costs");
 
         assertThat(user.tableValue("production.costTable", 0, 7)).isEqualTo("$50.00");
         assertThat(user.text("production.costSummary")).contains("Actuals 1/1 tasks", "total $50.00");
         user.selectTab("Frost & crop templates");
-        assertThat(user.fieldValue("production.frostSource")).isEqualTo("Unsaved farm observation");
-        assertThat(user.fieldValue("production.loadedLaborRate")).isEqualTo("37.50");
+        assertThat(user.fieldValue("Source / station")).isEqualTo("Unsaved farm observation");
+        assertThat(user.fieldValue("Labor cost per hour ($)")).isEqualTo("37.50");
         user.selectTab("Design recipes");
-        assertThat(user.fieldValue("production.recipeName")).isEqualTo("Unfinished bouquet");
+        assertThat(user.fieldValue("Recipe name")).isEqualTo("Unfinished bouquet");
         verify(service, times(1)).recordTaskActuals(eq(19L), any());
     }
 
@@ -81,7 +81,7 @@ class ProductionStudioDerivedRefreshTest {
         when(service.productionCosts(YEAR, null)).thenAnswer(ignored -> costs(committed.get(), false));
         SwingDialogHarness dialogs = new SwingDialogHarness().confirm("Commit production plan", true);
         SwingUserHarness user = build(service, dialogs);
-        user.type("production.frostSource", "Keep this frost draft")
+        user.type("Source / station", "Keep this frost draft")
                 .selectTab("Plantings & work").click("Commit plan & tasks")
                 .selectTab("Economics & handoffs").selectTab("Planned + live availability");
 
@@ -91,7 +91,7 @@ class ProductionStudioDerivedRefreshTest {
         assertThat(user.tableRows("production.costTable")).isEqualTo(1);
         assertThat(user.text("production.costSummary")).contains("100 expected stems");
         user.selectTab("Frost & crop templates");
-        assertThat(user.fieldValue("production.frostSource")).isEqualTo("Keep this frost draft");
+        assertThat(user.fieldValue("Source / station")).isEqualTo("Keep this frost draft");
         verify(service, times(1)).commitPlantings(anyLong(), anyInt(), anyString(), anyDouble(), anyInt(), anyString());
         dialogs.assertComplete();
     }
@@ -134,14 +134,14 @@ class ProductionStudioDerivedRefreshTest {
         SwingDialogHarness dialogs = new SwingDialogHarness().safelyCancelUnscripted();
         SwingUserHarness user = build(service, dialogs);
         user.selectTab("Economics & handoffs").selectTab("Production costs")
-                .type("production.costYear", "unfinished year")
-                .selectTab("Plantings & work").selectRow("production.taskTable", 0)
-                .click("Save actuals + done");
+                .type("Season", "unfinished year")
+                .selectTab("Plantings & work").selectTab("Field work").selectRow("production.taskTable", 0)
+                .click("Save actuals + done").awaitText("field result saved");
 
         assertThat(user.text("production.status")).contains("field result saved", "Refresh costs",
                 "do not repeat the saved action");
         user.selectTab("Economics & handoffs").selectTab("Production costs");
-        assertThat(user.fieldValue("production.costYear")).isEqualTo("unfinished year");
+        assertThat(user.fieldValue("Season")).isEqualTo("unfinished year");
         assertThat(user.tableValue("production.costTable", 0, 7)).isEqualTo("$0.00");
         verify(service, times(1)).recordTaskActuals(eq(19L), any());
         dialogs.assertComplete();
@@ -156,22 +156,22 @@ class ProductionStudioDerivedRefreshTest {
                 .thenReturn(costs(true, true));
         SwingDialogHarness dialogs = new SwingDialogHarness();
         SwingUserHarness user = build(service, dialogs);
-        user.selectTab("Plantings & work").selectRow("production.taskTable", 0)
-                .type("production.taskActualMinutes", "35")
-                .type("production.taskInputCost", "4.75")
-                .type("production.taskFieldObservation", "Unfinished task observation")
+        user.selectTab("Plantings & work").selectTab("Field work").selectRow("production.taskTable", 0)
+                .type("Crew minutes", "35")
+                .type("Input cost ($)", "4.75")
+                .type("Field result or observation", "Unfinished task observation")
                 .selectTab("Frost & crop templates")
-                .type("production.frostSource", "Reviewed farm frost dates")
-                .type("production.loadedLaborRate", "37.50")
+                .type("Source / station", "Reviewed farm frost dates")
+                .type("Labor cost per hour ($)", "37.50")
                 .click("Save frost anchors");
 
         assertThat(user.text("production.status")).contains("Saved frost anchors", "Refresh costs",
                 "do not repeat the saved action");
-        assertThat(user.fieldValue("production.loadedLaborRate")).isEqualTo("37.50");
+        assertThat(user.fieldValue("Labor cost per hour ($)")).isEqualTo("37.50");
         user.selectTab("Plantings & work");
-        assertThat(user.fieldValue("production.taskActualMinutes")).isEqualTo("35");
-        assertThat(user.fieldValue("production.taskInputCost")).isEqualTo("4.75");
-        assertThat(user.fieldValue("production.taskFieldObservation")).isEqualTo("Unfinished task observation");
+        assertThat(user.fieldValue("Crew minutes")).isEqualTo("35");
+        assertThat(user.fieldValue("Input cost ($)")).isEqualTo("4.75");
+        assertThat(user.fieldValue("Field result or observation")).isEqualTo("Unfinished task observation");
         user.selectTab("Economics & handoffs").selectTab("Production costs");
         assertThat(user.tableValue("production.costTable", 0, 7)).isEqualTo("$0.00");
         user.click("Refresh costs");
@@ -201,8 +201,8 @@ class ProductionStudioDerivedRefreshTest {
         SwingDialogHarness dialogs = new SwingDialogHarness().confirm("Delete recipe", true);
         SwingUserHarness user = build(service, dialogs);
         user.selectTab("Economics & handoffs").selectTab("External handoffs")
-                .type("production.handoffProvider", "Unsent provider")
-                .type("production.handoffReference", "draft-reference");
+                .type("Provider", "Unsent provider")
+                .type("External reference", "draft-reference");
         assertThat(user.tableValue("production.handoffTable", 0, 5)).isEqualTo(11L);
         user.selectTab("Design recipes").selectRow("production.recipeTable", 0).click("Delete selected")
                 .selectTab("Economics & handoffs").selectTab("External handoffs");
@@ -210,8 +210,8 @@ class ProductionStudioDerivedRefreshTest {
         assertThat(user.tableRows("production.handoffTable")).isEqualTo(1);
         assertThat(user.tableValue("production.handoffTable", 0, 5)).isNull();
         assertThat(user.tableValue("production.handoffTable", 0, 7)).isEqualTo("listing-101");
-        assertThat(user.fieldValue("production.handoffProvider")).isEqualTo("Unsent provider");
-        assertThat(user.fieldValue("production.handoffReference")).isEqualTo("draft-reference");
+        assertThat(user.fieldValue("Provider")).isEqualTo("Unsent provider");
+        assertThat(user.fieldValue("External reference")).isEqualTo("draft-reference");
         verify(service, times(1)).deleteRecipe(11L);
         dialogs.assertComplete();
     }
@@ -279,6 +279,6 @@ class ProductionStudioDerivedRefreshTest {
             root.set(tab.getUIComponent());
             tab.initialize();
         });
-        return SwingUserHarness.on(root.get());
+        return SwingUserHarness.on(root.get()).awaitText("Production Studio refreshed.");
     }
 }

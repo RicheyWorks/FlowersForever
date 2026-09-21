@@ -3529,8 +3529,8 @@ class UserJourneyHarnessTest {
 
         HarnessSnapshot initial = plugin.observe();
         List<List<String>> routes = (List<List<String>>) initial.metadata().get("routes");
-        assertThat(initial.metadata()).containsEntry("routeCount", 35);
-        assertThat(routes).hasSize(35).doesNotHaveDuplicates()
+        assertThat(initial.metadata()).containsEntry("routeCount", 36);
+        assertThat(routes).hasSize(36).doesNotHaveDuplicates()
                 .contains(List.of("Dashboard", "Inventory charts"))
                 .contains(List.of("Season Planner", "Plan insights"))
                 .contains(List.of("Season Planner", "Availability outlook"))
@@ -3542,7 +3542,9 @@ class UserJourneyHarnessTest {
                 .contains(List.of("Reference & Planning", "Production studio",
                         "Frost & crop templates"))
                 .contains(List.of("Reference & Planning", "Production studio",
-                        "Plantings & work"))
+                        "Plantings & work", "Plan plantings"))
+                .contains(List.of("Reference & Planning", "Production studio",
+                        "Plantings & work", "Field work"))
                 .contains(List.of("Reference & Planning", "Production studio",
                         "Design recipes"))
                 .contains(List.of("Reference & Planning", "Production studio",

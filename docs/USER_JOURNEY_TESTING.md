@@ -4,6 +4,23 @@ See [HARNESS_AUDIT.md](HARNESS_AUDIT.md) for the current human-action matrix,
 recursive surface inventory, findings, verification evidence, and explicit
 OS-level smoke-test limits.
 
+## Production Studio on a laptop
+
+`ProductionStudioRefreshSafetyTest` covers delayed and failed reads, initial-load
+edits, task drafts attached to stable IDs, reordered and missing tasks, explicit
+reload/discard, exit warnings, and captured background task saves. A successful
+write followed by a failed read keeps the saved result and blocks further task
+writes until a fresh review succeeds. A superseded refresh cannot overwrite a
+newer draft or silently re-enable task writes.
+
+`ProductionStudioVisualContractTest` renders all eight Studio views at 850×500
+and 1180×760, in light and dark themes. The smaller size represents the content
+left after navigation and headers on a laptop. It checks real viewport geometry,
+vertical scroll reachability, human labels and associations, button text, table
+identity columns, and complete recovery/task-context messages. Screenshots are
+written to `target/ui-previews/production-studio`. These are actual Swing component
+renders using sample service fixtures, not native pointer/keyboard acceptance.
+
 ## Wiring regressions
 
 `ProductionStudioDerivedRefreshTest` drives the real Production Studio tab and
@@ -109,7 +126,7 @@ Runtime capability tests include `SwingControlActionsTest`,
 exercise long documents/collections, real Event Services layout and output,
 toggle/no-op behavior, renderer labels, input bounds, policy gates, and closed
 menu paths through MCP. The all-route catalog also reads each published
-read-only output and layout selector on all 35 routes.
+read-only output and layout selector on all 36 routes.
 
 `SwingActionOutcomeTest`, `SwingSpinnerActionsTest`, and
 `SwingRowActivationTest` cover application listeners that refuse or redirect an
@@ -265,14 +282,14 @@ and receipt protection if accounting fails.
   confirming each destructive action once;
 - keeping activity-history clearing unavailable to HAND while requiring an
   OWNER to confirm it, with exports and the empty timeline still usable;
-- recursively cataloging all 35 reachable leaf routes across every primary and
+- recursively cataloging all 36 reachable leaf routes across every primary and
   nested tab—including Dashboard charts, all Harvest workbenches, all Season
   Planner views, CRM Customers and Orders, report evidence tabs, trend model
   details, and every Reference view—and auditing at least 180 visible fields,
   selectors, buttons, tables, spinners, sliders, and tab sets for missing or
   ambiguous selectors and unwired production listeners;
 - composing that same production catalog behind the live runtime plugin,
-  publishing all 35 exact paths, opening each path through `navigate-route`, and
+  publishing all 36 exact paths, opening each path through `navigate-route`, and
   rejecting any visible control whose selector is blank, ambiguous across
   control kinds, or unsupported;
 - running a recursive whole-catalog button storm across those routes: at least 65

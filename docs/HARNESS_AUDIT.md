@@ -2,6 +2,48 @@
 
 Audit date: 2026-09-04
 
+## Production Studio usability and draft safety — September 21, 2026
+
+The owner's next shipping priority was marketing clarity and human-interface
+polish. Baseline renders at 850×500 (the content space left on a compact laptop)
+showed unusable planting/task panels, horizontally clipped recipe/handoff forms,
+and nearly collapsed report tables. The new full-width, vertically scrolling
+forms use associated human labels, readable table columns, explicit planning and
+field-work views, and repeated task identity beside actuals. Status and recovery
+messages wrap while preserving plain accessible text. There are now 36 leaf routes.
+
+The same review found that navigation/F5 replaced unsaved frost and task actuals
+and loaded all production services on the EDT. Background refresh now uses a
+captured query and generation before applying a completed snapshot. Frost
+baselines and task-ID draft maps preserve edits, including work on reordered,
+changed, filtered, or missing tasks. A stale context, failed task read, or
+superseded refresh keeps writes disabled until review. Explicit reload/discard
+actions ask before replacing drafts; the frame includes Studio in its close guard.
+
+Actuals saves capture task identity and values on the EDT and run in the
+background. Success remains success when subsequent task/cost reads fail. A
+missing task readback keeps writes blocked, and exit during a save explains that
+already saved records are not undone. Other template/recipe/handoff writes retain
+their existing synchronous service calls; no domain-wide record-version lock is
+claimed by the client-side task review checks.
+
+Independent review found and fixed two premature write-enablement paths after
+interrupted refresh and missing post-save task readback. Rendered checks also
+found Swing HTML CSS width inflation collapsing a table; actual pixel-based text
+measurement and a shrinkable label minimum now preserve its viewport.
+
+Focused verification passed 42 cases. Fifteen new refresh/safety cases and four
+rendered theme/size cases exercise eight Studio views, full recovery messages,
+and scroll reachability. The strengthened visual cases also passed independently.
+Full clean isolated verification passed 1,576 tests and two packaged-JAR checks,
+with no failures, errors, or skips. Line coverage is 86.88% and branch coverage
+69.62%; coverage, Checkstyle, SpotBugs, test floors, and source/report evidence
+checks all passed. A subsequent `--check` confirmed the saved evidence matches
+the current source. The complete log is `dist/harness-evidence/ship-ui-quality.log`.
+Screenshots are in `target/ui-previews/production-studio`; baseline examples are
+in `dist/harness-evidence/production-baseline`. These are rendered Swing fixtures,
+not evidence of native input or a rebuilt installer.
+
 ## Transport, worker, and desktop wiring — September 21, 2026
 
 MCP previously exposed only action tools, so observation-only plugins and the

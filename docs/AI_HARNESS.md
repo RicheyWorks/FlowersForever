@@ -1561,7 +1561,7 @@ registered while the REST transport stays absent by default. The separate
 installed-desktop profile remains the evidence for real OS pointer, keyboard,
 focus, and pixel behavior;
 see the [human-interaction harness audit](HARNESS_AUDIT.md). A production-catalog
-contract independently publishes all 35 current primary/nested routes, opens
+contract independently publishes all 36 current primary/nested routes, opens
 each through `navigate-route`, observes its controls, and requires every visible
 runtime selector to be non-blank, globally unique, and backed by a supported
 interaction.

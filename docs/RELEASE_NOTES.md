@@ -1,5 +1,17 @@
 # FlowersForever private-preview notes
 
+## September 21, 2026 — Production Studio for everyday laptop use
+
+- Separates planting schedules from daily field work and gives editors full-width,
+  vertically scrolling forms, readable tables, associated labels, and visible task context.
+- Keeps unsaved frost settings and task actuals during refresh and navigation;
+  background loading and task saves leave the interface responsive.
+- Retains changed or missing task drafts for review, provides explicit reload/discard
+  actions, and warns before closing with unfinished production work.
+- Keeps saved outcomes distinct from failed follow-up reads and requires a fresh
+  task review before writes resume after an interrupted or failed refresh.
+- Brings grower benefits and real product screens forward in the README.
+
 ## September 21, 2026 — Close harness and application wiring gaps
 
 - Exposes the harness manifest and live plugin observations as MCP resources,

@@ -223,12 +223,13 @@ templates with spacing, rows per bed, sow and transplant offsets from spring
 frost, sow-to-harvest days, harvest window, succession interval, germination,
 stems per viable plant, and task offsets. These values are farm records; the app
 does not silently replace them with a generic regional schedule.
-Changing to a season without saved anchors clears the previous season's values
+Enter a season year and press Enter, or choose **Reload frost anchors**. Loading
+a season without saved anchors clears the previous season's values
 and shows dated farm-estimate defaults for review, so an older year's frost dates
 cannot silently remain in the form. Saving anchors also selects that year in the
 schedule builder.
 
-Open **Plantings & work**, select a template, and enter the bed, bed feet, season,
+Open **Plantings & work → Plan plantings**, select a template, and enter the bed, bed feet, season,
 and number of successions. **Preview schedule** shows every sow, transplant, and
 harvest window, the plant-site and viable-plant math, expected stems, and any
 first-fall-frost warning. **Commit plan & tasks** first reviews the exact block,
@@ -248,13 +249,32 @@ preview and asks for a fresh calculation. Task actions activate only when the
 selected row supports them: open work can be completed or skipped, final work can
 be reopened, and linked generated work can be regenerated. Regeneration has its
 own impact confirmation before open work is replaced.
-To finish real field work, select its row and enter total **Labor min**, the
-task-specific **Input cost**, and a concise **Field result**. **Save actuals +
+To finish real field work, open **Plantings & work → Field work**, select its row,
+then scroll to **Record the selected task**. Check the repeated task, crop, bed,
+and due date above the editor. Enter total **Crew minutes**, the task-specific
+**Input cost ($)**, and a concise **Field result or observation**. **Save actuals +
 done** stores those values and the completion time on the exact plan-linked task.
 Select a completed row to correct its actuals. Skipped work must be reopened
 before actuals can be entered. Reopening does not erase earlier labor, cost, or
 field evidence, and regeneration preserves any task that still contains those
 actuals.
+
+**Refresh studio** and **Refresh work** load in the background. Switching pages,
+refreshing, and changing the task filter keep unsaved frost settings and task
+drafts; task drafts stay attached to their original task. If a task changes or
+disappears from the current view, the draft remains available and saving is
+disabled until you review it. **Discard task draft** asks before replacing an
+unsaved draft; when drafts remain for other tasks, the confirmation names that
+scope. **Reload frost anchors** asks before replacing edited frost dates or the
+labor rate with saved settings for the chosen year.
+
+A failed refresh keeps the previous records and explains how to retry. If task
+actuals save successfully but the following read fails, the message says the work
+was saved: refresh the view without repeating the save. Keep the app open until
+a pending save reports its result. Closing with unsaved frost or task drafts
+offers **Keep working**; exiting during a save does not undo records already saved.
+Forms scroll vertically at smaller window sizes, while wide record tables have
+their own horizontal scrollbar.
 
 Open **Economics & handoffs → Production costs** and choose the season. The
 report groups task actuals by their exact planting-plan ID, applies the saved
@@ -279,8 +299,9 @@ live inventory and that week's planned crop supply, then rounds the remaining
 shortage to complete wholesale packs and reports leftovers. The result keeps
 flower cost, labor, overhead, revenue, profit, margin, and markup distinct.
 It also shows per-design cost, profit, and break-even sale price. Recipe and crop
-template selections stay in place across refreshes, saved frost anchors reload
-with the selected year, and a double-click on a library row opens it for editing.
+template selections stay in place across refreshes, edited frost settings stay
+in the form until saved or explicitly reloaded, and a double-click on a library
+row opens it for editing.
 
 **Planned + live availability** is a sales planning view, not a reservation. It
 omits completed crop plans and empty inventory-only rows so stale supply does not

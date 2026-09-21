@@ -171,6 +171,22 @@ uses Spring Security and never trusts desktop identity.
 - Rose ruleset save/load uses accessible validated forms instead of raw input dialogs ✓
 - Connector construction and desktop session lifecycle use one Spring-owned policy each ✓
 
+### Production Studio usability and refresh safety
+
+Production Studio separates planning from field work and uses full-width forms
+with associated labels and vertical page scrolling. Wide record tables retain
+their own horizontal scrollbars. The task editor repeats the selected task's
+identity; recovery messages wrap without exposing internal control identifiers.
+
+Full Studio refresh, frost reload, and task actuals saves capture inputs on the
+EDT, call services through SwingWorker, and apply eligible results on the EDT.
+Refresh generations and query comparisons reject superseded results. Frost
+baselines and task drafts keyed by stable ID retain unsaved work; changed task
+context or an unsuccessful task read requires review before further task writes.
+The catalog exposes Production Studio to the frame's existing close guard.
+Other template, recipe, and handoff writes retain their existing synchronous
+service calls; this pass does not claim all Studio operations are asynchronous.
+
 ---
 
 **This architecture respects the existing Spring Boot + service layer** while

@@ -95,6 +95,7 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
     private IrrigationInfoTab irrigationTab;
     private CrmTab crmTab;
     private SeasonPlannerTab seasonPlannerTab;
+    private ProductionStudioTab productionStudioTab;
 
     private final Preferences prefs = Preferences.userNodeForPackage(FlowerFarmGUI.class);
     private boolean darkMode;
@@ -219,6 +220,7 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
         irrigationTab = catalog.irrigation();
         crmTab = catalog.crm();
         seasonPlannerTab = catalog.seasonPlanner();
+        productionStudioTab = catalog.productionStudio();
         tabs.clear();
         tabs.addAll(catalog.tabs());
 
@@ -492,17 +494,22 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
     private void closeApplication(boolean signingOut) {
         String warning = combinedExitWarning(
                 crmTab == null ? null : crmTab.applicationExitWarning(),
-                marketDayTab == null ? null : marketDayTab.applicationExitWarning());
+                marketDayTab == null ? null : marketDayTab.applicationExitWarning(),
+                productionStudioTab == null ? null : productionStudioTab.applicationExitWarning());
         if (warning != null) {
-            Object[] options = {"Keep working", signingOut
-                    ? "Discard and sign out" : "Discard and exit"};
+            boolean savePending = productionStudioTab != null && productionStudioTab.hasPendingSave();
+            Object[] options = {"Keep working", savePending ? "Exit before result"
+                    : signingOut ? "Discard and sign out" : "Discard and exit"};
+            String prompt = savePending ? warning + "\n\nExiting does not undo records already saved. "
+                    + "If you exit before the result, check the task when you reopen before trying again. "
+                    + "Choose Keep working to wait for the result." : exitPrompt(warning, signingOut);
             int choice = dialogs.showOption(
-                    frame, exitPrompt(warning, signingOut),
+                    frame, prompt,
                     signingOut ? "Unfinished work — sign out" : "Unfinished work — exit",
                     JOptionPane.DEFAULT_OPTION, JOptionPane.WARNING_MESSAGE,
                     null, options, options[0]);
             if (choice != 1) {
-                setStatus("Exit cancelled. Unfinished order and packing work was kept.");
+                setStatus("Exit cancelled. Your unfinished work was kept.");
                 return;
             }
         } else if (signingOut) {
