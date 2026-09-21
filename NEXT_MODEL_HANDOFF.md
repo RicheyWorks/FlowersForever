@@ -1,5 +1,58 @@
 # Latest direction — September 21, 2026
 
+## Latest completed work: safer Harvest entry and native readiness
+
+The owner's "next" continues shipping readiness with human-interface priority.
+Harvest now protects complete quick-entry drafts before load/copy/clear, keeps
+failed and copied entries dirty, suppresses crop-preset writes during refresh,
+and blocks double-click replacement during pending mutations. Modal decisions
+recheck captured draft/record identity. Sample batches ask before replacing lines;
+delete consequences mention local edits. The close guard includes Harvest, and
+pending CRM/packing/Harvest/Studio operations use exit-before-result wording.
+
+Compact renders exposed hidden inputs and history, squeezed fields, and clipped
+filters/status. The final layout uses two-column quick entry, full-width wrapped
+status rows, reachable vertical workspace scrolling, explicit filter rows, and
+readable history columns. README's real harvest screenshot is updated.
+An additional rendered new-SKU/queued-refresh/report-error state reproduced header
+overflow; the corrected header separates title/actions, wrapping status rows, and
+conditional inventory setup. All four render cases now include that state. The
+first full run was deliberately interrupted for this fix; the final run below
+restarts clean and is the only full evidence to accept for this pass.
+
+New checks: 16 Harvest draft cases, four rendered theme/size cases, and six shell
+exit cases. The broad focused run passed 138/144; the six layout/legacy-layout
+failures then passed targeted reruns. All existing counts remain protected;
+test floors now include 167 suite/phase entries. Final clean isolated verification
+passed 1,602 tests plus two packaged-JAR checks, zero failures/errors/skips, and
+all quality gates. Coverage is 86.91% lines / 69.72% branches. A subsequent
+`--check` revalidated source/report hashes. Log:
+`dist/harness-evidence/harvest-quality.log`; evidence:
+`dist/harness-evidence/latest.json`. All build processes and agent edits are done.
+
+Native helpers no longer hardcode 33 tools. Both validate the doctor's required
+capabilities and missing-operation list. Seventeen simulated launcher/contract
+tests passed, including eleven Windows JSON-report scenarios. No installer or
+native app was built/launched. GitHub billing remains a separate blocker.
+
+Next concrete candidates from this review:
+
+- Inventory stock-count and item-edit workers commit, then read all items in the
+  same worker result. A readback failure can report "not saved" and retain a retry
+  although the write committed. Separate saved outcome from refresh failure and
+  gate subsequent affected writes on fresh inventory. See `InventoryTab`'s
+  `recordStockCount`, `startItemEditSave`, and associated failure handlers.
+- Local `build-release.ps1` deletes all `dist` and omits desktop smoke; Windows
+  CI desktop smoke checks its marker without checking clean process exit. Keep
+  any new packaging output isolated from evidence and existing native binaries.
+- GitHub's eight default-branch dependency alerts already have patched versions
+  in this branch's verified BOM; do not blindly bump dependencies to fix stale
+  default-branch alerts. Signing/platform acceptance and billing remain external.
+
+Continue on `codex/recover-unpushed-work` / PR #21. This pass is committed and
+pushed with the updated guide, audit, README screenshot, and PR description.
+Earlier no-commit instructions remain superseded.
+
 ## Latest completed work: README marketing and Production Studio shipping usability
 
 The owner requested stronger README marketing, then the next significant shipping

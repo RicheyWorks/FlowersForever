@@ -254,6 +254,17 @@ if not isinstance(value, dict):
 if phase == 'doctor':
     if value.get('ready') is not True:
         raise SystemExit('MCP doctor did not report ready=true.')
+    # The doctor derives these capabilities from the application's required
+    # operation sets; future tool additions must not break native smoke checks.
+    if value.get('missingFarmDataTools') != []:
+        raise SystemExit('MCP doctor reported missing required farm-data operations.')
+    capabilities = value.get('capabilities')
+    for capability in ('connectAndMap', 'readBackAndResume', 'migrateAndOperate'):
+        if not isinstance(capabilities, dict) or capabilities.get(capability) is not True:
+            raise SystemExit('MCP doctor did not enable the required ' + capability + ' capability.')
+    count = value.get('enabledFarmDataToolCount')
+    if type(count) is not int or count <= 0:
+        raise SystemExit('MCP doctor did not report a positive farm-data operation count.')
     reported = value.get('dataDirectory')
     if not isinstance(reported, str) or pathlib.Path(reported).resolve() != pathlib.Path(os.environ['FLOWERFARM_DATA_DIR']).resolve():
         raise SystemExit('MCP doctor did not use the requested shared data directory.')

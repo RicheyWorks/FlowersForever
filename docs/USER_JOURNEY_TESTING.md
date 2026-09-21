@@ -4,6 +4,28 @@ See [HARNESS_AUDIT.md](HARNESS_AUDIT.md) for the current human-action matrix,
 recursive surface inventory, findings, verification evidence, and explicit
 OS-level smoke-test limits.
 
+## Harvest drafts and compact entry
+
+`HarvestDraftSafetyTest` exercises explicit load/copy/clear decisions, sample-line
+replacement, baseline-equal failed saves, retained setup, refresh during a modal
+decision, stable target IDs, and double-clicks during delayed add/batch/delete
+operations. Shell tests also drive actual Harvest drafts through exit/sign-out
+cancellation and verify that pending CRM, packing, harvest, and task results never
+use wording that implies saved records can be discarded.
+
+`HarvestEntryVisualContractTest` renders quick and batch entry at 850×500 and
+1180×760 in both themes. It checks actual scroll reachability, useful crop/unit
+widths, associated labels, complete status text, edit identity while another history
+row is selected, history filters/actions, and readable date/crop table columns.
+Screenshots are written to `target/ui-previews/harvest-entry`; they are component
+renders with sample records, not native pointer/keyboard acceptance.
+
+`node --test scripts/test-macos-launchers.test.mjs` includes synthetic Windows
+PowerShell doctor reports and simulated macOS launchers. Current and expanded
+catalogs pass; missing capabilities/operations and malformed counts fail before
+further launches. The checks use the application's readiness contract rather
+than hardcoding the farm action count. They require Bash, Python, and PowerShell 7.
+
 ## Production Studio on a laptop
 
 `ProductionStudioRefreshSafetyTest` covers delayed and failed reads, initial-load

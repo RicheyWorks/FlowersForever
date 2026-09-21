@@ -6450,8 +6450,7 @@ public class CrmTab implements FlowerFarmTab {
         String newOrderHandoff = currentNewOrderHandoff();
         boolean newOrderHandoffChanged = !newOrderHandoff.equals(newOrderHandoffBaseline);
         boolean newOrderInstructions = orderNotes != null && !orderNotes.getText().isBlank();
-        boolean writeRunning = creatingOrder || addingOrderLine || runningOrderMutation
-                || fulfillingOrder || savingCustomer || deletingCustomer;
+        boolean writeRunning = hasPendingSave();
         List<String> work = new ArrayList<>();
         if (productDrafts > 0) {
             work.add(productDrafts + " unfinished product entr"
@@ -6482,6 +6481,12 @@ public class CrmTab implements FlowerFarmTab {
         return "Customers & Orders still has " + String.join(", ", work)
                 + ". Closing now can discard unsaved entry fields or interrupt the running "
                 + "result. Keep working to save or explicitly clear each draft first.";
+    }
+
+    /** Whether closing could hide the outcome of an already submitted record change. */
+    public boolean hasPendingSave() {
+        return creatingOrder || addingOrderLine || runningOrderMutation
+                || fulfillingOrder || savingCustomer || deletingCustomer;
     }
 
     private static OrderLifecycleReadiness orderLifecycleReadiness(

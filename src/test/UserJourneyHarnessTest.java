@@ -3789,14 +3789,12 @@ class UserJourneyHarnessTest {
     }
 
     @Test
-    @DisplayName("compact harvest layout keeps both history evidence and entry workspace visible")
+    @DisplayName("compact harvest layout keeps entry visible and history reachable by scrolling")
     void auditsEffectiveViewportClippingAtCompactDesktopSize() {
         HarvestService harvest = mock(HarvestService.class);
         HarvestLogTab tab = new HarvestLogTab(harvest, new HarnessHost());
         SwingUserHarness user = SwingUserHarness.on(build(tab)).layoutAt(1050, 700);
 
-        SwingUserHarness.VisibleExtent history =
-                user.visibleExtent("harvest.history.table");
         SwingUserHarness.VisibleExtent workspace =
                 user.visibleExtent("harvest.workspace");
         SwingUserHarness.VisibleExtent crop =
@@ -3806,11 +3804,19 @@ class UserJourneyHarnessTest {
         SwingUserHarness.VisibleExtent add =
                 user.visibleExtent("harvest.add");
 
+        onEdt(() -> {
+            javax.swing.JScrollPane scroll = user.named(
+                    "harvest.workspaceScroll", javax.swing.JScrollPane.class);
+            scroll.getVerticalScrollBar().setValue(scroll.getVerticalScrollBar().getMaximum());
+            return null;
+        });
+        SwingUserHarness.VisibleExtent history = user.visibleExtent("harvest.history.table");
+
         assertThat(history.height())
-                .as("actual harvest rows visible through the compact split pane")
+                .as("actual harvest rows reachable through the compact workspace scroll")
                 .isGreaterThanOrEqualTo(50);
         assertThat(workspace.height())
-                .as("actual quick-entry workspace visible below history")
+                .as("actual quick-entry workspace visible before scrolling to history")
                 .isGreaterThanOrEqualTo(240);
         assertThat(crop.height())
                 .as("primary crop input visible without scrolling")

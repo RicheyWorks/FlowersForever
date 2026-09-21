@@ -378,8 +378,11 @@ class DataEntryVisualContractTest {
                         historyTable, 0, 0, harvestLog.getUIComponent()).y);
         Component harvestUnit = findNamed(harvestLog.getUIComponent(), "harvest.unit");
         assertThat(SwingUtilities.convertPoint(harvestUnit, 0, 0, harvestLog.getUIComponent()).y)
-                .as("harvest unit stays visible beside crop and quantity")
-                .isEqualTo(SwingUtilities.convertPoint(cropInput, 0, 0, harvestLog.getUIComponent()).y);
+                .as("harvest unit stays in the next primary-entry row below crop and quantity")
+                .isBetween(SwingUtilities.convertPoint(cropInput, 0, 0,
+                                harvestLog.getUIComponent()).y + 1,
+                        SwingUtilities.convertPoint(cropInput, 0, 0,
+                                harvestLog.getUIComponent()).y + 80);
         javax.swing.JViewport harvestViewport = (javax.swing.JViewport)
                 SwingUtilities.getAncestorOfClass(javax.swing.JViewport.class, cropInput);
         for (Component input : List.of(cropInput, harvestUnit,

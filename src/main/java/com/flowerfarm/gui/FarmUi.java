@@ -706,6 +706,43 @@ public final class FarmUi {
         return badge;
     }
 
+    /** Full-width status text for a dedicated row, wrapping without changing its accessible text. */
+    public static JLabel wrappingStatusBadge(String text, Tone tone) {
+        JLabel badge = new WrappingStatusLabel(text);
+        badge.setName("farm.statusBadge");
+        styleStatusBadge(badge, tone);
+        return badge;
+    }
+
+    private static final class WrappingStatusLabel extends JLabel {
+        private static final long serialVersionUID = 1L;
+
+        private WrappingStatusLabel(String text) {
+            super(text, SwingConstants.LEFT);
+        }
+
+        @Override public Dimension getPreferredSize() {
+            int available = getParent() == null || getParent().getWidth() <= 0 ? 640
+                    : getParent().getWidth() - getParent().getInsets().left
+                    - getParent().getInsets().right;
+            available = Math.max(120, available);
+            int textWidth = Math.max(80, available - getInsets().left - getInsets().right);
+            String plain = getText() == null ? "" : getText();
+            String escaped = plain.replace("&", "&amp;").replace("<", "&lt;")
+                    .replace(">", "&gt;");
+            javax.swing.plaf.basic.BasicHTML.updateRenderer(this, "<html>" + escaped + "</html>");
+            javax.swing.text.View content = (javax.swing.text.View)
+                    getClientProperty(javax.swing.plaf.basic.BasicHTML.propertyKey);
+            content.setSize(textWidth, 0);
+            int height = (int) Math.ceil(content.getPreferredSpan(javax.swing.text.View.Y_AXIS));
+            return new Dimension(available, height + getInsets().top + getInsets().bottom);
+        }
+
+        @Override public Dimension getMinimumSize() {
+            return new Dimension(0, getPreferredSize().height);
+        }
+    }
+
     /** Restyles an existing badge after a session or state transition. */
     public static void styleStatusBadge(JLabel badge, Tone tone) {
         badge.setOpaque(true);

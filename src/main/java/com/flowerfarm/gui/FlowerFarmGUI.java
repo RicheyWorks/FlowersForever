@@ -492,33 +492,8 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
     }
 
     private void closeApplication(boolean signingOut) {
-        String warning = combinedExitWarning(
-                crmTab == null ? null : crmTab.applicationExitWarning(),
-                marketDayTab == null ? null : marketDayTab.applicationExitWarning(),
-                productionStudioTab == null ? null : productionStudioTab.applicationExitWarning());
-        if (warning != null) {
-            boolean savePending = productionStudioTab != null && productionStudioTab.hasPendingSave();
-            Object[] options = {"Keep working", savePending ? "Exit before result"
-                    : signingOut ? "Discard and sign out" : "Discard and exit"};
-            String prompt = savePending ? warning + "\n\nExiting does not undo records already saved. "
-                    + "If you exit before the result, check the task when you reopen before trying again. "
-                    + "Choose Keep working to wait for the result." : exitPrompt(warning, signingOut);
-            int choice = dialogs.showOption(
-                    frame, prompt,
-                    signingOut ? "Unfinished work — sign out" : "Unfinished work — exit",
-                    JOptionPane.DEFAULT_OPTION, JOptionPane.WARNING_MESSAGE,
-                    null, options, options[0]);
-            if (choice != 1) {
-                setStatus("Exit cancelled. Your unfinished work was kept.");
-                return;
-            }
-        } else if (signingOut) {
-            int choice = dialogs.showConfirm(
-                    frame, "Sign out and exit?", "Sign out",
-                    JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE);
-            if (choice != JOptionPane.YES_OPTION) {
-                return;
-            }
+        if (!confirmApplicationClose(signingOut)) {
+            return;
         }
         if (signingOut) {
             session.clear();
@@ -526,6 +501,41 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
         savePreferences();
         frame.dispose();
         System.exit(0);
+    }
+
+    /** Runs the installed close decision without disposing the frame or changing the session. */
+    boolean confirmApplicationClose(boolean signingOut) {
+        String warning = combinedExitWarning(
+                crmTab == null ? null : crmTab.applicationExitWarning(),
+                marketDayTab == null ? null : marketDayTab.applicationExitWarning(),
+                harvestTab == null ? null : harvestTab.applicationExitWarning(),
+                productionStudioTab == null ? null : productionStudioTab.applicationExitWarning());
+        if (warning != null) {
+            boolean savePending = (productionStudioTab != null && productionStudioTab.hasPendingSave())
+                    || (harvestTab != null && harvestTab.hasPendingSave())
+                    || (crmTab != null && crmTab.hasPendingSave())
+                    || (marketDayTab != null && marketDayTab.hasPendingSave());
+            Object[] options = {"Keep working", savePending ? "Exit before result"
+                    : signingOut ? "Discard and sign out" : "Discard and exit"};
+            String prompt = savePending ? pendingExitPrompt(warning) : exitPrompt(warning, signingOut);
+            int choice = dialogs.showOption(
+                    frame, prompt,
+                    signingOut ? "Unfinished work — sign out" : "Unfinished work — exit",
+                    JOptionPane.DEFAULT_OPTION, JOptionPane.WARNING_MESSAGE,
+                    null, options, options[0]);
+            if (choice != 1) {
+                setStatus("Exit cancelled. Your unfinished work was kept.");
+                return false;
+            }
+        } else if (signingOut) {
+            int choice = dialogs.showConfirm(
+                    frame, "Sign out and exit?", "Sign out",
+                    JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE);
+            if (choice != JOptionPane.YES_OPTION) {
+                return false;
+            }
+        }
+        return true;
     }
 
     static String combinedExitWarning(String... warnings) {
@@ -545,6 +555,13 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
         return warning + "\n\nChoose Keep working to return without losing anything. "
                 + "Choose Discard and " + (signingOut ? "sign out" : "exit")
                 + " only if losing this unfinished work is intentional before " + action + ".";
+    }
+
+    static String pendingExitPrompt(String warning) {
+        return warning + "\n\nExiting does not undo records already saved. "
+                + "If you exit before the result, check the affected records or output files "
+                + "when you reopen before trying again. Any unsaved drafts will be lost. "
+                + "Choose Keep working to wait for the result.";
     }
 
     private static JMenu menu(String label, int mnemonic, String description) {

@@ -1,5 +1,19 @@
 # FlowersForever private-preview notes
 
+## September 21, 2026 — Keep unfinished harvest work safe
+
+- Gives harvest entry wider fields, complete status messages, reachable history
+  and filters on compact screens, and readable history identity columns.
+- Asks before loading, copying, or clearing over changed quick-entry fields;
+  unchanged saved rows and retained setup remain quick to use.
+- Protects existing batch lines before loading examples, keeps crop drafts during
+  recent-crop refresh, and blocks history double-click replacement during writes.
+- Warns before exit or sign-out with unfinished harvests or pending saves/deletions.
+  Running CRM, packing, harvest, and task operations use explicit exit-before-result
+  wording so closing never implies undoing records already saved.
+- Checks native launcher readiness against required capabilities and missing
+  operations, replacing the obsolete Windows check for exactly 33 farm tools.
+
 ## September 21, 2026 — Production Studio for everyday laptop use
 
 - Separates planting schedules from daily field work and gives editors full-width,

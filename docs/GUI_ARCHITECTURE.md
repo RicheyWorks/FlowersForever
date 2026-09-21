@@ -19,6 +19,24 @@
 | Visual Feedback          | Basic table                   | Color-coded stock + KPI Dashboard            | At-a-glance operational awareness |
 | Extensibility            | Hard                          | Easy to add new tabs (Reports, Harvest Log, Customers, Suppliers) | Long-term maintainability |
 
+## Harvest entry state and layout
+
+Harvest quick entry tracks an immutable raw-field snapshot plus the saved edit
+target. Clean baselines are captured after initial setup, a saved-row load, an
+explicit clear, or successful save preparation. Copy and failed-save markers keep
+meaningful drafts protected even if their fields equal a baseline. Replacement
+dialogs recheck the reviewed snapshot and saved row after returning from Swing's
+modal event loop. `HarvestBatchView` delegates sample replacement approval to the
+tab before writing any text. The frame queries Harvest's unfinished/pending state
+when closing; it does not treat pending writes as reversible drafts.
+
+Harvest uses width-tracking vertical workspace scrolling, a scrollable two-column
+entry form, and explicit rows for actions, status, filters, and conditional SKU
+setup. `FarmUi.wrappingStatusBadge` is intended for a dedicated full-width row:
+it measures HTML renderer layout in actual pixels while keeping plain label and
+accessible text. History tables retain readable identity columns and use horizontal
+scrolling for extended record detail.
+
 ## Package Structure (as built)
 
 ```

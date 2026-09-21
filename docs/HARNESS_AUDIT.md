@@ -2,6 +2,62 @@
 
 Audit date: 2026-09-04
 
+## Harvest draft protection and native readiness — September 21, 2026
+
+The next shipping review reproduced silent quick-entry replacement through load,
+copy, and clear, including history double-clicks while an asynchronous write was
+pending. The form now compares complete raw fields and its edit target with a clean
+baseline. Replacing changed work requires an explicit decision; unmodified saved
+rows and retained setup after a successful add stay clean. Copies and failed saves
+remain drafts even when their values happen to equal that baseline. Crop-choice
+refresh cannot write an old preset back into a newly typed crop.
+
+Replacement decisions capture and recheck both the draft and selected record.
+Deletion identifies edits it would discard and checks the draft again after its
+confirmation. Sample lines cannot overwrite an entered batch without consent.
+Harvest exit/sign-out warnings include quick entry, batch lines, and running
+mutations. The frame's pending-result wording also covers CRM and packing writes;
+exiting never claims to undo records already committed.
+
+Compact renders exposed zero-height entry fields, unreachable history, clipped
+filters, and a status row competing with buttons. Entry now uses two wide columns,
+separate action/status rows, wrapped plain-text status labels, and vertical
+workspace scrolling. History filters remain reachable and identity columns retain
+readable widths with horizontal table scrolling. Loading or copying a saved row
+reveals the quick-entry editor. The README's actual harvest screenshot is refreshed.
+
+Review then reproduced another dynamic state: revealing new-SKU setup alongside
+queued-refresh and failed-report messages pushed the heading/status outside the
+header even at 1180 pixels. The header now keeps access/Refresh beside its title,
+places refresh/report feedback on wrapping rows, and reveals inventory setup in
+a separate row. All four rendered theme/size cases include that real reveal path.
+An initial full verification was stopped for this additional correction and is
+not counted as passing evidence.
+
+Sixteen new draft-safety cases and six shell cases cover the decisions and pending
+results. Four new light/dark render cases check 850×500 and 1180×760, real scroll
+reachability, complete messages, target identity, fields, filters, and history.
+The earlier broad focused run passed 138/144 checks; its six layout/legacy-layout
+failures were corrected and all six passed in targeted reruns. Initial new-test
+compile/selector mistakes were corrected separately and are not product defects.
+Final clean isolated verification passed 1,602 tests plus two packaged-JAR checks,
+with no failures, errors, or skips. Line coverage is 86.91% and branch coverage
+69.72%; coverage, Checkstyle, SpotBugs, all 167 suite/phase floors, and source/report
+evidence checks passed. A subsequent `--check` confirmed the evidence still matches
+source hash `4a02d03f7da0edd9de15dce4ec2bfa76ded991d393492d2dbce5f9101560196a`.
+
+The Windows native launcher smoke still required exactly 33 farm tools although
+the current doctor exposes 38. Both native smoke helpers now check the doctor's
+required capabilities, empty missing-operation list, valid count, and requested
+data directory. The combined script entry passed 17 tests, including eleven
+synthetic Windows doctor reports. Current and expanded catalogs pass; missing
+required operations cannot hide behind an unchanged tool count.
+
+Evidence lives in `dist/harness-evidence/harvest-*.log`, with baseline screenshots
+under `dist/harness-evidence/harvest-baseline` and final renders under
+`target/ui-previews/harvest-entry`. No native app binary was launched or rebuilt;
+these are component and simulated-launcher checks.
+
 ## Production Studio usability and draft safety — September 21, 2026
 
 The owner's next shipping priority was marketing clarity and human-interface

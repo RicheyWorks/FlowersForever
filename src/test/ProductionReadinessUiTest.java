@@ -10,6 +10,10 @@ import com.flowerfarm.gui.harness.SwingDialogHarness;
 import com.flowerfarm.gui.harness.SwingFileHarness;
 import com.flowerfarm.gui.harness.SwingMenuHarness;
 import com.flowerfarm.gui.harness.SwingUserHarness;
+import com.flowerfarm.gui.tabs.HarvestLogTab;
+import com.flowerfarm.gui.tabs.CrmTab;
+import com.flowerfarm.gui.tabs.MarketDayTab;
+import com.flowerfarm.gui.tabs.ProductionStudioTab;
 import com.flowerfarm.connector.ConnectorResult;
 import com.flowerfarm.connector.ConnectorRegistry;
 import com.flowerfarm.model.FarmProfile;
@@ -30,6 +34,9 @@ import com.flowerfarm.service.SeasonPlanService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import javax.swing.JButton;
 import javax.swing.JMenu;
@@ -272,6 +279,86 @@ class ProductionReadinessUiTest {
                         "Customers & Orders has an unfinished product.",
                         "Market Day has a checked load.");
         assertThat(FlowerFarmGUI.combinedExitWarning(null, "  ")).isNull();
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void exitAndSignOutKeepHarvestDraftWhenCancelled(boolean signingOut) throws Exception {
+        DesktopSession session = new DesktopSession();
+        session.setAuthEnabled(true);
+        session.set(new FarmUser("field-hand", "", FarmRole.HAND));
+        SwingDialogHarness dialogs = new SwingDialogHarness().chooseForm(
+                "Unfinished work — " + (signingOut ? "sign out" : "exit"),
+                "Keep working", form -> form.expectText("Harvest Log"));
+        FlowerFarmGUI gui = gui(mock(GuiLoginGate.class), session, dialogs,
+                new SwingFileHarness().cancelUnscripted());
+        HarvestLogTab harvest = new HarvestLogTab(mock(HarvestService.class), gui);
+        ReflectionTestUtils.setField(gui, "harvestTab", harvest);
+        SwingUtilities.invokeAndWait(() -> {
+            gui.buildSouthBar();
+            SwingUserHarness.on(harvest.getUIComponent())
+                    .type("Harvest crop or variety", "Dahlia draft")
+                    .type("Harvest quantity", "72");
+            assertThat(gui.confirmApplicationClose(signingOut)).isFalse();
+            assertThat(SwingUserHarness.on(harvest.getUIComponent())
+                    .fieldValue("Harvest crop or variety")).isEqualTo("Dahlia draft");
+            assertThat(SwingUserHarness.on(harvest.getUIComponent())
+                    .fieldValue("Harvest quantity")).isEqualTo("72");
+        });
+        assertThat(session.current().username()).isEqualTo("field-hand");
+        dialogs.assertComplete();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"harvestTab", "crmTab", "marketDayTab", "productionStudioTab"})
+    void exitDuringSubmittedWorkNeverPromisesToDiscardSavedRecords(String field) throws Exception {
+        FarmDialogs dialogs = mock(FarmDialogs.class);
+        when(dialogs.showOption(any(), any(), anyString(), anyInt(), anyInt(),
+                any(), any(), any())).thenAnswer(invocation -> {
+                    assertThat(String.valueOf((Object) invocation.getArgument(1))).contains(
+                            "does not undo records already saved", "before trying again",
+                            "Any unsaved drafts will be lost", "Keep working");
+                    assertThat((Object[]) invocation.getArgument(6)).containsExactly(
+                            "Keep working", "Exit before result");
+                    assertThat((Object) invocation.getArgument(7)).isEqualTo("Keep working");
+                    return JOptionPane.CLOSED_OPTION;
+                });
+        FlowerFarmGUI gui = gui(mock(GuiLoginGate.class), new DesktopSession(), dialogs,
+                new SwingFileHarness().cancelUnscripted());
+        Object tab;
+        switch (field) {
+            case "harvestTab" -> {
+                HarvestLogTab harvest = mock(HarvestLogTab.class);
+                when(harvest.applicationExitWarning()).thenReturn("Harvest save is running.");
+                when(harvest.hasPendingSave()).thenReturn(true);
+                tab = harvest;
+            }
+            case "crmTab" -> {
+                CrmTab crm = mock(CrmTab.class);
+                when(crm.applicationExitWarning()).thenReturn("Customer save is running.");
+                when(crm.hasPendingSave()).thenReturn(true);
+                tab = crm;
+            }
+            case "marketDayTab" -> {
+                MarketDayTab market = mock(MarketDayTab.class);
+                when(market.applicationExitWarning()).thenReturn("Packing completion is running.");
+                when(market.hasPendingSave()).thenReturn(true);
+                tab = market;
+            }
+            default -> {
+                ProductionStudioTab studio = mock(ProductionStudioTab.class);
+                when(studio.applicationExitWarning()).thenReturn("Task save is running.");
+                when(studio.hasPendingSave()).thenReturn(true);
+                tab = studio;
+            }
+        }
+        ReflectionTestUtils.setField(gui, field, tab);
+        SwingUtilities.invokeAndWait(() -> {
+            gui.buildSouthBar();
+            assertThat(gui.confirmApplicationClose(false)).isFalse();
+        });
+        verify(dialogs).showOption(any(), any(), anyString(), anyInt(), anyInt(),
+                any(), any(), any());
     }
 
     @Test

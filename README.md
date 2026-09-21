@@ -89,7 +89,7 @@ Choose a field task, check its crop and bed, and record the crew time, input cos
 <table>
   <tr>
     <td width="50%" valign="top">
-      <a href="docs/images/app-harvest-log.png"><img src="docs/images/app-harvest-log.png" alt="Harvest Log with harvest history, filters, and an entry form"></a>
+      <a href="docs/images/app-harvest-log.png"><img src="docs/images/app-harvest-log.png" alt="Harvest Log with wide entry fields, visible save controls and draft status, and history filters below"></a>
       <br><strong>Record the cut while it is fresh.</strong><br>
       Log one harvest or a batch, retain crop and bed context, and correct an entry without losing its history.
     </td>

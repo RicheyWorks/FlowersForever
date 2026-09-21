@@ -155,6 +155,11 @@ public class MarketDayTab implements FlowerFarmTab {
                 + "explicitly discard this packing progress.";
     }
 
+    /** Whether closing could hide a completion result or interrupt a file save. */
+    public boolean hasPendingSave() {
+        return fulfilling || exporting;
+    }
+
     /** Show the retained packing work with a state-preserving route back. */
     public void showFrom(String returnTab, String returnLabel) {
         getUIComponent();

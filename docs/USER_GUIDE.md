@@ -356,6 +356,24 @@ the same cut twice. The form resets only after the harvest and inventory update
 succeed. If either fails, every field, the loaded edit target, and **Keep harvest
 context** choice remain available for retry.
 
+The quick-entry form has two wide columns, with crop, quantity, unit, and date
+first. Scroll within the form for optional traceability fields, and down the
+workspace to review history. Save controls and the selected edit target have
+their own rows. History keeps crop names and dates readable; scroll its table
+sideways for notes, lot, grade, loss, and storage details.
+
+Loading another saved harvest, copying one as today's cut, or choosing **Clear
+form** asks before replacing changed quick-entry fields. **Keep draft** leaves
+the form and its exact edit target intact. An unchanged loaded record and the
+setup retained after a successful save do not need a discard decision. A copied
+harvest is an unsaved new entry until you log it. History double-clicks cannot
+replace the form while a harvest write is running.
+
+Exit and sign-out warnings include unfinished quick-entry fields, nonempty batch
+lines, and pending harvest saves or deletions. Choose **Keep working** to finish.
+Exiting during a write does not undo saved harvests or inventory adjustments;
+check the saved history after reopening before submitting the same cut again.
+
 Invalid single-entry values stay in place and are handled inline: the exact
 field is highlighted, keyboard focus moves to it, and the entry badge explains
 the correction. Fix the value and submit again; no dismissible error window
@@ -364,7 +382,7 @@ interrupts repeated harvest entry.
 For a morning cut with several crops, use **Batch entry**. Its visible Date,
 Unit, Bed / field, and Notes fields apply to every row unless a
 line supplies its own unit or bed. New batches start empty; **Use sample lines**
-loads examples only when selected. Enter one `Crop,Quantity[,Unit][,Bed]` row per
+asks before replacing existing lines with examples. Enter one `Crop,Quantity[,Unit][,Bed]` row per
 line and review the live row count, totals, and rounded inventory impact before
 choosing **Log batch harvest**. After a successful save, the lines clear to
 prevent duplicate logging while the visible batch defaults remain ready for the

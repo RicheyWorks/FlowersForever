@@ -51,6 +51,31 @@ function Stop-McpProcess([Diagnostics.Process]$Process) {
     $Process.Dispose()
 }
 
+function Assert-McpDoctorReady([object]$Doctor, [string]$ExpectedDataDirectory) {
+    if ($Doctor.ready -isnot [bool] -or -not $Doctor.ready) {
+        throw 'MCP doctor did not report ready=true.'
+    }
+    # The application owns the required operation sets. Check that contract rather
+    # than pinning this smoke helper to a count that changes when tools are added.
+    if ($Doctor.missingFarmDataTools -isnot [array] -or $Doctor.missingFarmDataTools.Count -ne 0) {
+        throw 'MCP doctor reported missing required farm-data operations.'
+    }
+    foreach ($capability in @('connectAndMap', 'readBackAndResume', 'migrateAndOperate')) {
+        if ($Doctor.capabilities.$capability -isnot [bool] -or -not $Doctor.capabilities.$capability) {
+            throw "MCP doctor did not enable the required $capability capability."
+        }
+    }
+    if (($Doctor.enabledFarmDataToolCount -isnot [long] -and $Doctor.enabledFarmDataToolCount -isnot [int]) `
+            -or $Doctor.enabledFarmDataToolCount -le 0) {
+        throw 'MCP doctor did not report a positive farm-data operation count.'
+    }
+    if ($Doctor.dataDirectory -isnot [string] `
+            -or [string]::IsNullOrWhiteSpace($Doctor.dataDirectory) `
+            -or [IO.Path]::GetFullPath($Doctor.dataDirectory) -ne $ExpectedDataDirectory) {
+        throw 'MCP doctor did not use the requested shared data directory.'
+    }
+}
+
 $doctorProcess = New-McpProcess @('--mcp-doctor')
 $doctorProcess.StandardInput.Close()
 $doctorOut = $doctorProcess.StandardOutput.ReadToEndAsync()
@@ -63,15 +88,7 @@ try {
         throw "MCP doctor exited with code $($doctorProcess.ExitCode): $($doctorErr.Result)"
     }
     $doctor = $doctorOut.Result | ConvertFrom-Json
-    if (-not $doctor.ready) {
-        throw "MCP doctor requires action: $($doctor.nextSteps -join '; ')"
-    }
-    if ($doctor.enabledFarmDataToolCount -ne 33) {
-        throw "MCP doctor found $($doctor.enabledFarmDataToolCount) farm tools; expected 33."
-    }
-    if ([IO.Path]::GetFullPath($doctor.dataDirectory) -ne $resolvedData) {
-        throw "MCP doctor opened '$($doctor.dataDirectory)' instead of '$resolvedData'."
-    }
+    Assert-McpDoctorReady $doctor $resolvedData
     if ($doctorOut.Result.Contains($token) -or $doctorErr.Result.Contains($token)) {
         throw 'MCP doctor exposed its process token.'
     }

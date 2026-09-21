@@ -1,11 +1,13 @@
 // Behavioral smoke-helper tests: fake executable launchers and jcmd, no Java/DB.
-// Uses system Bash and Python3; Windows uses Git Bash and Python (PYTHON override supported).
+// Uses Bash, Python3, and PowerShell7; Windows uses Git Bash and Python (PYTHON override supported).
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { chmod, copyFile, mkdir, mkdtemp, readFile, readdir, realpath, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
+// Keep Windows readiness-contract regressions in this existing CI entry point.
+import './test-mcp-launcher.test.mjs';
 
 const bash = process.env.BASH_EXECUTABLE || (process.platform === 'win32'
   ? 'C:/Program Files/Git/bin/bash.exe' : 'bash');
@@ -26,8 +28,19 @@ if [[ "$phase" == doctor ]]; then
   "$PYTHON" - <<'PY'
 import json, os
 directory = os.environ['FLOWERFARM_DATA_DIR']
-if os.environ['SCENARIO'] == 'wrong-directory': directory += '/wrong'
-print(json.dumps({'ready': True, 'dataDirectory': directory}))
+scenario = os.environ['SCENARIO']
+if scenario == 'wrong-directory': directory += '/wrong'
+report = {'ready': True, 'dataDirectory': directory,
+          'enabledFarmDataToolCount': 38, 'missingFarmDataTools': [],
+          'capabilities': {'connectAndMap': True, 'readBackAndResume': True, 'migrateAndOperate': True}}
+if scenario == 'future-tools': report['enabledFarmDataToolCount'] = 39
+if scenario == 'missing-operation': report['missingFarmDataTools'] = ['farm-data__complete-order-handoff']
+if scenario == 'missing-operation-list': del report['missingFarmDataTools']
+if scenario == 'disabled-capability': report['capabilities']['migrateAndOperate'] = False
+if scenario == 'missing-capability': del report['capabilities']['readBackAndResume']
+if scenario == 'invalid-count': report['enabledFarmDataToolCount'] = 0
+if scenario == 'fractional-count': report['enabledFarmDataToolCount'] = 38.5
+print(json.dumps(report))
 PY
 elif [[ "$phase" == ping ]]; then
   cat >/dev/null
@@ -134,6 +147,24 @@ test('a ready doctor opening the wrong directory is rejected', async t => {
   assert.notEqual(result.code, 0);
   assert.match(result.output, /requested shared data directory/);
 });
+
+test('additional farm operations do not break the native readiness contract', async t => {
+  const f = await setup(t, 'future-tools');
+  const result = await f.run();
+  assert.equal(result.code, 0, result.output);
+  assert.match(result.output, /All three macOS launcher phases exited successfully/);
+});
+
+for (const scenario of ['missing-operation', 'missing-operation-list', 'disabled-capability',
+  'missing-capability', 'invalid-count', 'fractional-count']) {
+  test('rejects an incomplete doctor contract before any further launch: ' + scenario, async t => {
+    const f = await setup(t, scenario);
+    const result = await f.run();
+    assert.notEqual(result.code, 0, result.output);
+    assert.match(result.output, /MCP doctor (reported missing|required|did not)/);
+    assert.equal((await readFile(path.join(f.data, 'phase-paths'), 'utf8')).trim().split(/\r?\n/).length, 1);
+  });
+}
 
 for (const scenario of ['ping-error', 'ping-null']) {
   test('rejects unsuccessful or malformed MCP ping: ' + scenario, async t => {

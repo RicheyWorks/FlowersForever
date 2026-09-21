@@ -33,6 +33,11 @@ public final class HarvestBatchView extends JPanel {
     private final JLabel statusLabel;
 
     public HarvestBatchView(Runnable logAction) {
+        this(logAction, () -> true);
+    }
+
+    public HarvestBatchView(Runnable logAction,
+                            java.util.function.BooleanSupplier approveSampleReplacement) {
         super(new BorderLayout(4, 4));
         setOpaque(false);
         dateField = field(LocalDate.now().toString(), 10, "Batch harvest date",
@@ -60,13 +65,21 @@ public final class HarvestBatchView extends JPanel {
                 "Creates one harvest entry per non-empty line and updates inventory.");
         logButton.addActionListener(event -> logAction.run());
         sampleButton = FarmUi.secondaryButton("Use sample lines");
-        sampleButton.addActionListener(event -> batchArea.setText(SAMPLE));
-        statusLabel = FarmUi.statusBadge("Checking batch…", FarmUi.Tone.NEUTRAL);
+        sampleButton.addActionListener(event -> {
+            if (approveSampleReplacement.getAsBoolean()) {
+                batchArea.setText(SAMPLE);
+            }
+        });
+        statusLabel = FarmUi.wrappingStatusBadge("Checking batch…", FarmUi.Tone.NEUTRAL);
         statusLabel.setName("harvest.batchStatus");
         statusLabel.getAccessibleContext().setAccessibleName("Batch harvest readiness");
         statusLabel.getAccessibleContext().setAccessibleDescription(
                 "Live validation and submission status for the batch harvest lines.");
-        add(FarmUi.toolbar(logButton, sampleButton, statusLabel), BorderLayout.SOUTH);
+        JPanel footer = new JPanel(new BorderLayout(0, FarmUi.CONTROL_GAP));
+        footer.setOpaque(false);
+        footer.add(FarmUi.toolbar(logButton, sampleButton), BorderLayout.NORTH);
+        footer.add(statusLabel, BorderLayout.CENTER);
+        add(footer, BorderLayout.SOUTH);
     }
 
     public JTextArea batchArea() {
@@ -110,8 +123,8 @@ public final class HarvestBatchView extends JPanel {
         constraints.anchor = GridBagConstraints.WEST;
         addField(context, constraints, 0, 0, "Date", dateField, 'D');
         addField(context, constraints, 0, 1, "Unit", unitField, 'U');
-        addField(context, constraints, 0, 2, "Bed / field", bedField, 'B');
-        addField(context, constraints, 0, 3, "Notes", notesField, 'N');
+        addField(context, constraints, 1, 0, "Bed / field", bedField, 'B');
+        addField(context, constraints, 1, 1, "Notes", notesField, 'N');
         return context;
     }
 
@@ -136,6 +149,7 @@ public final class HarvestBatchView extends JPanel {
         field.getAccessibleContext().setAccessibleName(accessibleName);
         field.getAccessibleContext().setAccessibleDescription(description);
         field.setToolTipText(description);
+        FarmUi.entryControl(field, "", description);
         return field;
     }
 }
