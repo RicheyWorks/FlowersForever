@@ -1,5 +1,56 @@
 # Latest direction — September 22, 2026
 
+## Latest completed work: Season Planner recovery
+
+Season Planner now retains exact raw planting forms independently for saved-record
+edits and new planting drafts. Failed saves, rejected stale decisions, refreshes,
+other records, and unrelated successful writes do not replace them. Add resumes a
+new draft for the selected season; Review drafts lists all retained work and offers
+review or confirmed single-draft discard with Keep working / Keep draft defaults.
+Cancelled retry forms retain corrections, including invalid and unnormalized text.
+Missing-record, other-season, failed-refresh, and VIEWER recovery opens copyable
+read-only details. A failed edit retains the original full record snapshot; changed
+refreshed values require a current-versus-draft comparison and explicit Use draft
+values before the ordinary form review. Both approvals recheck current context.
+
+All planting mutation entry points check role/host access, running work, and failed
+reads. Form/delete decisions capture refresh/write/modal revisions, season, and the
+full selected record; targeted actions also capture selection revisions. Refreshes
+requested during writes coalesce behind the result. Acknowledged create/update/delete
+results remove only their applicable drafts and remain visibly saved when follow-up
+reads fail. Host callbacks cannot hide the write outcome or prevent the independent
+local reload. Failed reads lock writes until fresh loading succeeds. The shell now
+includes retained planting drafts and pending mutations in exit/sign-out decisions.
+
+Drafts remain session-only. Cancel of a fresh ordinary form still abandons that form.
+The new snapshot checks do not add database record-version preconditions against
+another client writing after review. No native app/installer was built or launched.
+
+Focused suites passed: 73 decision cases,
+27 recovery cases, 52 shell cases (14 new), and the 69 existing user journeys plus
+planner/visual contracts. The compact planner render was inspected. Test floors are
+updated to match. Final log: `dist/harness-evidence/season-planner-quality.log`;
+source/report evidence: `dist/harness-evidence/latest.json`.
+
+Full clean isolated verification passed 1,914 tests plus two packaged-JAR checks,
+zero failures/errors/skips, and all 178 suite/phase floors. Coverage is 87.24% lines
+and 70.47% branches; Checkstyle and SpotBugs report zero findings. Both SBOM formats
+were generated. A separate `--check` confirmed source/report consistency for
+`4b040f43eb7dd18d379c326fbd456fc532b6734f51a8748e1b56c6b396a3756b`.
+
+Continue on `codex/recover-unpushed-work` / PR #21 with local/GitHub synchronization.
+Check the latest Actions annotations for the separate account payment/spending-limit
+block before describing remote CI. Native acceptance remains separate.
+
+Next concrete candidate: `KnowledgeLogTab.startSave` still puts failed new/edit
+lesson drafts into one `retrySaveId` / `retrySaveDraft` slot. Fail an edit to lesson A,
+then submit lesson B: B replaces A's retained draft regardless of its outcome.
+Bound the next pass to independent lesson/new drafts, exact raw values, review/discard
+and shell warning integration, with an A/B replacement regression. Existing user
+journeys cover only one failed new-lesson retry.
+
+Historical continuation notes follow.
+
 ## Latest completed work: unfinished customer details
 
 The owner's next continuation addressed the customer-only draft gap below.

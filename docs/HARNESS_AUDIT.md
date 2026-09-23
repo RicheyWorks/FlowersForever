@@ -2,6 +2,37 @@
 
 Audit date: 2026-09-04
 
+## Season Planner recovery — September 22, 2026
+
+The planner's single retry slot could silently replace an earlier failed planting
+edit. It now retains exact raw forms per saved target and new-draft identity, with
+session-wide review and default-safe single-draft discard. Cancelled retries preserve
+corrections. Full read-only forms remain selectable/copyable with missing targets,
+other seasons, failed reads, or VIEWER access. If refreshed saved values differ from
+the original edit baseline, retry requires a complete saved-versus-draft comparison,
+explicit Use draft values, and ordinary form review; current state is checked after
+both dialogs. Acknowledged deletion discards only the same record's retained edits.
+
+Add/edit/succession/plant-guide/delete decisions share current access, busy, and failed
+read checks. Captured revisions, season, full target state, and selection protect
+against stale and nested modal decisions. Refreshes queue behind mutations. Successful
+writes are acknowledged independently of local/host refresh and cannot become retry
+drafts merely because a follow-up read or callback fails. Failed local refreshes
+keep writes disabled until a successful reload. Exit/sign-out includes retained
+planting work and pending changes. Drafts are session-only; no database version
+preconditions or native acceptance are claimed.
+
+Coverage includes 73 new decision cases, 27 recovery cases, and 14 shell additions
+(52 shell cases total), plus the existing 69 user journeys and planner/visual
+contracts. The compact planner render was inspected. Final full log:
+`dist/harness-evidence/season-planner-quality.log`; evidence: `latest.json`.
+
+Full clean isolated verification passed 1,914 tests plus two packaged-JAR checks,
+zero failures/errors/skips, and all 178 suite/phase floors. Coverage is 87.24% lines
+and 70.47% branches; Checkstyle and SpotBugs report zero findings. Both SBOM formats
+were generated. A separate `--check` confirmed source/report consistency for
+`4b040f43eb7dd18d379c326fbd456fc532b6734f51a8748e1b56c6b396a3756b`.
+
 ## Unfinished customer details — September 22, 2026
 
 Customer forms previously had no clean baseline, so Load selected, double-click,

@@ -58,6 +58,7 @@ import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
 /** Visual season and bed planning from first sow through final harvest. */
@@ -84,6 +85,7 @@ public class SeasonPlannerTab implements FlowerFarmTab {
     private JButton editButton;
     private JButton successionButton;
     private JButton deleteButton;
+    private JButton reviewDraftsButton;
     private JLabel blocksValue;
     private JLabel bedsValue;
     private JLabel stemsValue;
@@ -108,8 +110,14 @@ public class SeasonPlannerTab implements FlowerFarmTab {
     private List<SeasonPlanService.PlanPerformance> lastPerformance = List.of();
     private List<AvailabilityRow> lastAvailability = List.of();
     private Long requestedSelectionId;
-    private Long retrySaveId;
-    private SeasonPlanEntry retrySaveDraft;
+    private final Map<Long, PendingPlanting> retainedDrafts = new LinkedHashMap<>();
+    private long nextDraftKey;
+    private long decisionRevision;
+    private long selectionRevision;
+    private boolean refreshQueued;
+    private boolean refreshFailed;
+    private String acknowledgedChange;
+    private String hostRefreshWarning;
     private boolean canWrite = true;
     private boolean loading;
     private boolean saving;
@@ -158,15 +166,40 @@ public class SeasonPlannerTab implements FlowerFarmTab {
 
     @Override
     public void refreshData() {
-        if (tableModel != null && !saving) {
+        if (tableModel != null) {
             startRefresh();
         }
     }
 
     @Override
     public void applyRolePermissions(boolean canWrite) {
+        if (this.canWrite != canWrite) {
+            decisionRevision++;
+        }
         this.canWrite = canWrite;
         updateActions();
+    }
+
+    /** Warns before session-only planting drafts or an unresolved write can be lost. */
+    public String applicationExitWarning() {
+        if (retainedDrafts.isEmpty() && !saving) {
+            return null;
+        }
+        List<String> work = new ArrayList<>();
+        if (!retainedDrafts.isEmpty()) {
+            work.add(countLabel(retainedDrafts.size(), "retained planting draft", "retained planting drafts"));
+        }
+        if (saving) {
+            work.add("a planting change still awaiting its result");
+        }
+        return "Season Planner has " + String.join(" and ", work) + "."
+                + (retainedDrafts.isEmpty() ? "" : " Drafts are kept only for this session.")
+                + (saving ? " Leaving does not cancel the submitted change." : "");
+    }
+
+    /** Whether closing could hide the result of a submitted planting change. */
+    public boolean hasPendingSave() {
+        return saving;
     }
 
     private void buildUi() {
@@ -181,17 +214,20 @@ public class SeasonPlannerTab implements FlowerFarmTab {
         addButton.setName("seasonPlanner.add");
         refreshButton = FarmUi.secondaryButton("Refresh");
         refreshButton.setName("seasonPlanner.refresh");
+        reviewDraftsButton = FarmUi.secondaryButton("Review drafts (0)");
+        reviewDraftsButton.setName("seasonPlanner.reviewDrafts");
         panel.add(FarmUi.pageHeader(
                 "Season & Bed Planner",
                 "Enter each planting block once, then see timing, bed capacity, and expected stems together.",
-                FarmUi.toolbar(new JLabel("Season:"), seasonPicker, refreshButton, addButton)),
+                FarmUi.toolbar(new JLabel("Season:"), seasonPicker, refreshButton,
+                        reviewDraftsButton, addButton)),
                 BorderLayout.NORTH);
 
         JPanel content = new JPanel(new BorderLayout(0, FarmUi.SECTION_GAP));
         content.setOpaque(false);
         content.add(buildMetrics(), BorderLayout.NORTH);
         content.add(buildWorkspace(), BorderLayout.CENTER);
-        statusBadge = FarmUi.statusBadge("Ready to plan the season", FarmUi.Tone.NEUTRAL);
+        statusBadge = FarmUi.wrappingStatusBadge("Ready to plan the season", FarmUi.Tone.NEUTRAL);
         statusBadge.setName("seasonPlanner.status");
         content.add(statusBadge, BorderLayout.SOUTH);
         panel.add(content, BorderLayout.CENTER);
@@ -206,6 +242,7 @@ public class SeasonPlannerTab implements FlowerFarmTab {
         editButton.addActionListener(event -> editSelected());
         successionButton.addActionListener(event -> planSuccession());
         deleteButton.addActionListener(event -> deleteSelected());
+        reviewDraftsButton.addActionListener(event -> reviewDrafts());
         updateActions();
     }
 
@@ -274,6 +311,7 @@ public class SeasonPlannerTab implements FlowerFarmTab {
         FarmUi.configureTable(table, "Season planting plan table");
         table.getSelectionModel().addListSelectionListener(event -> {
             if (!event.getValueIsAdjusting()) {
+                selectionRevision++;
                 updateActions();
             }
         });
@@ -409,9 +447,15 @@ public class SeasonPlannerTab implements FlowerFarmTab {
     }
 
     private void startRefresh() {
-        if (loading || tableModel == null) {
+        if (tableModel == null) {
             return;
         }
+        decisionRevision++;
+        if (loading || saving) {
+            refreshQueued = true;
+            return;
+        }
+        refreshQueued = false;
         int seasonYear = selectedSeason();
         Long selectedId = requestedSelectionId != null ? requestedSelectionId
                 : selectedEntry() == null ? null : selectedEntry().getId();
@@ -429,17 +473,25 @@ public class SeasonPlannerTab implements FlowerFarmTab {
 
             @Override protected void done() {
                 try {
-                    applySnapshot(get(), selectedId, seasonYear);
+                    SeasonSnapshot snapshot = get();
+                    if (selectedSeason() == seasonYear && !refreshQueued) {
+                        applySnapshot(snapshot, selectedId, seasonYear);
+                        refreshFailed = false;
+                    }
                 } catch (InterruptedException exception) {
                     Thread.currentThread().interrupt();
-                    showFailure("Loading the season plan", exception);
+                    showRefreshFailure(exception);
                 } catch (java.util.concurrent.ExecutionException exception) {
-                    showFailure("Loading the season plan",
+                    showRefreshFailure(
                             exception.getCause() == null ? exception : exception.getCause());
                 } catch (RuntimeException exception) {
-                    showFailure("Loading the season plan", exception);
+                    showRefreshFailure(exception);
                 } finally {
                     loading = false;
+                    decisionRevision++;
+                    if (refreshQueued || selectedSeason() != seasonYear) {
+                        startRefresh();
+                    }
                     updateActions();
                 }
             }
@@ -468,24 +520,29 @@ public class SeasonPlannerTab implements FlowerFarmTab {
             table.setRowSelectionInterval(0, 0);
         }
         String message = analysisMessage(analysis, selectedYear);
-        FarmUi.updateStatusBadge(statusBadge, message, analysisTone(analysis));
-        if (host != null) {
-            host.setStatus(message + ".");
-        }
+        String outcome = acknowledgedChange == null ? "" : acknowledgedChange + " ";
+        String warning = hostRefreshWarning == null ? "" : " " + hostRefreshWarning;
+        setStatus(outcome + message + warning,
+                hostRefreshWarning == null ? analysisTone(analysis) : FarmUi.Tone.WARNING);
+        acknowledgedChange = null;
+        hostRefreshWarning = null;
     }
 
     private void updateSeasonChoices(List<Integer> years, int selectedYear) {
         updatingSeasons = true;
-        DefaultComboBoxModel<Integer> model = new DefaultComboBoxModel<>();
-        model.addElement(selectedYear);
-        for (Integer year : years) {
-            if (year != null && year != selectedYear) {
-                model.addElement(year);
+        try {
+            DefaultComboBoxModel<Integer> model = new DefaultComboBoxModel<>();
+            model.addElement(selectedYear);
+            for (Integer year : years) {
+                if (year != null && year != selectedYear) {
+                    model.addElement(year);
+                }
             }
+            seasonPicker.setModel(model);
+            seasonPicker.setSelectedItem(selectedYear);
+        } finally {
+            updatingSeasons = false;
         }
-        seasonPicker.setModel(model);
-        seasonPicker.setSelectedItem(selectedYear);
-        updatingSeasons = false;
     }
 
     private void updateMetrics(SeasonPlanService.SeasonAnalysis analysis) {
@@ -837,45 +894,126 @@ public class SeasonPlannerTab implements FlowerFarmTab {
         return Math.round(value * 10d) / 10d;
     }
 
-    private void addPlanting() {
-        if (!GuiPermissions.requireWrite(host, panel, "add a planting block")) {
-            return;
-        }
-        SeasonPlanEntry retained = retrySaveId == null ? retrySaveDraft : null;
-        SeasonPlanEntry entry = retained == null
-                ? showForm(null)
-                : showForm(retained, false, "Retry planting block");
-        if (entry != null) {
-            startSave(null, entry);
-        }
+    private boolean canStartChange() {
+        return canWrite && (host == null || host.canMutateData())
+                && !loading && !saving && !refreshFailed;
     }
 
-    /**
-     * Opens a farm-owned planting draft from an immutable sourced reference.
-     * Only crop context and provenance are copied; dates, bed space, and yield
-     * remain explicit grower decisions in the ordinary validated form.
-     */
+    private PlantingDecision beginDecision(SeasonPlanEntry target) {
+        decisionRevision++;
+        return new PlantingDecision(decisionRevision, selectionRevision,
+                selectedSeason(), EntryState.of(target));
+    }
+
+    private boolean currentDecision(PlantingDecision decision) {
+        return canStartChange() && decision.revision() == decisionRevision
+                && decision.seasonYear() == selectedSeason()
+                && (decision.target() == null
+                || decision.selectionRevision() == selectionRevision
+                && decision.target().equals(EntryState.of(selectedEntry())));
+    }
+
+    private PendingPlanting newDraft(Long id, PlantingForm form) {
+        return new PendingPlanting(++nextDraftKey, id,
+                id == null ? null : EntryState.of(selectedEntry()), form);
+    }
+
+    private PendingPlanting draftFor(Long id) {
+        return retainedDrafts.values().stream()
+                .filter(draft -> Objects.equals(id, draft.targetId()))
+                .filter(draft -> id != null || draft.form().seasonYear == selectedSeason())
+                .findFirst().orElse(null);
+    }
+
+    private void addPlanting() {
+        if (!canStartChange()) {
+            return;
+        }
+        PendingPlanting draft = draftFor(null);
+        if (draft == null) {
+            draft = newDraft(null, new PlantingForm((SeasonPlanEntry) null, selectedSeason(), null));
+        }
+        openDraft(draft, null, retainedDrafts.containsKey(draft.key())
+                ? "Retry planting block" : "Add planting block");
+    }
+
+    /** Opens a farm-owned draft whose dates, bed space, and yield require review. */
     public boolean preparePlantingFromReference(PnwPlantProfile reference) {
-        java.util.Objects.requireNonNull(reference, "reference");
+        Objects.requireNonNull(reference, "reference");
         getUIComponent();
-        if (!GuiPermissions.requireWrite(host, panel,
-                "prepare a planting block from the plant guide")) {
+        if (!canStartChange()) {
             return false;
         }
         String guidance = "Started from PNW Plant Guide · source retained · "
                 + "confirm every farm-specific value";
-        PlantingForm form = new PlantingForm(
-                reference, selectedSeason(), guidance);
+        PendingPlanting draft = newDraft(null,
+                new PlantingForm(reference, selectedSeason(), guidance));
+        return openDraft(draft, null, "Plan “" + reference.commonName() + "”");
+    }
+
+    private void editSelected() {
+        if (!canStartChange()) {
+            return;
+        }
+        SeasonPlanEntry selected = selectedEntry();
+        if (selected == null) {
+            return;
+        }
+        PendingPlanting draft = draftFor(selected.getId());
+        if (draft == null) {
+            draft = newDraft(selected.getId(), new PlantingForm(selected, selectedSeason(), null));
+        }
+        openDraft(draft, selected, retainedDrafts.containsKey(draft.key())
+                ? "Retry planting block" : "Edit planting block");
+    }
+
+    private void planSuccession() {
+        if (!canStartChange()) {
+            return;
+        }
+        SeasonPlanEntry selected = selectedEntry();
+        if (selected == null) {
+            return;
+        }
+        SeasonPlanEntry entry = seasonPlanService.draftSuccession(selected, SUCCESSION_SHIFT_DAYS);
+        PendingPlanting draft = newDraft(null, new PlantingForm(entry, selectedSeason(),
+                "Copied from the selected block · all dates moved 14 days · review before saving"));
+        openDraft(draft, selected, "Plan next succession");
+    }
+
+    private boolean openDraft(PendingPlanting original, SeasonPlanEntry target, String title) {
+        PlantingDecision decision = beginDecision(target);
+        if (original.targetId() != null && !Objects.equals(original.baseline(), EntryState.of(target))
+                && !approveChangedPlanting(original, target, decision)) {
+            return false;
+        }
+        boolean retainedBefore = retainedDrafts.get(original.key()) == original;
+        PlantingForm form = new PlantingForm(original.form());
+        PendingPlanting draft = new PendingPlanting(original.key(), original.targetId(),
+                original.targetId() == null ? null : EntryState.of(target), form);
         while (true) {
-            int choice = dialogs.showConfirm(panel, form.panel(),
-                    "Plan “" + reference.commonName() + "”",
+            int choice = dialogs.showConfirm(panel, form.panel(), title,
                     JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+            if (!currentDecision(decision)) {
+                // A nested review may have replaced or saved this exact draft already.
+                if (retainedDrafts.get(original.key()) == original
+                        || !retainedBefore && !retainedDrafts.containsKey(original.key())) {
+                    retainDraft(draft);
+                }
+                setStatus("The season plan or access changed while this form was open. "
+                        + "No change was submitted from this form. Review retained drafts before saving.",
+                        FarmUi.Tone.WARNING);
+                return false;
+            }
             if (choice != JOptionPane.OK_OPTION) {
+                if (retainedDrafts.containsKey(original.key())) {
+                    retainDraft(draft);
+                }
                 return false;
             }
             try {
                 SeasonPlanEntry entry = form.read();
-                startSave(null, entry);
+                startSave(draft, entry);
                 return true;
             } catch (IllegalArgumentException exception) {
                 dialogs.showMessage(panel, exception.getMessage(),
@@ -884,158 +1022,205 @@ public class SeasonPlannerTab implements FlowerFarmTab {
         }
     }
 
-    private void editSelected() {
-        if (!GuiPermissions.requireWrite(host, panel, "edit a planting block")) {
-            return;
-        }
-        SeasonPlanEntry selected = selectedEntry();
-        if (selected == null) {
-            return;
-        }
-        SeasonPlanEntry retained = selected.getId().equals(retrySaveId)
-                ? retrySaveDraft : selected;
-        SeasonPlanEntry entry = showForm(retained, false,
-                retained == selected ? "Edit planting block" : "Retry planting block");
-        if (entry != null) {
-            startSave(selected.getId(), entry);
-        }
+    private boolean approveChangedPlanting(PendingPlanting draft, SeasonPlanEntry target,
+                                           PlantingDecision decision) {
+        JTextArea comparison = new JTextArea("CURRENT SAVED BLOCK\n"
+                + new PlantingForm(target, selectedSeason(), null).details()
+                + "\nRETAINED DRAFT\n" + draft.form().details(), 20, 62);
+        comparison.setEditable(false);
+        comparison.setLineWrap(true);
+        comparison.setWrapStyleWord(true);
+        comparison.setCaretPosition(0);
+        comparison.getAccessibleContext().setAccessibleName("Current planting and retained draft details");
+        JPanel message = new JPanel(new BorderLayout(0, FarmUi.SECTION_GAP));
+        message.add(FarmUi.wrappingStatusBadge(
+                "This planting changed since the draft was prepared. Compare all values before "
+                        + "using the draft to replace the current block. You will review the form next.",
+                FarmUi.Tone.WARNING), BorderLayout.NORTH);
+        message.add(new JScrollPane(comparison), BorderLayout.CENTER);
+        Object[] options = {"Keep draft", "Use draft values"};
+        int answer = dialogs.showOption(panel, message, "Review changed planting block",
+                JOptionPane.DEFAULT_OPTION, JOptionPane.WARNING_MESSAGE, null, options, options[0]);
+        return answer == 1 && currentDecision(decision);
     }
 
-    private SeasonPlanEntry showForm(SeasonPlanEntry existing) {
-        return showForm(existing, false);
+    private void showDraftDetails(PendingPlanting draft) {
+        PlantingForm copy = new PlantingForm(draft.form());
+        for (JTextField field : copy.fields()) {
+            field.setEditable(false);
+        }
+        copy.notes.setEditable(false);
+        copy.status.setEnabled(false);
+        dialogs.showMessage(panel, copy.panel(), "Retained planting draft", JOptionPane.INFORMATION_MESSAGE);
     }
 
-    private void planSuccession() {
-        if (!GuiPermissions.requireWrite(host, panel, "plan a succession")) {
+    private void retainDraft(PendingPlanting draft) {
+        retainedDrafts.put(draft.key(), draft);
+        decisionRevision++;
+        updateActions();
+    }
+
+    private void reviewDrafts() {
+        if (loading || saving || retainedDrafts.isEmpty()) {
             return;
         }
-        SeasonPlanEntry selected = selectedEntry();
-        if (selected == null) {
+        long revision = ++decisionRevision;
+        JComboBox<PendingPlanting> choices = new JComboBox<>(
+                retainedDrafts.values().toArray(PendingPlanting[]::new));
+        choices.setName("seasonPlanner.draftChoice");
+        choices.getAccessibleContext().setAccessibleName("Retained planting draft");
+        JPanel message = new JPanel(new BorderLayout(0, FarmUi.SECTION_GAP));
+        message.add(FarmUi.wrappingStatusBadge(
+                "Drafts are kept only for this session. Select one to review or discard.",
+                FarmUi.Tone.INFO), BorderLayout.NORTH);
+        message.add(choices, BorderLayout.CENTER);
+        Object[] options = {"Keep working", "Review draft", "Discard draft"};
+        int answer = dialogs.showOption(panel, message, "Retained planting drafts",
+                JOptionPane.DEFAULT_OPTION, JOptionPane.PLAIN_MESSAGE, null, options, options[0]);
+        PendingPlanting selected = (PendingPlanting) choices.getSelectedItem();
+        if (revision != decisionRevision || loading || saving || selected == null
+                || retainedDrafts.get(selected.key()) != selected) {
             return;
         }
-        SeasonPlanEntry draft = seasonPlanService.draftSuccession(
-                selected, SUCCESSION_SHIFT_DAYS);
-        SeasonPlanEntry entry = showForm(draft, true);
-        if (entry != null) {
-            startSave(null, entry);
-        }
-    }
-
-    private SeasonPlanEntry showForm(SeasonPlanEntry existing, boolean succession) {
-        String title = succession ? "Plan next succession"
-                : existing == null ? "Add planting block" : "Edit planting block";
-        return showForm(existing, succession, title);
-    }
-
-    private SeasonPlanEntry showForm(
-            SeasonPlanEntry existing, boolean succession, String title) {
-        String guidance = succession
-                ? "Copied from the selected block · all dates moved 14 days · review before saving"
-                : null;
-        PlantingForm form = new PlantingForm(existing, selectedSeason(), guidance);
-        while (true) {
-            int choice = dialogs.showConfirm(panel, form.panel(), title,
-                    JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
-            if (choice != JOptionPane.OK_OPTION) {
-                return null;
+        if (answer == 2) {
+            discardDraft(selected);
+        } else if (answer == 1 && canStartChange()) {
+            SeasonPlanEntry target = selected.targetId() == null ? null : selectedEntry();
+            if (selected.targetId() != null
+                    && (target == null || !selected.targetId().equals(target.getId()))) {
+                if (!restoreSelection(selected.targetId())) {
+                    showDraftDetails(selected);
+                    setStatus("This draft belongs to planting #" + selected.targetId()
+                            + " in season " + selected.form().seasonYear
+                            + ". Select that season and refresh to review it, or discard the draft.",
+                            FarmUi.Tone.WARNING);
+                    return;
+                }
+                target = selectedEntry();
             }
-            try {
-                return form.read();
-            } catch (IllegalArgumentException exception) {
-                dialogs.showMessage(panel, exception.getMessage(),
-                        "Check the planting block", JOptionPane.WARNING_MESSAGE);
-            }
+            openDraft(selected, target, "Retry planting block");
+        } else if (answer == 1) {
+            showDraftDetails(selected);
+            setStatus("Refresh the season plan and restore write access before saving a retained draft.",
+                    FarmUi.Tone.WARNING);
         }
     }
 
-    private void startSave(Long id, SeasonPlanEntry entry) {
-        if (saving) {
+    private void discardDraft(PendingPlanting draft) {
+        long revision = ++decisionRevision;
+        Object[] options = {"Keep draft", "Discard draft"};
+        int answer = dialogs.showOption(panel, FarmUi.confirmationPanel(
+                        "Discard this retained planting draft?",
+                        draft + " will be lost. Saved planting blocks are unchanged.", FarmUi.Tone.WARNING),
+                "Discard planting draft?", JOptionPane.DEFAULT_OPTION, JOptionPane.WARNING_MESSAGE,
+                null, options, options[0]);
+        if (answer == 1 && revision == decisionRevision && !loading && !saving
+                && retainedDrafts.get(draft.key()) == draft) {
+            retainedDrafts.remove(draft.key());
+            decisionRevision++;
+            setStatus("Planting draft discarded. Saved planting blocks are unchanged.", FarmUi.Tone.NEUTRAL);
+            updateActions();
+        }
+    }
+
+    private void startSave(PendingPlanting draft, SeasonPlanEntry entry) {
+        if (!canStartChange()) {
             return;
         }
-        retrySaveId = id;
-        retrySaveDraft = entry;
+        retainDraft(draft);
         saving = true;
         savingDraft = true;
         updateActions();
-        FarmUi.updateStatusBadge(statusBadge,
-                id == null ? "Adding planting block…" : "Updating planting block…",
+        setStatus(draft.targetId() == null ? "Adding planting block…" : "Updating planting block…",
                 FarmUi.Tone.INFO);
         new SwingWorker<SeasonPlanEntry, Void>() {
             @Override protected SeasonPlanEntry doInBackground() {
-                return id == null ? seasonPlanService.create(entry)
-                        : seasonPlanService.update(id, entry);
+                return draft.targetId() == null ? seasonPlanService.create(entry)
+                        : seasonPlanService.update(draft.targetId(), entry);
             }
 
             @Override protected void done() {
+                boolean acknowledged = false;
                 try {
                     SeasonPlanEntry saved = get();
-                    retrySaveId = null;
-                    retrySaveDraft = null;
-                    requestedSelectionId = saved.getId();
-                    updatingSeasons = true;
-                    seasonPicker.setSelectedItem(saved.getSeasonYear());
-                    updatingSeasons = false;
-                    if (host != null) {
-                        saving = false;
-                        host.setStatus("Planting block saved: " + cropLabel(saved) + ".");
-                        host.refreshAll();
-                    } else {
-                        saving = false;
-                        startRefresh();
-                    }
+                    acknowledged = true;
+                    retainedDrafts.remove(draft.key());
+                    requestedSelectionId = saved == null ? draft.targetId() : saved.getId();
+                    updateSeasonChoices(List.of(), entry.getSeasonYear());
+                    acknowledgeChange("Planting block saved: " + cropLabel(entry) + ".");
                 } catch (InterruptedException exception) {
                     Thread.currentThread().interrupt();
                     showSaveFailure(exception);
                 } catch (java.util.concurrent.ExecutionException exception) {
-                    showSaveFailure(
-                            exception.getCause() == null ? exception : exception.getCause());
+                    showSaveFailure(exception.getCause() == null ? exception : exception.getCause());
                 } finally {
-                    saving = false;
-                    savingDraft = false;
-                    updateActions();
+                    finishWrite(acknowledged);
                 }
             }
         }.execute();
     }
 
+    private void acknowledgeChange(String message) {
+        acknowledgedChange = message;
+        // Acknowledged writes are never retried because a view or host callback failed.
+        setStatus(message + " Refreshing the season plan…", FarmUi.Tone.SUCCESS);
+        if (host != null) {
+            try {
+                host.refreshAll();
+            } catch (RuntimeException exception) {
+                hostRefreshWarning = "Other views could not refresh; use Refresh all to reload them.";
+            }
+        }
+    }
+
+    private void finishWrite(boolean acknowledged) {
+        saving = false;
+        savingDraft = false;
+        decisionRevision++;
+        if (acknowledged || refreshQueued) {
+            startRefresh();
+        }
+        updateActions();
+    }
+
     private void deleteSelected() {
-        if (!GuiPermissions.requireWrite(host, panel, "remove a planting block")) {
+        if (!canStartChange()) {
             return;
         }
         SeasonPlanEntry selected = selectedEntry();
         if (selected == null) {
             return;
         }
+        PlantingDecision decision = beginDecision(selected);
         int answer = dialogs.showConfirm(panel,
-                FarmUi.confirmationPanel(
-                        "Remove this planting block?",
+                FarmUi.confirmationPanel("Remove this planting block?",
                         cropLabel(selected) + " in " + selected.getBedOrField()
-                                + " will be removed from the season plan. Harvest records are unchanged.",
-                        FarmUi.Tone.WARNING),
-                "Remove planting block", JOptionPane.OK_CANCEL_OPTION,
-                JOptionPane.WARNING_MESSAGE);
-        if (answer != JOptionPane.OK_OPTION) {
+                                + " will be removed from the season plan. Harvest records are unchanged."
+                                + (draftFor(selected.getId()) == null ? ""
+                                : " Retained edit drafts for this planting block will also be discarded."),
+                        FarmUi.Tone.WARNING), "Remove planting block",
+                JOptionPane.OK_CANCEL_OPTION, JOptionPane.WARNING_MESSAGE);
+        if (answer != JOptionPane.OK_OPTION || !currentDecision(decision)) {
             return;
         }
+        Long id = selected.getId();
         saving = true;
+        decisionRevision++;
         updateActions();
+        setStatus("Removing planting block…", FarmUi.Tone.INFO);
         new SwingWorker<Void, Void>() {
             @Override protected Void doInBackground() {
-                seasonPlanService.delete(selected.getId());
+                seasonPlanService.delete(id);
                 return null;
             }
 
             @Override protected void done() {
+                boolean acknowledged = false;
                 try {
                     get();
-                    if (host != null) {
-                        saving = false;
-                        host.setStatus("Planting block removed; harvest records were unchanged.");
-                        host.refreshAll();
-                    } else {
-                        saving = false;
-                        startRefresh();
-                    }
+                    acknowledged = true;
+                    retainedDrafts.values().removeIf(draft -> Objects.equals(id, draft.targetId()));
+                    acknowledgeChange("Planting block removed; harvest records were unchanged.");
                 } catch (InterruptedException exception) {
                     Thread.currentThread().interrupt();
                     showFailure("Removing the planting block", exception);
@@ -1043,8 +1228,7 @@ public class SeasonPlannerTab implements FlowerFarmTab {
                     showFailure("Removing the planting block",
                             exception.getCause() == null ? exception : exception.getCause());
                 } finally {
-                    saving = false;
-                    updateActions();
+                    finishWrite(acknowledged);
                 }
             }
         }.execute();
@@ -1076,41 +1260,66 @@ public class SeasonPlannerTab implements FlowerFarmTab {
 
     private void showFailure(String action, Throwable failure) {
         String message = FarmUi.actionableError(action, failure);
-        FarmUi.updateStatusBadge(statusBadge, message, FarmUi.Tone.DANGER);
+        setStatus(message, FarmUi.Tone.DANGER);
+    }
+
+    private void showRefreshFailure(Throwable failure) {
+        refreshFailed = true;
+        String outcome = acknowledgedChange == null ? "" : acknowledgedChange + " Do not repeat that change. ";
+        setStatus(outcome + FarmUi.actionableError("Loading the season plan", failure)
+                + " Displayed rows may be out of date. Choose Refresh before changing planting blocks.",
+                FarmUi.Tone.WARNING);
+    }
+
+    private void setStatus(String message, FarmUi.Tone tone) {
+        FarmUi.updateStatusBadge(statusBadge, message, tone);
+        statusBadge.setToolTipText(message);
+        statusBadge.getAccessibleContext().setAccessibleDescription(message);
         if (host != null) {
-            host.setStatus(message);
+            try {
+                host.setStatus(message);
+            } catch (RuntimeException exception) {
+                // The planner's visible status still reports the actual write/read result.
+                hostRefreshWarning = "The application status could not update; the season result is shown here.";
+            }
         }
     }
 
     private void showSaveFailure(Throwable failure) {
-        String action = retrySaveId == null ? "Retry planting" : "Edit selected";
         String message = FarmUi.actionableError("Saving the planting block", failure)
-                + " The complete draft was kept; choose " + action + " to review and retry.";
+                + " The complete draft was kept; choose Review drafts to review and retry.";
+        setStatus(message, FarmUi.Tone.DANGER);
         FarmUi.updateStatusBadge(statusBadge,
                 "Planting block not saved · draft kept", FarmUi.Tone.DANGER);
         statusBadge.setToolTipText(message);
         statusBadge.getAccessibleContext().setAccessibleDescription(message);
-        if (host != null) {
-            host.setStatus(message);
-        }
     }
 
     private void updateActions() {
         boolean ready = !loading && !saving;
+        boolean writable = canStartChange();
         if (addButton != null) {
             String label = savingDraft ? "Saving planting…"
-                    : retrySaveDraft != null && retrySaveId == null
+                    : draftFor(null) != null
                     ? "Retry planting" : "Add planting";
             addButton.setText(label);
-            addButton.setToolTipText(retrySaveDraft != null && retrySaveId == null
+            addButton.setToolTipText(draftFor(null) != null
                     ? "Review the planting draft retained after the failed save."
                     : "Add a planting block to the selected season.");
             addButton.getAccessibleContext().setAccessibleDescription(
                     addButton.getToolTipText());
         }
-        GuiPermissions.setWritable(canWrite && ready, addButton);
-        GuiPermissions.setWritable(canWrite && ready && selectedEntry() != null,
+        String disabledTip = refreshFailed ? "Refresh the season plan before changing planting blocks."
+                : loading || saving ? "Wait for the current planting operation to finish."
+                : GuiPermissions.VIEWER_READONLY_TIP;
+        GuiPermissions.setWritable(writable, disabledTip, addButton);
+        GuiPermissions.setWritable(writable && selectedEntry() != null, disabledTip,
                 editButton, successionButton, deleteButton);
+        if (reviewDraftsButton != null) {
+            reviewDraftsButton.setText("Review drafts (" + retainedDrafts.size() + ")");
+            reviewDraftsButton.setEnabled(ready && !retainedDrafts.isEmpty());
+            reviewDraftsButton.setToolTipText("Review or discard planting drafts kept for this session.");
+        }
         if (refreshButton != null) {
             refreshButton.setEnabled(ready);
         }
@@ -1135,6 +1344,30 @@ public class SeasonPlannerTab implements FlowerFarmTab {
 
     private record SeasonSnapshot(SeasonPlanService.SeasonAnalysis analysis,
                                   List<Integer> seasons) {
+    }
+
+    private record PendingPlanting(long key, Long targetId, EntryState baseline, PlantingForm form) {
+        @Override public String toString() {
+            return form.seasonYear + " · " + (targetId == null ? "New planting" : "Planting #" + targetId)
+                    + " · " + form.crop.getText() + " · " + form.bed.getText();
+        }
+    }
+
+    private record PlantingDecision(long revision, long selectionRevision,
+                                    int seasonYear, EntryState target) {
+    }
+
+    private record EntryState(Long id, int year, String crop, String variety, String bed,
+                              LocalDate sow, LocalDate transplant, LocalDate harvestStart,
+                              LocalDate harvestEnd, double bedFeet, int expectedStems,
+                              SeasonPlanStatus status, String notes, java.time.Instant updatedAt) {
+        private static EntryState of(SeasonPlanEntry entry) {
+            return entry == null ? null : new EntryState(entry.getId(), entry.getSeasonYear(),
+                    entry.getCropName(), entry.getVariety(), entry.getBedOrField(), entry.getSowDate(),
+                    entry.getTransplantDate(), entry.getHarvestStart(), entry.getHarvestEnd(),
+                    entry.getBedFeet(), entry.getExpectedStems(), entry.getStatus(), entry.getNotes(),
+                    entry.getUpdatedAt());
+        }
     }
 
     private record AvailabilityKey(LocalDate weekOf, String crop, String variety) {
@@ -1162,15 +1395,44 @@ public class SeasonPlannerTab implements FlowerFarmTab {
                 new JComboBox<>(SeasonPlanStatus.values());
         private final JTextArea notes = new JTextArea(3, 28);
         private final int seasonYear;
+        private final String guidance;
 
         private PlantingForm(SeasonPlanEntry existing, int selectedYear, String guidance) {
             seasonYear = existing == null ? selectedYear : existing.getSeasonYear();
+            this.guidance = guidance;
             build(existing, null, guidance);
         }
 
         private PlantingForm(PnwPlantProfile reference, int selectedYear, String guidance) {
             seasonYear = selectedYear;
+            this.guidance = guidance;
             build(null, reference, guidance);
+        }
+
+        private PlantingForm(PlantingForm source) {
+            this((SeasonPlanEntry) null, source.seasonYear, source.guidance);
+            List<JTextField> originals = source.fields();
+            List<JTextField> copies = fields();
+            for (int index = 0; index < copies.size(); index++) {
+                copies.get(index).setText(originals.get(index).getText());
+            }
+            status.setSelectedItem(source.status.getSelectedItem());
+            notes.setText(source.notes.getText());
+        }
+
+        private List<JTextField> fields() {
+            return List.of(crop, variety, bed, sow, transplant,
+                    harvestStart, harvestEnd, bedFeet, expectedStems);
+        }
+
+        private String details() {
+            StringBuilder text = new StringBuilder("Season: " + seasonYear + "\n");
+            for (JTextField field : fields()) {
+                text.append(field.getAccessibleContext().getAccessibleName())
+                        .append(": ").append(field.getText()).append('\n');
+            }
+            return text + "Planting status: " + status.getSelectedItem()
+                    + "\nPlanning notes: " + notes.getText() + "\n";
         }
 
         private void build(SeasonPlanEntry existing, PnwPlantProfile reference,

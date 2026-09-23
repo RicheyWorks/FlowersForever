@@ -15,6 +15,7 @@ import com.flowerfarm.gui.tabs.CrmTab;
 import com.flowerfarm.gui.tabs.InventoryTab;
 import com.flowerfarm.gui.tabs.MarketDayTab;
 import com.flowerfarm.gui.tabs.ProductionStudioTab;
+import com.flowerfarm.gui.tabs.SeasonPlannerTab;
 import com.flowerfarm.connector.ConnectorResult;
 import com.flowerfarm.connector.ConnectorRegistry;
 import com.flowerfarm.model.FarmProfile;
@@ -353,6 +354,102 @@ class ProductionReadinessUiTest {
         assertThat(session.current().username()).isEqualTo("field-hand");
         verify(dialogs).showOption(any(), any(), anyString(), anyInt(), anyInt(),
                 any(), any(), any());
+    }
+
+    @ParameterizedTest(name = "retained planting: sign out={0}, close response={1}")
+    @CsvSource({"false, 0", "true, 0", "false, -1", "true, -1", "false, 1", "true, 1"})
+    void seasonOnlyRetainedDraftRequiresExplicitShellDiscard(boolean signingOut, int choice)
+            throws Exception {
+        DesktopSession session = new DesktopSession();
+        session.setAuthEnabled(true);
+        session.set(new FarmUser("field-hand", "", FarmRole.HAND));
+        SeasonPlannerTab planner = mock(SeasonPlannerTab.class);
+        when(planner.applicationExitWarning()).thenReturn(
+                "Season Planner has a retained failed planting draft for Dahlia · North bed.");
+        FarmDialogs dialogs = mock(FarmDialogs.class);
+        when(dialogs.showOption(any(), any(), anyString(), anyInt(), anyInt(), any(), any(), any()))
+                .thenAnswer(invocation -> {
+                    assertThat(String.valueOf((Object) invocation.getArgument(1))).contains(
+                            "Season Planner", "retained failed planting draft", "Dahlia · North bed",
+                            "without losing anything", "intentional");
+                    assertThat((String) invocation.getArgument(2)).isEqualTo(
+                            "Unfinished work — " + (signingOut ? "sign out" : "exit"));
+                    assertThat((Object[]) invocation.getArgument(6)).containsExactly(
+                            "Keep working", signingOut ? "Discard and sign out" : "Discard and exit");
+                    assertThat((Object) invocation.getArgument(7)).isEqualTo("Keep working");
+                    return choice;
+                });
+        FlowerFarmGUI gui = gui(mock(GuiLoginGate.class), session, dialogs,
+                new SwingFileHarness().cancelUnscripted());
+        ReflectionTestUtils.setField(gui, "seasonPlannerTab", planner);
+
+        SwingUtilities.invokeAndWait(() -> {
+            gui.buildSouthBar();
+            assertThat(gui.confirmApplicationClose(signingOut)).isEqualTo(choice == 1);
+        });
+
+        assertThat(session.current().username()).isEqualTo("field-hand");
+        verify(dialogs).showOption(any(), any(), anyString(), anyInt(), anyInt(), any(), any(), any());
+        verify(dialogs, never()).showConfirm(any(), any(), anyString(), anyInt(), anyInt());
+    }
+
+    @ParameterizedTest(name = "pending planting: sign out={0}, close response={1}")
+    @CsvSource({"false, 0", "true, 0", "false, -1", "true, -1", "false, 1", "true, 1"})
+    void seasonOnlyPendingWriteUsesExitBeforeResult(boolean signingOut, int choice) throws Exception {
+        DesktopSession session = new DesktopSession();
+        session.setAuthEnabled(true);
+        session.set(new FarmUser("field-hand", "", FarmRole.HAND));
+        SeasonPlannerTab planner = mock(SeasonPlannerTab.class);
+        when(planner.applicationExitWarning()).thenReturn("Season Planner has a planting write still running.");
+        when(planner.hasPendingSave()).thenReturn(true);
+        FarmDialogs dialogs = mock(FarmDialogs.class);
+        when(dialogs.showOption(any(), any(), anyString(), anyInt(), anyInt(), any(), any(), any()))
+                .thenAnswer(invocation -> {
+                    assertThat(String.valueOf((Object) invocation.getArgument(1))).contains(
+                            "Season Planner", "planting write still running", "does not undo records already saved",
+                            "before trying again", "Any unsaved drafts will be lost", "Keep working")
+                            .doesNotContain("Discard and");
+                    assertThat((String) invocation.getArgument(2)).isEqualTo(
+                            "Unfinished work — " + (signingOut ? "sign out" : "exit"));
+                    assertThat((Object[]) invocation.getArgument(6)).containsExactly(
+                            "Keep working", "Exit before result");
+                    assertThat((Object) invocation.getArgument(7)).isEqualTo("Keep working");
+                    return choice;
+                });
+        FlowerFarmGUI gui = gui(mock(GuiLoginGate.class), session, dialogs,
+                new SwingFileHarness().cancelUnscripted());
+        ReflectionTestUtils.setField(gui, "seasonPlannerTab", planner);
+
+        SwingUtilities.invokeAndWait(() -> {
+            gui.buildSouthBar();
+            assertThat(gui.confirmApplicationClose(signingOut)).isEqualTo(choice == 1);
+        });
+
+        assertThat(session.current().username()).isEqualTo("field-hand");
+        verify(dialogs).showOption(any(), any(), anyString(), anyInt(), anyInt(), any(), any(), any());
+        verify(dialogs, never()).showConfirm(any(), any(), anyString(), anyInt(), anyInt());
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void cleanSeasonPlannerDoesNotTriggerDraftDiscard(boolean signingOut) throws Exception {
+        FarmDialogs dialogs = mock(FarmDialogs.class);
+        when(dialogs.showConfirm(any(), any(), anyString(), anyInt(), anyInt()))
+                .thenReturn(JOptionPane.YES_OPTION);
+        SeasonPlannerTab planner = mock(SeasonPlannerTab.class);
+        FlowerFarmGUI gui = gui(mock(GuiLoginGate.class), new DesktopSession(), dialogs,
+                new SwingFileHarness().cancelUnscripted());
+        ReflectionTestUtils.setField(gui, "seasonPlannerTab", planner);
+
+        SwingUtilities.invokeAndWait(() -> {
+            gui.buildSouthBar();
+            assertThat(gui.confirmApplicationClose(signingOut)).isTrue();
+        });
+
+        verify(planner).applicationExitWarning();
+        verify(dialogs, never()).showOption(any(), any(), anyString(), anyInt(), anyInt(), any(), any(), any());
+        verify(dialogs, times(signingOut ? 1 : 0)).showConfirm(any(), eq("Sign out and exit?"), eq("Sign out"),
+                eq(JOptionPane.YES_NO_OPTION), eq(JOptionPane.QUESTION_MESSAGE));
     }
 
     @ParameterizedTest(name = "{0}: sign out={1}, close response={2}")

@@ -510,11 +510,13 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
                 marketDayTab == null ? null : marketDayTab.applicationExitWarning(),
                 harvestTab == null ? null : harvestTab.applicationExitWarning(),
                 inventoryTab == null ? null : inventoryTab.applicationExitWarning(),
+                seasonPlannerTab == null ? null : seasonPlannerTab.applicationExitWarning(),
                 productionStudioTab == null ? null : productionStudioTab.applicationExitWarning());
         if (warning != null) {
             boolean savePending = (productionStudioTab != null && productionStudioTab.hasPendingSave())
                     || (harvestTab != null && harvestTab.hasPendingSave())
                     || (inventoryTab != null && inventoryTab.hasPendingSave())
+                    || (seasonPlannerTab != null && seasonPlannerTab.hasPendingSave())
                     || (crmTab != null && crmTab.hasPendingSave())
                     || (marketDayTab != null && marketDayTab.hasPendingSave());
             Object[] options = {"Keep working", savePending ? "Exit before result"
