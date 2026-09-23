@@ -1,5 +1,21 @@
 # FlowersForever private-preview notes
 
+## September 22, 2026 — Reliable inventory recovery and release checks
+
+- Keeps acknowledged inventory counts, edits, and deletions visibly saved when
+  their follow-up reload fails. Further inventory writes wait for fresh rows;
+  search, selection, and permission changes preserve the recovery warning.
+- Queues refreshes behind running inventory writes and rechecks the reviewed
+  product and access after modal decisions. Inventory drafts and pending writes
+  now participate in the exit and sign-out warning.
+- Gives inventory status and report messages full-width wrapping rows so a long
+  product name does not crowd the Refresh action out of the header. Compact
+  workspaces scroll, with separate stock/report actions and a usable table.
+- Isolates every local release build under unique target and dist directories,
+  preserving verification evidence and existing native runtimes.
+- Requires a fresh desktop smoke marker and successful process exit before
+  accepting a Windows runtime or completing local release packaging.
+
 ## September 21, 2026 — Keep unfinished harvest work safe
 
 - Gives harvest entry wider fields, complete status messages, reachable history

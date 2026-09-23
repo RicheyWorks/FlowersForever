@@ -497,6 +497,17 @@ run next. Existing rows, search, filters, and selection remain available after
 a failed reload, with an inline retry state; count, edit, and delete actions stay
 locked until the displayed snapshot is current.
 
+If a count, edit, or deletion saves but its inventory reload fails, the badge
+keeps the saved result and asks you to **Refresh**. Do not repeat the saved action.
+Counts, edits, and deletions remain unavailable until a reload succeeds; changing
+the search or selection does not clear this warning. Refresh requests received
+during a save wait for that save to finish. An open confirmation also rechecks
+the selected product and access before submitting changes.
+
+Closing or signing out warns about retained inventory drafts and running writes.
+Exiting while a write is running cannot undo records already saved. Check the
+product when you reopen before trying that action again.
+
 Low-stock and price-list reports also build in the background from a single
 inventory snapshot. While a report or export is running, its controls are
 locked to prevent duplicate work, but the current rows, search, sorting, and

@@ -52,8 +52,10 @@ preview jobs permission to write private release assets.
    SBOMs/notices. `verified-inputs.json` records source, version, asset IDs,
    sizes, and SHA-256 hashes.
 2. Windows and macOS download that same JAR by asset ID and verify its hash.
-   Each builds an app image, runs the desktop smoke marker and AI doctor/stdio
+   Each builds an app image, runs the desktop startup/shutdown and AI doctor/stdio
    checks, packages the tested image, and uploads its installer and record.
+   Windows requires a fresh desktop marker with valid contents and a zero exit
+   code within 90 seconds; timeout cleanup stops the smoke process.
    macOS waits for each launcher to exit, reuses the same database across all
    three launches, and fails any phase that exceeds 90 seconds. A delayed phase
    produces a bounded JVM thread dump and limited lock metadata for diagnosis;

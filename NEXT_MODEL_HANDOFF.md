@@ -1,4 +1,60 @@
-# Latest direction — September 21, 2026
+# Latest direction — September 22, 2026
+
+## Latest completed work: inventory saved-result recovery and release isolation
+
+The owner's "continue flowers forever" resumed the two concrete handoff
+candidates below. Inventory counts, edits, and deletions now keep acknowledged
+writes distinct from failed readback. A saved action cannot become a retry draft
+because inventory reload or host refresh failed. Count/edit/delete actions require
+a fresh successful inventory read; selection, search, and role updates preserve
+the warning. Refreshes requested during writes queue until the write resolves.
+
+Modal decisions recheck the reviewed product fields, current selection, and access.
+Rejected count/edit decisions retain their entered values for the reviewed SKU.
+Count-next waits through the host's inventory refresh and rechecks identity and
+visible workspace before opening. Inventory drafts and pending results now join
+the shell's close/sign-out guard. These are desktop checks, not database version
+preconditions against concurrent clients.
+
+Compact renders found a collapsed stock table beneath the new wrapping status.
+The final layout gives status/report feedback dedicated rows, a vertically
+scrolling workspace, a usable table height, and separate stock/report action rows.
+Four light/dark cases at 850×500 and 1180×760 verify complete messages and real
+scroll access to controls/table. Baseline renders are preserved in
+`dist/harness-evidence/inventory-recovery-baseline`; final images are in
+`target/ui-previews/inventory-recovery`.
+
+Release tooling uses fresh `target/release-<version>-<GUID>` and
+`dist/release-<version>-<GUID>` folders instead of clearing shared outputs. Local,
+candidate, private-preview, and signed Windows builds share a fresh-marker plus
+zero-exit desktop gate with 90-second timeout and process cleanup. Thirteen new
+simulated packaging/desktop checks and seventeen existing launcher checks passed.
+No native application/installer was launched or built.
+
+Java verification adds 33 cases: 14 recovery, 10 modal/count-next, four visual,
+and five shell cases. The first focused run passed 81 tests. A second 102-case
+run reproduced two compact-layout failures; after the correction all 33 targeted
+dialog/render/UI checks passed. The full verification result is recorded in
+`dist/harness-evidence/inventory-quality.log` and `dist/harness-evidence/latest.json`.
+Final clean isolated verification passed 1,635 tests plus two packaged-JAR checks,
+zero failures/errors/skips, and all 170 suite/phase floors. Coverage is 86.97% lines
+and 69.89% branches; Checkstyle and SpotBugs report zero findings. Both SBOM formats
+were generated. Source hash:
+`93824fd73331d65eb787007eaf7897a8e83b35bd20629e4f886bb4b7f6ee33d0`.
+A subsequent `--check` confirmed source/report hashes still match.
+
+Continue on `codex/recover-unpushed-work` / PR #21. All agents have finished editing.
+Earlier no-commit/no-GitHub instructions remain superseded by the synchronization
+direction recorded below.
+
+Next concrete candidate: inventory still stores only one failed count and one
+failed edit draft. An unrelated successful save now preserves the retained draft,
+but a second different product's failed/rejected attempt can replace the first.
+Use per-product retention or an explicit replacement decision, with corresponding
+exit-warning and selection/refresh tests. Signing/platform acceptance remains
+external; check the newest GitHub run annotations for the billing limitation.
+
+Historical continuation notes follow.
 
 ## Latest completed work: safer Harvest entry and native readiness
 

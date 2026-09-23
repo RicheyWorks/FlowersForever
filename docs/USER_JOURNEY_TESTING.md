@@ -4,6 +4,29 @@ See [HARNESS_AUDIT.md](HARNESS_AUDIT.md) for the current human-action matrix,
 recursive surface inventory, findings, verification evidence, and explicit
 OS-level smoke-test limits.
 
+## Inventory saved results and recovery
+
+`InventoryMutationRecoveryTest` has fourteen cases for acknowledged count/edit/
+delete writes followed by failed readback or host refresh, persistent warnings,
+freshness gating, queued refreshes, and role/cross-mutation guards.
+`InventoryDialogSafetyTest` adds ten cases for selection, role, and snapshot
+changes while modal decisions dispatch events, retained rejected count/edit
+values, and count-next after the host's real inventory reload. Five shell cases
+extend exit/sign-out protection to inventory drafts and pending results.
+
+`InventoryRecoveryVisualTest` renders real saved-count/readback-failed state in
+light and dark themes at 850×500 and 1180×760. A long product name must remain
+fully readable beside the saved outcome and refresh guidance. The header remains
+visible while actual viewport scrolling reveals every stock/report action and
+the usable inventory table. Renders live under `target/ui-previews/inventory-recovery`;
+the initial collapsed-table evidence is retained under
+`dist/harness-evidence/inventory-recovery-baseline`.
+
+Release-script fixtures separately cover isolated output preservation, failed
+desktop shutdown preventing packaging, and fresh-marker/clean-exit/timeout
+contracts. These are simulated launchers and headless Swing components, not
+native pointer/keyboard acceptance or rebuilt installer validation.
+
 ## Harvest drafts and compact entry
 
 `HarvestDraftSafetyTest` exercises explicit load/copy/clear decisions, sample-line

@@ -12,6 +12,7 @@ import com.flowerfarm.gui.harness.SwingMenuHarness;
 import com.flowerfarm.gui.harness.SwingUserHarness;
 import com.flowerfarm.gui.tabs.HarvestLogTab;
 import com.flowerfarm.gui.tabs.CrmTab;
+import com.flowerfarm.gui.tabs.InventoryTab;
 import com.flowerfarm.gui.tabs.MarketDayTab;
 import com.flowerfarm.gui.tabs.ProductionStudioTab;
 import com.flowerfarm.connector.ConnectorResult;
@@ -35,6 +36,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -310,7 +312,42 @@ class ProductionReadinessUiTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"harvestTab", "crmTab", "marketDayTab", "productionStudioTab"})
+    @CsvSource({"false, 0", "true, 0", "false, 1", "true, 1"})
+    void retainedInventoryWorkRequiresExplicitDiscard(boolean signingOut, int choice)
+            throws Exception {
+        DesktopSession session = new DesktopSession();
+        session.setAuthEnabled(true);
+        session.set(new FarmUser("field-hand", "", FarmRole.HAND));
+        InventoryTab inventory = mock(InventoryTab.class);
+        when(inventory.applicationExitWarning()).thenReturn(
+                "Inventory has an unsaved stock count and a retained item edit.");
+        FarmDialogs dialogs = mock(FarmDialogs.class);
+        when(dialogs.showOption(any(), any(), anyString(), anyInt(), anyInt(),
+                any(), any(), any())).thenAnswer(invocation -> {
+                    assertThat(String.valueOf((Object) invocation.getArgument(1))).contains(
+                            "Inventory", "unsaved stock count", "retained item edit",
+                            "without losing anything", "intentional");
+                    assertThat((Object) invocation.getArgument(2)).isEqualTo(
+                            "Unfinished work — " + (signingOut ? "sign out" : "exit"));
+                    assertThat((Object[]) invocation.getArgument(6)).containsExactly(
+                            "Keep working", signingOut ? "Discard and sign out" : "Discard and exit");
+                    assertThat((Object) invocation.getArgument(7)).isEqualTo("Keep working");
+                    return choice;
+                });
+        FlowerFarmGUI gui = gui(mock(GuiLoginGate.class), session, dialogs,
+                new SwingFileHarness().cancelUnscripted());
+        ReflectionTestUtils.setField(gui, "inventoryTab", inventory);
+        SwingUtilities.invokeAndWait(() -> {
+            gui.buildSouthBar();
+            assertThat(gui.confirmApplicationClose(signingOut)).isEqualTo(choice == 1);
+        });
+        assertThat(session.current().username()).isEqualTo("field-hand");
+        verify(dialogs).showOption(any(), any(), anyString(), anyInt(), anyInt(),
+                any(), any(), any());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"harvestTab", "inventoryTab", "crmTab", "marketDayTab", "productionStudioTab"})
     void exitDuringSubmittedWorkNeverPromisesToDiscardSavedRecords(String field) throws Exception {
         FarmDialogs dialogs = mock(FarmDialogs.class);
         when(dialogs.showOption(any(), any(), anyString(), anyInt(), anyInt(),
@@ -327,6 +364,12 @@ class ProductionReadinessUiTest {
                 new SwingFileHarness().cancelUnscripted());
         Object tab;
         switch (field) {
+            case "inventoryTab" -> {
+                InventoryTab inventory = mock(InventoryTab.class);
+                when(inventory.applicationExitWarning()).thenReturn("Inventory save is running.");
+                when(inventory.hasPendingSave()).thenReturn(true);
+                tab = inventory;
+            }
             case "harvestTab" -> {
                 HarvestLogTab harvest = mock(HarvestLogTab.class);
                 when(harvest.applicationExitWarning()).thenReturn("Harvest save is running.");

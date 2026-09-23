@@ -307,8 +307,7 @@ class ReleaseContractTest {
                 "workflow_dispatch:",
                 "Validate complete candidate bundle (no release)",
                 "--type app-image",
-                "--release-smoke",
-                "release-smoke.ok",
+                "scripts/test-desktop-launcher.ps1",
                 "FlowersForever.exe",
                 "FlowersForever.app/Contents/MacOS/FlowersForever",
                 "if: github.event_name != 'push'",
@@ -344,10 +343,10 @@ class ReleaseContractTest {
                 imageBuilds++;
                 assertThat(run).contains("--dest smoke-dist");
             }
-            if (run.contains("--release-smoke")) {
+            if (run.contains("scripts/test-desktop-launcher.ps1")) {
                 smokeIndex = index;
                 assertThat(run).contains("${{ matrix.launcher }}", "${{ matrix.ai_launcher }}",
-                        "scripts/test-mcp-launcher.ps1", "release-smoke.ok");
+                        "scripts/test-mcp-launcher.ps1", "-DataDir \"$SMOKE_DATA\"");
             }
             if (run.contains("--type ${{ matrix.type }}")) {
                 packageIndex = index;
@@ -369,12 +368,16 @@ class ReleaseContractTest {
         int packageIndex = build.indexOf("& jpackage --type msi");
 
         assertThat(smokeIndex).isGreaterThanOrEqualTo(0);
+        assertThat(build.indexOf("test-desktop-launcher.ps1")).isGreaterThan(smokeIndex)
+                .isLessThan(packageIndex);
         assertThat(packageIndex).isGreaterThan(smokeIndex);
         String msiCommand = build.substring(packageIndex,
                 build.indexOf("if ($LASTEXITCODE", packageIndex));
         assertThat(msiCommand).contains("--app-image $appImage", "--vendor RicheyWorks")
                 .doesNotContain("--input ", "--main-jar ", "--add-launcher ");
         assertThat(build).contains("Compress-Archive -LiteralPath $appImage");
+        assertThat(build).contains("target\\release-$buildId", "dist\\release-$buildId",
+                "-Dflowerfarm.build.directory=$target").doesNotContain("Remove-Item");
     }
 
     @Test
@@ -421,7 +424,8 @@ class ReleaseContractTest {
                         "@('FlowersForever.exe', 'FlowersForeverAI.exe')",
                         "$launcherSignature.Status -ne 'Valid'",
                         "$launcherSignature.SignerCertificate.Subject -cne $publisher",
-                        "throw \"$name and the MSI have different signing publishers.\"");
+                        "throw \"$name and the MSI have different signing publishers.\"",
+                        "scripts/test-desktop-launcher.ps1 -Launcher $launcher -DataDir $smokeData");
             }
         }
         assertThat(packagesSignedImage).isTrue();
@@ -444,7 +448,7 @@ class ReleaseContractTest {
                 "THIRD-PARTY.txt", "needs: [verify, installers]");
         assertThat(build).contains("--type app-image", "--type msi", "SHA256SUMS.txt",
                 "bom.json", "bom.xml", "THIRD-PARTY.txt", "*-SNAPSHOT",
-                "Remove-Item -LiteralPath $resolvedDist -Recurse -Force",
+                "test-desktop-launcher.ps1",
                 "-Dflowerfarm.packaged=true");
         assertThat(backup).contains("FlowersForever\\data", "Get-FileHash", "SHA256",
                 "Compress-Archive -LiteralPath $resolvedData");

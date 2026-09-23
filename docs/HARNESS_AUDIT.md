@@ -2,6 +2,52 @@
 
 Audit date: 2026-09-04
 
+## Inventory acknowledgements and release isolation — September 22, 2026
+
+Inventory count, edit, and delete workers previously committed their write and
+read the entire catalog in the same failing result. A readback exception therefore
+reported an acknowledged operation as unsaved and retained a replayable draft.
+The worker now returns the saved result separately from readback failure. Host
+refresh exceptions also preserve the acknowledged result. Further inventory
+mutations require a successful fresh read; selection, filtering, and permission
+updates cannot erase the recovery warning or bypass the action guards.
+
+Refreshes requested during writes wait until the write resolves. Modal count,
+edit, and delete decisions recheck product fields, selection, and access before
+submission. A rejected count/edit keeps its entered values tied to the reviewed
+product. Count-next waits through the host's inventory refresh and rechecks the
+next identity and visible workspace before opening. Inventory pending writes
+and retained drafts now participate in the shell's exit/sign-out decision.
+These client checks do not add transactional version preconditions across clients.
+
+The first compact renders exposed a collapsed stock table after recovery text
+wrapped. The final layout keeps feedback on full-width rows, provides a vertical
+workspace scrollbar and a usable table height, and separates mutation actions
+from reports. Four light/dark cases at 850×500 and 1180×760 verify complete
+saved-product identity and real scroll access to every action and the table.
+Ten modal cases, fourteen mutation/refresh cases, and five additional shell cases
+cover the behavior. The existing failed-refresh contract now requires disabled
+writes, matching its documented promise. Successful unrelated saves no longer
+clear another product's retained draft. Multiple different failed drafts still
+share one count/edit retry slot; that existing limitation needs a separate pass.
+
+Local release builds now use unique target/dist subdirectories and preserve
+existing evidence and native binaries. All Windows release paths require a fresh,
+valid desktop marker plus zero process exit within 90 seconds, with timeout
+cleanup. Thirteen new simulated release/desktop checks and seventeen existing
+launcher checks passed. No native installer or application was built or launched.
+
+Focused verification passed 81 cases. A subsequent 102-case pass had two compact
+render failures; after the layout correction, all 33 targeted dialog/render/UI
+cases passed. Full clean isolated quality evidence is recorded in
+`dist/harness-evidence/inventory-quality.log` and `dist/harness-evidence/latest.json`.
+The final clean run passed 1,635 tests plus two packaged-JAR checks with zero
+failures/errors/skips, all 170 suite/phase floors, and every quality gate.
+Coverage is 86.97% lines and 69.89% branches. Checkstyle and SpotBugs report no
+violations/findings/errors; online verification generated both SBOM formats.
+The verified source hash is
+`93824fd73331d65eb787007eaf7897a8e83b35bd20629e4f886bb4b7f6ee33d0`.
+
 ## Harvest draft protection and native readiness — September 21, 2026
 
 The next shipping review reproduced silent quick-entry replacement through load,

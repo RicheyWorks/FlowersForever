@@ -406,7 +406,7 @@ class InventoryTabUiTest {
         assertThat(table.getRowCount()).isEqualTo(1);
         assertThat(table.getSelectedRow()).isZero();
         assertThat(search.getText()).isEqualTo("Nootka");
-        assertThat(button(root[0], "Record stock count…").isEnabled()).isTrue();
+        assertThat(button(root[0], "Record stock count…").isEnabled()).isFalse();
         assertThat(inventoryStatus(root[0]).getAccessibleContext()
                 .getAccessibleDescription())
                 .contains("inventory database unavailable", "Existing rows and filters were kept");

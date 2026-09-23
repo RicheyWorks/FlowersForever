@@ -205,6 +205,22 @@ The catalog exposes Production Studio to the frame's existing close guard.
 Other template, recipe, and handoff writes retain their existing synchronous
 service calls; this pass does not claim all Studio operations are asynchronous.
 
+### Inventory save and refresh outcomes
+
+Inventory workers return an acknowledged mutation separately from their subsequent
+inventory readback. A readback or host-refresh failure cannot seed a retry draft
+for a committed write. Failed refreshes retain visible rows and a persistent
+recovery message while all count/edit/delete entry points require a fresh snapshot.
+Refresh requests during writes queue until completion; count-next continuation
+waits through the host's inventory refresh and rechecks its captured target.
+Modal decisions compare the reviewed product fields and current access before
+dispatching a write. These desktop checks do not provide database record-version
+preconditions against concurrent clients. The frame includes inventory pending
+writes and retained drafts in its close guard. Header feedback wraps on dedicated
+rows, keeping the Refresh action beside the title. The workspace scrolls vertically
+at compact sizes; a usable table height and separate stock/report action rows keep
+inventory rows and every action reachable.
+
 ---
 
 **This architecture respects the existing Spring Boot + service layer** while

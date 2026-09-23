@@ -112,6 +112,23 @@ launches a temporary app image with `--release-smoke` and must produce
 The same clean images must pass the AI launcher's doctor and a redirected MCP
 stdio ping. Windows uses the console launcher path a real AI client uses; macOS
 uses the additional executable inside the signed app bundle.
+The Windows desktop gate also requires a zero exit code within 90 seconds and
+valid marker contents. A marker from an earlier launch is rejected, and a hung
+smoke process is stopped before the check fails. The signed Windows release and
+private draft preview use the same gate.
+
+For a local unsigned Windows build, set the POM to its exact stable version and
+run `pwsh -File scripts/build-release.ps1` with JDK 17, Maven, and a compatible
+WiX toolchain available. Each invocation uses its own
+`target/release-<version>-<GUID>` build directory and writes the app image, ZIP,
+MSI, JAR, SBOMs, notices, and checksums to
+`dist/release-<version>-<GUID>`. Existing native binaries and
+`dist/harness-evidence` remain intact. The script runs Maven quality verification,
+then the AI doctor/stdio and desktop startup/shutdown checks against the same
+temporary database before packaging the tested image. `-SkipMsi` omits only the
+MSI; `-SkipTests` skips Maven tests, while both launcher checks still run. Failed
+build directories remain available for investigation and have no completed
+checksum manifest.
 
 Maintainers can also start the workflow manually and optionally provide an exact
 candidate version. Candidate runs upload a checksum-complete private bundle for

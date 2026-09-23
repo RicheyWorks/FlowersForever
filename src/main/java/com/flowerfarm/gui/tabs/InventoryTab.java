@@ -85,8 +85,11 @@ public class InventoryTab implements FlowerFarmTab {
     private boolean inventoryRefreshQueued;
     private boolean runningDocument;
     private String inventoryRefreshFailure;
+    private boolean inventoryNeedsRefresh;
+    private String savedInventoryOutcome;
     private ItemSelection retryCountItem;
     private Integer retryCountQuantity;
+    private ItemSelection pendingCountNext;
     private ItemSelection retryEditItem;
     private InventoryItemPresenter.ItemDraft retryEditDraft;
     private String conflictingProductName;
@@ -144,6 +147,10 @@ public class InventoryTab implements FlowerFarmTab {
     }
 
     void startInventoryRefresh() {
+        if (savingStockCount || savingItemMutation) {
+            inventoryRefreshQueued = true;
+            return;
+        }
         if (refreshingInventory) {
             inventoryRefreshQueued = true;
             showInventoryRefreshState(
@@ -152,8 +159,8 @@ public class InventoryTab implements FlowerFarmTab {
                     FarmUi.Tone.INFO);
             return;
         }
+        inventoryRefreshQueued = false;
         refreshingInventory = true;
-        inventoryRefreshFailure = null;
         refreshBtn.setEnabled(false);
         updateInventoryActions();
         showInventoryRefreshState("Refreshing inventory…",
@@ -175,6 +182,9 @@ public class InventoryTab implements FlowerFarmTab {
                     if (!inventoryRefreshQueued) {
                         ItemSelection selection = selectedItemIdentity();
                         replaceInventoryItems(items, selection);
+                        inventoryNeedsRefresh = false;
+                        inventoryRefreshFailure = null;
+                        savedInventoryOutcome = null;
                         if (host != null) {
                             host.setStatus("Inventory refreshed: " + items.size() + " item(s).");
                         }
@@ -204,14 +214,19 @@ public class InventoryTab implements FlowerFarmTab {
     }
 
     private void failInventoryRefresh(Throwable failure) {
+        inventoryNeedsRefresh = true;
+        pendingCountNext = null;
         String detail = FarmUi.actionableError("Refreshing inventory", failure);
-        String recovery = detail
-                + " Existing rows and filters were kept; retry when the data source is ready.";
+        String recovery = (savedInventoryOutcome == null ? "" : savedInventoryOutcome + " ")
+                + detail + " Existing rows and filters were kept; retry when the data source is ready."
+                + " Refresh inventory before editing, deleting, or recording another count."
+                + (savedInventoryOutcome == null ? "" : " Do not repeat the saved action.");
         inventoryRefreshFailure = recovery;
-        showInventoryRefreshState("Inventory refresh failed · retry",
+        showInventoryRefreshState(inventoryRecoveryTitle(),
                 recovery, FarmUi.Tone.DANGER);
         if (host != null) {
-            host.setStatus("Inventory refresh failed. Existing rows were kept; review the status and retry.");
+            host.setStatus((savedInventoryOutcome == null ? "" : savedInventoryOutcome + " ")
+                    + "Inventory refresh failed. Existing rows were kept; review the status and retry the refresh.");
         }
     }
 
@@ -220,13 +235,25 @@ public class InventoryTab implements FlowerFarmTab {
         refreshBtn.setEnabled(true);
         updateInventoryActions();
         if (inventoryRefreshFailure != null) {
-            showInventoryRefreshState("Inventory refresh failed · retry",
+            showInventoryRefreshState(inventoryRecoveryTitle(),
                     inventoryRefreshFailure, FarmUi.Tone.DANGER);
         }
         if (inventoryRefreshQueued) {
             inventoryRefreshQueued = false;
             startInventoryRefresh();
+        } else {
+            continueStockCountWhenReady();
         }
+    }
+
+    private String inventoryRecoveryTitle() {
+        return savedInventoryOutcome == null ? "Inventory refresh failed · retry"
+                : savedInventoryOutcome + " Refresh inventory.";
+    }
+
+    private boolean inventoryMutationAvailable() {
+        return canWrite && !savingStockCount && !savingItemMutation
+                && !refreshingInventory && !inventoryNeedsRefresh && !runningDocument;
     }
 
     private void showInventoryRefreshState(String message, String description,
@@ -296,20 +323,27 @@ public class InventoryTab implements FlowerFarmTab {
     private void buildUI() {
         panel = FarmUi.page();
 
-        statusLabel = FarmUi.statusBadge("Loading inventory…", FarmUi.Tone.NEUTRAL);
+        statusLabel = FarmUi.wrappingStatusBadge("Loading inventory…", FarmUi.Tone.NEUTRAL);
         accessLabel = FarmUi.statusBadge("Checking access…", FarmUi.Tone.NEUTRAL);
-        documentStatusLabel = FarmUi.statusBadge("Reports ready", FarmUi.Tone.NEUTRAL);
+        documentStatusLabel = FarmUi.wrappingStatusBadge("Reports ready", FarmUi.Tone.NEUTRAL);
         documentStatusLabel.setName("inventory.documentStatus");
         documentStatusLabel.getAccessibleContext().setAccessibleName(
                 "Inventory report and export status");
         refreshBtn = FarmUi.secondaryButton("Refresh");
         refreshBtn.setToolTipText("Reload inventory from the database");
         refreshBtn.addActionListener(e -> refreshData());
-        panel.add(FarmUi.pageHeader(
+        JPanel header = new JPanel(new BorderLayout(0, FarmUi.CONTROL_GAP));
+        header.setOpaque(false);
+        header.add(FarmUi.pageHeader(
                 "Inventory",
                 "Search stock, review pricing, and prepare cooler restock sheets.",
-                FarmUi.toolbar(accessLabel, statusLabel,
-                        documentStatusLabel, refreshBtn)), BorderLayout.NORTH);
+                FarmUi.toolbar(accessLabel, refreshBtn)), BorderLayout.NORTH);
+        JPanel feedback = new JPanel(new BorderLayout(0, FarmUi.CONTROL_GAP));
+        feedback.setOpaque(false);
+        feedback.add(statusLabel, BorderLayout.NORTH);
+        feedback.add(documentStatusLabel, BorderLayout.CENTER);
+        header.add(feedback, BorderLayout.CENTER);
+        panel.add(header, BorderLayout.NORTH);
 
         searchField = FarmUi.searchField(
                 "Inventory search",
@@ -435,6 +469,7 @@ public class InventoryTab implements FlowerFarmTab {
         });
 
         JScrollPane tableScroll = FarmUi.tableScroll(inventoryTable);
+        tableScroll.setPreferredSize(new Dimension(720, 220));
         tableCardLayout = new CardLayout();
         tableState = new JPanel(tableCardLayout);
         tableState.add(tableScroll, "table");
@@ -443,7 +478,7 @@ public class InventoryTab implements FlowerFarmTab {
                 "Add the first flower or farm product in Add item; it will appear here after save.");
         tableState.add(inventoryEmptyState.component(), "empty");
 
-        JPanel content = new JPanel(new BorderLayout(0, FarmUi.SECTION_GAP));
+        JPanel content = new InventoryWorkspace();
         content.setOpaque(false);
         content.add(FarmUi.section(
                 "Find stock",
@@ -482,17 +517,46 @@ public class InventoryTab implements FlowerFarmTab {
         exportBtn.addActionListener(e -> exportVisibleToCsv());
         reviewNameConflictBtn.addActionListener(e -> reviewExistingNameConflict());
 
-        JPanel actionPanel = FarmUi.toolbar(
-                stockCountBtn, editBtn, deleteBtn, reviewNameConflictBtn,
-                reorderBtn, priceListBtn, exportBtn);
+        JPanel actionPanel = new JPanel(new GridLayout(0, 1, 0, FarmUi.CONTROL_GAP));
+        actionPanel.setOpaque(false);
+        actionPanel.add(FarmUi.toolbar(stockCountBtn, editBtn, deleteBtn, reviewNameConflictBtn));
+        actionPanel.add(FarmUi.toolbar(reorderBtn, priceListBtn, exportBtn));
         content.add(FarmUi.section(
                 "Inventory actions",
                 "Select a row to confirm the Count, Edit, or Delete target. Exports remain available.",
                 actionPanel), BorderLayout.SOUTH);
 
-        panel.add(content, BorderLayout.CENTER);
+        JScrollPane workspaceScroll = new JScrollPane(content,
+                ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED,
+                ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
+        workspaceScroll.setName("inventory.workspaceScroll");
+        workspaceScroll.setBorder(BorderFactory.createEmptyBorder());
+        workspaceScroll.getViewport().setOpaque(false);
+        workspaceScroll.setOpaque(false);
+        workspaceScroll.getVerticalScrollBar().setUnitIncrement(FarmUi.TABLE_ROW_HEIGHT);
+        panel.add(workspaceScroll, BorderLayout.CENTER);
         updateInventoryActions();
         applyRolePermissions(host == null || host.canMutateData());
+    }
+
+    private static final class InventoryWorkspace extends JPanel implements Scrollable {
+        private static final long serialVersionUID = 1L;
+
+        private InventoryWorkspace() {
+            super(new BorderLayout(0, FarmUi.SECTION_GAP));
+        }
+
+        @Override public Dimension getPreferredScrollableViewportSize() { return getPreferredSize(); }
+        @Override public int getScrollableUnitIncrement(Rectangle visible, int orientation, int direction) {
+            return FarmUi.TABLE_ROW_HEIGHT;
+        }
+        @Override public int getScrollableBlockIncrement(Rectangle visible, int orientation, int direction) {
+            return Math.max(FarmUi.TABLE_ROW_HEIGHT, visible.height - FarmUi.TABLE_ROW_HEIGHT);
+        }
+        @Override public boolean getScrollableTracksViewportWidth() { return true; }
+        @Override public boolean getScrollableTracksViewportHeight() {
+            return getParent() != null && getParent().getHeight() >= getPreferredSize().height;
+        }
     }
 
     private void updateInventoryActions() {
@@ -501,8 +565,7 @@ public class InventoryTab implements FlowerFarmTab {
         }
         Item selectedItem = selectedItemForAction();
         boolean selected = selectedItem != null;
-        GuiPermissions.setWritable(canWrite && !savingStockCount && !savingItemMutation
-                        && !refreshingInventory && !runningDocument && selected,
+        GuiPermissions.setWritable(inventoryMutationAvailable() && selected,
                 stockCountBtn, editBtn, deleteBtn);
         boolean documentsReady = !savingStockCount && !savingItemMutation
                 && !refreshingInventory && !runningDocument;
@@ -543,6 +606,11 @@ public class InventoryTab implements FlowerFarmTab {
                 editBtn.setToolTipText("Edit “" + selectedItem.getName() + "”.");
                 deleteBtn.setToolTipText("Permanently delete “" + selectedItem.getName() + "”.");
             }
+            if (inventoryRefreshFailure != null && !refreshingInventory
+                    && !savingStockCount && !savingItemMutation) {
+                showInventoryRefreshState(inventoryRecoveryTitle(),
+                        inventoryRefreshFailure, FarmUi.Tone.DANGER);
+            }
         }
     }
 
@@ -563,12 +631,13 @@ public class InventoryTab implements FlowerFarmTab {
         if (!GuiPermissions.requireWrite(host, panel, "record inventory counts")) {
             return;
         }
-        if (savingStockCount || inventoryTable.getSelectedRow() < 0) {
+        if (!inventoryMutationAvailable() || inventoryTable.getSelectedRow() < 0) {
             return;
         }
         int viewRow = inventoryTable.getSelectedRow();
         int modelRow = inventoryTable.convertRowIndexToModel(viewRow);
         Item current = currentItems.get(modelRow);
+        InventorySnapshot reviewed = InventorySnapshot.from(current);
         ItemSelection nextItem = null;
         if (viewRow + 1 < inventoryTable.getRowCount()) {
             int nextModelRow = inventoryTable.convertRowIndexToModel(viewRow + 1);
@@ -594,6 +663,11 @@ public class InventoryTab implements FlowerFarmTab {
         boolean saveAndContinue = nextItem != null && choice == 0;
         boolean save = choice == 0 || (nextItem != null && choice == 1);
         if (save) {
+            if (!reviewedInventoryStillSelected(reviewed)) {
+                retryCountItem = ItemSelection.from(current);
+                retryCountQuantity = countView.countedQuantity();
+                return;
+            }
             startSelectedStockCountSave(
                     countView.countedQuantity(), countView.variance(), saveAndContinue);
         }
@@ -602,7 +676,7 @@ public class InventoryTab implements FlowerFarmTab {
     /** Saves one captured physical count without blocking Swing's event thread. */
     void startSelectedStockCountSave(int countedQuantity, int variance,
                                      boolean continueToNext) {
-        if (savingStockCount || inventoryTable == null
+        if (!inventoryMutationAvailable() || inventoryTable == null
                 || inventoryTable.getSelectedRow() < 0) {
             return;
         }
@@ -640,54 +714,66 @@ public class InventoryTab implements FlowerFarmTab {
                         ? itemPresenter.setQuantity(modelRow, current, countedQuantity)
                         : itemPresenter.setQuantityById(
                                 current.getId(), current, countedQuantity);
-                return new StockCountResult(saved, List.copyOf(itemPresenter.items()),
+                return new StockCountResult(saved, readInventoryAfterMutation(),
                         capturedNext, variance);
             }
 
             @Override
             protected void done() {
+                StockCountResult result;
                 try {
-                    completeStockCount(get());
+                    result = get();
                 } catch (InterruptedException exception) {
                     Thread.currentThread().interrupt();
                     failStockCount(currentIdentity, countedQuantity, current, exception);
+                    return;
                 } catch (java.util.concurrent.ExecutionException exception) {
                     failStockCount(currentIdentity, countedQuantity, current,
                             exception.getCause() == null ? exception : exception.getCause());
-                } catch (RuntimeException exception) {
-                    failStockCount(currentIdentity, countedQuantity, current, exception);
+                    return;
                 }
+                completeStockCount(result);
             }
         }.execute();
     }
 
     private void completeStockCount(StockCountResult result) {
-        finishStockCountControls();
-        retryCountItem = null;
-        retryCountQuantity = null;
+        if (retryCountItem != null && retryCountItem.matches(result.saved())) {
+            retryCountItem = null;
+            retryCountQuantity = null;
+        }
         ItemSelection selection = result.nextItem() == null
                 ? ItemSelection.from(result.saved()) : result.nextItem();
-        replaceInventoryItems(result.items(), selection);
-        if (host != null) {
-            host.refreshAll();
-        }
+        boolean refreshed = applySavedInventory(result.inventory(), selection,
+                "Count for “" + result.saved().getName() + "” was saved.");
+        finishStockCountControls();
         String message = "Counted “" + result.saved().getName() + "”: "
                 + result.saved().getQuantity() + " " + result.saved().getUnit()
                 + " on hand" + varianceSummary(result.variance()) + ".";
-        FarmUi.updateStatusBadge(statusLabel,
+        if (refreshed) {
+            showInventoryRefreshState(
                 compactName(result.saved().getName()) + " saved · "
                         + result.saved().getQuantity() + " " + result.saved().getUnit(),
-                FarmUi.Tone.SUCCESS);
-        statusLabel.getAccessibleContext().setAccessibleName(
-                "Inventory results and selected product");
-        statusLabel.getAccessibleContext().setAccessibleDescription(message);
-        statusLabel.setToolTipText(message);
-        if (host != null) {
-            host.setStatus(message);
+                    message, FarmUi.Tone.SUCCESS);
+            pendingCountNext = result.nextItem();
         }
-        if (result.nextItem() != null && inventoryTable.getSelectedRow() >= 0
-                && panel.isShowing()) {
-            SwingUtilities.invokeLater(this::recordStockCount);
+        notifyInventorySaved(message);
+        continueStockCountWhenReady();
+    }
+
+    private void continueStockCountWhenReady() {
+        if (pendingCountNext == null || refreshingInventory || inventoryRefreshQueued) {
+            return;
+        }
+        ItemSelection next = pendingCountNext;
+        pendingCountNext = null;
+        if (inventoryMutationAvailable() && panel.isShowing()) {
+            SwingUtilities.invokeLater(() -> {
+                Item selected = selectedItemForAction();
+                if (panel.isShowing() && selected != null && next.matches(selected)) {
+                    recordStockCount();
+                }
+            });
         }
     }
 
@@ -715,6 +801,7 @@ public class InventoryTab implements FlowerFarmTab {
             JOptionPane.showMessageDialog(panel, recovery,
                     "Count not saved", JOptionPane.ERROR_MESSAGE);
         }
+        resumeQueuedInventoryRefresh();
     }
 
     private void finishStockCountControls() {
@@ -728,11 +815,11 @@ public class InventoryTab implements FlowerFarmTab {
         inventoryTable.setEnabled(enabled);
         searchField.setEnabled(enabled);
         lowStockOnlyBtn.setEnabled(enabled);
-        refreshBtn.setEnabled(enabled);
+        refreshBtn.setEnabled(enabled && !refreshingInventory);
         updateInventoryActions();
     }
 
-    private record StockCountResult(Item saved, List<Item> items,
+    private record StockCountResult(Item saved, InventoryReadback inventory,
                                     ItemSelection nextItem, int variance) {
     }
 
@@ -1012,6 +1099,9 @@ public class InventoryTab implements FlowerFarmTab {
         if (!GuiPermissions.requireWrite(host, panel, "edit inventory")) {
             return;
         }
+        if (!inventoryMutationAvailable()) {
+            return;
+        }
         int viewRow = inventoryTable.getSelectedRow();
         if (viewRow < 0) {
             dialogs.showMessage(panel, "Please select a row to edit.",
@@ -1021,6 +1111,7 @@ public class InventoryTab implements FlowerFarmTab {
         int modelRow = inventoryTable.convertRowIndexToModel(viewRow);
 
         Item current = currentItems.get(modelRow);
+        InventorySnapshot reviewed = InventorySnapshot.from(current);
         InventoryItemFormView editor = new InventoryItemFormView();
         editor.setItem(current);
         ItemSelection identity = ItemSelection.from(current);
@@ -1043,7 +1134,13 @@ public class InventoryTab implements FlowerFarmTab {
             try {
                 InventoryItemPresenter.ItemDraft draft = editor.draft();
                 itemPresenter.toItem(draft);
-                startItemEditSave(modelRow, current, identity, draft);
+                if (!reviewedInventoryStillSelected(reviewed)) {
+                    retryEditItem = identity;
+                    retryEditDraft = draft;
+                    return;
+                }
+                startItemEditSave(inventoryTable.convertRowIndexToModel(
+                        inventoryTable.getSelectedRow()), current, identity, draft);
                 return;
             } catch (InventoryItemPresenter.FieldValidationException exception) {
                 editor.markError(exception.field(), exception.getMessage());
@@ -1061,7 +1158,7 @@ public class InventoryTab implements FlowerFarmTab {
 
     /** Saves one captured inventory edit without blocking Swing's event thread. */
     void startSelectedItemEdit(InventoryItemPresenter.ItemDraft draft) {
-        if (savingItemMutation || inventoryTable == null
+        if (!inventoryMutationAvailable() || inventoryTable == null
                 || inventoryTable.getSelectedRow() < 0) {
             return;
         }
@@ -1078,7 +1175,7 @@ public class InventoryTab implements FlowerFarmTab {
 
     private void startItemEditSave(int modelRow, Item current, ItemSelection identity,
                                    InventoryItemPresenter.ItemDraft draft) {
-        if (savingItemMutation) {
+        if (!inventoryMutationAvailable()) {
             return;
         }
         clearNameConflictHandoff();
@@ -1098,34 +1195,39 @@ public class InventoryTab implements FlowerFarmTab {
                 Item saved = current.getId() == null
                         ? itemPresenter.update(modelRow, draft)
                         : itemPresenter.updateById(current.getId(), draft);
-                return new ItemMutationResult(saved, List.copyOf(itemPresenter.items()));
+                return new ItemMutationResult(saved, readInventoryAfterMutation());
             }
 
             @Override
             protected void done() {
+                ItemMutationResult result;
                 try {
-                    ItemMutationResult result = get();
-                    finishItemMutation();
+                    result = get();
+                } catch (InterruptedException exception) {
+                    Thread.currentThread().interrupt();
+                    failItemEdit(identity, draft, current, exception);
+                    return;
+                } catch (java.util.concurrent.ExecutionException exception) {
+                    failItemEdit(identity, draft, current,
+                            exception.getCause() == null ? exception : exception.getCause());
+                    return;
+                }
+                if (retryEditItem != null && retryEditItem.matches(current)) {
                     retryEditItem = null;
                     retryEditDraft = null;
-                    clearNameConflictHandoff();
-                    replaceInventoryItems(result.items(), ItemSelection.from(result.saved()));
-                    if (host != null) {
-                        host.refreshAll();
-                        host.setStatus("Updated “" + result.saved().getName()
-                                + "”. Inventory views are refreshed.");
-                    }
+                }
+                clearNameConflictHandoff();
+                boolean refreshed = applySavedInventory(result.inventory(),
+                        ItemSelection.from(result.saved()),
+                        "Edit for “" + result.saved().getName() + "” was saved.");
+                finishItemMutation();
+                if (refreshed) {
                     showInventoryRefreshState(
                             compactName(result.saved().getName()) + " updated",
                             "The inventory edit was saved and the updated product remains selected.",
                             FarmUi.Tone.SUCCESS);
-                } catch (InterruptedException exception) {
-                    Thread.currentThread().interrupt();
-                    failItemEdit(identity, draft, current, exception);
-                } catch (java.util.concurrent.ExecutionException exception) {
-                    failItemEdit(identity, draft, current,
-                            exception.getCause() == null ? exception : exception.getCause());
                 }
+                notifyInventorySaved("Updated “" + result.saved().getName() + "”. The edit was saved.");
             }
         }.execute();
     }
@@ -1169,6 +1271,7 @@ public class InventoryTab implements FlowerFarmTab {
                     "Item not saved", JOptionPane.ERROR_MESSAGE);
             SwingUtilities.invokeLater(() -> editSelected(null));
         }
+        resumeQueuedInventoryRefresh();
     }
 
     private void reviewExistingNameConflict() {
@@ -1195,6 +1298,9 @@ public class InventoryTab implements FlowerFarmTab {
         if (!GuiPermissions.requireWrite(host, panel, "delete inventory items")) {
             return;
         }
+        if (!inventoryMutationAvailable()) {
+            return;
+        }
         int viewRow = inventoryTable.getSelectedRow();
         if (viewRow < 0) {
             JOptionPane.showMessageDialog(panel, "Please select a row to delete.",
@@ -1203,6 +1309,7 @@ public class InventoryTab implements FlowerFarmTab {
         }
         int modelRow = inventoryTable.convertRowIndexToModel(viewRow);
         Item current = currentItems.get(modelRow);
+        InventorySnapshot reviewed = InventorySnapshot.from(current);
         String name = current.getName();
 
         int confirm = dialogs.showConfirm(panel,
@@ -1211,14 +1318,15 @@ public class InventoryTab implements FlowerFarmTab {
                         "This permanently removes the product from inventory and cannot be undone.",
                         FarmUi.Tone.DANGER),
                 "Delete inventory item?", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
-        if (confirm == JOptionPane.YES_OPTION) {
-            startItemDelete(modelRow, current, ItemSelection.from(current));
+        if (confirm == JOptionPane.YES_OPTION && reviewedInventoryStillSelected(reviewed)) {
+            startItemDelete(inventoryTable.convertRowIndexToModel(
+                    inventoryTable.getSelectedRow()), current, ItemSelection.from(current));
         }
     }
 
     /** Deletes the currently selected captured item without blocking Swing. */
     void startSelectedItemDelete() {
-        if (savingItemMutation || inventoryTable == null
+        if (!inventoryMutationAvailable() || inventoryTable == null
                 || inventoryTable.getSelectedRow() < 0) {
             return;
         }
@@ -1228,7 +1336,7 @@ public class InventoryTab implements FlowerFarmTab {
     }
 
     private void startItemDelete(int modelRow, Item current, ItemSelection identity) {
-        if (savingItemMutation) {
+        if (!inventoryMutationAvailable()) {
             return;
         }
         savingItemMutation = true;
@@ -1238,39 +1346,49 @@ public class InventoryTab implements FlowerFarmTab {
                 "The selected product is locked until the database confirms deletion.",
                 FarmUi.Tone.INFO);
 
-        new SwingWorker<List<Item>, Void>() {
+        new SwingWorker<InventoryReadback, Void>() {
             @Override
-            protected List<Item> doInBackground() {
+            protected InventoryReadback doInBackground() {
                 if (current.getId() == null) {
                     itemPresenter.delete(modelRow);
                 } else {
                     itemPresenter.deleteById(current.getId());
                 }
-                return List.copyOf(itemPresenter.items());
+                return readInventoryAfterMutation();
             }
 
             @Override
             protected void done() {
+                InventoryReadback result;
                 try {
-                    List<Item> items = get();
-                    finishItemMutation();
-                    replaceInventoryItems(items, null);
-                    if (host != null) {
-                        host.refreshAll();
-                        host.setStatus("Deleted “" + current.getName()
-                                + "”. Inventory views are refreshed.");
-                    }
+                    result = get();
+                } catch (InterruptedException exception) {
+                    Thread.currentThread().interrupt();
+                    failItemDelete(identity, current, exception);
+                    return;
+                } catch (java.util.concurrent.ExecutionException exception) {
+                    failItemDelete(identity, current,
+                            exception.getCause() == null ? exception : exception.getCause());
+                    return;
+                }
+                if (retryCountItem != null && retryCountItem.matches(current)) {
+                    retryCountItem = null;
+                    retryCountQuantity = null;
+                }
+                if (retryEditItem != null && retryEditItem.matches(current)) {
+                    retryEditItem = null;
+                    retryEditDraft = null;
+                }
+                boolean refreshed = applySavedInventory(result, null,
+                        "“" + current.getName() + "” was deleted.");
+                finishItemMutation();
+                if (refreshed) {
                     showInventoryRefreshState(
                             compactName(current.getName()) + " deleted",
                             "The database confirmed deletion. No replacement product is selected.",
                             FarmUi.Tone.SUCCESS);
-                } catch (InterruptedException exception) {
-                    Thread.currentThread().interrupt();
-                    failItemDelete(identity, current, exception);
-                } catch (java.util.concurrent.ExecutionException exception) {
-                    failItemDelete(identity, current,
-                            exception.getCause() == null ? exception : exception.getCause());
                 }
+                notifyInventorySaved("Deleted “" + current.getName() + "”. Deletion was saved.");
             }
         }.execute();
     }
@@ -1292,6 +1410,7 @@ public class InventoryTab implements FlowerFarmTab {
             JOptionPane.showMessageDialog(panel, recovery,
                     "Item not deleted", JOptionPane.ERROR_MESSAGE);
         }
+        resumeQueuedInventoryRefresh();
     }
 
     private void finishItemMutation() {
@@ -1302,7 +1421,98 @@ public class InventoryTab implements FlowerFarmTab {
         updateInventoryActions();
     }
 
-    private record ItemMutationResult(Item saved, List<Item> items) {
+    /** Acknowledged writes stay successful even if their separate readback fails. */
+    private InventoryReadback readInventoryAfterMutation() {
+        try {
+            return new InventoryReadback(List.copyOf(itemPresenter.items()), null);
+        } catch (RuntimeException failure) {
+            return new InventoryReadback(null, failure);
+        }
+    }
+
+    private boolean applySavedInventory(InventoryReadback inventory, ItemSelection selection,
+                                         String outcome) {
+        savedInventoryOutcome = outcome;
+        inventoryNeedsRefresh = true;
+        if (inventory.failure() != null) {
+            failInventoryRefresh(inventory.failure());
+            return false;
+        }
+        try {
+            replaceInventoryItems(inventory.items(), selection);
+            inventoryNeedsRefresh = false;
+            inventoryRefreshFailure = null;
+            return true;
+        } catch (RuntimeException failure) {
+            failInventoryRefresh(failure);
+            return false;
+        }
+    }
+
+    private void notifyInventorySaved(String message) {
+        if (host != null) {
+            try {
+                host.refreshAll();
+                if (inventoryRefreshFailure == null) {
+                    host.setStatus(message);
+                }
+            } catch (RuntimeException failure) {
+                failInventoryRefresh(failure);
+                updateInventoryActions();
+            }
+        }
+        resumeQueuedInventoryRefresh();
+    }
+
+    private void resumeQueuedInventoryRefresh() {
+        if (inventoryRefreshQueued && !refreshingInventory
+                && !savingStockCount && !savingItemMutation) {
+            startInventoryRefresh();
+        }
+    }
+
+    private boolean reviewedInventoryStillSelected(InventorySnapshot reviewed) {
+        Item selected = selectedItemForAction();
+        if (inventoryMutationAvailable() && selected != null
+                && reviewed.equals(InventorySnapshot.from(selected))) {
+            return true;
+        }
+        if (host != null) {
+            host.setStatus("Inventory or access changed while the dialog was open. "
+                    + "No change was submitted. Reselect the product and review current inventory.");
+        }
+        return false;
+    }
+
+    /** Includes writes whose database result has not reached the desktop yet. */
+    public boolean hasPendingSave() {
+        return savingStockCount || savingItemMutation;
+    }
+
+    public String applicationExitWarning() {
+        if (hasPendingSave()) {
+            return "An inventory count, edit, or deletion is still running. "
+                    + "Wait for its result before exiting; saved changes are not undone by exit.";
+        }
+        if (retryCountQuantity != null || retryEditDraft != null) {
+            return "Inventory has an unfinished count or item edit retained for review. "
+                    + "Its entered values will be lost if you exit.";
+        }
+        return null;
+    }
+
+    private record InventoryReadback(List<Item> items, RuntimeException failure) {
+    }
+
+    private record InventorySnapshot(Long id, String name, String category, double price,
+                                      String unit, double cost, int quantity, String notes) {
+        private static InventorySnapshot from(Item item) {
+            return new InventorySnapshot(item.getId(), item.getName(), item.getCategory(),
+                    item.getPrice(), item.getUnit(), item.getCost(), item.getQuantity(), item.getNotes());
+        }
+    }
+
+    private record ItemMutationResult(Item saved, InventoryReadback inventory) {
     }
 
     private record ItemSelection(Long id, String name, String category, String unit) {
