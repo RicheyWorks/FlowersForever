@@ -1,5 +1,28 @@
 # Latest direction — September 22, 2026
 
+## Latest research: CSRBT harness ideas
+
+The owner also requested another look at the CSRBT ecosystem. The updated
+`docs/HARNESS_ECOSYSTEM.md` compares CSRBT's clean local/GitHub HEAD
+`80c3f2c250fb43e67b6970d49c1be58c95d30136` (eight commits after the prior review)
+with FlowersForever `4c74375`, using pinned source references and concrete
+acceptance criteria. This is research/documentation; no new harness feature or
+CSRBT sweep result is claimed.
+
+Recommended harness follow-up: stable advertised selectors and observable recovery
+outputs through the public gateway. Current bridge discovery prefers a unique
+changing button label over its stable component name and silently filters ambiguous
+supplemental outputs. Preserve context-token and sensitive-read protections while
+auditing those cases. Other scoped ideas: targeted mutation proof with current
+catalogues, Java/Node/Python evidence scope, and semantic persistence/export checks
+with controlled clocks. Existing floors, hashes, deadline/replay handling and
+semantic journeys are credited rather than proposed again.
+
+This adds a harness workstream alongside the Knowledge Log draft candidate below.
+The retained unknown-execution/data-version/diff/cross-transport protocol backlog
+still needs separately defined semantics. Read-only CSRBT review did not reproduce
+its committed browser/mutation results or launch any sibling-engine checks.
+
 ## Latest completed work: Season Planner recovery
 
 Season Planner now retains exact raw planting forms independently for saved-record
