@@ -221,6 +221,16 @@ rows, keeping the Refresh action beside the title. The workspace scrolls vertica
 at compact sizes; a usable table height and separate stock/report action rows keep
 inventory rows and every action reachable.
 
+Retained inventory drafts use canonical product-ID/operation keys; idless legacy
+items use name/category/unit. Immutable count/edit entries retain raw fields,
+their original product snapshot, and any duplicate-name conflict. Refresh never
+prunes missing drafts. Acknowledged writes clear only the captured operation;
+deletion clears only captured drafts for that product. Reference checks reject
+modal decisions made before a draft was changed, discarded, or resubmitted.
+The retained-draft review view is read-only and supports copy, exact-product
+navigation, and a separate confirmed local discard. Saved baseline changes are
+shown during retry; draft maps remain session-local and participate in exit guards.
+
 ---
 
 **This architecture respects the existing Spring Boot + service layer** while

@@ -508,6 +508,29 @@ Closing or signing out warns about retained inventory drafts and running writes.
 Exiting while a write is running cannot undo records already saved. Check the
 product when you reopen before trying that action again.
 
+Failed counts and item edits are retained separately for each product. Saving
+one count or edit clears only that draft, so unfinished work for other products
+remains available through search, filtering, refresh, and product renames.
+The saved product ID keeps a draft from attaching to a different product with
+the same name. Reopening a retained draft restores its entered values; **Cancel**
+keeps that draft and any corrections for later. Cancelling a new entry still
+closes it without retaining work.
+
+Choose **Review retained drafts…** in Inventory actions to select a count or edit,
+read and copy its entered values, and compare the latest loaded saved details.
+**Open product** finds the original product even when it is filtered out or
+renamed, without saving anything. If it is missing, its draft remains readable.
+**Discard draft** asks before removing only the selected draft; it never changes
+saved stock. VIEWER sessions may review and discard these local drafts.
+
+When saved product details change, reopening its draft warns before retrying.
+In particular, an item edit includes quantity, and a count was entered in the
+selling unit shown in the draft: compare current values and recount if necessary.
+Deleting a product also discards its local drafts after the database confirms
+deletion, and the confirmation explains that consequence. Drafts stay in this
+running desktop session; exit warnings include drafts for missing or filtered
+products. They are not restored after the application exits.
+
 Low-stock and price-list reports also build in the background from a single
 inventory snapshot. While a report or export is running, its controls are
 locked to prevent duplicate work, but the current rows, search, sorting, and

@@ -17,7 +17,6 @@ import javax.swing.JToggleButton;
 import javax.swing.SwingUtilities;
 import java.awt.Component;
 import java.awt.Container;
-import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -251,16 +250,7 @@ class InventoryMutationRecoveryTest {
     }
 
     private static void assertNoRetryDraft(InventoryTab tab) {
-        for (String fieldName : List.of("retryCountQuantity", "retryCountItem",
-                "retryEditDraft", "retryEditItem")) {
-            try {
-                Field field = InventoryTab.class.getDeclaredField(fieldName);
-                field.setAccessible(true);
-                assertThat(field.get(tab)).as(fieldName).isNull();
-            } catch (ReflectiveOperationException exception) {
-                throw new AssertionError("Cannot inspect mutation retry state", exception);
-            }
-        }
+        assertThat(tab.applicationExitWarning()).as("no retained draft or pending write").isNull();
     }
 
     private static void assertMutationButtonsDisabled(Component root) {

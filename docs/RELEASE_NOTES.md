@@ -1,5 +1,18 @@
 # FlowersForever private-preview notes
 
+## September 22, 2026 — Keep inventory drafts with their product
+
+- Retains failed counts and edits per saved product and operation, including
+  work hidden by filters or missing from a later inventory reload.
+- Restores drafts through product renames without attaching them to a same-name
+  replacement. Saving one draft preserves other products and the other draft type.
+- Adds **Review retained drafts…** with copyable entered values, current saved
+  details, a route to the original product, and confirmed single-draft discard.
+- Keeps corrections when cancelling a reopened draft, warns when its saved
+  baseline changed, and retains duplicate-name notices with the affected edit.
+- Rejects older modal save/discard decisions after newer draft changes and
+  explains draft loss before deleting a product. Exit warnings include all drafts.
+
 ## September 22, 2026 — Reliable inventory recovery and release checks
 
 - Keeps acknowledged inventory counts, edits, and deletions visibly saved when

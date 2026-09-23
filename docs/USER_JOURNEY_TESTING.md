@@ -4,6 +4,22 @@ See [HARNESS_AUDIT.md](HARNESS_AUDIT.md) for the current human-action matrix,
 recursive surface inventory, findings, verification evidence, and explicit
 OS-level smoke-test limits.
 
+## Inventory drafts across products
+
+`InventoryPerProductDraftTest` verifies independent count/edit restoration and
+acknowledgement, exact raw fields, renamed/reordered/filtered/missing products,
+same-name replacements with different IDs, and nested modal corrections. An old
+Save decision must not submit over values kept by a newer Cancel decision.
+`InventoryDraftReviewActionsTest` exercises read/copy, exact-product navigation,
+single-draft confirmed discard, VIEWER local recovery, and deletion consequences.
+
+`InventoryDraftReviewVisualTest` renders the reusable review dialog in light and
+dark themes at 580×300 and 700×380. Long product identity, malformed edit text,
+and missing-product values remain selectable and scroll-reachable. Dropdown
+choice changes the detail text and resets its scroll position. Evidence is
+under `target/ui-previews/inventory-drafts`; this remains headless component
+verification, not native dialog acceptance.
+
 ## Inventory saved results and recovery
 
 `InventoryMutationRecoveryTest` has fourteen cases for acknowledged count/edit/

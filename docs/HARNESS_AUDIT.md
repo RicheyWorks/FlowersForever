@@ -2,6 +2,47 @@
 
 Audit date: 2026-09-04
 
+## Per-product inventory drafts — September 22, 2026
+
+The follow-up replaces the single count/edit retry slots with separate drafts
+keyed by saved product ID and operation. A different SKU's failure, rejected
+modal decision, successful save, or deletion cannot replace another product's
+draft. Same-ID renames retain identity; a new same-name product does not inherit
+the missing original's work. Refresh, filtering, handoffs, and permissions do
+not prune drafts. Only the acknowledged operation's captured draft is cleared,
+before any failed readback can affect its saved outcome.
+
+Retained drafts include the original product snapshot, complete raw edit fields
+or count/unit, and their own duplicate-name conflict. Reopened drafts keep
+corrections on Cancel/X. If loaded saved details changed, the retry form warns
+and the review dialog shows full saved and entered values. The count warning
+also preserves its original unit. These guards do not replace transactional
+version checks against other clients, and drafts remain local to the running app.
+
+The new review dialog lists operation and ID before potentially long product
+names, offers copyable plain-text values even for missing products, and navigates
+to the exact original product without writing. VIEWER can inspect or discard
+local drafts. Discard confirms exactly one captured entry; reference checks
+reject a decision made before a newer correction, discard, or save. The same
+check prevents an older count/edit modal from submitting over newer retained
+values. Delete describes affected drafts and clears only acknowledged product
+work. Exit warnings include every retained entry, including missing products.
+
+Focused checks passed 83 cases, followed by 50 final recovery/render cases.
+New tests cover multiple products and operations, exact field spelling, rename,
+filter/refresh, missing/same-name replacements, nested modal corrections, local
+review/discard, viewer recovery, and deletion acknowledgement. Four standalone
+light/dark renders at 580×300 and 700×380 verify selection, complete copyable
+text, and scroll access through long/malformed/missing-product data. Images are
+in `target/ui-previews/inventory-drafts`. Final clean isolated evidence is kept
+in `dist/harness-evidence/inventory-drafts-quality.log` and `latest.json`.
+
+The clean run passed 1,669 tests plus two packaged-JAR checks with zero failures,
+errors, or skips, and met all 173 suite/phase floors. Coverage is 86.99% lines and
+69.96% branches. Checkstyle and SpotBugs report zero findings; both SBOM formats
+were generated. A separate `--check` confirmed report/source consistency for
+`6bc40b12b5b93dbc070c75988508dd8c91f4840b13eb4cf3d466e5166fe500c1`.
+
 ## Inventory acknowledgements and release isolation — September 22, 2026
 
 Inventory count, edit, and delete workers previously committed their write and

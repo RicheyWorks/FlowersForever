@@ -1,5 +1,52 @@
 # Latest direction — September 22, 2026
 
+## Latest completed work: per-product inventory drafts
+
+The owner's "next" continued the retained-draft limitation identified in the
+previous pass. Count and edit drafts now use canonical product-ID/operation
+keys, preserving other products and the other operation when one save succeeds.
+Failed/rejected work survives search, refresh, renames, missing products, and
+same-name replacements with different IDs. Raw edit fields are preserved exactly.
+Idless legacy entries use name/category/unit as their fallback identity.
+
+**Review retained drafts…** lists each operation and product ID, shows copyable
+entered values and current saved details, and opens the exact product without
+submitting changes. Missing products remain inspectable. A separate confirmation
+discards exactly one local draft; VIEWER can review/discard local work. Reopened
+drafts retain corrections on Cancel/X, while cancelling a new entry still closes
+it without retention. Saved-baseline changes and original count units are visible
+before retry. Duplicate-name conflicts stay with their edit and disappear when
+the requested name changes.
+
+Reference checks prevent stale modal Save/Discard decisions from overwriting
+newer retained work. Deleting a product describes its draft consequences and
+clears only captured drafts after acknowledgement. Exit warnings cover all
+retained work, including filtered/missing products. Drafts remain session-local;
+they are not persisted through restart. Desktop snapshot checks still do not
+provide transactional record-version preconditions against other clients.
+
+New suites contain 18 per-product/nested-modal cases, 12 review/discard/conflict
+cases, and four light/dark rendered cases (580×300 and 700×380). The first focused
+run passed 83 cases; the next recovery/render run passed 50. The final two conflict
+cases are included in the clean full run. Screenshots are under
+`target/ui-previews/inventory-drafts`. Verification log:
+`dist/harness-evidence/inventory-drafts-quality.log`; evidence:
+`dist/harness-evidence/latest.json`.
+Final clean isolated verification passed 1,669 tests plus two packaged-JAR checks,
+zero failures/errors/skips, and all 173 suite/phase floors. Coverage is 86.99% lines
+and 69.96% branches; Checkstyle and SpotBugs report zero findings. Both SBOM formats
+were generated. Source hash:
+`6bc40b12b5b93dbc070c75988508dd8c91f4840b13eb4cf3d466e5166fe500c1`.
+A separate `--check` confirmed matching source/report hashes.
+
+All agents have finished editing. Continue on `codex/recover-unpushed-work` / PR #21.
+The prior single-slot draft candidate is resolved. Next shipping review can focus
+on another desktop workflow's saved-result/draft boundaries; no further concrete
+blocking defect was found in the changed inventory paths. Native platform/signing
+acceptance and GitHub billing remain separate; check the latest run annotations.
+
+Historical continuation notes follow.
+
 ## Latest completed work: inventory saved-result recovery and release isolation
 
 The owner's "continue flowers forever" resumed the two concrete handoff
