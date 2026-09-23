@@ -1,5 +1,53 @@
 # Latest direction — September 22, 2026
 
+## Latest completed work: unfinished customer details
+
+The owner's next continuation addressed the customer-only draft gap below.
+CRM now keeps an exact raw-field/edit-identity clean baseline. Failed saves stay
+unfinished even when the submitted values equal that baseline. Explicit load,
+clear, and acknowledged save/deletion reset it; search, refresh, and linked
+account review preserve the existing form and baseline.
+
+Load selected, double-click, and Clear form ask **Discard customer changes?**
+only when entered work would be lost. **Keep editing** is the default; affirmative
+actions are **Discard and load** / **Discard and clear**. Cancel/X preserves all
+fields and the account being edited. The approval captures raw form, form/write
+revisions, refresh-failure state, and the complete selected load target. It is
+rechecked after the dialog, including access and pending work. Newer nested
+actions or changed-then-restored fields invalidate an older decision.
+
+Customer-only drafts join the existing shell close/sign-out warning. A loaded
+unchanged account remains clean; pending writes retain **Exit before result**
+wording. No shell production change was needed. Drafts remain session-local and
+are not restored after exit. This does not add database record-version checks
+against another client changing a customer while its editor is open.
+
+New regression suite: `CrmCustomerDraftSafetyTest` passed all 53 cases. Eighteen
+new real-CRM shell cases bring `ProductionReadinessUiTest` to 38; all passed in
+its isolated focused run. A draft test's initial broad exit assertion was narrowed
+to preserve an independent order warning after customer deletion; no production
+failure remained. Source edits are frozen and all agents have finished editing.
+Final clean isolated verification log: `dist/harness-evidence/customer-drafts-quality.log`;
+evidence: `dist/harness-evidence/latest.json`.
+Final clean isolated verification passed 1,800 tests plus two packaged-JAR checks,
+zero failures/errors/skips, and all 176 suite/phase floors. Coverage is 87.11% lines
+and 70.24% branches; Checkstyle and SpotBugs report zero findings. Both SBOM formats
+were generated. A separate `--check` confirmed source/report consistency for
+`6b233d2afee7b84063381d433b0991eb886e7194e40d8b9812ffaf42d7b014d7`.
+
+Continue on `codex/recover-unpushed-work` / PR #21 with local/GitHub synchronization.
+Native apps/installers were not built or launched. Check the latest GitHub Actions
+annotations for the separate payment/spending-limit block. The customer draft
+replacement/exit candidate from the previous pass is resolved.
+
+Next concrete candidate: `SeasonPlannerTab` still has a single retry slot, lacks
+shell exit protection, and does not recheck access/record state after planting
+edit/delete dialogs. Failed refreshes re-enable writes, and host-refresh exceptions
+after acknowledged writes need explicit saved-result recovery. Review that workflow
+with focused stale-dialog, failed-read, and retained-draft tests before extending it.
+
+Historical continuation notes follow.
+
 ## Latest completed work: customer and packing action decisions
 
 The owner's next continuation reviewed other desktop action boundaries after

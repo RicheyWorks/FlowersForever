@@ -58,6 +58,9 @@ public class CrmTab implements FlowerFarmTab {
     private JComboBox<String> custType;
     private JTextField custNotes;
     private Long editingCustomerId;
+    private CustomerFormState cleanCustomerForm;
+    private boolean failedCustomerDraft;
+    private long customerFormRevision;
 
     private JComboBox<CrmPresenter.CustomerChoice> orderCustomer;
     private JTextArea newOrderCustomerContext;
@@ -1036,11 +1039,7 @@ public class CrmTab implements FlowerFarmTab {
         saveCustomerBtn.setToolTipText("Update loaded customer (double-click row to load).");
         saveCustomerBtn.addActionListener(e -> saveCustomerEdit());
         clearCustomerBtn = FarmUi.secondaryButton("Clear form");
-        clearCustomerBtn.addActionListener(e -> {
-            if (requireCustomerAction(false)) {
-                clearCustomerForm();
-            }
-        });
+        clearCustomerBtn.addActionListener(e -> clearCustomerFormWithReview());
         deleteCustomerBtn = FarmUi.dangerButton("Delete selected");
         deleteCustomerBtn.addActionListener(e -> deleteCustomer());
         statementCustomerBtn = FarmUi.secondaryButton("Statement PDF…");
@@ -1066,6 +1065,8 @@ public class CrmTab implements FlowerFarmTab {
                 addCustomerBtn, loadCustomerBtn, saveCustomerBtn,
                 clearCustomerBtn, deleteCustomerBtn, statementCustomerBtn,
                 reviewCustomerConflictBtn, customerModeLabel);
+        trackCustomerFormChanges();
+        markCustomerFormClean();
         updateCustomerFormMode();
 
         JPanel south = new JPanel(new BorderLayout());
@@ -4791,20 +4792,24 @@ public class CrmTab implements FlowerFarmTab {
         if (!requireCustomerAction(false)) {
             return;
         }
-        int row = customerTable.getSelectedRow();
-        if (row < 0) {
+        CrmPresenter.CustomerRow target = selectedCustomerReview();
+        if (target == null) {
             error("Select a customer (or double-click a row).");
             return;
         }
-        row = customerTable.convertRowIndexToModel(row);
-        editingCustomerId = (Long) customerModel.getValueAt(row, 0);
-        custName.setText(String.valueOf(customerModel.getValueAt(row, 1)));
-        custContact.setText(nullToEmpty(customerModel.getValueAt(row, 2)));
-        custPhone.setText(nullToEmpty(customerModel.getValueAt(row, 3)));
-        custEmail.setText(nullToEmpty(customerModel.getValueAt(row, 4)));
-        custType.setSelectedItem(friendlyCustomerType(
-                String.valueOf(customerModel.getValueAt(row, 5))));
-        custNotes.setText(nullToEmpty(customerModel.getValueAt(row, 6)));
+        if (!approveCustomerReplacement(target)) {
+            return;
+        }
+        editingCustomerId = target.id();
+        custName.setText(target.name());
+        custContact.setText(target.contact());
+        custPhone.setText(target.phone());
+        custEmail.setText(target.email());
+        custType.setSelectedItem(friendlyCustomerType(target.type()));
+        custNotes.setText(target.notes());
+        clearCustomerConflictHandoff();
+        clearCustomerValidation();
+        markCustomerFormClean();
         updateCustomerFormMode();
         status("Loaded “" + custName.getText() + "”. Update the fields, then choose Save edit.");
     }
@@ -4873,6 +4878,8 @@ public class CrmTab implements FlowerFarmTab {
     }
 
     private void failCustomerSave(CustomerSaveRequest request, Throwable failure) {
+        failedCustomerDraft = true;
+        customerFormRevision++;
         finishCustomerSave();
         if (failure instanceof CustomerService.DuplicateCustomerNameException duplicate) {
             conflictingCustomerId = duplicate.existingId();
@@ -4939,7 +4946,77 @@ public class CrmTab implements FlowerFarmTab {
         custNotes.setText("");
         clearCustomerConflictHandoff();
         clearCustomerValidation();
+        markCustomerFormClean();
         updateCustomerFormMode();
+    }
+
+    private void clearCustomerFormWithReview() {
+        if (requireCustomerAction(false) && approveCustomerReplacement(null)) {
+            clearCustomerForm();
+            status("Customer form cleared. Ready to enter a new account.");
+        }
+    }
+
+    private CustomerFormState currentCustomerForm() {
+        return new CustomerFormState(editingCustomerId, customerDraft());
+    }
+
+    private boolean customerDraftChanged() {
+        return cleanCustomerForm != null
+                && (failedCustomerDraft || !cleanCustomerForm.equals(currentCustomerForm()));
+    }
+
+    private void markCustomerFormClean() {
+        cleanCustomerForm = currentCustomerForm();
+        failedCustomerDraft = false;
+        customerFormRevision++;
+    }
+
+    private void trackCustomerFormChanges() {
+        javax.swing.event.DocumentListener listener = new javax.swing.event.DocumentListener() {
+            @Override public void insertUpdate(javax.swing.event.DocumentEvent event) { changed(); }
+            @Override public void removeUpdate(javax.swing.event.DocumentEvent event) { changed(); }
+            @Override public void changedUpdate(javax.swing.event.DocumentEvent event) { changed(); }
+            private void changed() { customerFormRevision++; }
+        };
+        for (JTextField field : List.of(custName, custContact, custEmail, custPhone, custNotes)) {
+            field.getDocument().addDocumentListener(listener);
+        }
+        custType.addItemListener(event -> customerFormRevision++);
+    }
+
+    private boolean approveCustomerReplacement(CrmPresenter.CustomerRow target) {
+        if (!customerDraftChanged()) {
+            return true;
+        }
+        CustomerReplacementDecision decision = new CustomerReplacementDecision(
+                currentCustomerForm(), customerFormRevision, customerWriteRevision, crmRefreshFailure);
+        String draft = editingCustomerId == null ? "the new customer"
+                : "customer #" + editingCustomerId;
+        String action = target == null ? "clear the form"
+                : "load “" + target.name() + "” (customer #" + target.id() + ")";
+        Object[] options = {"Keep editing", target == null ? "Discard and clear" : "Discard and load"};
+        int choice = dialogs.showOption(panel, FarmUi.confirmationPanel(
+                        "Discard the unfinished customer details?",
+                        "The entered details for " + draft + " will be lost when you " + action
+                                + ". Save the customer first to keep these changes.", FarmUi.Tone.WARNING),
+                "Discard customer changes?", JOptionPane.DEFAULT_OPTION, JOptionPane.WARNING_MESSAGE,
+                null, options, options[0]);
+        if (choice != 1) {
+            status("Customer changes kept. The entered fields and account being edited were preserved.");
+            return false;
+        }
+        if (!requireCustomerAction(false)) {
+            return false;
+        }
+        if (!decision.equals(new CustomerReplacementDecision(
+                currentCustomerForm(), customerFormRevision, customerWriteRevision, crmRefreshFailure))
+                || target != null && !target.equals(selectedCustomerReview())) {
+            status("Customer work or the selected account changed while discard was reviewed. "
+                    + "The current fields were kept; review the form and try again.");
+            return false;
+        }
+        return true;
     }
 
     private void reviewExistingCustomer() {
@@ -6522,6 +6599,10 @@ public class CrmTab implements FlowerFarmTab {
         boolean newOrderInstructions = orderNotes != null && !orderNotes.getText().isBlank();
         boolean writeRunning = hasPendingSave();
         List<String> work = new ArrayList<>();
+        if (customerDraftChanged()) {
+            work.add(editingCustomerId == null ? "an unfinished new-customer draft"
+                    : "unsaved customer details for account #" + editingCustomerId);
+        }
         if (productDrafts > 0) {
             work.add(productDrafts + " unfinished product entr"
                     + (productDrafts == 1 ? "y" : "ies"));
@@ -8365,6 +8446,14 @@ public class CrmTab implements FlowerFarmTab {
     private record CustomerDeleteDecision(CrmPresenter.CustomerRow customer,
                                            Long editingId, CrmPresenter.CustomerDraft draft,
                                            long writeRevision) {
+    }
+
+    private record CustomerFormState(Long editingId, CrmPresenter.CustomerDraft draft) {
+    }
+
+    private record CustomerReplacementDecision(CustomerFormState form,
+                                                long formRevision, long writeRevision,
+                                                String refreshFailure) {
     }
 
     private record OpenCustomerRequest(Long orderId, String source,

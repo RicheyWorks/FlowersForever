@@ -633,6 +633,17 @@ check before changing inventory.
    the selected account and entered fields after confirmation; if either changed,
    review the account again. Deleting the loaded account also clears its form,
    including unsaved changes, as stated in the confirmation.
+   If you change customer details, **Load selected**, double-clicking an account,
+   and **Clear form** first ask **Discard customer changes?**. **Keep editing**
+   is selected by default and preserves all fields and the account being edited.
+   Choose **Discard and load** or **Discard and clear** only when replacing those
+   details is intentional. If the form or selected account changes while that
+   decision is open, the current work is kept for another review.
+   An unchanged loaded account does not need this extra decision. Failed saves
+   remain unfinished until successfully saved or explicitly discarded. Searching,
+   refreshing, and opening an account from an order preserve the entered form.
+   Closing or signing out now warns about these customer-only drafts too; they
+   are kept in this running session and are not restored after exit.
    In the order workspace, **Customer & delivery context** immediately shows the
    selected new-order customer's account type, contact person, phone, email, and
    shortened account note. A missing-contact message does not block Pickup or Market,

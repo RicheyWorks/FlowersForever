@@ -4,6 +4,16 @@ See [HARNESS_AUDIT.md](HARNESS_AUDIT.md) for the current human-action matrix,
 recursive surface inventory, findings, verification evidence, and explicit
 OS-level smoke-test limits.
 
+## Unfinished customer details
+
+`CrmCustomerDraftSafetyTest` checks raw customer-field baselines, failed-save
+retention, guarded load/double-click/clear decisions, and stale approvals.
+`ProductionReadinessUiTest` uses real CRM forms to verify that customer-only new,
+edited, and failed-save drafts reach the existing close/sign-out guard. Keeping
+work or closing the prompt preserves every field and the signed-in session;
+unchanged loaded accounts avoid an unnecessary unfinished-work prompt. Pending
+customer writes retain the **Exit before result** wording.
+
 ## Customer and packing action decisions
 
 `CrmCustomerDecisionSafetyTest` sends Enter and double-click events through the

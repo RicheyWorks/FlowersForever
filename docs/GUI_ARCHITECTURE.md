@@ -214,6 +214,15 @@ remain blocked after a failed CRM refresh until it succeeds. Customer deletion
 captures an immutable row, raw form, edit identity, and write revision before showing the injected dialog;
 the approval is checked again before dispatch, including current host access.
 
+Customer forms keep a clean raw-field/edit-ID baseline. Document and type changes
+advance a revision; failed saves remain dirty even when values match the baseline.
+User-directed load/clear actions ask before replacing dirty work, capturing both
+form/write revisions and the selected load target. Affirmative decisions recheck
+the form, target, access, pending result, and refresh-failure state. Only explicit
+load/clear, an acknowledged save, or deletion of the loaded account resets the
+baseline. Refreshes and handoffs leave it intact, and the existing shell close
+guard includes customer drafts. Draft state is local to the running desktop session.
+
 Market Day captures the reviewed plan, checked-load signatures, and a decision
 revision. Scope, role, check, refresh, and submission changes invalidate older
 approvals. A stale preflight rejection requires a successful plan rebuild before

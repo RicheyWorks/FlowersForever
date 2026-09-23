@@ -2,6 +2,41 @@
 
 Audit date: 2026-09-04
 
+## Unfinished customer details — September 22, 2026
+
+Customer forms previously had no clean baseline, so Load selected, double-click,
+and Clear form could replace entered details without a discard decision. The
+shell warning covered order work and running writes but omitted customer-only
+drafts. CRM now compares every raw field and the edit identity with a clean
+baseline, and failed saves remain unfinished even when values match that baseline.
+Explicit load/clear, an acknowledged save, or deletion of the loaded account
+resets it; refresh, search, and account-review handoffs leave entered work intact.
+
+Dirty replacement uses an injected confirmation with **Keep editing** as the
+default. Confirmed load/clear decisions compare raw form and write revisions,
+current access/pending work, refresh failure, and the complete selected load
+target before replacing anything. Newer decisions and changed-then-restored
+fields invalidate an older approval. Cancel/X preserves the original form and
+edit identity. Customer drafts now join the existing close/sign-out guard, while
+untouched loaded accounts remain clean. This is local session state, not recovery
+after application exit.
+
+`CrmCustomerDraftSafetyTest` exercises baselines, exact raw fields, failure and
+acknowledgement boundaries, replacement decisions, and stale/nested modals.
+Eighteen new real-CRM shell cases in `ProductionReadinessUiTest` verify drafts,
+failed saves, no-change loading, and pending writes across exit/sign-out choices.
+All 53 draft cases and 38 shell cases passed in focused verification. The draft
+suite's first run had one overbroad exit-warning assertion, corrected to preserve
+independent order warnings after customer deletion while checking form cleanup.
+Full evidence is recorded in `dist/harness-evidence/customer-drafts-quality.log`
+and `latest.json`.
+
+The full clean run passed 1,800 tests plus two packaged-JAR checks, zero
+failures/errors/skips, and all 176 suite/phase floors. Coverage is 87.11% lines
+and 70.24% branches; Checkstyle and SpotBugs report zero findings. Both SBOM
+formats were generated. A separate `--check` confirmed source/report consistency
+for `6b233d2afee7b84063381d433b0991eb886e7194e40d8b9812ffaf42d7b014d7`.
+
 ## Customer and packing action decisions — September 22, 2026
 
 The next review found that pressing Enter in Customer notes could submit through

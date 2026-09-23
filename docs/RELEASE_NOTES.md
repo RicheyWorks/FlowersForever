@@ -1,5 +1,16 @@
 # FlowersForever private-preview notes
 
+## September 22, 2026 — Preserve unfinished customer details
+
+- Loading a customer, double-clicking an account, or clearing a changed form
+  asks before discarding entered details. **Keep editing** is the default.
+- Unchanged loaded accounts remain clean. Failed customer saves stay unfinished,
+  including a failed save of values that match the original account.
+- Discard decisions recheck the entered fields, edit identity, selected load
+  target, access, and pending work before replacing anything.
+- Exit and sign-out warnings now include customer-only drafts. Refreshes and
+  account-review handoffs preserve the form; drafts remain local to this session.
+
 ## September 22, 2026 — Recheck customer and packing actions
 
 - Customer keyboard submission follows the same refresh, access, and pending-save

@@ -18,6 +18,7 @@ import com.flowerfarm.gui.tabs.ProductionStudioTab;
 import com.flowerfarm.connector.ConnectorResult;
 import com.flowerfarm.connector.ConnectorRegistry;
 import com.flowerfarm.model.FarmProfile;
+import com.flowerfarm.model.Customer;
 import com.flowerfarm.service.CustomerService;
 import com.flowerfarm.service.CustomerStatementService;
 import com.flowerfarm.service.DayCloseoutService;
@@ -41,6 +42,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import javax.swing.JButton;
+import javax.swing.JComponent;
 import javax.swing.JMenu;
 import javax.swing.JMenuBar;
 import javax.swing.JMenuItem;
@@ -48,6 +50,7 @@ import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
+import javax.swing.JTable;
 import javax.swing.KeyStroke;
 import javax.swing.SwingUtilities;
 import javax.swing.border.MatteBorder;
@@ -60,12 +63,18 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -346,6 +355,140 @@ class ProductionReadinessUiTest {
                 any(), any(), any());
     }
 
+    @ParameterizedTest(name = "{0}: sign out={1}, close response={2}")
+    @CsvSource({
+            "new, false, 0", "new, true, -1", "new, false, 1",
+            "edit, true, 0", "edit, false, -1", "edit, true, 1",
+            "failed-add, false, 0", "failed-add, true, -1", "failed-add, true, 1",
+            "failed-edit, true, 0", "failed-edit, false, -1", "failed-edit, false, 1"
+    })
+    void customerOnlyDraftRequiresExplicitShellDiscard(String draftKind, boolean signingOut, int choice)
+            throws Exception {
+        FarmDialogs dialogs = mock(FarmDialogs.class);
+        when(dialogs.showOption(any(), any(), anyString(), anyInt(), anyInt(), any(), any(), any()))
+                .thenAnswer(invocation -> {
+                    String prompt = String.valueOf((Object) invocation.getArgument(1));
+                    assertThat(prompt).contains("Customers & Orders", "customer", "Keep working",
+                            "without losing anything", "intentional")
+                            .doesNotContain("unfinished product", "unfinished new-order", "write still running");
+                    assertThat((String) invocation.getArgument(2)).isEqualTo(
+                            "Unfinished work — " + (signingOut ? "sign out" : "exit"));
+                    assertThat((Object[]) invocation.getArgument(6)).containsExactly(
+                            "Keep working", signingOut ? "Discard and sign out" : "Discard and exit");
+                    assertThat((Object) invocation.getArgument(7)).isEqualTo("Keep working");
+                    return choice;
+                });
+        CustomerExitFixture fixture = new CustomerExitFixture(dialogs);
+        fixture.prepareDraft(draftKind.contains("edit"));
+        boolean failed = draftKind.startsWith("failed");
+        if (failed) {
+            if (draftKind.endsWith("edit")) {
+                when(fixture.customers.update(eq(11L), any(Customer.class)))
+                        .thenThrow(new IllegalStateException("Customer database unavailable"));
+            } else {
+                when(fixture.customers.add(any(Customer.class)))
+                        .thenThrow(new IllegalStateException("Customer database unavailable"));
+            }
+            fixture.user.click(draftKind.endsWith("edit") ? "Save edit" : "Add customer");
+            fixture.user.awaitText("Customer not saved · retry available");
+        }
+
+        SwingUtilities.invokeAndWait(() ->
+                assertThat(fixture.gui.confirmApplicationClose(signingOut)).isEqualTo(choice == 1));
+
+        fixture.assertRawCustomerDraft();
+        assertThat(fixture.session.current().username()).isEqualTo("field-hand");
+        assertThat(fixture.crm.hasPendingSave()).isFalse();
+        verify(dialogs).showOption(any(), any(), anyString(), anyInt(), anyInt(), any(), any(), any());
+        verify(dialogs, never()).showConfirm(any(), any(), anyString(), anyInt(), anyInt());
+        verify(fixture.customers, times(failed && draftKind.endsWith("add") ? 1 : 0))
+                .add(any(Customer.class));
+        verify(fixture.customers, times(failed && draftKind.endsWith("edit") ? 1 : 0))
+                .update(eq(11L), any(Customer.class));
+        verify(fixture.customers, never()).delete(anyLong());
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void unchangedLoadedCustomerDoesNotTriggerAnUnfinishedWorkPrompt(boolean signingOut) throws Exception {
+        FarmDialogs dialogs = mock(FarmDialogs.class);
+        when(dialogs.showConfirm(any(), any(), anyString(), anyInt(), anyInt()))
+                .thenAnswer(invocation -> {
+                    assertThat((String) invocation.getArgument(1)).isEqualTo("Sign out and exit?");
+                    assertThat((String) invocation.getArgument(2)).isEqualTo("Sign out");
+                    return JOptionPane.YES_OPTION;
+                });
+        CustomerExitFixture fixture = new CustomerExitFixture(dialogs);
+        fixture.loadSavedCustomer();
+
+        SwingUtilities.invokeAndWait(() -> {
+            assertThat(fixture.crm.applicationExitWarning()).isNull();
+            assertThat(fixture.gui.confirmApplicationClose(signingOut)).isTrue();
+        });
+
+        assertThat(fixture.user.fieldValue("Customer or business name")).isEqualTo("Harbor Floral");
+        assertThat(fixture.user.fieldValue("Customer notes")).isEqualTo("Saved pickup instructions");
+        assertThat(fixture.session.current().username()).isEqualTo("field-hand");
+        verify(dialogs, never()).showOption(any(), any(), anyString(), anyInt(), anyInt(), any(), any(), any());
+        verify(dialogs, times(signingOut ? 1 : 0))
+                .showConfirm(any(), any(), anyString(), anyInt(), anyInt());
+        verify(fixture.customers, never()).add(any(Customer.class));
+        verify(fixture.customers, never()).update(anyLong(), any(Customer.class));
+    }
+
+    @ParameterizedTest(name = "pending edit={0}, sign out={1}, response={2}")
+    @CsvSource({"false, false, 0", "true, true, -1", "true, false, 1", "false, true, 1"})
+    void pendingRealCustomerSaveUsesExitBeforeResult(boolean editing, boolean signingOut, int choice)
+            throws Exception {
+        FarmDialogs dialogs = mock(FarmDialogs.class);
+        when(dialogs.showOption(any(), any(), anyString(), anyInt(), anyInt(), any(), any(), any()))
+                .thenAnswer(invocation -> {
+                    assertThat(String.valueOf((Object) invocation.getArgument(1))).contains(
+                            "customer write still running", "does not undo records already saved",
+                            "before trying again", "Any unsaved drafts will be lost");
+                    assertThat((String) invocation.getArgument(2)).isEqualTo(
+                            "Unfinished work — " + (signingOut ? "sign out" : "exit"));
+                    assertThat((Object[]) invocation.getArgument(6))
+                            .containsExactly("Keep working", "Exit before result");
+                    assertThat((Object) invocation.getArgument(7)).isEqualTo("Keep working");
+                    return choice;
+                });
+        CustomerExitFixture fixture = new CustomerExitFixture(dialogs);
+        fixture.prepareDraft(editing);
+        CountDownLatch entered = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        org.mockito.stubbing.Answer<Customer> blockedSave = invocation -> {
+            entered.countDown();
+            assertThat(release.await(5, TimeUnit.SECONDS)).as("test releases pending customer write").isTrue();
+            throw new IllegalStateException("Customer database unavailable");
+        };
+        if (editing) {
+            when(fixture.customers.update(eq(11L), any(Customer.class))).thenAnswer(blockedSave);
+        } else {
+            when(fixture.customers.add(any(Customer.class))).thenAnswer(blockedSave);
+        }
+        try {
+            fixture.user.click(editing ? "Save edit" : "Add customer");
+            assertThat(entered.await(4, TimeUnit.SECONDS)).isTrue();
+
+            SwingUtilities.invokeAndWait(() -> {
+                assertThat(fixture.crm.hasPendingSave()).isTrue();
+                assertThat(fixture.gui.confirmApplicationClose(signingOut)).isEqualTo(choice == 1);
+            });
+
+            fixture.assertRawCustomerDraft();
+            assertThat(fixture.session.current().username()).isEqualTo("field-hand");
+            verify(dialogs).showOption(any(), any(), anyString(), anyInt(), anyInt(), any(), any(), any());
+        } finally {
+            release.countDown();
+        }
+        fixture.user.awaitText("Customer not saved · retry available");
+        fixture.assertRawCustomerDraft();
+        assertThat(fixture.crm.hasPendingSave()).isFalse();
+        verify(fixture.customers, times(editing ? 1 : 0)).update(eq(11L), any(Customer.class));
+        verify(fixture.customers, times(editing ? 0 : 1)).add(any(Customer.class));
+    }
+
     @ParameterizedTest
     @ValueSource(strings = {"harvestTab", "inventoryTab", "crmTab", "marketDayTab", "productionStudioTab"})
     void exitDuringSubmittedWorkNeverPromisesToDiscardSavedRecords(String field) throws Exception {
@@ -479,6 +622,67 @@ class ProductionReadinessUiTest {
 
     private static FlowerFarmGUI gui(GuiLoginGate gate, DesktopSession session) {
         return gui(gate, session, FarmDialogs.swing(), FarmFileChooser.swing());
+    }
+
+    private static final class CustomerExitFixture {
+        private final CustomerService customers = mock(CustomerService.class);
+        private final OrderService orders = mock(OrderService.class);
+        private final DesktopSession session = new DesktopSession();
+        private final FlowerFarmGUI gui;
+        private final CrmTab crm;
+        private final JComponent root;
+        private final SwingUserHarness user;
+
+        private CustomerExitFixture(FarmDialogs shellDialogs) throws Exception {
+            Customer saved = new Customer(11L, "Harbor Floral", "Saved contact", "saved@example.test",
+                    "360-555-0184", "WHOLESALE", "Saved pickup instructions");
+            when(customers.search(anyString())).thenReturn(List.of(saved));
+            when(customers.getAll()).thenReturn(List.of(saved));
+            when(orders.filter(anyString(), anyString(), any(), any())).thenReturn(List.of());
+            when(orders.confirmedCompletionQueue()).thenReturn(List.of());
+            session.setAuthEnabled(true);
+            session.set(new FarmUser("field-hand", "", FarmRole.HAND));
+            gui = gui(mock(GuiLoginGate.class), session, shellDialogs,
+                    new SwingFileHarness().cancelUnscripted());
+            crm = new CrmTab(customers, orders, gui, mock(FarmDialogs.class));
+            ReflectionTestUtils.setField(gui, "crmTab", crm);
+            JComponent[] built = new JComponent[1];
+            SwingUtilities.invokeAndWait(() -> {
+                gui.buildSouthBar();
+                built[0] = crm.getUIComponent();
+                crm.initialize();
+            });
+            root = built[0];
+            user = SwingUserHarness.on(root);
+            user.awaitButtonEnabled("Refresh CRM", true);
+        }
+
+        private void loadSavedCustomer() throws Exception {
+            SwingUtilities.invokeAndWait(() -> user.named("crm.customers.table", JTable.class)
+                    .setRowSelectionInterval(0, 0));
+            user.click("Load selected");
+        }
+
+        private void prepareDraft(boolean editing) throws Exception {
+            if (editing) {
+                loadSavedCustomer();
+            }
+            user.type("Customer or business name", "  Harbor Floral revised  ")
+                    .type("Customer contact person", "  Maya Rivera  ")
+                    .type("Customer phone", "  360-555-0191 ext 02  ")
+                    .type("Customer email", "maya@example.test")
+                    .select("Customer type", "Florist")
+                    .type("Customer notes", "  Keep these exact delivery details  ");
+        }
+
+        private void assertRawCustomerDraft() {
+            assertThat(user.fieldValue("Customer or business name")).isEqualTo("  Harbor Floral revised  ");
+            assertThat(user.fieldValue("Customer contact person")).isEqualTo("  Maya Rivera  ");
+            assertThat(user.fieldValue("Customer phone")).isEqualTo("  360-555-0191 ext 02  ");
+            assertThat(user.fieldValue("Customer email")).isEqualTo("maya@example.test");
+            assertThat(user.selectedOption("Customer type")).isEqualTo("Florist");
+            assertThat(user.fieldValue("Customer notes")).isEqualTo("  Keep these exact delivery details  ");
+        }
     }
 
     private static FlowerFarmGUI gui(GuiLoginGate gate, DesktopSession session,
