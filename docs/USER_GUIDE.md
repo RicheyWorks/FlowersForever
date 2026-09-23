@@ -625,6 +625,14 @@ check before changing inventory.
    already exists, no duplicate is created and every entered customer detail stays
    in the form. Choose **Review existing customer** to find and select that exact
    account without discarding the draft, or enter a unique name and retry.
+   Pressing Enter in **Customer notes** follows the same rules as Add/Save:
+   wait for any running save or CRM refresh, and refresh successfully after a
+   failed reload before writing. Entered fields remain available for correction.
+   Double-clicking a customer or choosing **Load selected** cannot replace the
+   form while a customer save, deletion, or refresh is running. Deletion rechecks
+   the selected account and entered fields after confirmation; if either changed,
+   review the account again. Deleting the loaded account also clears its form,
+   including unsaved changes, as stated in the confirmation.
    In the order workspace, **Customer & delivery context** immediately shows the
    selected new-order customer's account type, contact person, phone, email, and
    shortened account note. A missing-contact message does not block Pickup or Market,
@@ -1236,6 +1244,9 @@ completed. The completion
 badge says **Packing review changed · rebuild required**, retains the current
 checks for reference, and directs the worker to **Build packing list**; unchanged
 orders keep their checks while changed loads must be checked again.
+Completion remains disabled until a successful rebuild; changing access or
+checking loads again does not remove that requirement. A failed rebuild keeps
+the lock and the visible packing evidence.
 
 After the physical load-out is checked, choose **Complete confirmed orders** and
 review the exact, scrollable customer-load list. It names every checked confirmed
@@ -1244,7 +1255,11 @@ and price, instruction, and the confirmed-only total. This keeps the destination
 visible in the final irreversible review when an account note is the Delivery
 order's only usable handoff context. Draft and already-completed orders included for
 reference are explicitly excluded from that total and completion. Cancel if any
-detail does not match the physical load. Completion runs in the background while
+detail does not match the physical load. The app rechecks the plan, access, scope,
+and packed checks after you approve.
+If they changed while the review was open, nothing is submitted from that decision;
+review the current list again. Refresh requests made during completion wait for
+its result. Completion runs in the background while
 the rest of the app remains responsive; the captured scope and packing checks
 lock until it finishes so the same load cannot be submitted twice. The completion
 transaction also locks and rechecks each order against the exact customer,

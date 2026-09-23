@@ -1,5 +1,61 @@
 # Latest direction — September 22, 2026
 
+## Latest completed work: customer and packing action decisions
+
+The owner's next continuation reviewed other desktop action boundaries after
+inventory draft recovery. Customer Enter could submit while its button was
+disabled after a failed/running CRM refresh, and double-click loading could
+overwrite a form during a pending save. Customer action entry points now share
+access, busy, queued/running refresh, and saved-result guards; writes also stay
+blocked after a failed CRM refresh until it succeeds. Exact entered fields survive
+blocked paths.
+
+Customer deletion uses the injected dialog and captures all displayed account
+fields, selection, edit identity, raw form, and a write revision. It rechecks
+these plus host/current role before dispatch. Unchanged successful refreshes
+remain valid; newer writes invalidate older approvals even if they failed.
+The confirmation explains loss of the loaded account's unsaved form on deletion.
+
+Market Day captures an immutable reviewed plan and exact packed-check signatures
+with a decision revision. Scope, check, role, refresh, export, and submission
+changes invalidate old modal approvals. Direct submission shares the freshness,
+access, pending-result, and packing checks. A stale service preflight rejection
+now actually locks completion until a successful rebuild; failed reads and role
+changes cannot bypass it. Refreshes requested during completion coalesce and
+wait for its result. Service preflight and transactional per-order safeguards
+remain in place; this is not a general database-versioning change.
+
+Focused verification passed 38 new CRM cases, then 48 packing cases (22 new and
+26 existing). New suites are `CrmCustomerDecisionSafetyTest` and
+`MarketDayCompletionDecisionTest`, with floors 38 and 22. Source edits are frozen
+and agents have finished editing. Full clean isolated log:
+`dist/harness-evidence/action-decisions-quality.log`; evidence:
+`dist/harness-evidence/latest.json`.
+Final clean isolated verification passed 1,729 tests plus two packaged-JAR checks,
+with zero failures/errors/skips and all 175 suite/phase floors met. Coverage is
+87.08% lines and 70.15% branches; Checkstyle and SpotBugs report zero findings.
+Both SBOM formats were generated. A separate `--check` confirmed source/report
+consistency for `c72e1d0bc1997d580844af053bdc5d1afd5c7a6fb8335653b75d40307d2510ff`.
+
+Continue on `codex/recover-unpushed-work` / PR #21 with local/GitHub synchronization.
+No native installer/app was rebuilt or launched. Check the latest GitHub Actions
+annotations for the separate account payment/spending-limit block.
+
+Concrete follow-up candidates found during this pass, outside its action-guard scope:
+
+- Customer-only draft loss: `CrmTab.applicationExitWarning()` omits the customer
+  form. Loading another account or Clear form also replaces its unsaved fields
+  when no operation is running. Add clean raw-form/edit-identity baselines,
+  explicit replacement decisions, and close/sign-out coverage without treating an
+  unchanged loaded account as a draft. Preserve failed saves as unfinished work.
+- `SeasonPlannerTab` still uses a single retry slot, lacks shell exit protection,
+  and does not recheck role/record state after planting edit/delete dialogs.
+  Failed refreshes re-enable writes, and host-refresh exceptions after an
+  acknowledged write are not handled as saved-result recovery. Treat this as a
+  separate bounded workflow review with failure and stale-dialog regressions.
+
+Historical continuation notes follow.
+
 ## Latest completed work: per-product inventory drafts
 
 The owner's "next" continued the retained-draft limitation identified in the

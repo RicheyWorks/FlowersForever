@@ -79,6 +79,8 @@ public class MarketDayTab implements FlowerFarmTab {
     private MarketDayPlan displayedPlan;
     private FulfillmentPresentation pendingFulfillmentPresentation;
     private boolean completionRefreshRequired;
+    private boolean completionReviewRefreshRequired;
+    private long completionDecisionVersion;
     private int committedCompletionCount;
     private java.util.Set<Long> committedCompletionOrderIds = java.util.Set.of();
     private java.util.Set<Long> packedCheckClearApproval;
@@ -205,10 +207,14 @@ public class MarketDayTab implements FlowerFarmTab {
 
     @Override
     public void applyRolePermissions(boolean canWrite) {
+        if (this.canWrite != canWrite) {
+            completionDecisionVersion++;
+        }
         this.canWrite = canWrite;
         for (Map.Entry<Long, JCheckBox> entry : packedOrders.entrySet()) {
             entry.getValue().setEnabled(orderReadyToPack(entry.getKey())
-                    && canWrite && !fulfilling && !refreshingPlan && !planScopeDirty);
+                    && canWrite && !fulfilling && !refreshingPlan && !planScopeDirty
+                    && !completionReviewRefreshRequired);
         }
         updateFulfillAction();
         FarmUi.updateStatusBadge(accessLabel,
@@ -454,6 +460,7 @@ public class MarketDayTab implements FlowerFarmTab {
     }
 
     private void packingScopeChanged() {
+        completionDecisionVersion++;
         boolean validDate = validateMarketDate(false);
         if (!validDate) {
             SwingUtilities.invokeLater(() -> {
@@ -537,13 +544,17 @@ public class MarketDayTab implements FlowerFarmTab {
             GuiPermissions.setWritable(
                     canWrite && allPacked && !stockBlocked && !planScopeDirty
                             && !completionRefreshRequired
+                            && !completionReviewRefreshRequired
                             && planRefreshFailure == null
-                            && !fulfilling && !refreshingPlan, fulfillBtn);
+                            && !fulfilling && !refreshingPlan && !exporting, fulfillBtn);
             if (fulfilling) {
                 return;
             }
             fulfillBtn.setToolTipText(completionRefreshRequired
                     ? completionRefreshRecovery()
+                    : completionReviewRefreshRequired
+                    ? "Packing review changed. Build the packing list successfully and review current loads "
+                            + "before completing orders. Retained packing checks are for reference."
                     : planRefreshFailure != null
                     ? "The previous packing plan is still shown. Rebuild it successfully before "
                             + "completing orders or deducting inventory."
@@ -569,6 +580,9 @@ public class MarketDayTab implements FlowerFarmTab {
                 if (completionRefreshRequired) {
                     message = committedCompletionCount
                             + " completed once · packing refresh required";
+                    tone = FarmUi.Tone.WARNING;
+                } else if (completionReviewRefreshRequired) {
+                    message = "Packing review changed · rebuild required";
                     tone = FarmUi.Tone.WARNING;
                 } else if (planRefreshFailure != null) {
                     message = "Refresh failed · previous plan shown · completion locked";
@@ -631,7 +645,7 @@ public class MarketDayTab implements FlowerFarmTab {
                     packed + " packed · " + readyRemaining + " ready remaining · "
                             + blocked + " blocked",
                     readyRemaining == 0 ? FarmUi.Tone.WARNING : FarmUi.Tone.DANGER);
-            nextUnpackedBtn.setEnabled(!fulfilling && !refreshingPlan
+            nextUnpackedBtn.setEnabled(!fulfilling && !refreshingPlan && !completionReviewRefreshRequired
                     && packedOrders.values().stream().anyMatch(
                             checkBox -> checkBox.isEnabled() && !checkBox.isSelected()));
             return;
@@ -641,7 +655,7 @@ public class MarketDayTab implements FlowerFarmTab {
                 packed + " of " + confirmedReady + " packed · "
                         + (confirmedReady - packed) + " remaining",
                 done ? FarmUi.Tone.SUCCESS : FarmUi.Tone.WARNING);
-        nextUnpackedBtn.setEnabled(!done && !fulfilling && !refreshingPlan);
+        nextUnpackedBtn.setEnabled(!done && !fulfilling && !refreshingPlan && !completionReviewRefreshRequired);
     }
 
     private void focusNextUnpacked() {
@@ -955,6 +969,14 @@ public class MarketDayTab implements FlowerFarmTab {
     }
 
     void startPlanRefresh() {
+        completionDecisionVersion++;
+        if (fulfilling) {
+            planRefreshQueued = true;
+            showPlanRefreshState("Refresh queued · order completion still running",
+                    "The current packing evidence is kept until the completion result is received.",
+                    FarmUi.Tone.INFO);
+            return;
+        }
         if (refreshingPlan) {
             planRefreshQueued = true;
             showPlanRefreshState("Refresh queued · current packing list finishing",
@@ -962,6 +984,7 @@ public class MarketDayTab implements FlowerFarmTab {
                     FarmUi.Tone.INFO);
             return;
         }
+        planRefreshQueued = false;
         PlanRequest request;
         try {
             FarmUi.clearFieldError(dateField);
@@ -1027,8 +1050,10 @@ public class MarketDayTab implements FlowerFarmTab {
     }
 
     private void applyPlanSnapshot(MarketDayPlan plan) {
+        plan = snapshotPlan(plan);
         displayedPlan = plan;
         planScopeDirty = false;
+        completionReviewRefreshRequired = false;
         confirmedReady = (int) plan.customers().stream()
                 .filter(customer -> "CONFIRMED".equalsIgnoreCase(customer.status()))
                 .count();
@@ -1126,7 +1151,7 @@ public class MarketDayTab implements FlowerFarmTab {
         exportType.setEnabled(enabled && !fulfilling && !exporting);
         for (Map.Entry<Long, JCheckBox> entry : packedOrders.entrySet()) {
             entry.getValue().setEnabled(enabled && orderReadyToPack(entry.getKey())
-                    && canWrite && !fulfilling && !planScopeDirty);
+                    && canWrite && !fulfilling && !planScopeDirty && !completionReviewRefreshRequired);
         }
         if (!enabled) {
             resolveShortfallsBtn.setEnabled(false);
@@ -1247,7 +1272,8 @@ public class MarketDayTab implements FlowerFarmTab {
             if (retainPacked) {
                 retainedChecks++;
             }
-            packed.addActionListener(event -> {
+            packed.addItemListener(event -> {
+                completionDecisionVersion++;
                 packedCheckClearApproval = null;
                 updateFulfillAction();
             });
@@ -1705,7 +1731,9 @@ public class MarketDayTab implements FlowerFarmTab {
         }
         ExportKind kind = ExportKind.fromLabel(type);
         MarketDayPlan snapshot = snapshotPlan(plan);
+        completionDecisionVersion++;
         exporting = true;
+        updateFulfillAction();
         exportBtn.setEnabled(false);
         exportType.setEnabled(false);
         showExportState("Saving " + kind.shortName() + "…",
@@ -1781,6 +1809,7 @@ public class MarketDayTab implements FlowerFarmTab {
         exportType.setEnabled(!refreshingPlan && !fulfilling);
         exportBtn.setEnabled(!refreshingPlan && !fulfilling && displayedPlan != null
                 && !planScopeDirty);
+        updateFulfillAction();
     }
 
     private void showExportState(String message, String description, FarmUi.Tone tone) {
@@ -1894,6 +1923,10 @@ public class MarketDayTab implements FlowerFarmTab {
                 return;
             }
             MarketDayCompletionReview review = marketDayCompletionReview(plan);
+            CompletionDecision decision = captureCompletionDecision(plan);
+            if (!completionDecisionStillCurrent(decision)) {
+                return;
+            }
             Object[] options = new Object[]{"Cancel", "Complete checked orders"};
             int ok = dialogs.showOption(panel,
                     marketDayCompletionPanel(review),
@@ -1904,7 +1937,9 @@ public class MarketDayTab implements FlowerFarmTab {
             if (ok != 1) {
                 return;
             }
-            startFulfillment(plan);
+            if (completionDecisionStillCurrent(decision)) {
+                startFulfillment(decision.plan());
+            }
         } catch (Exception ex) {
             JOptionPane.showMessageDialog(panel,
                     FarmUi.actionableError("Market-day batch fulfillment", ex),
@@ -1917,6 +1952,43 @@ public class MarketDayTab implements FlowerFarmTab {
 
     record MarketDayCompletionReview(
             String heading, String details, int confirmedCount, double confirmedValue) {}
+
+    private CompletionDecision captureCompletionDecision(MarketDayPlan plan) {
+        return new CompletionDecision(displayedPlan, snapshotPlan(plan),
+                Map.copyOf(packedCompletionEvidence()), completionDecisionVersion);
+    }
+
+    private Map<Long, String> packedCompletionEvidence() {
+        Map<Long, String> evidence = new LinkedHashMap<>();
+        packedOrders.forEach((orderId, check) -> {
+            if (check.isSelected()) {
+                evidence.put(orderId, packedOrderSignatures.get(orderId));
+            }
+        });
+        return evidence;
+    }
+
+    private boolean completionAvailable() {
+        return canWrite && (host == null || host.canMutateData())
+                && !fulfilling && !exporting && !refreshingPlan && !planRefreshQueued && !planScopeDirty
+                && planRefreshFailure == null && !completionRefreshRequired
+                && !completionReviewRefreshRequired && allConfirmedOrdersPacked();
+    }
+
+    private boolean completionDecisionStillCurrent(CompletionDecision decision) {
+        boolean current = completionAvailable() && decision.displayedPlan() == displayedPlan
+                && decision.version() == completionDecisionVersion
+                && decision.plan().equals(snapshotPlan(displayedPlan))
+                && decision.packed().equals(packedCompletionEvidence());
+        if (!current && host != null) {
+            host.setStatus("Packing review, checks, or access changed while the completion dialog was open. "
+                    + "No completion was submitted from this decision. Review the current packing list again.");
+        }
+        return current;
+    }
+
+    private record CompletionDecision(MarketDayPlan displayedPlan, MarketDayPlan plan,
+                                      Map<Long, String> packed, long version) { }
 
     static MarketDayCompletionReview marketDayCompletionReview(MarketDayPlan plan) {
         if (plan == null) {
@@ -2055,12 +2127,21 @@ public class MarketDayTab implements FlowerFarmTab {
             }
             return;
         }
+        if (!completionAvailable() || displayedPlan == null || !snapshotPlan(displayedPlan).equals(plan)) {
+            if (host != null) {
+                host.setStatus("Completion is locked. Review access, build the current packing list, "
+                        + "and check every confirmed load before completing orders.");
+            }
+            return;
+        }
         long confirmed = plan == null ? 0 : plan.customers().stream()
                 .filter(customer -> "CONFIRMED".equalsIgnoreCase(customer.status()))
                 .count();
         if (confirmed == 0) {
             throw new IllegalArgumentException("At least one confirmed order is required.");
         }
+        MarketDayPlan submittedPlan = snapshotPlan(plan);
+        completionDecisionVersion++;
         fulfilling = true;
         setFulfillmentControlsEnabled(false);
         showFulfillmentProgressHandoff(confirmed);
@@ -2082,7 +2163,7 @@ public class MarketDayTab implements FlowerFarmTab {
         SwingWorker<FulfillBatchResult, Void> worker = new SwingWorker<>() {
             @Override
             protected FulfillBatchResult doInBackground() {
-                return packingService.fulfillConfirmedOrders(plan);
+                return packingService.fulfillConfirmedOrders(submittedPlan);
             }
 
             @Override
@@ -2206,11 +2287,12 @@ public class MarketDayTab implements FlowerFarmTab {
     }
 
     private void failFulfillment(Throwable failure) {
-        finishFulfillmentControls();
-        updateFulfillAction();
         String detail = safeMessage(failure);
         boolean rebuildRequired = detail.toLowerCase(java.util.Locale.ROOT)
                 .contains("rebuild the packing list");
+        completionReviewRefreshRequired |= rebuildRequired;
+        finishFulfillmentControls();
+        updateFulfillAction();
         showFulfillmentFailureHandoff(detail, rebuildRequired);
         String status = rebuildRequired
                 ? "Packing review changed · rebuild required"
@@ -2235,6 +2317,9 @@ public class MarketDayTab implements FlowerFarmTab {
                             + "list and review it again."
                     : guidance + " Packing checks were kept.");
         }
+        if (planRefreshQueued) {
+            startPlanRefresh();
+        }
     }
 
     private void finishFulfillmentControls() {
@@ -2256,7 +2341,7 @@ public class MarketDayTab implements FlowerFarmTab {
         nextSaturdayBtn.setEnabled(enabled);
         for (Map.Entry<Long, JCheckBox> entry : packedOrders.entrySet()) {
             entry.getValue().setEnabled(enabled && orderReadyToPack(entry.getKey())
-                    && canWrite && !refreshingPlan);
+                    && canWrite && !refreshingPlan && !planScopeDirty && !completionReviewRefreshRequired);
         }
         nextUnpackedBtn.setEnabled(enabled && !refreshingPlan && !allConfirmedOrdersPacked());
         if (!enabled) {

@@ -1,5 +1,19 @@
 # FlowersForever private-preview notes
 
+## September 22, 2026 — Recheck customer and packing actions
+
+- Customer keyboard submission follows the same refresh, access, and pending-save
+  rules as the buttons. Double-clicking a customer cannot replace its form during
+  a running save, deletion, or refresh.
+- Customer deletion rechecks the reviewed account, selection, entered fields,
+  and access after confirmation. A newer customer write invalidates an older
+  deletion decision, and deleting the loaded account explains the form loss.
+- Market Day completion rechecks the exact reviewed plan and packed checks after
+  confirmation. Changed scope, access, refresh state, or a newer submission
+  requires another review.
+- A rejected stale packing review keeps completion locked until a successful
+  rebuild. Refresh requests during completion wait for its result.
+
 ## September 22, 2026 — Keep inventory drafts with their product
 
 - Retains failed counts and edits per saved product and operation, including

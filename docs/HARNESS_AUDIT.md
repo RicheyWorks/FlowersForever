@@ -2,6 +2,45 @@
 
 Audit date: 2026-09-04
 
+## Customer and packing action decisions — September 22, 2026
+
+The next review found that pressing Enter in Customer notes could submit through
+a disabled Save button after a failed CRM refresh. The table's double-click
+handler could also replace a captured customer form during a pending save, and
+customer deletion did not recheck the account or access after its confirmation.
+Customer action entry points now share busy, refresh, saved-result, and access
+guards. Deletion captures the complete reviewed row and raw form with a write
+revision; changed selection/details/fields or a newer write invalidate the older
+approval. Loading uses the sorted model row. Read-only account inspection after
+a failed refresh remains available without permitting writes.
+
+Market Day had a corresponding final-review gap: role, scope, checks, or refresh
+could change during the modal review without invalidating approval. It now
+captures an immutable plan, checked-order signatures, and a decision revision,
+and rechecks before dispatch. The service receives an immutable snapshot.
+Preflight rejection previously displayed "rebuild required" while leaving the
+completion action enabled; a persistent lock now requires a successful rebuild.
+Failed reloads and role changes cannot remove that lock. Global refreshes during
+completion queue until its result, preserving the visible packing evidence.
+
+`CrmCustomerDecisionSafetyTest` exercises keyboard and double-click entry points,
+raw-field retention while pending, and post-modal deletion decisions.
+`MarketDayCompletionDecisionTest` exercises stale approvals, direct submission
+guards, rebuild recovery, immutable captured plans, and queued refreshes.
+These are Swing component/service-mock checks; the existing transactional
+fulfillment checks still enforce live record and inventory conditions.
+
+Focused verification passed all 38 CRM cases and 48 packing cases (22 new and
+26 existing), with zero failures/errors/skips. The clean full verification log
+is `dist/harness-evidence/action-decisions-quality.log`; source/report evidence
+is `dist/harness-evidence/latest.json`.
+
+The full clean run passed 1,729 tests plus two packaged-JAR checks, with zero
+failures/errors/skips and all 175 suite/phase floors met. Coverage is 87.08% lines
+and 70.15% branches; Checkstyle and SpotBugs report zero findings. Both SBOM
+formats were generated. A separate `--check` verified source/report consistency
+for `c72e1d0bc1997d580844af053bdc5d1afd5c7a6fb8335653b75d40307d2510ff`.
+
 ## Per-product inventory drafts — September 22, 2026
 
 The follow-up replaces the single count/edit retry slots with separate drafts

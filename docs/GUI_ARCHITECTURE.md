@@ -205,6 +205,22 @@ The catalog exposes Production Studio to the frame's existing close guard.
 Other template, recipe, and handoff writes retain their existing synchronous
 service calls; this pass does not claim all Studio operations are asynchronous.
 
+### Customer and packing action decisions
+
+Customer form buttons and action entry points share access and current-state
+predicates. Keyboard submission and double-click loading cannot bypass a pending
+write, queued/running refresh, or saved-result recovery lock. Writes additionally
+remain blocked after a failed CRM refresh until it succeeds. Customer deletion
+captures an immutable row, raw form, edit identity, and write revision before showing the injected dialog;
+the approval is checked again before dispatch, including current host access.
+
+Market Day captures the reviewed plan, checked-load signatures, and a decision
+revision. Scope, role, check, refresh, and submission changes invalidate older
+approvals. A stale preflight rejection requires a successful plan rebuild before
+completion is enabled again. Refreshes during completion queue behind its result,
+preserving the captured packing evidence. These desktop guards complement the
+existing service preflight and transactional per-order checks.
+
 ### Inventory save and refresh outcomes
 
 Inventory workers return an acknowledged mutation separately from their subsequent

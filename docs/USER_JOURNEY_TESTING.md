@@ -4,6 +4,21 @@ See [HARNESS_AUDIT.md](HARNESS_AUDIT.md) for the current human-action matrix,
 recursive surface inventory, findings, verification evidence, and explicit
 OS-level smoke-test limits.
 
+## Customer and packing action decisions
+
+`CrmCustomerDecisionSafetyTest` sends Enter and double-click events through the
+customer form, including pending writes, failed/running/queued refreshes, and
+VIEWER access. Deletion confirmations change selection, saved details, fields,
+or access while open to verify that only the still-reviewed account can be
+deleted and that rejected decisions preserve entered work.
+
+`MarketDayCompletionDecisionTest` changes packing scope, checked loads, access,
+and refresh state inside the final completion review. It also verifies that
+preflight rejection requires a successful rebuild, that old approvals cannot
+resubmit after newer work, and that refreshes during completion wait for the
+captured result. Component checks complement the transactional service tests;
+they do not replace native keyboard/pointer acceptance.
+
 ## Inventory drafts across products
 
 `InventoryPerProductDraftTest` verifies independent count/edit restoration and

@@ -141,6 +141,7 @@ public class CrmTab implements FlowerFarmTab {
     private boolean fulfillingOrder;
     private boolean savingCustomer;
     private boolean deletingCustomer;
+    private long customerWriteRevision;
     private boolean creatingOrder;
     private boolean addingOrderLine;
     private boolean runningOrderMutation;
@@ -1035,7 +1036,11 @@ public class CrmTab implements FlowerFarmTab {
         saveCustomerBtn.setToolTipText("Update loaded customer (double-click row to load).");
         saveCustomerBtn.addActionListener(e -> saveCustomerEdit());
         clearCustomerBtn = FarmUi.secondaryButton("Clear form");
-        clearCustomerBtn.addActionListener(e -> clearCustomerForm());
+        clearCustomerBtn.addActionListener(e -> {
+            if (requireCustomerAction(false)) {
+                clearCustomerForm();
+            }
+        });
         deleteCustomerBtn = FarmUi.dangerButton("Delete selected");
         deleteCustomerBtn.addActionListener(e -> deleteCustomer());
         statementCustomerBtn = FarmUi.secondaryButton("Statement PDF…");
@@ -1835,14 +1840,14 @@ public class CrmTab implements FlowerFarmTab {
         }
         boolean editing = editingCustomerId != null;
         boolean selected = customerTable != null && customerTable.getSelectedRow() >= 0;
-        boolean current = !refreshingCrm && !savingCustomer && !deletingCustomer
-                && pendingCustomerWriteSuccess == null;
+        boolean current = customerFormCurrent();
         boolean authoritative = current && crmRefreshFailure == null;
-        addCustomerBtn.setEnabled(canWrite && authoritative && !editing);
-        saveCustomerBtn.setEnabled(canWrite && authoritative && editing);
-        loadCustomerBtn.setEnabled(canWrite && current && selected);
-        clearCustomerBtn.setEnabled(canWrite && current);
-        deleteCustomerBtn.setEnabled(canWrite && authoritative && selected);
+        boolean writable = customerAccessAllowed();
+        addCustomerBtn.setEnabled(writable && authoritative && !editing);
+        saveCustomerBtn.setEnabled(writable && authoritative && editing);
+        loadCustomerBtn.setEnabled(writable && current && selected);
+        clearCustomerBtn.setEnabled(writable && current);
+        deleteCustomerBtn.setEnabled(writable && authoritative && selected);
         statementCustomerBtn.setEnabled(current && selected && !runningDocument);
         if (crmRefreshFailure != null) {
             String guidance = "Customer details are retained for review. Refresh CRM successfully "
@@ -4725,8 +4730,57 @@ public class CrmTab implements FlowerFarmTab {
         orderStatusLabel.getAccessibleContext().setAccessibleDescription(guidance);
     }
 
+    private boolean customerFormCurrent() {
+        return !refreshingCrm && !crmRefreshQueued && !savingCustomer && !deletingCustomer
+                && pendingCustomerWriteSuccess == null;
+    }
+
+    private boolean customerAccessAllowed() {
+        return canWrite && (host == null || host.canMutateData());
+    }
+
+    private boolean requireCustomerAction(boolean mutation) {
+        if (!customerAccessAllowed()) {
+            status("Customer entry is read-only. The entered fields were kept; sign in as HAND or OWNER to edit.");
+            return false;
+        }
+        if (pendingCustomerWriteSuccess != null) {
+            showPendingCustomerWriteGuidance();
+            return false;
+        }
+        if (!customerFormCurrent()) {
+            status("Customer work is still loading or saving. The entered fields were kept; "
+                    + "wait for the result before changing the form or submitting another action.");
+            return false;
+        }
+        if (mutation && crmRefreshFailure != null) {
+            status("Customer details are retained for review. Refresh CRM successfully "
+                    + "before adding, saving, or deleting an account.");
+            return false;
+        }
+        return true;
+    }
+
+    private CrmPresenter.CustomerRow selectedCustomerReview() {
+        if (customerTable == null || customerTable.getSelectedRow() < 0) {
+            return null;
+        }
+        int row = customerTable.convertRowIndexToModel(customerTable.getSelectedRow());
+        return new CrmPresenter.CustomerRow((Long) customerModel.getValueAt(row, 0),
+                nullToEmpty(customerModel.getValueAt(row, 1)),
+                nullToEmpty(customerModel.getValueAt(row, 2)),
+                nullToEmpty(customerModel.getValueAt(row, 3)),
+                nullToEmpty(customerModel.getValueAt(row, 4)),
+                nullToEmpty(customerModel.getValueAt(row, 5)),
+                nullToEmpty(customerModel.getValueAt(row, 6)));
+    }
+
     private void addCustomer() {
-        if (!GuiPermissions.requireWrite(host, panel, "manage customers")) {
+        if (!requireCustomerAction(true)) {
+            return;
+        }
+        if (editingCustomerId != null) {
+            status("A customer is loaded. Choose Save edit, or clear the form before adding an account.");
             return;
         }
         startCustomerSave(new CustomerSaveRequest(null, customerDraft(),
@@ -4734,11 +4788,15 @@ public class CrmTab implements FlowerFarmTab {
     }
 
     private void loadCustomerIntoForm() {
+        if (!requireCustomerAction(false)) {
+            return;
+        }
         int row = customerTable.getSelectedRow();
         if (row < 0) {
             error("Select a customer (or double-click a row).");
             return;
         }
+        row = customerTable.convertRowIndexToModel(row);
         editingCustomerId = (Long) customerModel.getValueAt(row, 0);
         custName.setText(String.valueOf(customerModel.getValueAt(row, 1)));
         custContact.setText(nullToEmpty(customerModel.getValueAt(row, 2)));
@@ -4752,7 +4810,7 @@ public class CrmTab implements FlowerFarmTab {
     }
 
     private void saveCustomerEdit() {
-        if (!GuiPermissions.requireWrite(host, panel, "edit customers")) {
+        if (!requireCustomerAction(true)) {
             return;
         }
         if (editingCustomerId == null) {
@@ -4764,13 +4822,13 @@ public class CrmTab implements FlowerFarmTab {
     }
 
     private void startCustomerSave(CustomerSaveRequest request) {
-        if (savingCustomer || deletingCustomer || pendingCustomerWriteSuccess != null) {
-            showPendingCustomerWriteGuidance();
+        if (!requireCustomerAction(true)) {
             return;
         }
         clearCustomerValidation();
         clearCustomerConflictHandoff();
         savingCustomer = true;
+        customerWriteRevision++;
         if (customerTable != null) {
             customerTable.setEnabled(false);
         }
@@ -4937,39 +4995,51 @@ public class CrmTab implements FlowerFarmTab {
     }
 
     private void deleteCustomer() {
-        if (!GuiPermissions.requireWrite(host, panel, "delete customers")) {
+        if (!requireCustomerAction(true)) {
             return;
         }
-        int row = customerTable.getSelectedRow();
-        if (row < 0) {
+        CrmPresenter.CustomerRow reviewed = selectedCustomerReview();
+        if (reviewed == null) {
             error("Select a customer.");
             return;
         }
-        Long id = (Long) customerModel.getValueAt(row, 0);
-        String name = String.valueOf(customerModel.getValueAt(row, 1));
-        int ok = JOptionPane.showConfirmDialog(panel,
+        CustomerDeleteDecision decision = new CustomerDeleteDecision(
+                reviewed, editingCustomerId, customerDraft(), customerWriteRevision);
+        String name = reviewed.name();
+        int ok = dialogs.showConfirm(panel,
                 FarmUi.confirmationPanel(
                         "Delete “" + name + "”?",
                         "This permanently removes the customer. Delete their orders first if "
-                                + "the account has order history.",
+                                + "the account has order history."
+                                + (Objects.equals(editingCustomerId, reviewed.id())
+                                ? " The loaded customer form and its unsaved changes will also be cleared."
+                                : ""),
                         FarmUi.Tone.DANGER),
                 "Delete customer", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
         if (ok != JOptionPane.YES_OPTION) {
             return;
         }
-        startCustomerDelete(id, name);
+        if (!requireCustomerAction(true)) {
+            return;
+        }
+        if (!decision.equals(new CustomerDeleteDecision(selectedCustomerReview(),
+                editingCustomerId, customerDraft(), customerWriteRevision))) {
+            status("Customer selection, saved details, or entered work changed while deletion was reviewed. "
+                    + "Nothing was deleted. Review the current account and choose Delete selected again.");
+            return;
+        }
+        startCustomerDelete(reviewed.id(), name);
     }
 
     /** Deletes one captured customer without blocking Swing's event thread. */
     void startCustomerDelete(long customerId, String customerName) {
-        if (deletingCustomer || savingCustomer || refreshingCrm
-                || pendingCustomerWriteSuccess != null) {
-            showPendingCustomerWriteGuidance();
+        if (!requireCustomerAction(true)) {
             return;
         }
         String name = customerName == null || customerName.isBlank()
                 ? "customer #" + customerId : customerName.trim();
         deletingCustomer = true;
+        customerWriteRevision++;
         customerTable.setEnabled(false);
         deleteCustomerBtn.setText("Deleting customer…");
         applyRolePermissions(canWrite);
@@ -8290,6 +8360,11 @@ public class CrmTab implements FlowerFarmTab {
         boolean editing() {
             return customerId != null;
         }
+    }
+
+    private record CustomerDeleteDecision(CrmPresenter.CustomerRow customer,
+                                           Long editingId, CrmPresenter.CustomerDraft draft,
+                                           long writeRevision) {
     }
 
     private record OpenCustomerRequest(Long orderId, String source,
