@@ -1,5 +1,37 @@
 # Latest direction — September 26, 2026
 
+## Latest completed work: desktop layout polish
+
+Dashboard quick actions keep a comfortable height in both large and compact
+windows. The work and alert cards stack on narrower screens; vertical scrolling
+keeps priority actions and tools reachable without squeezing them. Priority and
+daily-sheet status have dedicated rows, and the refresh timestamp stays visible
+in the footer.
+
+Knowledge Log uses readable table widths, horizontal scrolling, escaped full-cell
+tooltips, a balanced initial list/detail split, and larger padded lesson text.
+Compact windows preserve a 300px lesson workspace with vertical scrolling instead
+of shrinking the reader to a few lines. Its wrapping search status remains fixed.
+Dashboard and Knowledge Log reveal keyboard-focused controls through the enclosing
+viewport. Reports date fields use the shared comfortable entry styling, with
+aligned guidance and less crowded actions. Existing data, permissions, draft,
+search, and export behavior is unchanged.
+
+The 232 focused design-system, visual, knowledge, and priority-workflow cases
+passed. Light/dark renders were inspected, including 850x500 content areas,
+keyboard-revealed actions, and the lesson reader. These rendered component checks
+do not substitute for native installer or pointer/keyboard acceptance.
+Local images are in `target/ui-previews`; the focused log is
+`dist/harness-evidence/ui-polish-render.log`.
+
+The final clean isolated Java 21 verification passed 1,936 tests and two
+packaged-JAR checks, with all 180 suite/phase floors met. Coverage is 87.25%
+lines and 70.48% branches; Checkstyle and SpotBugs both report zero findings.
+The source-bound evidence is `dist/harness-evidence/latest.json`, and the full
+log is `dist/harness-evidence/ui-polish-quality.log`. The tested source digest
+is `1a5a797bcd4296cc7d8e9fbc5e712c4919ab764e6312df3ab1a4e494f2ac5f3b`.
+README Dashboard and Knowledge Log screenshots reflect the refreshed layouts.
+
 ## Latest completed work: stable desktop selectors
 
 Completed the interrupted selector update for Swing plugin 1.9. Snapshots prefer

@@ -97,10 +97,14 @@ public class ReportsTab implements FlowerFarmTab {
                 "Save a printable harvest, production, and sales summary for your records.",
                 FarmUi.toolbar(reportStatus, weeklyButton)), BorderLayout.NORTH);
 
-        fromField = new JTextField(LocalDate.now().minusDays(6).toString(), 12);
+        fromField = FarmUi.entryControl(
+                new JTextField(LocalDate.now().minusDays(6).toString(), 12),
+                "YYYY-MM-DD", "First included report date, using YYYY-MM-DD.");
         FarmUi.initialFocus(fromField);
         fromField.getAccessibleContext().setAccessibleName("Report start date");
-        toField = new JTextField(LocalDate.now().toString(), 12);
+        toField = FarmUi.entryControl(
+                new JTextField(LocalDate.now().toString(), 12),
+                "YYYY-MM-DD", "Last included report date, using YYYY-MM-DD.");
         toField.getAccessibleContext().setAccessibleName("Report end date");
         JLabel fromLabel = new JLabel("Start date:");
         fromLabel.setLabelFor(fromField);
@@ -126,9 +130,11 @@ public class ReportsTab implements FlowerFarmTab {
         fromField.addActionListener(event -> generateRange());
         toField.addActionListener(event -> generateRange());
         JPanel rangeFields = FarmUi.toolbar(
-                fromLabel, fromField, toLabel, toField, previewButton, rangeButton);
+                fromLabel, fromField, toLabel, toField, previewButton);
+        rangeFields.setAlignmentX(Component.LEFT_ALIGNMENT);
         JPanel rangePresets = FarmUi.toolbar(
-                new JLabel("Quick ranges:"), today, lastWeek, thisMonth);
+                new JLabel("Quick ranges:"), today, lastWeek, thisMonth, rangeButton);
+        rangePresets.setAlignmentX(Component.LEFT_ALIGNMENT);
         JPanel rangeToolbar = new JPanel();
         rangeToolbar.setOpaque(false);
         rangeToolbar.setLayout(new BoxLayout(rangeToolbar, BoxLayout.Y_AXIS));
@@ -138,6 +144,7 @@ public class ReportsTab implements FlowerFarmTab {
         rangeToolbar.add(Box.createVerticalStrut(FarmUi.CONTROL_GAP));
         rangePreview = FarmUi.formHint(" ");
         rangePreview.setName("reports.rangePreview");
+        rangePreview.setAlignmentX(Component.LEFT_ALIGNMENT);
         rangePreview.getAccessibleContext().setAccessibleName("Selected report period");
         rangeToolbar.add(rangePreview);
 

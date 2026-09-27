@@ -789,9 +789,10 @@ public class DashboardTab implements FlowerFarmTab {
         panel.add(FarmUi.pageHeader(
                 "Today on the farm",
                 "Harvest, sales, stock, packing, and watering priorities in one place.",
-                FarmUi.toolbar(lastUpdatedLabel, refreshOverviewButton)), BorderLayout.NORTH);
+                FarmUi.toolbar(refreshOverviewButton)), BorderLayout.NORTH);
 
-        JPanel center = new JPanel(new BorderLayout(0, 12));
+        JPanel center = new DashboardBody();
+        center.setOpaque(false);
 
         JPanel kpiPanel = new JPanel(new GridLayout(1, 4, 12, 0));
         kpiPanel.setOpaque(false);
@@ -820,18 +821,17 @@ public class DashboardTab implements FlowerFarmTab {
         chartsPanel.add(buildPieChartPanel());
         chartsPanel.add(buildBarChartPanel());
 
-        JPanel south = new JPanel(new BorderLayout(8, 8));
-        south.setOpaque(false);
-
-        alertsArea = FarmUi.displayArea(5, 40);
+        alertsArea = FarmUi.displayArea(7, 28);
+        alertsArea.setFont(UIManager.getFont("Label.font").deriveFont(14f));
+        alertsArea.setMargin(new Insets(10, 10, 10, 10));
         alertsArea.getAccessibleContext().setAccessibleName("Farm operations alerts");
         JPanel alertsPanel = FarmUi.section(
                 "Operations alerts",
-                "Stock, orders, harvest, packing, and irrigation priorities.",
+                "Stock, orders, harvest, packing, and watering.",
                 new JScrollPane(alertsArea));
-        south.add(alertsPanel, BorderLayout.CENTER);
 
         JPanel actions = new JPanel(new GridLayout(2, 3, 8, 6));
+        actions.setName("dashboard.quickActions");
         actions.setOpaque(false);
         morningBriefingButton = FarmUi.primaryButton("Morning briefing");
         morningBriefingButton.setName("dashboard.morningBriefing");
@@ -864,19 +864,25 @@ public class DashboardTab implements FlowerFarmTab {
         moreTools.getAccessibleContext().setAccessibleName("More farm tools");
         JButton openTool = FarmUi.secondaryButton("Open tool");
         openTool.addActionListener(e -> openDashboardTool((String) moreTools.getSelectedItem()));
-        JPanel moreToolsRow = FarmUi.toolbar(new JLabel("More farm tools"), moreTools, openTool);
-        dailySheetStatusLabel = FarmUi.statusBadge(
+        JPanel moreToolsRow = new JPanel(new BorderLayout(FarmUi.CONTROL_GAP, 6));
+        moreToolsRow.setOpaque(false);
+        JLabel toolsLabel = FarmUi.mutedLabel("More farm tools");
+        toolsLabel.setLabelFor(moreTools);
+        moreToolsRow.add(toolsLabel, BorderLayout.NORTH);
+        moreToolsRow.add(moreTools, BorderLayout.CENTER);
+        moreToolsRow.add(openTool, BorderLayout.EAST);
+        dailySheetStatusLabel = FarmUi.wrappingStatusBadge(
                 "Daily sheets ready", FarmUi.Tone.NEUTRAL);
         dailySheetStatusLabel.setName("dashboard.dailySheetStatus");
         dailySheetStatusLabel.getAccessibleContext().setAccessibleName(
                 "Morning briefing and day closeout status");
-        JPanel actionFooter = new JPanel(new BorderLayout(FarmUi.CONTROL_GAP, 0));
+        JPanel actionFooter = new JPanel(new BorderLayout(0, FarmUi.CONTROL_GAP));
         actionFooter.setOpaque(false);
-        actionFooter.add(dailySheetStatusLabel, BorderLayout.WEST);
+        actionFooter.add(dailySheetStatusLabel, BorderLayout.SOUTH);
         actionFooter.add(moreToolsRow, BorderLayout.CENTER);
         JPanel actionWorkspace = new JPanel(new BorderLayout(0, FarmUi.CONTROL_GAP));
         actionWorkspace.setOpaque(false);
-        priorityStatusLabel = FarmUi.statusBadge(
+        priorityStatusLabel = FarmUi.wrappingStatusBadge(
                 "Refresh to identify the top priority", FarmUi.Tone.NEUTRAL);
         priorityStatusLabel.setName("dashboard.priorityStatus");
         priorityStatusLabel.getAccessibleContext().setAccessibleName("Top farm priority");
@@ -887,6 +893,7 @@ public class DashboardTab implements FlowerFarmTab {
                 "Selected farm priority details");
         priorityDetailLabel.setVisible(false);
         priorityQueue = new JComboBox<>();
+        priorityQueue.setPrototypeDisplayValue("Review today's packing and stock priorities");
         priorityQueue.setName("dashboard.priorityQueue");
         priorityQueue.setEnabled(false);
         priorityQueue.getAccessibleContext().setAccessibleName("Ranked farm priorities");
@@ -908,9 +915,9 @@ public class DashboardTab implements FlowerFarmTab {
         priorityActionButton.addActionListener(event -> {
             startDashboardPriority(selectedDashboardPriority);
         });
-        JPanel priorityRow = new JPanel(new BorderLayout(FarmUi.CONTROL_GAP, 0));
+        JPanel priorityRow = new JPanel(new BorderLayout(FarmUi.CONTROL_GAP, FarmUi.CONTROL_GAP));
         priorityRow.setOpaque(false);
-        priorityRow.add(priorityStatusLabel, BorderLayout.WEST);
+        priorityRow.add(priorityStatusLabel, BorderLayout.NORTH);
         priorityRow.add(priorityQueue, BorderLayout.CENTER);
         priorityRow.add(priorityActionButton, BorderLayout.EAST);
         JPanel priorityChooser = new JPanel(new BorderLayout(0, FarmUi.CONTROL_GAP));
@@ -918,12 +925,16 @@ public class DashboardTab implements FlowerFarmTab {
         priorityChooser.add(priorityRow, BorderLayout.NORTH);
         priorityChooser.add(priorityDetailLabel, BorderLayout.SOUTH);
         actionWorkspace.add(priorityChooser, BorderLayout.NORTH);
-        actionWorkspace.add(actions, BorderLayout.CENTER);
+        JPanel boundedActions = new JPanel(new BorderLayout());
+        boundedActions.setOpaque(false);
+        boundedActions.add(actions, BorderLayout.NORTH);
+        actionWorkspace.add(boundedActions, BorderLayout.CENTER);
         actionWorkspace.add(actionFooter, BorderLayout.SOUTH);
-        south.add(FarmUi.section(
+        JPanel workPanel = FarmUi.section(
                 "Today’s work",
                 null,
-                actionWorkspace), BorderLayout.EAST);
+                actionWorkspace);
+        JPanel south = new DashboardSections(workPanel, alertsPanel);
 
         JTabbedPane workspace = new JTabbedPane();
         workspace.setName("dashboard.workspace");
@@ -931,9 +942,81 @@ public class DashboardTab implements FlowerFarmTab {
         workspace.addTab("Today’s work", south);
         workspace.addTab("Inventory charts", chartsPanel);
         center.add(workspace, BorderLayout.CENTER);
-        panel.add(center, BorderLayout.CENTER);
+        JScrollPane scroll = new JScrollPane(center,
+                JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED, JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+        scroll.setName("dashboard.scroll");
+        scroll.setBorder(BorderFactory.createEmptyBorder());
+        scroll.getVerticalScrollBar().setUnitIncrement(24);
+        panel.add(scroll, BorderLayout.CENTER);
+        panel.add(lastUpdatedLabel, BorderLayout.SOUTH);
+        FarmUi.revealFocusedControls(center);
 
         applyTheme(false);
+    }
+
+    private static final class DashboardBody extends JPanel implements Scrollable {
+        private static final long serialVersionUID = 1L;
+
+        private DashboardBody() {
+            super(new BorderLayout(0, FarmUi.SECTION_GAP));
+        }
+
+        @Override public Dimension getPreferredScrollableViewportSize() { return getPreferredSize(); }
+        @Override public int getScrollableUnitIncrement(Rectangle visible, int orientation, int direction) {
+            return 24;
+        }
+        @Override public int getScrollableBlockIncrement(Rectangle visible, int orientation, int direction) {
+            return Math.max(24, visible.height - 24);
+        }
+        @Override public boolean getScrollableTracksViewportWidth() { return true; }
+        @Override public boolean getScrollableTracksViewportHeight() { return false; }
+    }
+
+    /** Keep actions at their natural height and stack the work cards on smaller screens. */
+    private static final class DashboardSections extends JPanel {
+        private static final long serialVersionUID = 1L;
+        private final JPanel work;
+        private final JPanel alerts;
+        private Boolean stacked;
+
+        private DashboardSections(JPanel work, JPanel alerts) {
+            super(new GridBagLayout());
+            this.work = work;
+            this.alerts = alerts;
+            setOpaque(false);
+            add(work);
+            add(alerts);
+        }
+
+        private void updateColumns() {
+            int width = getParent() == null ? getWidth() : getParent().getWidth();
+            boolean next = width > 0 && width < 1100;
+            if (stacked != null && stacked == next) return;
+            stacked = next;
+            GridBagLayout layout = (GridBagLayout) getLayout();
+            GridBagConstraints constraints = new GridBagConstraints();
+            constraints.fill = GridBagConstraints.BOTH;
+            constraints.anchor = GridBagConstraints.NORTHWEST;
+            constraints.weightx = 0.6;
+            layout.setConstraints(work, constraints);
+            constraints.gridx = next ? 0 : 1;
+            constraints.gridy = next ? 1 : 0;
+            constraints.weightx = next ? 0.6 : 0.4;
+            constraints.insets = next ? new Insets(FarmUi.CONTROL_GAP, 0, 0, 0)
+                    : new Insets(0, FarmUi.CONTROL_GAP, 0, 0);
+            layout.setConstraints(alerts, constraints);
+            revalidate();
+        }
+
+        @Override public Dimension getPreferredSize() {
+            updateColumns();
+            return super.getPreferredSize();
+        }
+
+        @Override public void doLayout() {
+            updateColumns();
+            super.doLayout();
+        }
     }
 
     private JButton actionButton(String label, String tabTitle, String statusMsg) {

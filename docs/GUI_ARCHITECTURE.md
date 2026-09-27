@@ -39,6 +39,14 @@ scrolling for extended record detail.
 
 ## Package Structure (as built)
 
+Dashboard and Knowledge Log use width-tracking body viewports so compact windows
+retain usable controls and reader areas. Dashboard work cards stack below the wide
+layout threshold, while action rows keep their natural height. Knowledge tables
+keep readable column widths with horizontal scrolling; the list/detail split stays
+adjustable. `FarmUi.revealFocusedControls` is an opt-in helper installed after a
+workflow's controls are built. It scrolls keyboard targets into view without moving
+the existing scroll position inside a nested table or lesson reader.
+
 ```
 com.flowerfarm.gui
 ├── FlowerFarmGUI.java          # Lightweight orchestrator (Spring @Component), implements TabHost

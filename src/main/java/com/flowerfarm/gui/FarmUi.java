@@ -38,6 +38,8 @@ import java.awt.Insets;
 import java.awt.LayoutManager;
 import java.awt.Rectangle;
 import java.awt.RenderingHints;
+import java.awt.event.FocusAdapter;
+import java.awt.event.FocusEvent;
 
 /**
  * Shared visual language for the farm-operations desktop UI.
@@ -471,6 +473,32 @@ public final class FarmUi {
             target.requestFocusInWindow();
         }
         return target;
+    }
+
+    /** Keep keyboard targets visible in a completed, scrollable workflow. */
+    public static void revealFocusedControls(JComponent root) {
+        if ((root instanceof AbstractButton || root instanceof JTextComponent
+                || root instanceof JComboBox<?> || root instanceof JTable)
+                && !Boolean.TRUE.equals(root.getClientProperty("flowerfarm.revealFocus"))) {
+            root.putClientProperty("flowerfarm.revealFocus", Boolean.TRUE);
+            root.addFocusListener(new FocusAdapter() {
+                @Override public void focusGained(FocusEvent event) {
+                    JComponent target = root;
+                    // Reveal an inner reader/table without changing its own scroll position.
+                    if (root.getParent() instanceof JViewport viewport
+                            && viewport.getParent() instanceof JScrollPane scroll) {
+                        target = scroll;
+                    }
+                    target.scrollRectToVisible(new Rectangle(0, 0,
+                            target.getWidth(), target.getHeight()));
+                }
+            });
+        }
+        for (Component child : root.getComponents()) {
+            if (child instanceof JComponent component) {
+                revealFocusedControls(component);
+            }
+        }
     }
 
     private static Component findFocusTarget(Component component, boolean markedOnly) {

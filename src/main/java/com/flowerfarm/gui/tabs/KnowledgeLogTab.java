@@ -27,8 +27,10 @@ import javax.swing.JTable;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
 import javax.swing.ListSelectionModel;
+import javax.swing.Scrollable;
 import javax.swing.SwingWorker;
 import javax.swing.table.DefaultTableModel;
+import javax.swing.table.TableColumn;
 import javax.swing.table.TableRowSorter;
 import java.awt.BorderLayout;
 import java.awt.Component;
@@ -36,6 +38,8 @@ import java.awt.Dimension;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.Insets;
+import java.awt.Rectangle;
+import java.awt.event.MouseEvent;
 import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
 import java.util.Arrays;
@@ -142,15 +146,18 @@ public class KnowledgeLogTab implements FlowerFarmTab {
                 "Keep the lessons in the ground—what happened, what you tried, and what worked.",
                 FarmUi.toolbar(recordButton, refreshButton)), BorderLayout.NORTH);
 
-        JPanel content = new JPanel(new BorderLayout(0, FarmUi.SECTION_GAP));
-        content.setOpaque(false);
-        content.add(buildSearchSection(), BorderLayout.NORTH);
-        content.add(buildWorkspace(), BorderLayout.CENTER);
-        statusBadge = FarmUi.statusBadge(
+        JPanel content = new KnowledgeBody(buildSearchSection(), buildWorkspace());
+        FarmUi.revealFocusedControls(content);
+        JScrollPane scroll = new JScrollPane(content,
+                JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED, JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+        scroll.setName("knowledge.scroll");
+        scroll.setBorder(BorderFactory.createEmptyBorder());
+        scroll.getVerticalScrollBar().setUnitIncrement(24);
+        statusBadge = FarmUi.wrappingStatusBadge(
                 "Ready to search the farm's lessons", FarmUi.Tone.NEUTRAL);
         statusBadge.setName("knowledge.status");
-        content.add(statusBadge, BorderLayout.SOUTH);
-        panel.add(content, BorderLayout.CENTER);
+        panel.add(statusBadge, BorderLayout.SOUTH);
+        panel.add(scroll, BorderLayout.CENTER);
 
         recordButton.addActionListener(event -> recordLesson());
         refreshButton.addActionListener(event -> startSearch());
@@ -166,6 +173,41 @@ public class KnowledgeLogTab implements FlowerFarmTab {
         editButton.addActionListener(event -> editSelected());
         deleteButton.addActionListener(event -> deleteSelected());
         updateActions();
+    }
+
+    /** Keeps a readable lesson workspace when the window is shorter than the form. */
+    private static final class KnowledgeBody extends JPanel implements Scrollable {
+        private static final long serialVersionUID = 1L;
+        private static final int MINIMUM_WORKSPACE_HEIGHT = 300;
+        private final JComponent search;
+
+        private KnowledgeBody(JComponent search, JComponent workspace) {
+            super(new BorderLayout(0, FarmUi.SECTION_GAP));
+            this.search = search;
+            setOpaque(false);
+            add(search, BorderLayout.NORTH);
+            add(workspace, BorderLayout.CENTER);
+        }
+
+        @Override public Dimension getPreferredSize() {
+            Dimension preferred = super.getPreferredSize();
+            preferred.height = getInsets().top + getInsets().bottom
+                    + search.getPreferredSize().height + FarmUi.SECTION_GAP
+                    + MINIMUM_WORKSPACE_HEIGHT;
+            return preferred;
+        }
+
+        @Override public Dimension getPreferredScrollableViewportSize() { return getPreferredSize(); }
+        @Override public int getScrollableUnitIncrement(Rectangle visible, int orientation, int direction) {
+            return 24;
+        }
+        @Override public int getScrollableBlockIncrement(Rectangle visible, int orientation, int direction) {
+            return Math.max(24, visible.height - 24);
+        }
+        @Override public boolean getScrollableTracksViewportWidth() { return true; }
+        @Override public boolean getScrollableTracksViewportHeight() {
+            return getParent() != null && getParent().getHeight() >= getPreferredSize().height;
+        }
     }
 
     private JPanel buildSearchSection() {
@@ -208,12 +250,34 @@ public class KnowledgeLogTab implements FlowerFarmTab {
                 return false;
             }
         };
-        table = new JTable(tableModel);
+        table = new JTable(tableModel) {
+            @Override
+            public String getToolTipText(MouseEvent event) {
+                int row = rowAtPoint(event.getPoint());
+                int column = columnAtPoint(event.getPoint());
+                if (row >= 0 && column >= 0) {
+                    Object value = getValueAt(row, column);
+                    if (value != null && !value.toString().isBlank()) {
+                        String text = value.toString().replace("&", "&amp;")
+                                .replace("<", "&lt;").replace(">", "&gt;");
+                        return "<html>" + text + "</html>";
+                    }
+                }
+                return super.getToolTipText(event);
+            }
+        };
         table.setName("knowledge.table");
         table.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         table.setAutoCreateRowSorter(false);
         table.setRowSorter(new TableRowSorter<>(tableModel));
         FarmUi.configureTable(table, "Farm knowledge lessons table");
+        table.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
+        int[] columnWidths = {108, 270, 180, 120, 160, 140, 108};
+        for (int index = 0; index < columnWidths.length; index++) {
+            TableColumn column = table.getColumnModel().getColumn(index);
+            column.setPreferredWidth(columnWidths[index]);
+            column.setMinWidth(index == 0 || index == 6 ? 108 : 100);
+        }
         table.getSelectionModel().addListSelectionListener(event -> {
             if (!event.getValueIsAdjusting()) {
                 showSelected();
@@ -224,9 +288,12 @@ public class KnowledgeLogTab implements FlowerFarmTab {
                 "Saved lessons",
                 "Newest observations appear first. Select one to read the full lesson.",
                 tableScroll);
+        list.setMinimumSize(new Dimension(300, 0));
 
         detailArea = FarmUi.displayArea(18, 42);
         detailArea.setName("knowledge.detail");
+        detailArea.setFont(detailArea.getFont().deriveFont(14f));
+        detailArea.setBorder(BorderFactory.createEmptyBorder(12, 12, 12, 12));
         detailArea.getAccessibleContext().setAccessibleName("Selected farm lesson details");
         detailArea.setText("Select a saved lesson to see the observation, action, result, and follow-up.");
         editButton = FarmUi.secondaryButton("Edit selected");
@@ -235,19 +302,33 @@ public class KnowledgeLogTab implements FlowerFarmTab {
         deleteButton.setName("knowledge.delete");
         JPanel detailContent = new JPanel(new BorderLayout(0, FarmUi.CONTROL_GAP));
         detailContent.setOpaque(false);
-        detailContent.add(new JScrollPane(detailArea), BorderLayout.CENTER);
+        JScrollPane detailScroll = new JScrollPane(detailArea);
+        detailScroll.setBorder(BorderFactory.createLineBorder(FarmUi.borderColor()));
+        detailScroll.getVerticalScrollBar().setUnitIncrement(18);
+        detailContent.add(detailScroll, BorderLayout.CENTER);
         detailContent.add(FarmUi.toolbar(editButton, deleteButton), BorderLayout.SOUTH);
         JPanel detail = FarmUi.section(
                 "Selected lesson",
                 "Facts stay separate from confidence so the crew can judge what to repeat.",
                 detailContent);
+        detail.setMinimumSize(new Dimension(320, 0));
 
-        JSplitPane split = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, list, detail);
+        JSplitPane split = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, list, detail) {
+            private boolean dividerPlaced;
+
+            @Override
+            public void doLayout() {
+                if (!dividerPlaced && getWidth() > 0) {
+                    setDividerLocation(0.58);
+                    dividerPlaced = true;
+                }
+                super.doLayout();
+            }
+        };
         split.setName("knowledge.workspace");
-        split.setResizeWeight(0.62);
+        split.setResizeWeight(0.58);
         split.setContinuousLayout(true);
         split.setBorder(BorderFactory.createEmptyBorder());
-        split.setDividerLocation(720);
         return split;
     }
 

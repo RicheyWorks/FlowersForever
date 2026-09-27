@@ -421,6 +421,13 @@ class DataEntryVisualContractTest {
                 .isGreaterThanOrEqualTo(80);
         render("knowledge-log-compact", knowledgeLog.getUIComponent(),
                 new Dimension(1050, 700));
+        render("knowledge-log-laptop", knowledgeLog.getUIComponent(), new Dimension(850, 500));
+        assertInteractiveControlsFit(knowledgeLog.getUIComponent());
+        assertThat(findNamed(knowledgeLog.getUIComponent(), "knowledge.detail").getParent().getHeight())
+                .as("compact lessons retain a readable details viewport")
+                .isGreaterThanOrEqualTo(140);
+        render("knowledge-log-laptop-lesson", knowledgeLog.getUIComponent(), new Dimension(850, 500),
+                (JComponent) findNamed(knowledgeLog.getUIComponent(), "knowledge.edit"), "knowledge.scroll");
         render("season-planner", seasonPlanner.getUIComponent(),
                 new Dimension(1120, 720));
         render("season-planner-compact", seasonPlanner.getUIComponent(),
@@ -489,6 +496,16 @@ class DataEntryVisualContractTest {
                 dashboard.getUIComponent(), "dashboard.workspace");
         dashboardWorkspace.setSelectedIndex(0);
         render("dashboard", dashboard.getUIComponent(), new Dimension(1500, 1000));
+        assertThat(button(dashboard.getUIComponent(), "Morning briefing").getHeight())
+                .as("dashboard action keeps a comfortable height on a large display")
+                .isBetween(36, 60);
+        render("dashboard-laptop", dashboard.getUIComponent(), new Dimension(850, 500));
+        assertInteractiveControlsFit(dashboard.getUIComponent());
+        assertThat(button(dashboard.getUIComponent(), "Morning briefing").getHeight())
+                .as("dashboard action is not squeezed by a short viewport")
+                .isBetween(36, 60);
+        render("dashboard-laptop-actions", dashboard.getUIComponent(), new Dimension(850, 500),
+                button(dashboard.getUIComponent(), "Morning briefing"), "dashboard.scroll");
         dashboardWorkspace.setSelectedIndex(1);
         render("dashboard-charts", dashboard.getUIComponent(), new Dimension(1366, 768));
         dashboardWorkspace.setSelectedIndex(0);
@@ -586,6 +603,12 @@ class DataEntryVisualContractTest {
                     new Dimension(1050, 700));
             render("knowledge-log-dark-compact", knowledgeLog.getUIComponent(),
                     new Dimension(1050, 700));
+            render("knowledge-log-dark-laptop", knowledgeLog.getUIComponent(), new Dimension(850, 500));
+            render("knowledge-log-dark-laptop-lesson", knowledgeLog.getUIComponent(), new Dimension(850, 500),
+                    (JComponent) findNamed(knowledgeLog.getUIComponent(), "knowledge.edit"), "knowledge.scroll");
+            render("dashboard-dark-laptop", dashboard.getUIComponent(), new Dimension(850, 500));
+            render("dashboard-dark-laptop-actions", dashboard.getUIComponent(), new Dimension(850, 500),
+                    button(dashboard.getUIComponent(), "Morning briefing"), "dashboard.scroll");
             render("trend-analysis-dark-compact", trends.getUIComponent(),
                     new Dimension(1050, 700));
             render("irrigation-dark-compact", irrigation.getUIComponent(),
@@ -709,13 +732,35 @@ class DataEntryVisualContractTest {
         return List.copyOf(result);
     }
 
+    private static void revealKeyboardTarget(JComponent root, JComponent target, String scrollName) {
+        java.awt.event.FocusEvent focus = new java.awt.event.FocusEvent(
+                target, java.awt.event.FocusEvent.FOCUS_GAINED);
+        for (java.awt.event.FocusListener listener : target.getFocusListeners()) {
+            listener.focusGained(focus);
+        }
+        javax.swing.JScrollPane scroll = (javax.swing.JScrollPane) findNamed(root, scrollName);
+        java.awt.Rectangle bounds = SwingUtilities.convertRectangle(target.getParent(),
+                target.getBounds(), scroll.getViewport().getView());
+        assertThat(scroll.getViewport().getViewRect().contains(bounds))
+                .as("keyboard navigation reveals %s", target.getAccessibleContext().getAccessibleName())
+                .isTrue();
+    }
+
     private static void render(String name, JComponent component, Dimension size)
             throws Exception {
+        render(name, component, size, null, null);
+    }
+
+    private static void render(String name, JComponent component, Dimension size,
+                               JComponent keyboardTarget, String scrollName) throws Exception {
         SwingUtilities.invokeAndWait(() -> {
             component.addNotify();
             component.setSize(size);
             component.validate();
             layoutRecursively(component);
+            if (keyboardTarget != null) {
+                revealKeyboardTarget(component, keyboardTarget, scrollName);
+            }
             BufferedImage image = new BufferedImage(
                     size.width, size.height, BufferedImage.TYPE_INT_ARGB);
             Graphics2D graphics = image.createGraphics();
