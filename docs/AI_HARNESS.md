@@ -57,7 +57,7 @@ plugin deliberately classifies generic button activation as destructive because
 a selector could refer to Save, Delete, Fulfill, or another consequential
 button. This is intentionally stricter than guessing from button text.
 
-Snapshots include the visible route and control metadata—kind, selector,
+Snapshots include the visible route and control metadata—kind, selector, label,
 enabled, focusable, and commandable—but never editable field values or password
 contents. Visible labels may still contain customer or event information, so
 protect the token and treat observations as private farm data.
@@ -948,8 +948,9 @@ Read commands are synchronous and do not create action-journal entries.
 Reusing a read request ID still replays its earlier response; use a new ID to
 obtain current data.
 
-Export dialogs publish the stable `Farm export file chooser` selector
-(`farm.exportFileChooser` also works). With sensitive reads enabled,
+Export dialogs publish the stable `farm.exportFileChooser` selector;
+`Farm export file chooser` remains its readable label and accepted alias.
+With sensitive reads enabled,
 `read-control` reports the dialog title, current directory, and selected path.
 `choose-file` sets an absolute path and calls the chooser's approval callback;
 it rejects relative paths, incompatible file/directory selections, and files
@@ -1017,14 +1018,29 @@ Values and pixels can contain customer, order, event, or farm information.
 Enable this gate only for a supervised session and ensure the connected model,
 transport, logs, and transcripts have an acceptable retention policy.
 
-Selectors come from accessible names, production component names, or visible
-button text and must be unique across all control kinds on the current screen.
-Snapshot commandability checks all visible components against the name aliases
-accepted by command execution. If an accessible name also matches another
-visible component's name or button text, the snapshot uses the control's existing
-unique production component name when available. Otherwise the control remains
-unaddressable, even if a type-specific action could distinguish it. Use the
-returned selector verbatim; the display label itself does not change.
+Swing desktop plugin version 1.9 prefers a control's explicit production
+component name as its snapshot `selector` whenever that name is unique. The
+separate `HarnessControl.label` field uses visible button text when available and
+the accessible label otherwise, so a named button keeps its selector as text changes
+from `Add planting` to `Saving planting…` or `Retry planting`. Older plugins may
+omit the separate label, in which case it is an empty string.
+
+Selectors can also match accessible names and visible button text. If the
+component name is missing or ambiguous, discovery falls back to the accessible
+label or button text. Both discovery and command execution require uniqueness
+across all visible Swing components: a name or label shared by a button and a
+field, or by an interactive control and a non-interactive label, is ambiguous.
+A type-specific action cannot bypass that ambiguity. The current label remains
+an accepted alias when globally unique, even when discovery advertises the
+component name. A control with no unique advertised selector remains
+unaddressable. Use the returned selector verbatim.
+
+A retained selector does not keep an old `metadata.contextToken` current.
+Label changes and control-tree changes still invalidate the guarded observation;
+observe again and pass the fresh token as `expected-context` before acting on
+the changed screen. Commands that omit this optional guard retain the behavior
+described in the context-token contract above.
+
 Buttons without a production action or item listener are not advertised as
 commandable. Combo choices are matched
 to renderer-visible text; table columns and tabs use their exact displayed

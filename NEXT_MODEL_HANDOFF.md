@@ -1,4 +1,36 @@
-# Latest direction — September 22, 2026
+# Latest direction — September 26, 2026
+
+## Latest completed work: stable desktop selectors
+
+Completed the interrupted selector update for Swing plugin 1.9. Snapshots prefer
+globally unique component names and retain readable labels in `HarnessControl.label`.
+Button labels follow visible text even when an explicit accessible name stays fixed.
+Current human-label aliases still work when unique. Typed actions now reject
+cross-control ambiguities using the same address space as discovery. A stable
+selector does not bypass fresh-context, deadline, access, or enabled-state checks.
+
+New coverage exercises 17 selector lifecycle cases and five real Season Planner
+workflow/guard cases, including changing save labels and retained-draft counts.
+Existing table and file-dialog assertions now distinguish stable selectors from
+readable labels. The new suites' AssertJ type-inference and Mockito varargs issues
+are fixed. Both new suites have verification floors. All 27 focused selector,
+workflow, plugin, and file-dialog cases passed.
+
+Final clean isolated quality verification on Java 21.0.4 passed 1,936 tests plus
+two packaged-JAR checks, with zero failures/errors/skips. All 180 suite/phase
+floors passed; coverage is 87.23% lines and 70.45% branches. Checkstyle and
+SpotBugs have zero findings, and both SBOM formats were generated. The 72 Node
+worker/preview/launcher/packaging checks and 18 Python verifier checks also passed.
+Logs: `dist/harness-evidence/sync-quality.log`, `sync-node-tests.log`, and
+`sync-python-tests.log`. Source/report evidence is `dist/harness-evidence/latest.json`.
+
+Continue on `codex/recover-unpushed-work` / draft PR #21. The branch includes all
+of `main`; local and remote main were both `54d41f7` during this sync. GitHub Actions
+is separately blocked before execution by account payments/spending limits; local
+success does not establish remote CI or native installer acceptance.
+
+The recovery-output discovery work and other CSRBT ideas below remain follow-ups.
+The September 22 research describes the source as it stood before this change.
 
 ## Latest research: CSRBT harness ideas
 
@@ -9,11 +41,10 @@ with FlowersForever `4c74375`, using pinned source references and concrete
 acceptance criteria. This is research/documentation; no new harness feature or
 CSRBT sweep result is claimed.
 
-Recommended harness follow-up: stable advertised selectors and observable recovery
-outputs through the public gateway. Current bridge discovery prefers a unique
-changing button label over its stable component name and silently filters ambiguous
-supplemental outputs. Preserve context-token and sensitive-read protections while
-auditing those cases. Other scoped ideas: targeted mutation proof with current
+Stable advertised selectors are now implemented above. The next harness follow-up
+is observable recovery outputs through the public gateway: discovery still filters
+ambiguous supplemental outputs. Preserve context-token and sensitive-read protections
+while auditing those cases. Other scoped ideas: targeted mutation proof with current
 catalogues, Java/Node/Python evidence scope, and semantic persistence/export checks
 with controlled clocks. Existing floors, hashes, deadline/replay handling and
 semantic journeys are credited rather than proposed again.

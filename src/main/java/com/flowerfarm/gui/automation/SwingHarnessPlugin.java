@@ -31,7 +31,7 @@ public class SwingHarnessPlugin implements HarnessPlugin {
             ID,
             "FlowersForever Swing desktop",
             "Observe and operate the installed desktop through accessible selectors.",
-            "1.8",
+            "1.9",
             HarnessPluginKind.APPLICATION,
             Set.of(HarnessPluginCapability.OBSERVATION,
                     HarnessPluginCapability.COMMANDS,

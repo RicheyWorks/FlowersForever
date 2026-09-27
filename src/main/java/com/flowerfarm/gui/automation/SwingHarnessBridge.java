@@ -925,14 +925,21 @@ public class SwingHarnessBridge {
     private <T extends Component> T unique(String selector, Class<T> type) {
         Attachment current = requireAttachment();
         return onEdt(() -> {
-            List<T> matches = new ArrayList<>();
-            collectMatches(activeRoot(current), selector, type, matches);
+            // Discovery and every action share one address space. A typed lookup
+            // must not silently choose a button whose name also identifies a field.
+            List<JComponent> matches = new ArrayList<>();
+            collectMatches(activeRoot(current), selector, JComponent.class, matches);
             if (matches.size() != 1) {
                 throw new IllegalArgumentException("Expected one visible "
                         + type.getSimpleName() + " named '" + selector + "' but found "
                         + matches.size());
             }
-            return matches.get(0);
+            JComponent target = matches.get(0);
+            if (!type.isInstance(target)) {
+                throw new IllegalArgumentException("Control '" + selector
+                        + "' is not a " + type.getSimpleName());
+            }
+            return type.cast(target);
         });
     }
 
@@ -1026,17 +1033,16 @@ public class SwingHarnessBridge {
     }
 
     private static HarnessControl observedControl(JComponent root, RawControl control) {
-        String selector = control.selector();
-        boolean unique = !selector.isBlank()
-                && hasUniqueSelector(root, control.component(), selector);
+        String label = control.component() instanceof AbstractButton button
+                ? firstNonBlank(button.getText(), control.selector()) : control.selector();
         String componentName = control.component().getName();
-        if (!unique && componentName != null && !componentName.isBlank()
-                && hasUniqueSelector(root, control.component(), componentName)) {
-            selector = componentName;
-            unique = true;
-        }
+        boolean named = componentName != null && !componentName.isBlank()
+                && hasUniqueSelector(root, control.component(), componentName);
+        String selector = named ? componentName : control.selector();
+        boolean unique = named || !selector.isBlank()
+                && hasUniqueSelector(root, control.component(), selector);
         return new HarnessControl(control.kind(), selector, control.enabled(),
-                control.focusable(), control.supported() && unique);
+                control.focusable(), control.supported() && unique, label);
     }
 
     private static boolean hasUniqueSelector(

@@ -81,7 +81,8 @@ class SwingHarnessFileDialogTest {
                 assertThat(opened.snapshot().metadata()).containsEntry("modalActive", true);
                 assertThat(opened.snapshot().controls()).singleElement()
                         .satisfies(control -> {
-                            assertThat(control.selector()).isEqualTo(SELECTOR);
+                            assertThat(control.selector()).isEqualTo("farm.exportFileChooser");
+                            assertThat(control.label()).isEqualTo(SELECTOR);
                             assertThat(control.commandable()).isTrue();
                         });
                 var details = gateway.execute(TOKEN, SwingHarnessPlugin.ID,

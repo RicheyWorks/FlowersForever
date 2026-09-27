@@ -1,5 +1,19 @@
 # Harness ideas from the CSRBT ecosystem
 
+## Implementation update — September 26, 2026
+
+The stable-selector recommendation below is implemented in Swing plugin 1.9.
+Discovery prefers unique component names and publishes human-readable labels
+separately; current label aliases still work when unique. Discovery and typed
+actions reject ambiguity across control types. Seventeen lifecycle regressions
+and five Season Planner workflow/guard cases cover label changes, collisions,
+rebuilding, disappearance, and continued context/permission enforcement.
+See [the current selector contract](AI_HARNESS.md).
+
+Recovery-output discovery, targeted mutation proof, composite runtime evidence,
+and semantic export checks remain follow-ups. The September 22 review below is
+historical and describes the source before the selector change.
+
 ## Review refresh — September 22, 2026
 
 **Best next harness pass: audit stable selectors and recovery outputs through the

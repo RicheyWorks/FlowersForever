@@ -52,8 +52,10 @@ class SwingHarnessPluginTest {
         assertThat(before.route()).containsExactly("Reference");
         assertThat(before.controls())
                 .extracting(control -> control.selector())
-                .contains("Crop draft", "Crop choice", "Plant table", "Task list",
+                .contains("Crop draft", "Crop choice", "plant.table", "Task list",
                         "Stem count", "Stem angle", "Apply draft");
+        assertThat(before.controls()).filteredOn(control -> control.selector().equals("plant.table"))
+                .singleElement().satisfies(control -> assertThat(control.label()).isEqualTo("Plant table"));
         assertThat(before.toString()).doesNotContain("private crop note");
         assertThat(before.metadata()).containsEntry("fieldValuesIncluded", false);
         assertThat(before.metadata()).containsEntry("routeCount", 2);
