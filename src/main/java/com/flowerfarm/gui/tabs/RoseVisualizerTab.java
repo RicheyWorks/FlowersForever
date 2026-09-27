@@ -128,9 +128,8 @@ public class RoseVisualizerTab implements FlowerFarmTab {
                 "Explore PNW rose habits, connect inventory products, and save useful variants.",
                 infoLabel), BorderLayout.NORTH);
         canvas = new LSystemCanvas();
-        JScrollPane previewScroll = new JScrollPane(canvas);
-        previewScroll.setName("rose.visualizer.preview");
-        previewScroll.getAccessibleContext().setAccessibleName("Rose growth preview");
+        canvas.setName("rose.visualizer.preview");
+        canvas.getAccessibleContext().setAccessibleName("Rose growth preview");
 
         JScrollPane controlScroll = new JScrollPane(buildControls());
         controlScroll.setName("rose.visualizer.controls");
@@ -142,7 +141,7 @@ public class RoseVisualizerTab implements FlowerFarmTab {
         JSplitPane workspace = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT,
                 FarmUi.section("Growth preview",
                         "Redraw after changing a variety, season, or growth control.",
-                        previewScroll),
+                        canvas),
                 FarmUi.section("Growth controls",
                         "Start with a preset, then adjust or evolve the branching habit.",
                         controlScroll));
@@ -235,7 +234,12 @@ public class RoseVisualizerTab implements FlowerFarmTab {
         east.add(section("Inventory rose product"));
         east.add(inventorySkuBox);
         east.add(Box.createVerticalStrut(4));
-        east.add(FarmUi.toolbar(inventoryStatusLabel, refreshInventoryBtn));
+        JPanel inventoryActions = FarmUi.toolbar(inventoryStatusLabel, refreshInventoryBtn);
+        inventoryActions.setName("rose.visualizer.inventoryActions");
+        inventoryActions.setAlignmentX(Component.LEFT_ALIGNMENT);
+        inventoryActions.setMaximumSize(new Dimension(
+                Integer.MAX_VALUE, inventoryActions.getPreferredSize().height));
+        east.add(inventoryActions);
         east.add(Box.createVerticalStrut(6));
         east.add(section("Season / colors"));
         east.add(seasonBox);

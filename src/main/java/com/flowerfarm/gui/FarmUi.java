@@ -12,6 +12,7 @@ import javax.swing.JComboBox;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTable;
+import javax.swing.JTabbedPane;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
 import javax.swing.SwingConstants;
@@ -478,19 +479,28 @@ public final class FarmUi {
     /** Keep keyboard targets visible in a completed, scrollable workflow. */
     public static void revealFocusedControls(JComponent root) {
         if ((root instanceof AbstractButton || root instanceof JTextComponent
-                || root instanceof JComboBox<?> || root instanceof JTable)
+                || root instanceof JComboBox<?> || root instanceof JTable || root instanceof JTabbedPane)
                 && !Boolean.TRUE.equals(root.getClientProperty("flowerfarm.revealFocus"))) {
             root.putClientProperty("flowerfarm.revealFocus", Boolean.TRUE);
             root.addFocusListener(new FocusAdapter() {
                 @Override public void focusGained(FocusEvent event) {
                     JComponent target = root;
                     // Reveal an inner reader/table without changing its own scroll position.
-                    if (root.getParent() instanceof JViewport viewport
+                    if ((root instanceof JTable || root instanceof JTextComponent)
+                            && root.getParent() instanceof JViewport viewport
                             && viewport.getParent() instanceof JScrollPane scroll) {
                         target = scroll;
                     }
-                    target.scrollRectToVisible(new Rectangle(0, 0,
-                            target.getWidth(), target.getHeight()));
+                    Rectangle bounds = root instanceof JTabbedPane tabs && tabs.getSelectedIndex() >= 0
+                            ? tabs.getBoundsAt(tabs.getSelectedIndex())
+                            : new Rectangle(0, 0, target.getWidth(), target.getHeight());
+                    // An inner viewport consumes scroll requests, so reveal each enclosing level.
+                    for (Container parent = target.getParent(); parent != null; parent = parent.getParent()) {
+                        if (parent instanceof JViewport viewport
+                                && viewport.getView() instanceof JComponent view) {
+                            view.scrollRectToVisible(SwingUtilities.convertRectangle(target, bounds, view));
+                        }
+                    }
                 }
             });
         }

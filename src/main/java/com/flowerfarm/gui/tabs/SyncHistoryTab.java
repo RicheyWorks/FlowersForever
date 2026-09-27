@@ -393,46 +393,94 @@ public class SyncHistoryTab implements FlowerFarmTab {
         tableState.add(FarmUi.emptyState(
                 "No activities match these filters",
                 "Clear the filters or return after an import, harvest, or order change."), "empty");
+        tableState.setMinimumSize(new Dimension(0, 170));
+        tableState.setPreferredSize(new Dimension(720, 210));
 
         JPanel inspector = buildActivityInspector();
         JSplitPane timelineWorkspace = new JSplitPane(
                 JSplitPane.VERTICAL_SPLIT, tableState, inspector);
         timelineWorkspace.setName("activity.timelineWorkspace");
-        timelineWorkspace.setResizeWeight(0.67);
+        timelineWorkspace.setResizeWeight(0.55);
         timelineWorkspace.setContinuousLayout(true);
 
-        JPanel content = new JPanel(new BorderLayout(0, FarmUi.SECTION_GAP));
-        content.setOpaque(false);
-        content.add(FarmUi.section(
+        JPanel filters = FarmUi.section(
                 "Filter the timeline",
                 "Narrow by source, operation, result, or text in the message and detail.",
-                filterBar), BorderLayout.NORTH);
-        content.add(FarmUi.section(
+                filterBar);
+        JPanel timeline = FarmUi.section(
                 "Farm activity timeline",
                 "Select an activity to read its full details and recovery guidance.",
-                timelineWorkspace), BorderLayout.CENTER);
-        panel.add(content, BorderLayout.CENTER);
+                timelineWorkspace);
+        JPanel content = new ActivityBody(filters, timeline);
+        content.setName("activity.body");
+        FarmUi.revealFocusedControls(content);
+        JScrollPane scroll = new JScrollPane(content,
+                JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED, JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+        scroll.setName("activity.scroll");
+        scroll.setBorder(BorderFactory.createEmptyBorder());
+        scroll.getVerticalScrollBar().setUnitIncrement(24);
+        panel.add(scroll, BorderLayout.CENTER);
         applyRolePermissions(host == null || host.canMutateData());
+    }
+
+    /** Preserve room for both timeline rows and their readable details on short screens. */
+    private static final class ActivityBody extends JPanel implements Scrollable {
+        private static final long serialVersionUID = 1L;
+        private final JComponent filters;
+
+        private ActivityBody(JComponent filters, JComponent timeline) {
+            super(new BorderLayout(0, FarmUi.SECTION_GAP));
+            this.filters = filters;
+            setOpaque(false);
+            add(filters, BorderLayout.NORTH);
+            add(timeline, BorderLayout.CENTER);
+        }
+
+        @Override public Dimension getPreferredSize() {
+            Dimension preferred = super.getPreferredSize();
+            preferred.height = filters.getPreferredSize().height + FarmUi.SECTION_GAP + 540;
+            return preferred;
+        }
+        @Override public Dimension getPreferredScrollableViewportSize() { return getPreferredSize(); }
+        @Override public int getScrollableUnitIncrement(Rectangle visible, int orientation, int direction) {
+            return 24;
+        }
+        @Override public int getScrollableBlockIncrement(Rectangle visible, int orientation, int direction) {
+            return Math.max(24, visible.height - 24);
+        }
+        @Override public boolean getScrollableTracksViewportWidth() { return true; }
+        @Override public boolean getScrollableTracksViewportHeight() {
+            return getParent() != null && getParent().getHeight() >= getPreferredSize().height;
+        }
     }
 
     private JPanel buildActivityInspector() {
         selectedStatus = FarmUi.statusBadge("No activity selected", FarmUi.Tone.NEUTRAL);
-        recoveryLabel = FarmUi.formHint("Select a row to review what happened and what to do next.");
+        recoveryLabel = FarmUi.wrappingStatusBadge(
+                "Select a row to review what happened and what to do next.", FarmUi.Tone.NEUTRAL);
         recoveryLabel.setName("activity.recovery");
+        recoveryLabel.getAccessibleContext().setAccessibleName("Form guidance");
+        recoveryLabel.getAccessibleContext().setAccessibleDescription(recoveryLabel.getText());
         openWorkflowBtn = FarmUi.secondaryButton("Open related workflow");
         openWorkflowBtn.setName("activity.openWorkflow");
         openWorkflowBtn.setEnabled(false);
         openWorkflowBtn.addActionListener(e -> openSelectedWorkflow());
 
-        JPanel heading = new JPanel(new BorderLayout(FarmUi.CONTROL_GAP, 0));
+        JPanel actions = new JPanel(new BorderLayout(FarmUi.CONTROL_GAP, 0));
+        actions.setOpaque(false);
+        actions.add(FarmUi.toolbar(selectedStatus), BorderLayout.CENTER);
+        actions.add(openWorkflowBtn, BorderLayout.EAST);
+        JPanel heading = new JPanel(new BorderLayout(0, FarmUi.CONTROL_GAP));
+        heading.setName("activity.inspectorHeading");
         heading.setOpaque(false);
-        heading.add(FarmUi.toolbar(selectedStatus, recoveryLabel), BorderLayout.CENTER);
-        heading.add(openWorkflowBtn, BorderLayout.EAST);
+        heading.add(actions, BorderLayout.NORTH);
+        heading.add(recoveryLabel, BorderLayout.CENTER);
 
         detailArea = FarmUi.displayArea(5, 60);
         detailArea.setName("activity.selectedDetail");
         detailArea.getAccessibleContext().setAccessibleName("Selected activity details");
-        detailArea.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 11));
+        detailArea.setFont(UIManager.getFont("Label.font").deriveFont(13f));
+        detailArea.setBorder(BorderFactory.createEmptyBorder(12, 14, 12, 14));
         detailArea.setText("Select an activity to review its full message and diagnostic details.");
 
         JPanel inspector = new JPanel(new BorderLayout(0, FarmUi.CONTROL_GAP));
@@ -442,6 +490,8 @@ public class SyncHistoryTab implements FlowerFarmTab {
                 FarmUi.cardBorder(), BorderFactory.createEmptyBorder(2, 2, 2, 2)));
         inspector.add(heading, BorderLayout.NORTH);
         inspector.add(new JScrollPane(detailArea), BorderLayout.CENTER);
+        inspector.setMinimumSize(new Dimension(0, 240));
+        inspector.setPreferredSize(new Dimension(720, 260));
         return inspector;
     }
 
@@ -483,8 +533,8 @@ public class SyncHistoryTab implements FlowerFarmTab {
         JPanel fields = FarmUi.toolbar(
                 sourceLabel, connectorFilter,
                 operationLabel, operationFilter,
-                resultLabel, resultFilter,
-                searchLabel, messageSearch);
+                resultLabel, resultFilter);
+        JPanel search = FarmUi.toolbar(searchLabel, messageSearch);
 
         JButton applyBtn = FarmUi.primaryButton("Apply filters");
         applyBtn.addActionListener(apply);
@@ -517,14 +567,15 @@ public class SyncHistoryTab implements FlowerFarmTab {
         clearHistBtn = FarmUi.dangerButton("Clear history…");
         clearHistBtn.addActionListener(e -> clearHistory());
 
-        JPanel actions = FarmUi.toolbar(
-                applyBtn, failures, clear, refreshBtn, exportCsvBtn, exportPdfBtn, clearHistBtn);
+        JPanel actions = FarmUi.toolbar(applyBtn, failures, clear, refreshBtn);
+        JPanel exports = FarmUi.toolbar(exportCsvBtn, exportPdfBtn, clearHistBtn, exportStatusLabel);
         filterBar.add(fields);
+        filterBar.add(Box.createVerticalStrut(FarmUi.CONTROL_GAP));
+        filterBar.add(search);
         filterBar.add(Box.createVerticalStrut(FarmUi.CONTROL_GAP));
         filterBar.add(actions);
         filterBar.add(Box.createVerticalStrut(FarmUi.CONTROL_GAP));
-        exportStatusLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
-        filterBar.add(exportStatusLabel);
+        filterBar.add(exports);
         return filterBar;
     }
 

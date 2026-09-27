@@ -357,6 +357,11 @@ class DataEntryVisualContractTest {
         crmWorkspace.setSelectedIndex(0);
         render("customers", crm.getUIComponent(), new Dimension(1120, 780));
         render("customers-compact", crm.getUIComponent(), new Dimension(1050, 700));
+        assertThat(textField(crm.getUIComponent(), "Customer or business name").getHeight())
+                .as("customer fields keep a comfortable input height").isGreaterThanOrEqualTo(36);
+        render("customers-laptop", crm.getUIComponent(), new Dimension(850, 500));
+        render("customers-laptop-form", crm.getUIComponent(), new Dimension(850, 500),
+                button(crm.getUIComponent(), "Add customer"), "crm.customerScroll");
         crmWorkspace.setSelectedIndex(1);
         render("orders", crm.getUIComponent(), new Dimension(1120, 780));
         render("orders-compact", crm.getUIComponent(), new Dimension(1050, 700));
@@ -365,6 +370,7 @@ class DataEntryVisualContractTest {
                 .isGreaterThanOrEqualTo(50);
         assertFormLabelsFit((Container) findNamed(
                 crm.getUIComponent(), "crm.orderEntryForm"));
+        render("orders-laptop", crm.getUIComponent(), new Dimension(850, 500));
         render("harvest-log", harvestLog.getUIComponent(), new Dimension(1120, 780));
         assertThat(findNamed(harvestLog.getUIComponent(), "harvest.history.table").getHeight())
                 .as("visible harvest history rows at laptop height")
@@ -411,8 +417,20 @@ class DataEntryVisualContractTest {
         render("inventory", inventoryTab.getUIComponent(), new Dimension(1080, 720));
         render("inventory-compact", inventoryTab.getUIComponent(), new Dimension(1050, 700));
         render("market-day", marketDayTab.getUIComponent(), new Dimension(1050, 700));
+        render("market-day-desktop", marketDayTab.getUIComponent(), new Dimension(1280, 1120));
+        render("market-day-laptop", marketDayTab.getUIComponent(), new Dimension(850, 500));
+        assertThat(findNamed(marketDayTab.getUIComponent(), "marketDay.execution").getHeight())
+                .as("packing list and load-out retain usable working height").isGreaterThanOrEqualTo(300);
+        render("market-day-laptop-loads", marketDayTab.getUIComponent(), new Dimension(850, 500),
+                (JComponent) findNamed(marketDayTab.getUIComponent(), "marketDay.openOrder.10"),
+                "marketDay.scroll");
         render("reports", reports.getUIComponent(), new Dimension(1050, 700));
         render("activity-history", activity.getUIComponent(), new Dimension(1120, 720));
+        render("activity-history-laptop", activity.getUIComponent(), new Dimension(850, 500));
+        assertThat(findNamed(activity.getUIComponent(), "activity.selectedDetail").getParent().getHeight())
+                .as("activity details retain room for several readable lines").isGreaterThanOrEqualTo(100);
+        render("activity-history-laptop-details", activity.getUIComponent(), new Dimension(850, 500),
+                (JComponent) findNamed(activity.getUIComponent(), "activity.selectedDetail"), "activity.scroll");
         render("activity-history-viewer", activityViewer.getUIComponent(),
                 new Dimension(1050, 700));
         render("knowledge-log", knowledgeLog.getUIComponent(), new Dimension(1120, 720));
@@ -430,6 +448,8 @@ class DataEntryVisualContractTest {
                 (JComponent) findNamed(knowledgeLog.getUIComponent(), "knowledge.edit"), "knowledge.scroll");
         render("season-planner", seasonPlanner.getUIComponent(),
                 new Dimension(1120, 720));
+        render("season-planner-desktop", seasonPlanner.getUIComponent(),
+                new Dimension(1280, 1000));
         render("season-planner-compact", seasonPlanner.getUIComponent(),
                 new Dimension(1050, 700));
         JTabbedPane seasonWorkspace = (JTabbedPane) findNamed(
@@ -437,14 +457,31 @@ class DataEntryVisualContractTest {
         seasonWorkspace.setSelectedIndex(1);
         render("season-planner-records", seasonPlanner.getUIComponent(),
                 new Dimension(1120, 720));
+        render("season-planner-records-laptop", seasonPlanner.getUIComponent(),
+                new Dimension(850, 500));
+        assertThat(findNamed(seasonPlanner.getUIComponent(), "seasonPlanner.table").getParent().getHeight())
+                .as("compact season records retain several visible planting rows").isGreaterThanOrEqualTo(100);
+        render("season-planner-records-laptop-rows", seasonPlanner.getUIComponent(), new Dimension(850, 500),
+                (JComponent) findNamed(seasonPlanner.getUIComponent(), "seasonPlanner.table"), "seasonPlanner.scroll");
         seasonWorkspace.setSelectedIndex(2);
         render("season-planner-weekly", seasonPlanner.getUIComponent(),
                 new Dimension(1120, 720));
+        render("season-planner-weekly-desktop", seasonPlanner.getUIComponent(),
+                new Dimension(1280, 1000));
         seasonWorkspace.setSelectedIndex(3);
         render("season-planner-insights", seasonPlanner.getUIComponent(),
                 new Dimension(1120, 720));
         seasonWorkspace.setSelectedIndex(0);
         render("trend-analysis", trends.getUIComponent(), new Dimension(1050, 700));
+        assertThat(findNamed(trends.getUIComponent(), "trend.chart").getHeight())
+                .as("harvest chart keeps a readable plot and axis labels").isGreaterThanOrEqualTo(240);
+        assertThat(findNamed(trends.getUIComponent(), "trend.weeklyTable").getParent().getHeight())
+                .as("weekly evidence shows multiple rows below its headers").isGreaterThanOrEqualTo(100);
+        render("trend-analysis-laptop-tabs", trends.getUIComponent(), new Dimension(850, 500),
+                (JComponent) findNamed(trends.getUIComponent(), "trend.evidenceTabs"), "trend.scroll");
+        render("trend-analysis-laptop-evidence", trends.getUIComponent(), new Dimension(850, 500),
+                (JComponent) findNamed(trends.getUIComponent(), "trend.weeklyTable"), "trend.scroll");
+        render("trend-analysis-desktop", trends.getUIComponent(), new Dimension(1280, 1050));
         render("irrigation", irrigation.getUIComponent(), new Dimension(1050, 700));
         render("irrigation-error", irrigationError.getUIComponent(),
                 new Dimension(1050, 700));
@@ -487,6 +524,11 @@ class DataEntryVisualContractTest {
                 new Dimension(1200, 800));
         render("reference-workspace-visualizer-compact", reference.getUIComponent(),
                 new Dimension(1050, 700));
+        Component roseInventory = findNamed(roseVisualizer.getUIComponent(), "rose.visualizer.inventorySku");
+        assertThat(roseInventory.getX())
+                .as("rose controls start at the left edge of their panel").isLessThanOrEqualTo(12);
+        assertThat(findNamed(roseVisualizer.getUIComponent(), "rose.visualizer.inventoryActions").getX())
+                .as("inventory actions align with the other rose controls").isEqualTo(roseInventory.getX());
         referenceTabs.setSelectedIndex(0);
         dashboard.getUIComponent();
         dashboard.initialize();
@@ -591,6 +633,12 @@ class DataEntryVisualContractTest {
                     new Dimension(1050, 700));
             render("orders-dark-compact", crm.getUIComponent(),
                     new Dimension(1050, 700));
+            render("orders-dark-laptop", crm.getUIComponent(), new Dimension(850, 500));
+            crmWorkspace.setSelectedIndex(0);
+            render("customers-dark-laptop", crm.getUIComponent(), new Dimension(850, 500));
+            render("customers-dark-laptop-form", crm.getUIComponent(), new Dimension(850, 500),
+                    button(crm.getUIComponent(), "Add customer"), "crm.customerScroll");
+            crmWorkspace.setSelectedIndex(1);
             render("reports-dark-compact", reports.getUIComponent(),
                     new Dimension(1050, 700));
             render("season-planner-dark-compact", seasonPlanner.getUIComponent(),
@@ -599,8 +647,15 @@ class DataEntryVisualContractTest {
                     new Dimension(1050, 700));
             render("market-day-dark-compact", marketDayTab.getUIComponent(),
                     new Dimension(1050, 700));
+            render("market-day-dark-laptop", marketDayTab.getUIComponent(), new Dimension(850, 500));
+            render("market-day-dark-laptop-loads", marketDayTab.getUIComponent(), new Dimension(850, 500),
+                    (JComponent) findNamed(marketDayTab.getUIComponent(), "marketDay.openOrder.10"),
+                    "marketDay.scroll");
             render("activity-history-dark-compact", activity.getUIComponent(),
                     new Dimension(1050, 700));
+            render("activity-history-dark-laptop", activity.getUIComponent(), new Dimension(850, 500));
+            render("activity-history-dark-laptop-details", activity.getUIComponent(), new Dimension(850, 500),
+                    (JComponent) findNamed(activity.getUIComponent(), "activity.selectedDetail"), "activity.scroll");
             render("knowledge-log-dark-compact", knowledgeLog.getUIComponent(),
                     new Dimension(1050, 700));
             render("knowledge-log-dark-laptop", knowledgeLog.getUIComponent(), new Dimension(850, 500));
@@ -611,6 +666,8 @@ class DataEntryVisualContractTest {
                     button(dashboard.getUIComponent(), "Morning briefing"), "dashboard.scroll");
             render("trend-analysis-dark-compact", trends.getUIComponent(),
                     new Dimension(1050, 700));
+            render("trend-analysis-dark-laptop-evidence", trends.getUIComponent(), new Dimension(850, 500),
+                    (JComponent) findNamed(trends.getUIComponent(), "trend.weeklyTable"), "trend.scroll");
             render("irrigation-dark-compact", irrigation.getUIComponent(),
                     new Dimension(1050, 700));
             render("rose-guide-dark-compact", roseGuide.getUIComponent(),
@@ -739,10 +796,23 @@ class DataEntryVisualContractTest {
             listener.focusGained(focus);
         }
         javax.swing.JScrollPane scroll = (javax.swing.JScrollPane) findNamed(root, scrollName);
-        java.awt.Rectangle bounds = SwingUtilities.convertRectangle(target.getParent(),
-                target.getBounds(), scroll.getViewport().getView());
+        JComponent revealed = target;
+        // Reader/table focus reveals its viewport; its full content may be much taller.
+        if ((target instanceof JTable || target instanceof javax.swing.text.JTextComponent)
+                && target.getParent() instanceof javax.swing.JViewport viewport
+                && viewport.getParent() instanceof javax.swing.JScrollPane readerScroll) {
+            revealed = readerScroll;
+        }
+        java.awt.Rectangle bounds = SwingUtilities.convertRectangle(revealed.getParent(),
+                revealed.getBounds(), scroll.getViewport().getView());
+        if (target instanceof JTabbedPane tabs) {
+            bounds = SwingUtilities.convertRectangle(tabs,
+                    tabs.getBoundsAt(tabs.getSelectedIndex()), scroll.getViewport().getView());
+        }
         assertThat(scroll.getViewport().getViewRect().contains(bounds))
-                .as("keyboard navigation reveals %s", target.getAccessibleContext().getAccessibleName())
+                .as("keyboard navigation reveals %s: control %s in viewport %s",
+                        target.getAccessibleContext().getAccessibleName(), bounds,
+                        scroll.getViewport().getViewRect())
                 .isTrue();
     }
 

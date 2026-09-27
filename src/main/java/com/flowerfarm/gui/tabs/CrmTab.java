@@ -907,12 +907,12 @@ public class CrmTab implements FlowerFarmTab {
     private void buildUI() {
         panel = FarmUi.page();
         accessLabel = FarmUi.statusBadge("Editing enabled", FarmUi.Tone.SUCCESS);
-        crmRefreshLabel = FarmUi.statusBadge("Customers and orders not loaded",
+        crmRefreshLabel = FarmUi.wrappingStatusBadge("Customers and orders not loaded",
                 FarmUi.Tone.NEUTRAL);
         crmRefreshLabel.setName("crm.refreshStatus");
         crmRefreshLabel.getAccessibleContext().setAccessibleName(
                 "Customer and order refresh status");
-        documentStatusLabel = FarmUi.statusBadge("Documents ready", FarmUi.Tone.NEUTRAL);
+        documentStatusLabel = FarmUi.wrappingStatusBadge("Documents ready", FarmUi.Tone.NEUTRAL);
         documentStatusLabel.setName("crm.documentStatus");
         documentStatusLabel.getAccessibleContext().setAccessibleName(
                 "Customer statement, invoice, and order export status");
@@ -923,8 +923,13 @@ public class CrmTab implements FlowerFarmTab {
         panel.add(FarmUi.pageHeader(
                 "Customers and orders",
                 "Manage market and florist relationships from inquiry through fulfillment.",
-                FarmUi.toolbar(accessLabel, crmRefreshLabel,
-                        documentStatusLabel, refreshCrmBtn)), BorderLayout.NORTH);
+                FarmUi.toolbar(accessLabel, refreshCrmBtn)), BorderLayout.NORTH);
+        JPanel statusMessages = new JPanel(new BorderLayout(0, FarmUi.CONTROL_GAP));
+        statusMessages.setName("crm.statusMessages");
+        statusMessages.setOpaque(false);
+        statusMessages.add(crmRefreshLabel, BorderLayout.NORTH);
+        statusMessages.add(documentStatusLabel, BorderLayout.SOUTH);
+        panel.add(statusMessages, BorderLayout.SOUTH);
 
         crmWorkspace = new JTabbedPane();
         crmWorkspace.setName("crm.workspace");
@@ -947,9 +952,9 @@ public class CrmTab implements FlowerFarmTab {
         panel.add(crmWorkspace, BorderLayout.CENTER);
     }
 
-    private JPanel buildCustomerPanel() {
-        JPanel p = new JPanel(new BorderLayout(6, 6));
-        p.setOpaque(false);
+    private JComponent buildCustomerPanel() {
+        JPanel p = new CrmWorkspaceBody(160);
+        p.setName("crm.customerBody");
 
         CrmCustomerSearchView searchView = new CrmCustomerSearchView(this::applyCustomerFilter);
         custSearch = searchView.searchField();
@@ -1001,8 +1006,9 @@ public class CrmTab implements FlowerFarmTab {
         customerState.add(customerEmptyState.component(), "empty");
         p.add(customerState, BorderLayout.CENTER);
 
-        JPanel form = new JPanel(new GridLayout(0, 4, 6, 4));
+        JPanel form = new JPanel(new GridBagLayout());
         form.setName("crm.orderEntryForm");
+        form.setOpaque(false);
         form.setBorder(BorderFactory.createEmptyBorder(
                 0, FarmUi.SECTION_GAP, 0, FarmUi.SECTION_GAP));
         custName = new JTextField();
@@ -1017,6 +1023,11 @@ public class CrmTab implements FlowerFarmTab {
         custEmail.getAccessibleContext().setAccessibleName("Customer email");
         custType.getAccessibleContext().setAccessibleName("Customer type");
         custNotes.getAccessibleContext().setAccessibleName("Customer notes");
+        for (JComponent control : List.of(
+                custName, custContact, custPhone, custEmail, custType, custNotes)) {
+            FarmUi.entryControl(control, null,
+                    control.getAccessibleContext().getAccessibleName());
+        }
         custNotes.addActionListener(event -> {
             if (editingCustomerId == null) {
                 addCustomer();
@@ -1024,12 +1035,12 @@ public class CrmTab implements FlowerFarmTab {
                 saveCustomerEdit();
             }
         });
-        addFormField(form, "Name*", custName, 'N');
-        addFormField(form, "Contact", custContact, 'C');
-        addFormField(form, "Phone", custPhone, 'P');
-        addFormField(form, "Email", custEmail, 'E');
-        addFormField(form, "Type", custType, 'T');
-        addFormField(form, "Notes", custNotes, '\0');
+        addCustomerFormField(form, "Name*", custName, 'N');
+        addCustomerFormField(form, "Contact", custContact, 'C');
+        addCustomerFormField(form, "Phone", custPhone, 'P');
+        addCustomerFormField(form, "Email", custEmail, 'E');
+        addCustomerFormField(form, "Type", custType, 'T');
+        addCustomerFormField(form, "Notes", custNotes, '\0');
 
         addCustomerBtn = FarmUi.primaryButton("Add customer");
         addCustomerBtn.addActionListener(e -> addCustomer());
@@ -1055,29 +1066,98 @@ public class CrmTab implements FlowerFarmTab {
         reviewCustomerConflictBtn.getAccessibleContext().setAccessibleName(
                 "Review the existing customer with this name");
         reviewCustomerConflictBtn.addActionListener(e -> reviewExistingCustomer());
-        customerModeLabel = FarmUi.statusBadge("New customer", FarmUi.Tone.INFO);
+        customerModeLabel = FarmUi.wrappingStatusBadge("New customer", FarmUi.Tone.INFO);
         watchValidationCorrection(custName, () -> {
             clearCustomerConflictHandoff();
             showCustomerCorrectionReady();
         });
         watchValidationCorrection(custEmail, this::showCustomerCorrectionReady);
-        JPanel buttons = FarmUi.toolbar(
-                addCustomerBtn, loadCustomerBtn, saveCustomerBtn,
-                clearCustomerBtn, deleteCustomerBtn, statementCustomerBtn,
-                reviewCustomerConflictBtn, customerModeLabel);
+        JPanel primaryActions = FarmUi.toolbar(
+                addCustomerBtn, loadCustomerBtn, saveCustomerBtn, clearCustomerBtn);
+        primaryActions.setName("crm.customerPrimaryActions");
+        JPanel secondaryActions = FarmUi.toolbar(
+                deleteCustomerBtn, statementCustomerBtn, reviewCustomerConflictBtn);
+        secondaryActions.setName("crm.customerSecondaryActions");
+        JPanel buttons = new JPanel(new BorderLayout(0, FarmUi.CONTROL_GAP));
+        buttons.setName("crm.customerFormActions");
+        buttons.setOpaque(false);
+        buttons.add(primaryActions, BorderLayout.NORTH);
+        buttons.add(secondaryActions, BorderLayout.CENTER);
+        buttons.add(customerModeLabel, BorderLayout.SOUTH);
         trackCustomerFormChanges();
         markCustomerFormClean();
         updateCustomerFormMode();
 
-        JPanel south = new JPanel(new BorderLayout());
+        JPanel south = new JPanel(new BorderLayout(0, FarmUi.CONTROL_GAP));
+        south.setOpaque(false);
         south.add(form, BorderLayout.CENTER);
         south.add(buttons, BorderLayout.SOUTH);
         p.add(south, BorderLayout.SOUTH);
-        return p;
+        return scrollWorkspace(p, "crm.customerScroll");
     }
 
-    private JPanel buildOrderPanel() {
-        JPanel p = new JPanel(new BorderLayout(6, 6));
+    private static void addCustomerFormField(JPanel form, String text,
+                                            JComponent field, char mnemonic) {
+        int position = form.getComponentCount() / 2;
+        GridBagConstraints constraints = new GridBagConstraints();
+        constraints.gridx = (position % 2) * 2;
+        constraints.gridy = position / 2;
+        constraints.anchor = GridBagConstraints.LINE_START;
+        constraints.insets = new Insets(position < 2 ? 0 : FarmUi.CONTROL_GAP,
+                position % 2 == 0 ? 0 : FarmUi.SECTION_GAP, 0, FarmUi.CONTROL_GAP);
+        form.add(fieldLabel(text, field, mnemonic), constraints);
+        constraints.gridx++;
+        constraints.weightx = 1;
+        constraints.fill = GridBagConstraints.HORIZONTAL;
+        constraints.insets = new Insets(position < 2 ? 0 : FarmUi.CONTROL_GAP, 0, 0, 0);
+        form.add(field, constraints);
+    }
+
+    private static JScrollPane scrollWorkspace(JPanel content, String name) {
+        FarmUi.revealFocusedControls(content);
+        JScrollPane scroll = new JScrollPane(content,
+                JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED, JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+        scroll.setName(name);
+        scroll.setBorder(BorderFactory.createEmptyBorder());
+        scroll.getVerticalScrollBar().setUnitIncrement(24);
+        return scroll;
+    }
+
+    /** Preserve table and form space while shorter windows scroll the whole workspace. */
+    private static final class CrmWorkspaceBody extends JPanel implements Scrollable {
+        private static final long serialVersionUID = 1L;
+        private final int minimumCenterHeight;
+
+        private CrmWorkspaceBody(int minimumCenterHeight) {
+            super(new BorderLayout(6, 6));
+            this.minimumCenterHeight = minimumCenterHeight;
+            setOpaque(false);
+        }
+
+        @Override public Dimension getPreferredSize() {
+            Dimension preferred = super.getPreferredSize();
+            Component center = ((BorderLayout) getLayout()).getLayoutComponent(BorderLayout.CENTER);
+            if (center != null) {
+                preferred.height += minimumCenterHeight - center.getPreferredSize().height;
+            }
+            return preferred;
+        }
+
+        @Override public Dimension getPreferredScrollableViewportSize() { return getPreferredSize(); }
+        @Override public int getScrollableUnitIncrement(Rectangle visible, int orientation, int direction) {
+            return 24;
+        }
+        @Override public int getScrollableBlockIncrement(Rectangle visible, int orientation, int direction) {
+            return Math.max(24, visible.height - 24);
+        }
+        @Override public boolean getScrollableTracksViewportWidth() { return true; }
+        @Override public boolean getScrollableTracksViewportHeight() {
+            return getParent() != null && getParent().getHeight() >= getPreferredSize().height;
+        }
+    }
+
+    private JComponent buildOrderPanel() {
+        JPanel p = new CrmWorkspaceBody(360);
         p.setName("crm.orderPanel");
         p.setOpaque(false);
 
@@ -1102,10 +1182,10 @@ public class CrmTab implements FlowerFarmTab {
         filterTo.setName("crm.orderFilterTo");
         filterFrom.getAccessibleContext().setAccessibleName("Order filter start date");
         filterTo.getAccessibleContext().setAccessibleName("Order filter end date");
-        orderStatusLabel = FarmUi.statusBadge("Orders not loaded", FarmUi.Tone.NEUTRAL);
+        orderStatusLabel = FarmUi.wrappingStatusBadge("Orders not loaded", FarmUi.Tone.NEUTRAL);
         watchValidationCorrection(filterFrom, this::showOrderFilterCorrectionReady);
         watchValidationCorrection(filterTo, this::showOrderFilterCorrectionReady);
-        fulfillmentStatusLabel = FarmUi.statusBadge(
+        fulfillmentStatusLabel = FarmUi.wrappingStatusBadge(
                 "Completion ready · inventory changes only after confirmation",
                 FarmUi.Tone.NEUTRAL);
         fulfillmentStatusLabel.setName("crm.fulfillmentStatus");
@@ -1163,8 +1243,13 @@ public class CrmTab implements FlowerFarmTab {
                 fieldLabel("To", filterTo, '\0'), filterTo);
         JPanel filterActions = FarmUi.toolbar(
                 focusNewOrderBtn, applyOrderFilterBtn, clearOrderFilterBtn, readyToFulfillBtn,
-                needsHandoffReviewBtn,
-                orderStatusLabel, fulfillmentStatusLabel);
+                needsHandoffReviewBtn);
+        filterActions.setName("crm.orderFilterActions");
+        JPanel filterStatuses = new JPanel(new BorderLayout(0, FarmUi.CONTROL_GAP));
+        filterStatuses.setName("crm.orderFilterStatuses");
+        filterStatuses.setOpaque(false);
+        filterStatuses.add(orderStatusLabel, BorderLayout.NORTH);
+        filterStatuses.add(fulfillmentStatusLabel, BorderLayout.CENTER);
         JPanel filterBar = new JPanel();
         filterBar.setOpaque(false);
         filterBar.setLayout(new BoxLayout(filterBar, BoxLayout.Y_AXIS));
@@ -1183,6 +1268,12 @@ public class CrmTab implements FlowerFarmTab {
         filterBar.add(filterDates);
         filterBar.add(Box.createVerticalStrut(FarmUi.CONTROL_GAP));
         filterBar.add(filterActions);
+        filterBar.add(Box.createVerticalStrut(FarmUi.CONTROL_GAP));
+        filterBar.add(filterStatuses);
+        for (JComponent row : List.of(
+                orderHandoffBanner, filterCriteria, filterDates, filterActions, filterStatuses)) {
+            row.setAlignmentX(Component.LEFT_ALIGNMENT);
+        }
         p.add(filterBar, BorderLayout.NORTH);
 
         orderModel = new DefaultTableModel(
@@ -1556,8 +1647,12 @@ public class CrmTab implements FlowerFarmTab {
         secondaryActions.add(FarmUi.toolbar(
                 startAnotherOrderBtn, resetNewOrderDetailsBtn));
         secondaryActions.add(Box.createVerticalStrut(FarmUi.CONTROL_GAP));
-        secondaryActions.add(FarmUi.toolbar(
-                controlLabel("More order actions", orderTools), orderTools, runOrderToolBtn));
+        JPanel orderToolRow = new JPanel(new BorderLayout(FarmUi.CONTROL_GAP, FarmUi.CONTROL_GAP));
+        orderToolRow.setOpaque(false);
+        orderToolRow.add(controlLabel("More order actions", orderTools), BorderLayout.NORTH);
+        orderToolRow.add(orderTools, BorderLayout.CENTER);
+        orderToolRow.add(runOrderToolBtn, BorderLayout.EAST);
+        secondaryActions.add(orderToolRow);
         updateOrderActions();
 
         JPanel south = new JPanel(new BorderLayout());
@@ -1641,21 +1736,30 @@ public class CrmTab implements FlowerFarmTab {
         entryScroll.setBorder(null);
         entryScroll.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
         entryScroll.getVerticalScrollBar().setUnitIncrement(16);
-        orderState.setMinimumSize(new Dimension(0, 72));
-        entryScroll.setMinimumSize(new Dimension(0, 150));
+        orderState.setMinimumSize(new Dimension(0, 140));
+        entryScroll.setMinimumSize(new Dimension(0, 180));
         JSplitPane orderWorkspace = new JSplitPane(
-                JSplitPane.VERTICAL_SPLIT, orderState, entryScroll);
+                JSplitPane.VERTICAL_SPLIT, orderState, entryScroll) {
+            private boolean dividerPlaced;
+
+            @Override public void doLayout() {
+                if (!dividerPlaced && getHeight() > 0) {
+                    setDividerLocation(0.4);
+                    dividerPlaced = true;
+                }
+                super.doLayout();
+            }
+        };
         orderWorkspace.setName("crm.orderWorkspace");
         orderWorkspace.setBorder(null);
-        orderWorkspace.setResizeWeight(0.22);
-        orderWorkspace.setDividerLocation(0.22);
+        orderWorkspace.setResizeWeight(0.4);
         orderWorkspace.setContinuousLayout(true);
         orderWorkspace.setOneTouchExpandable(true);
         orderWorkspace.getAccessibleContext().setAccessibleName(
                 "Order list and entry workspace");
         p.add(orderWorkspace, BorderLayout.CENTER);
         installOrderKeyboardActions(p);
-        return p;
+        return scrollWorkspace(p, "crm.orderScroll");
     }
 
     private void installOrderKeyboardActions(JComponent scope) {

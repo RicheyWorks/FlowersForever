@@ -1,5 +1,37 @@
 # Latest direction — September 26, 2026
 
+## Further desktop polish
+
+CRM customer forms use natural label widths, comfortable input heights, and
+separate action rows. Refresh/document statuses stay in a wrapping footer so
+compact page titles remain readable. Orders retain useful list and entry heights,
+with filter statuses separated from actions and vertical workspace scrolling.
+
+Market Day preserves pick-list/load-out space and wraps customer checkboxes and
+status messages to the available width. Export status has its own row. Activity
+History preserves timeline/inspector space, uses larger padded detail text, and
+keeps recovery guidance separate from actions. Season Planner preserves usable
+workspace heights and a fixed status footer; records retain readable column widths
+and full-cell tooltips. Harvest Outlook preserves chart and evidence-table heights
+and wraps insight text to each card's width. The rose preview fits its pane while
+controls align left.
+
+Keyboard reveal now walks all enclosing viewports, including nested Market Day
+and CRM workspaces; table/text readers retain their internal position. Focused
+tab strips reveal their selected tab header. Existing data, authorization,
+confirmation, draft, and export semantics remain unchanged.
+
+Final clean isolated Java 21 verification passed 1,936 tests plus two packaged-JAR
+checks, with all 180 suite/phase floors met and zero failures/errors/skips.
+Coverage is 87.26% lines and 70.49% branches; Checkstyle and SpotBugs report zero
+findings. The source digest is
+`363dc1af9bd21629e1d049a85862db7bf7caeca373e7f3921c674fc3feece59c`.
+Evidence is in `dist/harness-evidence/latest.json`; the full log is
+`dist/harness-evidence/ui-polish-pass2-quality.log`. Compact light/dark renders and
+keyboard-revealed controls were reviewed, and the focused visual fixture passed.
+README screenshots now show the refreshed Market Day, Outlook, and Season Planner
+layouts. Native installers were not rebuilt or accepted interactively.
+
 ## Latest completed work: desktop layout polish
 
 Dashboard quick actions keep a comfortable height in both large and compact

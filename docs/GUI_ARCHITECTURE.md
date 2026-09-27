@@ -46,6 +46,17 @@ keep readable column widths with horizontal scrolling; the list/detail split sta
 adjustable. `FarmUi.revealFocusedControls` is an opt-in helper installed after a
 workflow's controls are built. It scrolls keyboard targets into view without moving
 the existing scroll position inside a nested table or lesson reader.
+Focused tab strips reveal their selected tab instead of scrolling to the bottom
+of the tab's entire content. CRM, Market Day, Activity History, and Harvest Outlook
+also preserve useful body heights inside width-tracking viewports. CRM keeps status
+messages outside the body and reserves separate list and entry space. Market Day
+load-out cards wrap to the checklist viewport, while the pick list retains its
+monospaced export layout. Harvest Outlook reserves chart and evidence-table space
+instead of scaling the plot into a thin strip; its insight text wraps to each
+card's actual width. Season Planner scrolls the metrics and workspace together
+while retaining a fixed status footer and readable record-column widths with
+horizontal scrolling. The rose preview uses the canvas's
+existing scene scaling to fit its panel; PNG exports retain their minimum size.
 
 ```
 com.flowerfarm.gui

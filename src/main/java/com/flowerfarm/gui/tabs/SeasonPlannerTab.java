@@ -24,6 +24,7 @@ import javax.swing.JTabbedPane;
 import javax.swing.JTable;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
+import javax.swing.Scrollable;
 import javax.swing.SwingUtilities;
 import javax.swing.SwingWorker;
 import javax.swing.table.DefaultTableModel;
@@ -42,6 +43,8 @@ import java.awt.GridLayout;
 import java.awt.HeadlessException;
 import java.awt.Insets;
 import java.awt.RenderingHints;
+import java.awt.Rectangle;
+import java.awt.event.MouseEvent;
 import java.awt.geom.Path2D;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
@@ -219,18 +222,30 @@ public class SeasonPlannerTab implements FlowerFarmTab {
         panel.add(FarmUi.pageHeader(
                 "Season & Bed Planner",
                 "Enter each planting block once, then see timing, bed capacity, and expected stems together.",
-                FarmUi.toolbar(new JLabel("Season:"), seasonPicker, refreshButton,
-                        reviewDraftsButton, addButton)),
+                FarmUi.toolbar(addButton)),
                 BorderLayout.NORTH);
 
-        JPanel content = new JPanel(new BorderLayout(0, FarmUi.SECTION_GAP));
-        content.setOpaque(false);
-        content.add(buildMetrics(), BorderLayout.NORTH);
-        content.add(buildWorkspace(), BorderLayout.CENTER);
+        JLabel seasonLabel = new JLabel("Season:");
+        seasonLabel.setLabelFor(seasonPicker);
+        JPanel controls = FarmUi.toolbar(seasonLabel, seasonPicker,
+                refreshButton, reviewDraftsButton);
+        controls.setName("seasonPlanner.controls");
+        JPanel overview = new JPanel(new BorderLayout(0, FarmUi.SECTION_GAP));
+        overview.setOpaque(false);
+        overview.add(controls, BorderLayout.NORTH);
+        overview.add(buildMetrics(), BorderLayout.CENTER);
+        JPanel content = new SeasonBody(overview, buildWorkspace());
+        content.setName("seasonPlanner.body");
+        FarmUi.revealFocusedControls(content);
+        JScrollPane scroll = new JScrollPane(content,
+                JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED, JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+        scroll.setName("seasonPlanner.scroll");
+        scroll.setBorder(BorderFactory.createEmptyBorder());
+        scroll.getVerticalScrollBar().setUnitIncrement(24);
         statusBadge = FarmUi.wrappingStatusBadge("Ready to plan the season", FarmUi.Tone.NEUTRAL);
         statusBadge.setName("seasonPlanner.status");
-        content.add(statusBadge, BorderLayout.SOUTH);
-        panel.add(content, BorderLayout.CENTER);
+        panel.add(statusBadge, BorderLayout.SOUTH);
+        panel.add(scroll, BorderLayout.CENTER);
 
         seasonPicker.addActionListener(event -> {
             if (!updatingSeasons) {
@@ -244,6 +259,37 @@ public class SeasonPlannerTab implements FlowerFarmTab {
         deleteButton.addActionListener(event -> deleteSelected());
         reviewDraftsButton.addActionListener(event -> reviewDrafts());
         updateActions();
+    }
+
+    /** Short windows scroll the overview while retaining readable records and charts. */
+    private static final class SeasonBody extends JPanel implements Scrollable {
+        private static final long serialVersionUID = 1L;
+        private final JComponent overview;
+
+        private SeasonBody(JComponent overview, JComponent workspace) {
+            super(new BorderLayout(0, FarmUi.SECTION_GAP));
+            this.overview = overview;
+            setOpaque(false);
+            add(overview, BorderLayout.NORTH);
+            add(workspace, BorderLayout.CENTER);
+        }
+
+        @Override public Dimension getPreferredSize() {
+            Dimension preferred = super.getPreferredSize();
+            preferred.height = overview.getPreferredSize().height + FarmUi.SECTION_GAP + 440;
+            return preferred;
+        }
+        @Override public Dimension getPreferredScrollableViewportSize() { return getPreferredSize(); }
+        @Override public int getScrollableUnitIncrement(Rectangle visible, int orientation, int direction) {
+            return 24;
+        }
+        @Override public int getScrollableBlockIncrement(Rectangle visible, int orientation, int direction) {
+            return Math.max(24, visible.height - 24);
+        }
+        @Override public boolean getScrollableTracksViewportWidth() { return true; }
+        @Override public boolean getScrollableTracksViewportHeight() {
+            return getParent() != null && getParent().getHeight() >= getPreferredSize().height;
+        }
     }
 
     private JPanel buildMetrics() {
@@ -305,10 +351,31 @@ public class SeasonPlannerTab implements FlowerFarmTab {
                 };
             }
         };
-        table = new JTable(tableModel);
+        table = new JTable(tableModel) {
+            @Override public String getToolTipText(MouseEvent event) {
+                int row = rowAtPoint(event.getPoint());
+                int column = columnAtPoint(event.getPoint());
+                if (row >= 0 && column >= 0) {
+                    Object value = getValueAt(row, column);
+                    if (value != null && !value.toString().isBlank()) {
+                        String text = value.toString().replace("&", "&amp;")
+                                .replace("<", "&lt;").replace(">", "&gt;");
+                        return "<html>" + text + "</html>";
+                    }
+                }
+                return super.getToolTipText(event);
+            }
+        };
         table.setName("seasonPlanner.table");
         table.setRowSorter(new TableRowSorter<>(tableModel));
         FarmUi.configureTable(table, "Season planting plan table");
+        table.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
+        int[] columnWidths = {110, 250, 112, 112, 165, 75, 90, 90, 80, 110, 115};
+        for (int column = 0; column < columnWidths.length; column++) {
+            table.getColumnModel().getColumn(column).setPreferredWidth(columnWidths[column]);
+            table.getColumnModel().getColumn(column).setMinWidth(
+                    column == 2 || column == 3 ? 108 : 60);
+        }
         table.getSelectionModel().addListSelectionListener(event -> {
             if (!event.getValueIsAdjusting()) {
                 selectionRevision++;

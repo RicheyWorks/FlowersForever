@@ -185,8 +185,12 @@ public class TrendAnalysisTab implements FlowerFarmTab {
         chartPanel.setMouseWheelEnabled(false);
         chartPanel.setDomainZoomable(false);
         chartPanel.setRangeZoomable(false);
-        chartPanel.setMinimumSize(new Dimension(420, 120));
-        chartPanel.setPreferredSize(new Dimension(620, 185));
+        chartPanel.setMinimumSize(new Dimension(420, 240));
+        chartPanel.setPreferredSize(new Dimension(620, 260));
+        chartPanel.setMinimumDrawWidth(0);
+        chartPanel.setMinimumDrawHeight(0);
+        chartPanel.setMaximumDrawWidth(Integer.MAX_VALUE);
+        chartPanel.setMaximumDrawHeight(Integer.MAX_VALUE);
         chartPanel.getAccessibleContext().setAccessibleName(
                 "Actual harvest, fitted trend, and next-week forecast chart");
 
@@ -230,7 +234,8 @@ public class TrendAnalysisTab implements FlowerFarmTab {
         trendText = FarmUi.displayArea(7, 60);
         trendText.setName("trend.analysis.output");
         trendText.getAccessibleContext().setAccessibleName("Harvest trend model details");
-        trendText.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
+        trendText.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 13));
+        trendText.setMargin(new Insets(10, 10, 10, 10));
         trendText.setText(
                 "Select Analyze trends to review weekly Harvest Log totals.\n"
                         + "No demo or sample quantities are substituted when history is incomplete.");
@@ -241,10 +246,9 @@ public class TrendAnalysisTab implements FlowerFarmTab {
                 "Trend observations and model details");
         evidenceTabs.addTab("Weekly data", FarmUi.tableScroll(weeklyTable));
         evidenceTabs.addTab("Model details", new JScrollPane(trendText));
-        // Keep the observations close at hand without allowing the drill-down
-        // table to crowd the chart out of compact laptop-sized windows.
-        evidenceTabs.setMinimumSize(new Dimension(0, 80));
-        evidenceTabs.setPreferredSize(new Dimension(0, 88));
+        // Reserve actual rows beneath the tab strip and column headers.
+        evidenceTabs.setMinimumSize(new Dimension(0, 180));
+        evidenceTabs.setPreferredSize(new Dimension(0, 210));
 
         JPanel analysisWorkspace = new JPanel(new BorderLayout(0, 12));
         analysisWorkspace.setOpaque(false);
@@ -259,10 +263,19 @@ public class TrendAnalysisTab implements FlowerFarmTab {
         analysisWorkspace.add(analysisControls, BorderLayout.NORTH);
         analysisWorkspace.add(visualWorkspace, BorderLayout.CENTER);
         analysisWorkspace.add(evidenceTabs, BorderLayout.SOUTH);
-        panel.add(FarmUi.section(
+        JPanel body = new OutlookBody();
+        body.setOpaque(false);
+        body.add(FarmUi.section(
                 "Production outlook",
                 "Actual totals stay primary; fitted and forecast values are clearly distinguished.",
                 analysisWorkspace), BorderLayout.CENTER);
+        JScrollPane scroll = new JScrollPane(body,
+                JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED, JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+        scroll.setName("trend.scroll");
+        scroll.setBorder(BorderFactory.createEmptyBorder());
+        scroll.getVerticalScrollBar().setUnitIncrement(24);
+        panel.add(scroll, BorderLayout.CENTER);
+        FarmUi.revealFocusedControls(body);
 
         JButton harvestButton = FarmUi.secondaryButton("Open Harvest Log");
         harvestButton.addActionListener(e -> openWorkflow(
@@ -272,6 +285,25 @@ public class TrendAnalysisTab implements FlowerFarmTab {
                 "Market Day", "Compare projected output with the current packing plan."));
         panel.add(FarmUi.toolbar(harvestButton, marketButton), BorderLayout.SOUTH);
         loadSeriesOptions();
+    }
+
+    /** Keep the chart and its evidence readable while smaller windows scroll. */
+    private static final class OutlookBody extends JPanel implements Scrollable {
+        private static final long serialVersionUID = 1L;
+
+        private OutlookBody() { super(new BorderLayout()); }
+
+        @Override public Dimension getPreferredScrollableViewportSize() { return getPreferredSize(); }
+        @Override public int getScrollableUnitIncrement(Rectangle visible, int orientation, int direction) {
+            return 24;
+        }
+        @Override public int getScrollableBlockIncrement(Rectangle visible, int orientation, int direction) {
+            return Math.max(24, visible.height - 24);
+        }
+        @Override public boolean getScrollableTracksViewportWidth() { return true; }
+        @Override public boolean getScrollableTracksViewportHeight() {
+            return getParent() != null && getParent().getHeight() >= getPreferredSize().height;
+        }
     }
 
     /** Runs the forecast off the Event Dispatch Thread and renders the result. */
@@ -780,9 +812,29 @@ public class TrendAnalysisTab implements FlowerFarmTab {
     }
 
     private static JLabel insightLabel(String text) {
-        JLabel label = new JLabel();
+        JLabel label = new InsightLabel();
         updateInsight(label, text);
         return label;
+    }
+
+    private static final class InsightLabel extends JLabel {
+        private static final long serialVersionUID = 1L;
+
+        @Override public Dimension getPreferredSize() {
+            int width = getParent() == null || getParent().getWidth() <= 0 ? 280
+                    : getParent().getWidth() - getParent().getInsets().left
+                    - getParent().getInsets().right;
+            width = Math.max(100, width);
+            javax.swing.text.View content = (javax.swing.text.View)
+                    getClientProperty(javax.swing.plaf.basic.BasicHTML.propertyKey);
+            if (content == null) return super.getPreferredSize();
+            content.setSize(width, 0);
+            return new Dimension(width, (int) Math.ceil(content.getPreferredSpan(javax.swing.text.View.Y_AXIS)));
+        }
+
+        @Override public Dimension getMinimumSize() {
+            return new Dimension(0, getPreferredSize().height);
+        }
     }
 
     private static void updateMetric(JLabel label, String text) {
@@ -792,8 +844,7 @@ public class TrendAnalysisTab implements FlowerFarmTab {
 
     private static void updateInsight(JLabel label, String text) {
         String safe = text == null ? "" : text;
-        label.setText("<html><body style='width:245px'>" + escapeHtml(safe)
-                + "</body></html>");
+        label.setText("<html>" + escapeHtml(safe) + "</html>");
         label.getAccessibleContext().setAccessibleName(safe);
     }
 

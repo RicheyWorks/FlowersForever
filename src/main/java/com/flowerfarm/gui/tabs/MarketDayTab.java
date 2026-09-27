@@ -273,7 +273,7 @@ public class MarketDayTab implements FlowerFarmTab {
         exportBtn.setMnemonic(java.awt.event.KeyEvent.VK_E);
         exportBtn.setEnabled(false);
         exportBtn.addActionListener(e -> runExport((String) exportType.getSelectedItem()));
-        exportStatusLabel = FarmUi.statusBadge("Export ready", FarmUi.Tone.NEUTRAL);
+        exportStatusLabel = FarmUi.wrappingStatusBadge("Export ready", FarmUi.Tone.NEUTRAL);
         exportStatusLabel.setName("marketDay.exportStatus");
         exportStatusLabel.getAccessibleContext().setAccessibleName(
                 "Market-day packing export status");
@@ -342,10 +342,13 @@ public class MarketDayTab implements FlowerFarmTab {
                 dateLabel, dateField, windowLabel, windowSpinner, todayBtn, nextSaturdayBtn);
         JPanel scopeOptions = FarmUi.toolbar(draftBox, fulfilledBox, buildPlanBtn);
         JPanel exports = FarmUi.toolbar(
-                new JLabel("Export"), exportType, exportBtn, exportStatusLabel, openCrm);
+                new JLabel("Export"), exportType, exportBtn, openCrm);
+        JPanel exportStatusRow = new JPanel(new BorderLayout());
+        exportStatusRow.setName("marketDay.exportStatusRow");
+        exportStatusRow.setOpaque(false);
+        exportStatusRow.add(exportStatusLabel, BorderLayout.CENTER);
         JPanel inventoryHandoff = FarmUi.toolbar(
-                shortfallLabel, resolveShortfallsBtn,
-                FarmUi.formHint("Resolve stock gaps before checking customer loads as packed."));
+                shortfallLabel, resolveShortfallsBtn);
         accessLabel = FarmUi.statusBadge("Order completion enabled", FarmUi.Tone.SUCCESS);
         JPanel controls = new JPanel();
         controls.setOpaque(false);
@@ -366,11 +369,15 @@ public class MarketDayTab implements FlowerFarmTab {
         controls.add(Box.createVerticalStrut(FarmUi.CONTROL_GAP));
         controls.add(exports);
         controls.add(Box.createVerticalStrut(FarmUi.CONTROL_GAP));
-        controls.add(inventoryHandoff);
+        controls.add(exportStatusRow);
         controls.add(Box.createVerticalStrut(FarmUi.CONTROL_GAP));
-        controls.add(FarmUi.toolbar(accessLabel, fulfillBtn, fulfillmentStatusLabel,
-                FarmUi.formHint(
-                        "Exports do not change orders. Complete only after packing or delivery.")));
+        controls.add(inventoryHandoff);
+        controls.add(FarmUi.toolbar(FarmUi.formHint(
+                "Resolve stock gaps before checking customer loads as packed.")));
+        controls.add(Box.createVerticalStrut(FarmUi.CONTROL_GAP));
+        controls.add(FarmUi.toolbar(accessLabel, fulfillBtn, fulfillmentStatusLabel));
+        controls.add(FarmUi.toolbar(FarmUi.formHint(
+                "Exports do not change orders. Complete only after packing or delivery.")));
         fulfillmentResultArea = FarmUi.displayArea(5, 68);
         fulfillmentResultArea.setName("marketDay.fulfillmentResultDetails");
         fulfillmentResultArea.setBackground(FarmUi.surfaceColor());
@@ -395,16 +402,16 @@ public class MarketDayTab implements FlowerFarmTab {
         planArea.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
         planArea.setLineWrap(false);
         planArea.getAccessibleContext().setAccessibleName("Market day packing list");
-        packingChecklist = new JPanel();
+        packingChecklist = new PackingChecklist();
         packingChecklist.setName("marketDay.packingChecklist");
         packingChecklist.setOpaque(false);
         packingChecklist.setLayout(new BoxLayout(packingChecklist, BoxLayout.Y_AXIS));
         packingChecklist.getAccessibleContext().setAccessibleName(
                 "Confirmed customer load-out checklist");
-        packingProgressLabel = FarmUi.statusBadge("0 orders ready", FarmUi.Tone.NEUTRAL);
+        packingProgressLabel = FarmUi.wrappingStatusBadge("0 orders ready", FarmUi.Tone.NEUTRAL);
         packingProgressLabel.setName("marketDay.packingProgress");
         packingProgressLabel.getAccessibleContext().setAccessibleName("Load-out packing progress");
-        checklistRefreshLabel = FarmUi.statusBadge(
+        checklistRefreshLabel = FarmUi.wrappingStatusBadge(
                 "Packed checks are kept when order details are unchanged", FarmUi.Tone.NEUTRAL);
         checklistRefreshLabel.setName("marketDay.checklistRefresh");
         checklistRefreshLabel.getAccessibleContext().setAccessibleName(
@@ -423,28 +430,115 @@ public class MarketDayTab implements FlowerFarmTab {
         clearPackedChecksBtn.getAccessibleContext().setAccessibleName(
                 "Clear unfinished packed-load checks");
         clearPackedChecksBtn.addActionListener(event -> clearPackedChecks());
-        JScrollPane checklistScroll = new JScrollPane(packingChecklist);
+        JScrollPane checklistScroll = new JScrollPane(packingChecklist,
+                JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED, JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+        checklistScroll.setName("marketDay.checklistScroll");
         checklistScroll.setBorder(null);
-        checklistScroll.setPreferredSize(new Dimension(285, 240));
+        checklistScroll.setPreferredSize(new Dimension(460, 320));
+        checklistScroll.setMinimumSize(new Dimension(340, 200));
+        checklistScroll.getVerticalScrollBar().setUnitIncrement(24);
+        JScrollPane planScroll = new JScrollPane(planArea);
+        planScroll.setMinimumSize(new Dimension(220, 200));
         JSplitPane execution = new JSplitPane(
-                JSplitPane.HORIZONTAL_SPLIT, new JScrollPane(planArea), checklistScroll);
+                JSplitPane.HORIZONTAL_SPLIT, planScroll, checklistScroll);
+        execution.setName("marketDay.execution");
         execution.setBorder(null);
-        execution.setResizeWeight(0.72);
+        execution.setResizeWeight(0.5);
         execution.setContinuousLayout(true);
         execution.setOneTouchExpandable(true);
-        JPanel content = new JPanel(new BorderLayout(0, FarmUi.SECTION_GAP));
-        content.setOpaque(false);
-        content.add(FarmUi.section(
+        JPanel scopeSection = FarmUi.section(
                 "Packing scope",
                 "Choose the delivery window and which order stages belong on the list.",
-                controls), BorderLayout.NORTH);
-        content.add(FarmUi.section(
+                controls);
+        JPanel executionSection = FarmUi.section(
                 "Pick list and customer slips",
                 "Review shortfalls, then check each confirmed customer as their load is packed.",
-                execution), BorderLayout.CENTER);
-        panel.add(content, BorderLayout.CENTER);
+                execution);
+        JPanel content = new MarketBody(scopeSection, executionSection);
+        content.setName("marketDay.body");
+        FarmUi.revealFocusedControls(content);
+        JScrollPane workspaceScroll = new JScrollPane(content,
+                JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED, JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+        workspaceScroll.setName("marketDay.scroll");
+        workspaceScroll.setBorder(BorderFactory.createEmptyBorder());
+        workspaceScroll.getVerticalScrollBar().setUnitIncrement(24);
+        panel.add(workspaceScroll, BorderLayout.CENTER);
         installPackingScopeValidation();
         updateFulfillAction();
+    }
+
+    /** Keep the packing workspace usable when scope controls fill a short window. */
+    private static final class MarketBody extends JPanel implements Scrollable {
+        private static final long serialVersionUID = 1L;
+        private final JComponent scope;
+
+        private MarketBody(JComponent scope, JComponent execution) {
+            super(new BorderLayout(0, FarmUi.SECTION_GAP));
+            this.scope = scope;
+            setOpaque(false);
+            add(scope, BorderLayout.NORTH);
+            add(execution, BorderLayout.CENTER);
+        }
+
+        @Override public Dimension getPreferredSize() {
+            Dimension preferred = super.getPreferredSize();
+            preferred.height = scope.getPreferredSize().height + FarmUi.SECTION_GAP + 400;
+            return preferred;
+        }
+        @Override public Dimension getPreferredScrollableViewportSize() { return getPreferredSize(); }
+        @Override public int getScrollableUnitIncrement(Rectangle visible, int orientation, int direction) {
+            return 24;
+        }
+        @Override public int getScrollableBlockIncrement(Rectangle visible, int orientation, int direction) {
+            return Math.max(24, visible.height - 24);
+        }
+        @Override public boolean getScrollableTracksViewportWidth() { return true; }
+        @Override public boolean getScrollableTracksViewportHeight() {
+            return getParent() != null && getParent().getHeight() >= getPreferredSize().height;
+        }
+    }
+
+    /** Customer cards use the available load-out width and scroll only vertically. */
+    private static final class PackingChecklist extends JPanel implements Scrollable {
+        private static final long serialVersionUID = 1L;
+        @Override public Dimension getPreferredScrollableViewportSize() { return getPreferredSize(); }
+        @Override public int getScrollableUnitIncrement(Rectangle visible, int orientation, int direction) {
+            return 24;
+        }
+        @Override public int getScrollableBlockIncrement(Rectangle visible, int orientation, int direction) {
+            return Math.max(24, visible.height - 24);
+        }
+        @Override public boolean getScrollableTracksViewportWidth() { return true; }
+        @Override public boolean getScrollableTracksViewportHeight() { return false; }
+    }
+
+    /** Wrap the full order summary while retaining its plain text and accessible name. */
+    private static final class PackingCheckBox extends JCheckBox {
+        private static final long serialVersionUID = 1L;
+
+        private PackingCheckBox(String text) { super(text); }
+
+        @Override public Dimension getPreferredSize() {
+            int available = getParent() == null || getParent().getWidth() <= 0 ? 420
+                    : getParent().getWidth() - getParent().getInsets().left
+                    - getParent().getInsets().right;
+            Icon icon = getIcon() == null ? UIManager.getIcon("CheckBox.icon") : getIcon();
+            int iconWidth = icon == null ? 20 : icon.getIconWidth();
+            int textWidth = Math.max(100, available - iconWidth - getIconTextGap()
+                    - getInsets().left - getInsets().right);
+            javax.swing.plaf.basic.BasicHTML.updateRenderer(this,
+                    "<html>" + escapeHtml(getText() == null ? "" : getText()) + "</html>");
+            javax.swing.text.View content = (javax.swing.text.View)
+                    getClientProperty(javax.swing.plaf.basic.BasicHTML.propertyKey);
+            content.setSize(textWidth, 0);
+            int textHeight = (int) Math.ceil(content.getPreferredSpan(javax.swing.text.View.Y_AXIS));
+            return new Dimension(available, Math.max(icon == null ? 20 : icon.getIconHeight(), textHeight)
+                    + getInsets().top + getInsets().bottom);
+        }
+
+        @Override public Dimension getMinimumSize() {
+            return new Dimension(0, getPreferredSize().height);
+        }
     }
 
     private void installPackingScopeValidation() {
@@ -1198,7 +1292,11 @@ public class MarketDayTab implements FlowerFarmTab {
         checklistActions.add(clearPackedChecksBtn);
         checklistActions.getAccessibleContext().setAccessibleName(
                 "Market Day checklist navigation and recovery actions");
-        JPanel checklistHeader = new JPanel();
+        JPanel checklistHeader = new JPanel() {
+            @Override public Dimension getMaximumSize() {
+                return new Dimension(Integer.MAX_VALUE, getPreferredSize().height);
+            }
+        };
         checklistHeader.setName("marketDay.checklistHeader");
         checklistHeader.setOpaque(false);
         checklistHeader.setLayout(new BoxLayout(checklistHeader, BoxLayout.Y_AXIS));
@@ -1208,8 +1306,6 @@ public class MarketDayTab implements FlowerFarmTab {
         checklistHeader.add(Box.createVerticalStrut(FarmUi.CONTROL_GAP));
         checklistHeader.add(checklistActions);
         checklistHeader.setAlignmentX(Component.LEFT_ALIGNMENT);
-        checklistHeader.setMaximumSize(new Dimension(
-                Integer.MAX_VALUE, checklistHeader.getPreferredSize().height));
         packingChecklist.add(checklistHeader);
         packingChecklist.add(Box.createVerticalStrut(FarmUi.CONTROL_GAP));
         Map<String, Long> handoffCounts = plan.customers().stream()
@@ -1247,7 +1343,7 @@ public class MarketDayTab implements FlowerFarmTab {
                     + "  ·  " + customer.lines().size() + " product"
                     + (customer.lines().size() == 1 ? "" : "s")
                     + "  ·  $" + String.format("%,.2f", customer.orderTotal());
-            JCheckBox packed = new JCheckBox(label);
+            JCheckBox packed = new PackingCheckBox(label);
             packed.setName("marketDay.packOrder." + customer.orderId());
             packed.setOpaque(false);
             PackingReadiness readiness = packingReadiness(customer, plan);
@@ -1285,7 +1381,7 @@ public class MarketDayTab implements FlowerFarmTab {
                     "Products for order " + customer.orderId());
             details.getAccessibleContext().setAccessibleDescription(
                     orderDetailsAccessible(customer));
-            JLabel readinessLabel = FarmUi.statusBadge(
+            JLabel readinessLabel = FarmUi.wrappingStatusBadge(
                     readiness.label(), readiness.ready()
                             ? FarmUi.Tone.SUCCESS : FarmUi.Tone.WARNING);
             readinessLabel.setName("marketDay.packReadiness." + customer.orderId());
@@ -1305,7 +1401,11 @@ public class MarketDayTab implements FlowerFarmTab {
                     host.showOrder(customer.orderId(), "Market Day", "Market Day");
                 }
             });
-            JPanel orderCard = new JPanel(new BorderLayout(0, 2));
+            JPanel orderCard = new JPanel(new BorderLayout(0, 2)) {
+                @Override public Dimension getMaximumSize() {
+                    return new Dimension(Integer.MAX_VALUE, Math.max(86, getPreferredSize().height));
+                }
+            };
             orderCard.setName("marketDay.packCard." + customer.orderId());
             orderCard.setOpaque(false);
             orderCard.setBorder(BorderFactory.createCompoundBorder(
@@ -1319,8 +1419,6 @@ public class MarketDayTab implements FlowerFarmTab {
             cardActions.add(readinessLabel, BorderLayout.NORTH);
             cardActions.add(reviewOrder, BorderLayout.SOUTH);
             orderCard.add(cardActions, BorderLayout.SOUTH);
-            int completeCardHeight = Math.max(86, orderCard.getPreferredSize().height);
-            orderCard.setMaximumSize(new Dimension(Integer.MAX_VALUE, completeCardHeight));
             packingChecklist.add(orderCard);
             packingChecklist.add(Box.createVerticalStrut(3));
         }
@@ -1352,6 +1450,7 @@ public class MarketDayTab implements FlowerFarmTab {
         checklistRefreshLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
         packingChecklist.add(Box.createVerticalStrut(FarmUi.CONTROL_GAP));
         packingChecklist.add(checklistRefreshLabel);
+        FarmUi.revealFocusedControls(packingChecklist);
         packingChecklist.revalidate();
         packingChecklist.repaint();
         updateFulfillAction();
