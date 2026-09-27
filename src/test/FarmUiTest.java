@@ -188,6 +188,15 @@ class FarmUiTest {
     @DisplayName("form guidance and field errors remain available to assistive technology")
     void formGuidanceAndValidation() {
         JLabel hint = FarmUi.formHint("Required fields are marked.");
+        String guidance = "Keep <html>literal labels</html> & complete guidance visible "
+                + "when a form column becomes narrower after resizing.";
+        JLabel wrapping = FarmUi.wrappingHint(guidance);
+        wrapping.setSize(520, 20);
+        int wideHeight = wrapping.getPreferredSize().height;
+        wrapping.setSize(170, wideHeight);
+        assertThat(wrapping.getPreferredSize().height).isGreaterThan(wideHeight);
+        assertThat(wrapping.getText()).isEqualTo(guidance);
+        assertThat(wrapping.getAccessibleContext().getAccessibleDescription()).isEqualTo(guidance);
         JTextField field = new JTextField("bad");
 
         FarmUi.markFieldError(field, "Enter a valid quantity.");

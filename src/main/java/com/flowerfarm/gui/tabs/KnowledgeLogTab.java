@@ -541,9 +541,8 @@ public class KnowledgeLogTab implements FlowerFarmTab {
 
     private KnowledgeEntry showForm(KnowledgeEntry existing, String title) {
         KnowledgeForm form = new KnowledgeForm(existing);
-        JScrollPane scroll = new JScrollPane(form.panel());
-        scroll.setPreferredSize(new Dimension(720, 630));
-        scroll.setBorder(BorderFactory.createEmptyBorder());
+        JScrollPane scroll = FarmUi.dialogScroll(panel, form.panel(), new Dimension(720, 630));
+        scroll.setName("knowledge.form.scroll");
         while (true) {
             int choice = dialogs.showConfirm(
                     panel, scroll, title, JOptionPane.OK_CANCEL_OPTION,
@@ -764,7 +763,9 @@ public class KnowledgeLogTab implements FlowerFarmTab {
         private int row;
 
         KnowledgeForm(KnowledgeEntry existing) {
+            panel.setName("knowledge.form");
             panel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+            FarmUi.initialFocus(date);
             renderer(kind);
             renderer(confidence);
             add("Observation date *", date, "YYYY-MM-DD; future dates are not allowed.");
@@ -847,6 +848,17 @@ public class KnowledgeLogTab implements FlowerFarmTab {
             if (target instanceof JComponent component) {
                 component.getAccessibleContext().setAccessibleName(
                         label.replace(" *", "").trim());
+                component.getAccessibleContext().setAccessibleDescription(help);
+                if (component instanceof JTextField || component instanceof JComboBox<?>) {
+                    FarmUi.entryControl(component, null, help);
+                }
+            }
+            if (field instanceof JScrollPane scroll) {
+                scroll.setBorder(BorderFactory.createLineBorder(FarmUi.borderColor()));
+                scroll.setPreferredSize(new Dimension(420, 110));
+                scroll.setMinimumSize(new Dimension(100, 110));
+                scroll.getVerticalScrollBar().setUnitIncrement(18);
+                scroll.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
             }
             JLabel caption = new JLabel(label);
             caption.setLabelFor(target);
@@ -861,7 +873,10 @@ public class KnowledgeLogTab implements FlowerFarmTab {
             hint.weightx = 1;
             hint.fill = GridBagConstraints.HORIZONTAL;
             hint.insets = new Insets(0, 4, 4, 4);
-            panel.add(FarmUi.formHint(help), hint);
+            JPanel guidance = new JPanel(new BorderLayout());
+            guidance.setOpaque(false);
+            guidance.add(FarmUi.wrappingHint(help), BorderLayout.CENTER);
+            panel.add(guidance, hint);
         }
 
         private void addHeading(String text) {
@@ -885,6 +900,8 @@ public class KnowledgeLogTab implements FlowerFarmTab {
             JTextArea area = new JTextArea(rows, 42);
             area.setLineWrap(true);
             area.setWrapStyleWord(true);
+            area.setFont(area.getFont().deriveFont(14f));
+            area.setBorder(BorderFactory.createEmptyBorder(8, 10, 8, 10));
             return area;
         }
 

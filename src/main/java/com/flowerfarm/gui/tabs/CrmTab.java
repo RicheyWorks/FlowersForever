@@ -7005,7 +7005,7 @@ public class CrmTab implements FlowerFarmTab {
         OrderService.OrderReviewSnapshot reviewedSnapshot = presenter.reviewSnapshot(order);
         int confirmation = !panel.isShowing() && dialogs == FarmDialogs.swing()
                 ? JOptionPane.YES_OPTION
-                : dialogs.showConfirm(panel, orderConfirmationPanel(review),
+                : dialogs.showConfirm(panel, orderReviewDialog(orderConfirmationPanel(review)),
                         "Confirm order for packing", JOptionPane.YES_NO_OPTION,
                         JOptionPane.WARNING_MESSAGE);
         if (confirmation != JOptionPane.YES_OPTION) {
@@ -7099,7 +7099,9 @@ public class CrmTab implements FlowerFarmTab {
         content.setName("crm.orderConfirmationReview");
         content.setBackground(FarmUi.surfaceColor());
         content.setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
-        JLabel heading = FarmUi.statusBadge(review.heading(), FarmUi.Tone.WARNING);
+        JLabel heading = FarmUi.wrappingStatusBadge(review.heading(), FarmUi.Tone.WARNING);
+        heading.setFont(heading.getFont().deriveFont(13f));
+        heading.setName("crm.orderConfirmationHeading");
         heading.setHorizontalAlignment(SwingConstants.LEFT);
         content.add(heading, BorderLayout.NORTH);
 
@@ -7194,7 +7196,9 @@ public class CrmTab implements FlowerFarmTab {
         content.setName("crm.orderCompletionReview");
         content.setBackground(FarmUi.surfaceColor());
         content.setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
-        JLabel heading = FarmUi.statusBadge(review.heading(), FarmUi.Tone.WARNING);
+        JLabel heading = FarmUi.wrappingStatusBadge(review.heading(), FarmUi.Tone.WARNING);
+        heading.setFont(heading.getFont().deriveFont(13f));
+        heading.setName("crm.orderCompletionHeading");
         heading.setHorizontalAlignment(SwingConstants.LEFT);
         content.add(heading, BorderLayout.NORTH);
 
@@ -7314,7 +7318,7 @@ public class CrmTab implements FlowerFarmTab {
         OrderService.OrderReviewSnapshot reviewedSnapshot = presenter.reviewSnapshot(order);
         int ok = !panel.isShowing() && dialogs == FarmDialogs.swing()
                 ? JOptionPane.YES_OPTION
-                : dialogs.showConfirm(panel, orderCompletionPanel(review),
+                : dialogs.showConfirm(panel, orderReviewDialog(orderCompletionPanel(review)),
                         "Complete order", JOptionPane.YES_NO_OPTION,
                         JOptionPane.WARNING_MESSAGE);
         if (ok != JOptionPane.YES_OPTION) {
@@ -7648,7 +7652,7 @@ public class CrmTab implements FlowerFarmTab {
         OrderService.OrderReviewSnapshot reviewedSnapshot = presenter.reviewSnapshot(order);
         int confirmation = !panel.isShowing() && dialogs == FarmDialogs.swing()
                 ? JOptionPane.YES_OPTION
-                : dialogs.showConfirm(panel, orderDestructivePanel(review), "Cancel order",
+                : dialogs.showConfirm(panel, orderReviewDialog(orderDestructivePanel(review)), "Cancel order",
                         JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
         if (confirmation != JOptionPane.YES_OPTION) {
             return;
@@ -7733,7 +7737,7 @@ public class CrmTab implements FlowerFarmTab {
         OrderService.OrderReviewSnapshot reviewedSnapshot = presenter.reviewSnapshot(order);
         int ok = !panel.isShowing() && dialogs == FarmDialogs.swing()
                 ? JOptionPane.YES_OPTION
-                : dialogs.showConfirm(panel, orderDestructivePanel(review),
+                : dialogs.showConfirm(panel, orderReviewDialog(orderDestructivePanel(review)),
                         "Delete order", JOptionPane.YES_NO_OPTION,
                         JOptionPane.WARNING_MESSAGE);
         if (ok != JOptionPane.YES_OPTION) {
@@ -7803,7 +7807,9 @@ public class CrmTab implements FlowerFarmTab {
         content.setName("crm.orderDestructiveReview");
         content.setBackground(FarmUi.surfaceColor());
         content.setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
-        JLabel heading = FarmUi.statusBadge(review.heading(), FarmUi.Tone.DANGER);
+        JLabel heading = FarmUi.wrappingStatusBadge(review.heading(), FarmUi.Tone.DANGER);
+        heading.setFont(heading.getFont().deriveFont(13f));
+        heading.setName("crm.orderDestructiveHeading");
         heading.setHorizontalAlignment(SwingConstants.LEFT);
         content.add(heading, BorderLayout.NORTH);
         JTextArea details = FarmUi.displayArea(11, 62);
@@ -7826,6 +7832,13 @@ public class CrmTab implements FlowerFarmTab {
         content.getAccessibleContext().setAccessibleName(
                 review.heading() + " exact destructive-action review");
         return content;
+    }
+
+    private JComponent orderReviewDialog(JComponent review) {
+        JScrollPane scroll = FarmUi.dialogScroll(panel, review, review.getPreferredSize());
+        scroll.setName("crm.orderReviewDialogScroll");
+        scroll.getAccessibleContext().setAccessibleName("Scrollable order action review");
+        return scroll;
     }
 
     private void startOrderMutation(OrderMutationRequest request) {

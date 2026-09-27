@@ -72,6 +72,21 @@ Rendered reference examples: [Plant Guide](images/app-plant-guide.png) and
 [Event Services](images/app-event-services.png). These use fixture data and the
 same Swing components exercised by the compact light/dark visual checks.
 
+Entry and order-review dialogs opt into `FarmUi.dialogScroll`: it bounds their
+preferred content viewport to the owner window and usable display area, reserving
+space for native title bars and option buttons. Content tracks the viewport width
+and keeps its natural height; keyboard focus reveals offscreen fields without
+resetting a nested text reader. Knowledge Log entries and Season Planner
+add/edit/retry/read-only drafts use this wrapper with comfortable labeled inputs
+and padded notes. Planting comparisons and CRM order action reviews use it too.
+Order headings wrap the exact customer identity, including literal markup, above
+the existing copyable consequences. `FarmUi.wrappingHint` measures each form
+column's assigned width and retains the original accessible guidance.
+
+Rendered dialog content: [Planting entry](images/app-planting-dialog.png) and
+[Farm lesson entry](images/app-lesson-dialog.png). These fixtures include the
+standard option buttons but do not capture native window decorations.
+
 ```
 com.flowerfarm.gui
 ├── FlowerFarmGUI.java          # Lightweight orchestrator (Spring @Component), implements TabHost

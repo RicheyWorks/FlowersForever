@@ -1,5 +1,39 @@
 # Latest direction — September 26, 2026
 
+## Entry and review dialog polish
+
+Knowledge Log entry/edit/retry forms and Season Planner add/edit/succession/retry
+and read-only draft forms use the shared `FarmUi.dialogScroll` wrapper. Dialog
+content fits its owner window and usable screen with room for native title bars
+and option buttons. Forms track viewport width and preserve their natural height,
+with keyboard reveal, comfortable inputs, wrapping guidance and padded notes.
+Changed planting comparisons also use the wrapper. Existing fields, validation,
+raw draft values, permissions and stale-decision checks remain intact.
+
+CRM confirm/complete/cancel/delete reviews preserve the full customer identity in
+larger wrapping headings. Their existing copyable consequence readers remain
+scrollable, while the actual dialog content is bounded to its owner.
+
+New rendered contracts cover lesson/planting forms with 660x500 and 1050x700
+owners in both themes, keyboard reachability of every input, and persistent
+OK/Cancel controls. Eight CRM cases cover long literal-markup identities and
+the final reviewed consequence at 580x340. The existing form/workflow/safety
+checks passed during focused verification. Final clean isolated Java 21 verification
+passed 1,948 tests plus two packaged-JAR checks, with all 182 suite/phase floors met
+and zero failures/errors/skips. Coverage is 87.28% lines and 70.46% branches;
+Checkstyle and SpotBugs report zero findings. The tested source digest is
+`c7b68305a48f6b8e261dc730e3775354eada93a8ae333b96284b53dedb00730c`.
+Evidence is `dist/harness-evidence/latest.json`; the clean log is
+`dist/harness-evidence/ui-polish-pass4-quality.log`. Lesson and planting dialog
+previews are saved under `docs/images` and linked from `docs/GUI_ARCHITECTURE.md`.
+Native installers were not rebuilt or accepted interactively.
+
+One additional source-only candidate remains for a future pass: the Rose
+Visualizer saved-ruleset picker sizes its selector from filenames. A very long
+custom name may widen that dialog; reproduce with a compact render before changing
+its layout. Reports use the native save chooser, and no comparably clear compact
+issue was found in the existing four-row inventory editor during this audit.
+
 ## Reference workspace polish
 
 Plant Guide keeps readable table columns and gives profiles and source attribution
@@ -25,11 +59,8 @@ Evidence is in `dist/harness-evidence/latest.json`; the full log is
 previews are saved in `docs/images` and linked from `docs/GUI_ARCHITECTURE.md`.
 Native installers were not rebuilt or accepted interactively.
 
-Potential next UI work identified from source, not implemented: Knowledge Log's
-entry dialog uses a fixed 720x630 viewport, and Season Planner's planting/review
-forms use fixed 690x500/530 preferred sizes. Both could use height-bounded,
-width-tracking dialog viewports and keyboard reveal. Existing screenshots do not
-cover these dialogs; verify their actual compact behavior before changing them.
+The previously identified fixed-size Knowledge Log and planting dialogs are
+addressed in the entry/review pass above, with dedicated compact renders.
 
 ## Further desktop polish
 

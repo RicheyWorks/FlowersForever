@@ -11,6 +11,7 @@ import javax.swing.JLabel;
 import javax.swing.JComboBox;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
+import javax.swing.Scrollable;
 import javax.swing.JTable;
 import javax.swing.JTabbedPane;
 import javax.swing.JTextArea;
@@ -32,6 +33,8 @@ import java.awt.FlowLayout;
 import java.awt.Font;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
+import java.awt.GraphicsConfiguration;
+import java.awt.GraphicsEnvironment;
 import java.awt.GradientPaint;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
@@ -39,6 +42,8 @@ import java.awt.Insets;
 import java.awt.LayoutManager;
 import java.awt.Rectangle;
 import java.awt.RenderingHints;
+import java.awt.Toolkit;
+import java.awt.Window;
 import java.awt.event.FocusAdapter;
 import java.awt.event.FocusEvent;
 
@@ -571,6 +576,60 @@ public final class FarmUi {
         return scroll;
     }
 
+    /** Bound modal form content to its owner and display while reserving room for dialog buttons. */
+    public static JScrollPane dialogScroll(Component owner, JComponent content, Dimension preferredViewport) {
+        Dimension available = new Dimension(1024, 768);
+        Window window = owner == null ? null : SwingUtilities.getWindowAncestor(owner);
+        Component boundsOwner = window == null ? owner : window;
+        if (boundsOwner != null && boundsOwner.getWidth() > 0 && boundsOwner.getHeight() > 0) {
+            available = boundsOwner.getSize();
+        }
+        if (!GraphicsEnvironment.isHeadless()) {
+            GraphicsConfiguration configuration = owner == null ? null : owner.getGraphicsConfiguration();
+            if (configuration == null) {
+                configuration = GraphicsEnvironment.getLocalGraphicsEnvironment()
+                        .getDefaultScreenDevice().getDefaultConfiguration();
+            }
+            Insets insets = Toolkit.getDefaultToolkit().getScreenInsets(configuration);
+            Rectangle screen = configuration.getBounds();
+            available.width = Math.min(available.width, screen.width - insets.left - insets.right);
+            available.height = Math.min(available.height, screen.height - insets.top - insets.bottom);
+        }
+        JPanel body = new DialogBody(content);
+        JScrollPane scroll = new JScrollPane(body,
+                JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED, JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+        scroll.setName("farm.dialogScroll");
+        scroll.setPreferredSize(new Dimension(
+                Math.min(preferredViewport.width, Math.max(120, available.width - 80)),
+                Math.min(preferredViewport.height, Math.max(100, available.height - 140))));
+        scroll.setBorder(BorderFactory.createEmptyBorder());
+        scroll.getVerticalScrollBar().setUnitIncrement(24);
+        revealFocusedControls(body);
+        return scroll;
+    }
+
+    private static final class DialogBody extends JPanel implements Scrollable {
+        private static final long serialVersionUID = 1L;
+
+        private DialogBody(JComponent content) {
+            super(new BorderLayout());
+            setOpaque(false);
+            add(content, BorderLayout.NORTH);
+        }
+
+        @Override public Dimension getPreferredScrollableViewportSize() { return getPreferredSize(); }
+        @Override public int getScrollableUnitIncrement(Rectangle visible, int orientation, int direction) {
+            return 24;
+        }
+        @Override public int getScrollableBlockIncrement(Rectangle visible, int orientation, int direction) {
+            return Math.max(24, visible.height - 24);
+        }
+        @Override public boolean getScrollableTracksViewportWidth() { return true; }
+        @Override public boolean getScrollableTracksViewportHeight() {
+            return getParent() != null && getParent().getHeight() >= getPreferredSize().height;
+        }
+    }
+
     public static JTextArea displayArea(int rows, int columns) {
         JTextArea area = new JTextArea(rows, columns);
         area.setName("farm.displayArea");
@@ -677,6 +736,47 @@ public final class FarmUi {
         hint.getAccessibleContext().setAccessibleName("Form guidance");
         hint.getAccessibleContext().setAccessibleDescription(text);
         return hint;
+    }
+
+    /** Plain, accessible guidance that follows its assigned width within a form column. */
+    public static JLabel wrappingHint(String text) {
+        JLabel hint = new WrappingHintLabel(text);
+        hint.setName("farm.formHint");
+        hint.putClientProperty(ROLE_PROPERTY, "muted");
+        hint.setForeground(mutedColor());
+        hint.setFont(hint.getFont().deriveFont(12f));
+        hint.getAccessibleContext().setAccessibleName("Form guidance");
+        hint.getAccessibleContext().setAccessibleDescription(text);
+        return hint;
+    }
+
+    private static final class WrappingHintLabel extends JLabel {
+        private static final long serialVersionUID = 1L;
+
+        private WrappingHintLabel(String text) { super(text); }
+
+        @Override public Dimension getPreferredSize() {
+            int width = getWidth() > 0 ? getWidth() : 340;
+            String text = getText() == null ? "" : getText();
+            javax.swing.plaf.basic.BasicHTML.updateRenderer(this, "<html>"
+                    + text.replace("&", "&amp;").replace("<", "&lt;")
+                    .replace(">", "&gt;") + "</html>");
+            javax.swing.text.View view = (javax.swing.text.View)
+                    getClientProperty(javax.swing.plaf.basic.BasicHTML.propertyKey);
+            view.setSize(Math.max(1, width - getInsets().left - getInsets().right), 0);
+            return new Dimension(width, (int) Math.ceil(view.getPreferredSpan(javax.swing.text.View.Y_AXIS))
+                    + getInsets().top + getInsets().bottom);
+        }
+
+        @Override public Dimension getMinimumSize() {
+            return new Dimension(0, getPreferredSize().height);
+        }
+
+        @Override public void setBounds(int x, int y, int width, int height) {
+            boolean widthChanged = width != getWidth();
+            super.setBounds(x, y, width, height);
+            if (widthChanged) revalidate();
+        }
     }
 
     /** A comfortable, clearly labelled entry target for everyday farm data. */

@@ -1058,8 +1058,9 @@ public class SeasonPlannerTab implements FlowerFarmTab {
         PlantingForm form = new PlantingForm(original.form());
         PendingPlanting draft = new PendingPlanting(original.key(), original.targetId(),
                 original.targetId() == null ? null : EntryState.of(target), form);
+        JScrollPane formScroll = plantingFormScroll(form);
         while (true) {
-            int choice = dialogs.showConfirm(panel, form.panel(), title,
+            int choice = dialogs.showConfirm(panel, formScroll, title,
                     JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
             if (!currentDecision(decision)) {
                 // A nested review may have replaced or saved this exact draft already.
@@ -1091,12 +1092,10 @@ public class SeasonPlannerTab implements FlowerFarmTab {
 
     private boolean approveChangedPlanting(PendingPlanting draft, SeasonPlanEntry target,
                                            PlantingDecision decision) {
-        JTextArea comparison = new JTextArea("CURRENT SAVED BLOCK\n"
+        JTextArea comparison = FarmUi.displayArea(20, 62);
+        comparison.setText("CURRENT SAVED BLOCK\n"
                 + new PlantingForm(target, selectedSeason(), null).details()
-                + "\nRETAINED DRAFT\n" + draft.form().details(), 20, 62);
-        comparison.setEditable(false);
-        comparison.setLineWrap(true);
-        comparison.setWrapStyleWord(true);
+                + "\nRETAINED DRAFT\n" + draft.form().details());
         comparison.setCaretPosition(0);
         comparison.getAccessibleContext().setAccessibleName("Current planting and retained draft details");
         JPanel message = new JPanel(new BorderLayout(0, FarmUi.SECTION_GAP));
@@ -1106,7 +1105,9 @@ public class SeasonPlannerTab implements FlowerFarmTab {
                 FarmUi.Tone.WARNING), BorderLayout.NORTH);
         message.add(new JScrollPane(comparison), BorderLayout.CENTER);
         Object[] options = {"Keep draft", "Use draft values"};
-        int answer = dialogs.showOption(panel, message, "Review changed planting block",
+        JScrollPane scroll = FarmUi.dialogScroll(panel, message, new Dimension(690, 480));
+        scroll.setName("seasonPlanner.comparison.scroll");
+        int answer = dialogs.showOption(panel, scroll, "Review changed planting block",
                 JOptionPane.DEFAULT_OPTION, JOptionPane.WARNING_MESSAGE, null, options, options[0]);
         return answer == 1 && currentDecision(decision);
     }
@@ -1118,7 +1119,14 @@ public class SeasonPlannerTab implements FlowerFarmTab {
         }
         copy.notes.setEditable(false);
         copy.status.setEnabled(false);
-        dialogs.showMessage(panel, copy.panel(), "Retained planting draft", JOptionPane.INFORMATION_MESSAGE);
+        dialogs.showMessage(panel, plantingFormScroll(copy),
+                "Retained planting draft", JOptionPane.INFORMATION_MESSAGE);
+    }
+
+    private JScrollPane plantingFormScroll(PlantingForm form) {
+        JScrollPane scroll = FarmUi.dialogScroll(panel, form.panel(), new Dimension(690, 520));
+        scroll.setName("seasonPlanner.form.scroll");
+        return scroll;
     }
 
     private void retainDraft(PendingPlanting draft) {
@@ -1460,7 +1468,7 @@ public class SeasonPlannerTab implements FlowerFarmTab {
         private final JTextField expectedStems = field("Expected stems", 10);
         private final JComboBox<SeasonPlanStatus> status =
                 new JComboBox<>(SeasonPlanStatus.values());
-        private final JTextArea notes = new JTextArea(3, 28);
+        private final JTextArea notes = new JTextArea(5, 28);
         private final int seasonYear;
         private final String guidance;
 
@@ -1504,11 +1512,20 @@ public class SeasonPlannerTab implements FlowerFarmTab {
 
         private void build(SeasonPlanEntry existing, PnwPlantProfile reference,
                            String guidance) {
-            panel.setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
+            panel.setName("seasonPlanner.form");
+            panel.setOpaque(false);
+            panel.setBorder(BorderFactory.createEmptyBorder(12, 12, 12, 12));
+            for (JTextField field : fields()) {
+                FarmUi.entryControl(field, null,
+                        field.getAccessibleContext().getAccessibleName());
+            }
             notes.setLineWrap(true);
             notes.setWrapStyleWord(true);
+            notes.setFont(notes.getFont().deriveFont(14f));
+            notes.setBorder(BorderFactory.createEmptyBorder(8, 10, 8, 10));
             notes.getAccessibleContext().setAccessibleName("Planning notes");
             status.getAccessibleContext().setAccessibleName("Planting status");
+            FarmUi.entryControl(status, null, "Planting status");
 
             LocalDate defaultSow = LocalDate.now().getYear() == seasonYear
                     ? LocalDate.now() : LocalDate.of(seasonYear, Month.MARCH, 1);
@@ -1546,7 +1563,7 @@ public class SeasonPlannerTab implements FlowerFarmTab {
 
             int row = 0;
             if (guidance != null) {
-                JLabel guidanceBadge = FarmUi.statusBadge(guidance, FarmUi.Tone.INFO);
+                JLabel guidanceBadge = FarmUi.wrappingStatusBadge(guidance, FarmUi.Tone.INFO);
                 guidanceBadge.setName("seasonPlanner.successionGuidance");
                 GridBagConstraints guidanceConstraints = constraints(0, row++, 4);
                 guidanceConstraints.insets = new Insets(0, 0, 10, 0);
@@ -1559,19 +1576,23 @@ public class SeasonPlannerTab implements FlowerFarmTab {
             addHeading("Season timing", row++);
             addRow("Sow *", sow, "Transplant", transplant, row++);
             addRow("Harvest start *", harvestStart, "Harvest end *", harvestEnd, row++);
-            JLabel dateHelp = FarmUi.mutedLabel(
+            JLabel dateHelp = FarmUi.wrappingHint(
                     "Use YYYY-MM-DD. Leave transplant blank for direct-sown crops.");
+            dateHelp.setName("seasonPlanner.dateHelp");
             GridBagConstraints help = constraints(0, row++, 4);
             help.insets = new Insets(0, 0, 10, 0);
+            help.fill = GridBagConstraints.HORIZONTAL;
             panel.add(dateHelp, help);
             addHeading("Capacity and yield", row++);
             addRow("Bed length (ft) *", bedFeet, "Expected stems *", expectedStems, row++);
-            addLabel("Notes", row++);
+            addLabel("Notes", notes, row++);
             GridBagConstraints noteConstraints = constraints(0, row, 4);
             noteConstraints.fill = GridBagConstraints.BOTH;
             noteConstraints.weighty = 1;
-            panel.add(new JScrollPane(notes), noteConstraints);
-            panel.setPreferredSize(new Dimension(690, guidance == null ? 500 : 530));
+            JScrollPane notesScroll = new JScrollPane(notes);
+            notesScroll.setName("seasonPlanner.notes.scroll");
+            notesScroll.getVerticalScrollBar().setUnitIncrement(18);
+            panel.add(notesScroll, noteConstraints);
         }
 
         private static String referenceNotes(PnwPlantProfile reference) {
@@ -1599,7 +1620,9 @@ public class SeasonPlannerTab implements FlowerFarmTab {
                             JComponent second, int row) {
             GridBagConstraints labelOne = constraints(0, row, 1);
             labelOne.insets = new Insets(4, 0, 4, 6);
-            panel.add(new JLabel(firstLabel), labelOne);
+            JLabel firstCaption = new JLabel(firstLabel);
+            firstCaption.setLabelFor(first);
+            panel.add(firstCaption, labelOne);
             GridBagConstraints fieldOne = constraints(1, row, 1);
             fieldOne.fill = GridBagConstraints.HORIZONTAL;
             fieldOne.weightx = 1;
@@ -1607,7 +1630,9 @@ public class SeasonPlannerTab implements FlowerFarmTab {
             panel.add(first, fieldOne);
             GridBagConstraints labelTwo = constraints(2, row, 1);
             labelTwo.insets = new Insets(4, 0, 4, 6);
-            panel.add(new JLabel(secondLabel), labelTwo);
+            JLabel secondCaption = new JLabel(secondLabel);
+            secondCaption.setLabelFor(second);
+            panel.add(secondCaption, labelTwo);
             GridBagConstraints fieldTwo = constraints(3, row, 1);
             fieldTwo.fill = GridBagConstraints.HORIZONTAL;
             fieldTwo.weightx = 1;
@@ -1615,10 +1640,12 @@ public class SeasonPlannerTab implements FlowerFarmTab {
             panel.add(second, fieldTwo);
         }
 
-        private void addLabel(String text, int row) {
+        private void addLabel(String text, JComponent field, int row) {
             GridBagConstraints constraints = constraints(0, row, 4);
             constraints.insets = new Insets(7, 0, 4, 0);
-            panel.add(new JLabel(text), constraints);
+            JLabel label = new JLabel(text);
+            label.setLabelFor(field);
+            panel.add(label, constraints);
         }
 
         private static GridBagConstraints constraints(int x, int y, int width) {
