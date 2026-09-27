@@ -1,5 +1,36 @@
 # Latest direction — September 26, 2026
 
+## Reference workspace polish
+
+Plant Guide keeps readable table columns and gives profiles and source attribution
+their own adjustable reading space. The source selector no longer determines the
+whole pane's width. Rose Guide separates header actions, wrapping sample status,
+and filter rows. Event Services preserves catalog/detail and brief space, uses
+two rows of comfortable labeled fields, and separates feedback from actions.
+Irrigation uses larger padded text, viewport-sized checklist labels, and usable
+plan/reference heights. These workspaces scroll vertically and reveal keyboard
+targets. Pricing now selects the correct product after either table sort order.
+
+The existing visual fixture covers 850x500 and 1050x700 layouts, light/dark themes,
+and keyboard reveal of reference readers, rose rows, irrigation notes, and event
+brief/actions. Functional pricing checks exercise ascending and descending sorts;
+event checks retain catalog visibility and verify the scrolled action is reachable.
+All eight focused checks and the final clean isolated Java 21 verification passed:
+1,936 tests plus two packaged-JAR checks, all 180 suite/phase floors met, and zero
+failures/errors/skips. Coverage is 87.25% lines and 70.44% branches; Checkstyle and
+SpotBugs report zero findings. The source digest is
+`504b09c54a8e417f5488b80eeb1712e030a65a57b489af6ef605fa783b8807ff`.
+Evidence is in `dist/harness-evidence/latest.json`; the full log is
+`dist/harness-evidence/ui-polish-pass3-quality.log`. Plant Guide and Event Services
+previews are saved in `docs/images` and linked from `docs/GUI_ARCHITECTURE.md`.
+Native installers were not rebuilt or accepted interactively.
+
+Potential next UI work identified from source, not implemented: Knowledge Log's
+entry dialog uses a fixed 720x630 viewport, and Season Planner's planting/review
+forms use fixed 690x500/530 preferred sizes. Both could use height-bounded,
+width-tracking dialog viewports and keyboard reveal. Existing screenshots do not
+cover these dialogs; verify their actual compact behavior before changing them.
+
 ## Further desktop polish
 
 CRM customer forms use natural label widths, comfortable input heights, and

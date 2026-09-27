@@ -97,11 +97,12 @@ public class RoseVarietiesTab implements FlowerFarmTab {
         sampleButton.setName("rose.addSample");
         sampleButton.setToolTipText("Add a ready-to-edit native rose product to inventory.");
         sampleButton.addActionListener(event -> addSampleRose());
-        sampleStatusLabel = FarmUi.statusBadge("Inventory sample ready", FarmUi.Tone.NEUTRAL);
+        sampleStatusLabel = FarmUi.wrappingStatusBadge("Inventory sample ready", FarmUi.Tone.NEUTRAL);
         sampleStatusLabel.setName("rose.sampleStatus");
         sampleStatusLabel.getAccessibleContext().setAccessibleName(
                 "Rose sample inventory status");
         openInventoryButton = FarmUi.secondaryButton("Open Inventory");
+        openInventoryButton.setName("rose.openInventory");
         openInventoryButton.setToolTipText(
                 "Review or edit Nootka Rose and other flower products in Inventory.");
         openInventoryButton.addActionListener(event -> {
@@ -111,6 +112,7 @@ public class RoseVarietiesTab implements FlowerFarmTab {
             }
         });
         JButton visualizer = FarmUi.secondaryButton("Open Rose Visualizer");
+        visualizer.setName("rose.openVisualizer");
         visualizer.setToolTipText(
                 "Explore generative growth habits for Nootka, rugosa, Bourbon, and climbers.");
         visualizer.addActionListener(event -> {
@@ -122,8 +124,14 @@ public class RoseVarietiesTab implements FlowerFarmTab {
         panel.add(FarmUi.pageHeader(
                 "Rose varieties",
                 "Field notes for resilient roses west of the Cascades",
-                FarmUi.toolbar(sampleButton, sampleStatusLabel,
-                        openInventoryButton, visualizer)), BorderLayout.NORTH);
+                null), BorderLayout.NORTH);
+        JPanel actions = FarmUi.toolbar(sampleButton, openInventoryButton, visualizer);
+        actions.setName("rose.actions");
+        JPanel actionArea = new JPanel(new BorderLayout(0, FarmUi.CONTROL_GAP));
+        actionArea.setName("rose.sampleWorkspace");
+        actionArea.setOpaque(false);
+        actionArea.add(actions, BorderLayout.NORTH);
+        actionArea.add(sampleStatusLabel, BorderLayout.CENTER);
 
         DefaultTableModel model = new DefaultTableModel(
                 new String[]{"Bloom habit", "Variety", "Best for", "Field notes"}, 0) {
@@ -147,12 +155,15 @@ public class RoseVarietiesTab implements FlowerFarmTab {
 
         JTextField search = FarmUi.searchField(
                 "Rose variety search", "Search variety, habit, or field use", 24);
+        search.setName("rose.search");
         FarmUi.initialFocus(search);
         JComboBox<String> habit = new JComboBox<>(new String[]{
                 "All bloom habits", "One-time", "Repeat", "Native / regional"});
+        habit.setName("rose.habitFilter");
         habit.getAccessibleContext().setAccessibleName("Rose bloom habit filter");
         JLabel results = FarmUi.statusBadge(
                 VARIETIES.length + " varieties", FarmUi.Tone.INFO);
+        results.setName("rose.results");
         Runnable applyFilter = () -> {
             String query = search.getText().trim().toLowerCase(Locale.ROOT);
             String selectedHabit = String.valueOf(habit.getSelectedItem());
@@ -181,24 +192,75 @@ public class RoseVarietiesTab implements FlowerFarmTab {
         });
         habit.addActionListener(event -> applyFilter.run());
         JButton clear = FarmUi.secondaryButton("Clear filters");
+        clear.setName("rose.clearFilters");
         clear.addActionListener(event -> {
             search.setText("");
             habit.setSelectedIndex(0);
         });
-        JPanel filters = FarmUi.toolbar(
-                new JLabel("Search:"), search,
-                new JLabel("Bloom habit:"), habit, clear, results);
-        JPanel content = new JPanel(new BorderLayout(0, FarmUi.SECTION_GAP));
-        content.setOpaque(false);
-        content.add(FarmUi.section(
+        JLabel searchLabel = new JLabel("Search:");
+        searchLabel.setLabelFor(search);
+        JLabel habitLabel = new JLabel("Bloom habit:");
+        habitLabel.setLabelFor(habit);
+        JPanel searchRow = FarmUi.toolbar(searchLabel, search, clear);
+        searchRow.setName("rose.searchRow");
+        JPanel habitRow = FarmUi.toolbar(habitLabel, habit, results);
+        habitRow.setName("rose.habitRow");
+        JPanel filters = new JPanel(new BorderLayout(0, FarmUi.CONTROL_GAP));
+        filters.setName("rose.filters");
+        filters.setOpaque(false);
+        filters.add(searchRow, BorderLayout.NORTH);
+        filters.add(habitRow, BorderLayout.CENTER);
+        JPanel controls = new JPanel(new BorderLayout(0, FarmUi.SECTION_GAP));
+        controls.setOpaque(false);
+        controls.add(actionArea, BorderLayout.NORTH);
+        controls.add(FarmUi.section(
                 "Find a resilient rose",
                 "Filter by bloom habit or search the variety, field use, and notes.",
-                filters), BorderLayout.NORTH);
-        content.add(FarmUi.section(
+                filters), BorderLayout.CENTER);
+        JPanel guide = FarmUi.section(
                 "Regional variety guide",
                 "Compare disease resilience, shade tolerance, wet-soil fit, and cutting use.",
-                FarmUi.tableScroll(roseTable)), BorderLayout.CENTER);
-        panel.add(content, BorderLayout.CENTER);
+                FarmUi.tableScroll(roseTable));
+        JPanel content = new RoseBody(controls, guide);
+        content.setName("rose.body");
+        FarmUi.revealFocusedControls(content);
+        JScrollPane scroll = new JScrollPane(content,
+                JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED, JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+        scroll.setName("rose.scroll");
+        scroll.setBorder(BorderFactory.createEmptyBorder());
+        scroll.getVerticalScrollBar().setUnitIncrement(24);
+        panel.add(scroll, BorderLayout.CENTER);
+    }
+
+    /** Keep the variety rows readable while shorter windows scroll the controls above them. */
+    private static final class RoseBody extends JPanel implements Scrollable {
+        private static final long serialVersionUID = 1L;
+        private final JComponent controls;
+
+        private RoseBody(JComponent controls, JComponent guide) {
+            super(new BorderLayout(0, FarmUi.SECTION_GAP));
+            this.controls = controls;
+            setOpaque(false);
+            add(controls, BorderLayout.NORTH);
+            add(guide, BorderLayout.CENTER);
+        }
+
+        @Override public Dimension getPreferredSize() {
+            Dimension preferred = super.getPreferredSize();
+            preferred.height = controls.getPreferredSize().height + FarmUi.SECTION_GAP + 320;
+            return preferred;
+        }
+        @Override public Dimension getPreferredScrollableViewportSize() { return getPreferredSize(); }
+        @Override public int getScrollableUnitIncrement(Rectangle visible, int orientation, int direction) {
+            return 24;
+        }
+        @Override public int getScrollableBlockIncrement(Rectangle visible, int orientation, int direction) {
+            return Math.max(24, visible.height - 24);
+        }
+        @Override public boolean getScrollableTracksViewportWidth() { return true; }
+        @Override public boolean getScrollableTracksViewportHeight() {
+            return getParent() != null && getParent().getHeight() >= getPreferredSize().height;
+        }
     }
 
     private void addSampleRose() {

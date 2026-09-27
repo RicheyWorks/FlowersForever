@@ -125,16 +125,20 @@ public class IrrigationInfoTab implements FlowerFarmTab {
     private void buildUI() {
         panel = FarmUi.page();
 
-        modeBadge = FarmUi.statusBadge("Weather pending", FarmUi.Tone.NEUTRAL);
+        modeBadge = FarmUi.wrappingStatusBadge("Weather pending", FarmUi.Tone.NEUTRAL);
         priorityBadge = FarmUi.statusBadge("Priority pending", FarmUi.Tone.NEUTRAL);
-        JPanel badges = FarmUi.toolbar(modeBadge, priorityBadge);
+        JPanel badges = new JPanel(new BorderLayout(FarmUi.CONTROL_GAP, 0));
+        badges.setOpaque(false);
+        badges.add(modeBadge, BorderLayout.CENTER);
+        badges.add(priorityBadge, BorderLayout.EAST);
 
         JPanel north = new JPanel(new BorderLayout(0, FarmUi.CONTROL_GAP));
         north.setOpaque(false);
-        north.add(FarmUi.pageHeader(
+        panel.add(FarmUi.pageHeader(
                 "Irrigation & care",
                 "Weather-aware watering guidance for Port Orchard and Kitsap beds",
-                badges), BorderLayout.NORTH);
+                null), BorderLayout.NORTH);
+        north.add(badges, BorderLayout.NORTH);
 
         handoffLabel = FarmUi.statusBadge("Irrigation handoff", FarmUi.Tone.INFO);
         handoffLabel.getAccessibleContext().setAccessibleName("Irrigation handoff context");
@@ -150,14 +154,14 @@ public class IrrigationInfoTab implements FlowerFarmTab {
         headlineLabel.setFont(headlineLabel.getFont().deriveFont(Font.PLAIN, 14f));
         headlineLabel.getAccessibleContext().setAccessibleName("Irrigation recommendation headline");
         north.add(headlineLabel, BorderLayout.SOUTH);
-        panel.add(north, BorderLayout.NORTH);
 
         detailArea = FarmUi.displayArea(12, 48);
         detailArea.setName("irrigation.today");
         detailArea.getAccessibleContext().setAccessibleName("Today's irrigation plan");
-        detailArea.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 13));
+        detailArea.setFont(UIManager.getFont("Label.font").deriveFont(14f));
+        detailArea.setBorder(BorderFactory.createEmptyBorder(12, 14, 12, 14));
 
-        actionChecklist = new JPanel();
+        actionChecklist = new ActionChecklist();
         actionChecklist.setName("irrigation.actionChecklist");
         actionChecklist.setLayout(new BoxLayout(actionChecklist, BoxLayout.Y_AXIS));
         actionChecklist.setOpaque(false);
@@ -180,26 +184,52 @@ public class IrrigationInfoTab implements FlowerFarmTab {
         checklistPane.setOpaque(false);
         checklistPane.setBorder(BorderFactory.createTitledBorder("Field checklist"));
         checklistPane.add(checklistHeader, BorderLayout.NORTH);
-        checklistPane.add(new JScrollPane(actionChecklist), BorderLayout.CENTER);
+        JScrollPane checklistScroll = new JScrollPane(actionChecklist,
+                JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED, JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+        checklistScroll.setName("irrigation.checklistScroll");
+        checklistPane.add(checklistScroll, BorderLayout.CENTER);
+        checklistPane.setMinimumSize(new Dimension(370, 200));
+        checklistPane.setPreferredSize(new Dimension(400, 230));
 
+        JScrollPane detailScroll = new JScrollPane(detailArea);
+        detailScroll.setMinimumSize(new Dimension(260, 200));
+        detailScroll.setPreferredSize(new Dimension(440, 230));
         JSplitPane todayWork = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT,
-                new JScrollPane(detailArea), checklistPane);
-        todayWork.setResizeWeight(0.62);
+                detailScroll, checklistPane);
+        todayWork.setName("irrigation.todayWorkspace");
+        todayWork.setResizeWeight(0.55);
+        todayWork.setContinuousLayout(true);
 
         referenceArea = FarmUi.displayArea(8, 48);
         referenceArea.setName("irrigation.reference");
         referenceArea.getAccessibleContext().setAccessibleName("Maritime PNW irrigation notes");
-        referenceArea.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
+        referenceArea.setFont(UIManager.getFont("Label.font").deriveFont(14f));
+        referenceArea.setBorder(BorderFactory.createEmptyBorder(12, 14, 12, 14));
         referenceArea.setText(staticReference());
 
+        JPanel today = FarmUi.section("Today's plan", "Live forecast or offline climatology guidance.",
+                todayWork);
+        today.setMinimumSize(new Dimension(0, 270));
+        today.setPreferredSize(new Dimension(840, 300));
+        JPanel notes = FarmUi.section("Standing maritime PNW notes",
+                "Seasonal guidance remains available without a network connection.",
+                new JScrollPane(referenceArea));
+        notes.setMinimumSize(new Dimension(0, 185));
+        notes.setPreferredSize(new Dimension(840, 210));
         JSplitPane split = new JSplitPane(JSplitPane.VERTICAL_SPLIT,
-                FarmUi.section("Today's plan", "Live forecast or offline climatology guidance.",
-                        todayWork),
-                FarmUi.section("Standing maritime PNW notes",
-                        "Seasonal guidance remains available without a network connection.",
-                        new JScrollPane(referenceArea)));
+                today, notes);
+        split.setName("irrigation.workspace");
         split.setResizeWeight(0.62);
-        panel.add(split, BorderLayout.CENTER);
+        split.setContinuousLayout(true);
+        JPanel body = new IrrigationBody(north, split);
+        body.setName("irrigation.body");
+        FarmUi.revealFocusedControls(body);
+        JScrollPane scroll = new JScrollPane(body,
+                JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED, JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+        scroll.setName("irrigation.scroll");
+        scroll.setBorder(BorderFactory.createEmptyBorder());
+        scroll.getVerticalScrollBar().setUnitIncrement(24);
+        panel.add(scroll, BorderLayout.CENTER);
 
         refreshLiveBtn = FarmUi.primaryButton("Refresh live weather");
         FarmUi.initialFocus(refreshLiveBtn);
@@ -216,6 +246,77 @@ public class IrrigationInfoTab implements FlowerFarmTab {
             }
         });
         panel.add(FarmUi.toolbar(refreshLiveBtn, climateOnlyBtn, harvest), BorderLayout.SOUTH);
+    }
+
+    /** Keep both reading panes useful when the window is shorter than the daily plan. */
+    private static final class IrrigationBody extends JPanel implements Scrollable {
+        private static final long serialVersionUID = 1L;
+        private final JComponent heading;
+
+        private IrrigationBody(JComponent heading, JComponent workspace) {
+            super(new BorderLayout(0, FarmUi.CONTROL_GAP));
+            this.heading = heading;
+            setOpaque(false);
+            add(heading, BorderLayout.NORTH);
+            add(workspace, BorderLayout.CENTER);
+        }
+
+        @Override public Dimension getPreferredSize() {
+            return new Dimension(840, heading.getPreferredSize().height + FarmUi.CONTROL_GAP + 515);
+        }
+        @Override public Dimension getPreferredScrollableViewportSize() { return getPreferredSize(); }
+        @Override public int getScrollableUnitIncrement(Rectangle visible, int orientation, int direction) {
+            return 24;
+        }
+        @Override public int getScrollableBlockIncrement(Rectangle visible, int orientation, int direction) {
+            return Math.max(24, visible.height - 24);
+        }
+        @Override public boolean getScrollableTracksViewportWidth() { return true; }
+        @Override public boolean getScrollableTracksViewportHeight() {
+            return getParent() != null && getParent().getHeight() >= getPreferredSize().height;
+        }
+    }
+
+    private static final class ActionChecklist extends JPanel implements Scrollable {
+        private static final long serialVersionUID = 1L;
+        @Override public Dimension getPreferredScrollableViewportSize() { return getPreferredSize(); }
+        @Override public int getScrollableUnitIncrement(Rectangle visible, int orientation, int direction) {
+            return 24;
+        }
+        @Override public int getScrollableBlockIncrement(Rectangle visible, int orientation, int direction) {
+            return Math.max(24, visible.height - 24);
+        }
+        @Override public boolean getScrollableTracksViewportWidth() { return true; }
+        @Override public boolean getScrollableTracksViewportHeight() { return false; }
+    }
+
+    /** Measure the action against its viewport, including the checkbox icon and padding. */
+    private static final class ActionCheckBox extends JCheckBox {
+        private static final long serialVersionUID = 1L;
+
+        private ActionCheckBox(String text) { super(text); }
+
+        @Override public Dimension getPreferredSize() {
+            int available = getParent() == null || getParent().getWidth() <= 0 ? 360
+                    : getParent().getWidth() - getParent().getInsets().left
+                    - getParent().getInsets().right;
+            Icon icon = getIcon() == null ? UIManager.getIcon("CheckBox.icon") : getIcon();
+            int iconWidth = icon == null ? 20 : icon.getIconWidth();
+            int textWidth = Math.max(100, available - iconWidth - getIconTextGap()
+                    - getInsets().left - getInsets().right);
+            javax.swing.plaf.basic.BasicHTML.updateRenderer(this,
+                    "<html>" + escape(getText()) + "</html>");
+            javax.swing.text.View content = (javax.swing.text.View)
+                    getClientProperty(javax.swing.plaf.basic.BasicHTML.propertyKey);
+            content.setSize(textWidth, 0);
+            int textHeight = (int) Math.ceil(content.getPreferredSpan(javax.swing.text.View.Y_AXIS));
+            return new Dimension(available, Math.max(icon == null ? 20 : icon.getIconHeight(), textHeight)
+                    + getInsets().top + getInsets().bottom);
+        }
+
+        @Override public Dimension getMinimumSize() {
+            return new Dimension(0, getPreferredSize().height);
+        }
     }
 
     void refreshAdvice(boolean preferLive) {
@@ -412,8 +513,7 @@ public class IrrigationInfoTab implements FlowerFarmTab {
 
         for (int index = 0; index < actions.size(); index++) {
             String action = actions.get(index);
-            JCheckBox check = new JCheckBox("<html><div style='width:260px'>"
-                    + escape(action) + "</div></html>");
+            JCheckBox check = new ActionCheckBox(action);
             check.setName("irrigation.action." + index);
             check.setOpaque(false);
             check.setAlignmentX(Component.LEFT_ALIGNMENT);
@@ -462,6 +562,7 @@ public class IrrigationInfoTab implements FlowerFarmTab {
     }
 
     private void refreshChecklistLayout() {
+        FarmUi.revealFocusedControls(actionChecklist);
         actionChecklist.revalidate();
         actionChecklist.repaint();
     }

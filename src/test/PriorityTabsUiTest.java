@@ -36,6 +36,8 @@ import javax.swing.JTabbedPane;
 import javax.swing.JTable;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
+import javax.swing.RowSorter;
+import javax.swing.SortOrder;
 import javax.swing.SwingUtilities;
 import java.awt.Component;
 import java.awt.Container;
@@ -12418,6 +12420,23 @@ class PriorityTabsUiTest {
         assertThat(findNamed(root[0], "pricing.units.table"))
                 .singleElement()
                 .isInstanceOf(JTable.class);
+        SwingUtilities.invokeAndWait(() -> {
+            JTable table = (JTable) findNamed(root[0], "pricing.units.table").get(0);
+            JComboBox<?> productType = find(root[0], JComboBox.class).stream()
+                    .filter(combo -> "Product type for unit guidance".equals(
+                            combo.getAccessibleContext().getAccessibleName()))
+                    .findFirst().orElseThrow();
+            for (SortOrder order : List.of(SortOrder.ASCENDING, SortOrder.DESCENDING)) {
+                table.getRowSorter().setSortKeys(List.of(new RowSorter.SortKey(0, order)));
+                String selectedType = order == SortOrder.ASCENDING
+                        ? "Bulk products" : "Equipment and labor";
+                productType.setSelectedItem(selectedType);
+                assertThat(table.getSelectedRow()).as("selected guidance row after %s sort", order)
+                        .isGreaterThanOrEqualTo(0);
+                assertThat(table.getValueAt(table.getSelectedRow(), 0))
+                        .as("selected product after %s sort", order).isEqualTo(selectedType);
+            }
+        });
     }
 
     private static CustomerOrder orderWithLine(

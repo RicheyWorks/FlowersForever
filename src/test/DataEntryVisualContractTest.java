@@ -280,7 +280,8 @@ class DataEntryVisualContractTest {
                 IrrigationAdvisorService.Priority.HIGH,
                 "Deep-water active beds before the afternoon heat.",
                 List.of("Run drip irrigation before 10 AM.",
-                        "Check Field B again near sunset."),
+                        "Check Field B again near sunset, including the newer planting along the fence "
+                                + "and the established rows near the gate."),
                 List.of("Field A", "Field B"), 0.1, 1.2, 1.1, 86.0, 58.0,
                 "Dry maritime summer pattern; protect freshly cut rows."));
         IrrigationInfoTab irrigation = new IrrigationInfoTab(irrigationService, new Host());
@@ -483,10 +484,47 @@ class DataEntryVisualContractTest {
                 (JComponent) findNamed(trends.getUIComponent(), "trend.weeklyTable"), "trend.scroll");
         render("trend-analysis-desktop", trends.getUIComponent(), new Dimension(1280, 1050));
         render("irrigation", irrigation.getUIComponent(), new Dimension(1050, 700));
+        render("irrigation-desktop", irrigation.getUIComponent(), new Dimension(1280, 920));
+        render("irrigation-laptop", irrigation.getUIComponent(), new Dimension(850, 500));
+        assertInteractiveControlsFit(irrigation.getUIComponent());
+        javax.swing.JScrollPane irrigationChecks = (javax.swing.JScrollPane)
+                findNamed(irrigation.getUIComponent(), "irrigation.checklistScroll");
+        assertThat(irrigationChecks.getViewport().getView().getWidth())
+                .as("watering actions fit the checklist viewport")
+                .isEqualTo(irrigationChecks.getViewport().getWidth());
+        render("irrigation-laptop-notes", irrigation.getUIComponent(), new Dimension(850, 500),
+                (JComponent) findNamed(irrigation.getUIComponent(), "irrigation.reference"), "irrigation.scroll");
         render("irrigation-error", irrigationError.getUIComponent(),
                 new Dimension(1050, 700));
+        render("irrigation-error-laptop", irrigationError.getUIComponent(), new Dimension(850, 500));
+        assertInteractiveControlsFit(irrigationError.getUIComponent());
         render("rose-guide", roseGuide.getUIComponent(), new Dimension(1050, 700));
+        render("rose-guide-laptop", roseGuide.getUIComponent(), new Dimension(850, 500));
+        assertInteractiveControlsFit(roseGuide.getUIComponent());
+        render("rose-guide-laptop-rows", roseGuide.getUIComponent(), new Dimension(850, 500),
+                (JComponent) findNamed(roseGuide.getUIComponent(), "rose.varieties.guide"), "rose.scroll");
+        render("plant-guide-laptop", plantGuide.getUIComponent(), new Dimension(850, 500));
+        assertInteractiveControlsFit(plantGuide.getUIComponent());
+        assertThat(findNamed(plantGuide.getUIComponent(), "plant.profile.details").getParent().getHeight())
+                .as("plant profile retains a readable viewport").isGreaterThanOrEqualTo(140);
+        render("plant-guide-laptop-source", plantGuide.getUIComponent(), new Dimension(850, 500),
+                (JComponent) findNamed(plantGuide.getUIComponent(), "plant.source.details"), "plant.guide.scroll");
+        ((javax.swing.JScrollPane) findNamed(plantGuide.getUIComponent(), "plant.guide.scroll"))
+                .getViewport().setViewPosition(new java.awt.Point(0, 0));
+        render("plant-guide-desktop", plantGuide.getUIComponent(), new Dimension(1280, 1000));
+        render("event-services", eventServices.getUIComponent(), new Dimension(1050, 700));
+        render("event-services-laptop", eventServices.getUIComponent(), new Dimension(850, 500));
+        assertInteractiveControlsFit(eventServices.getUIComponent());
+        render("event-services-laptop-brief", eventServices.getUIComponent(), new Dimension(850, 500),
+                (JComponent) findNamed(eventServices.getUIComponent(), "eventServices.brief"), "eventServices.scroll");
+        render("event-services-laptop-actions", eventServices.getUIComponent(), new Dimension(850, 500),
+                (JComponent) findNamed(eventServices.getUIComponent(), "eventServices.startCrmBrief"), "eventServices.scroll");
+        ((javax.swing.JScrollPane) findNamed(eventServices.getUIComponent(), "eventServices.scroll"))
+                .getViewport().setViewPosition(new java.awt.Point(0, 0));
+        render("event-services-desktop", eventServices.getUIComponent(), new Dimension(1280, 1120));
         render("pricing-reference", pricing.getUIComponent(), new Dimension(1050, 700));
+        render("pricing-reference-laptop", pricing.getUIComponent(), new Dimension(850, 500));
+        assertInteractiveControlsFit(pricing.getUIComponent());
         render("rose-visualizer", roseVisualizer.getUIComponent(), new Dimension(1200, 800));
         render("destructive-confirmation", FarmUi.confirmationPanel(
                 "Complete 4 confirmed orders?",
@@ -670,10 +708,18 @@ class DataEntryVisualContractTest {
                     (JComponent) findNamed(trends.getUIComponent(), "trend.weeklyTable"), "trend.scroll");
             render("irrigation-dark-compact", irrigation.getUIComponent(),
                     new Dimension(1050, 700));
+            render("irrigation-dark-laptop-notes", irrigation.getUIComponent(), new Dimension(850, 500),
+                    (JComponent) findNamed(irrigation.getUIComponent(), "irrigation.reference"), "irrigation.scroll");
             render("rose-guide-dark-compact", roseGuide.getUIComponent(),
                     new Dimension(1050, 700));
+            render("rose-guide-dark-laptop-rows", roseGuide.getUIComponent(), new Dimension(850, 500),
+                    (JComponent) findNamed(roseGuide.getUIComponent(), "rose.varieties.guide"), "rose.scroll");
             render("plant-guide-dark-compact", plantGuide.getUIComponent(),
                     new Dimension(1050, 700));
+            render("plant-guide-dark-laptop-source", plantGuide.getUIComponent(), new Dimension(850, 500),
+                    (JComponent) findNamed(plantGuide.getUIComponent(), "plant.source.details"), "plant.guide.scroll");
+            render("event-services-dark-laptop-brief", eventServices.getUIComponent(), new Dimension(850, 500),
+                    (JComponent) findNamed(eventServices.getUIComponent(), "eventServices.brief"), "eventServices.scroll");
             render("pricing-reference-dark-compact", pricing.getUIComponent(),
                     new Dimension(1050, 700));
             render("rose-visualizer-dark-compact", roseVisualizer.getUIComponent(),

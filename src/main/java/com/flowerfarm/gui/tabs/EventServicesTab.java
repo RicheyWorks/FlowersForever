@@ -20,11 +20,17 @@ import javax.swing.JTextArea;
 import javax.swing.JTextField;
 import javax.swing.ListSelectionModel;
 import javax.swing.RowFilter;
+import javax.swing.Scrollable;
 import javax.swing.table.AbstractTableModel;
 import javax.swing.table.TableRowSorter;
 import java.awt.BorderLayout;
 import java.awt.Dimension;
+import java.awt.GridBagConstraints;
+import java.awt.GridBagLayout;
 import java.awt.HeadlessException;
+import java.awt.Insets;
+import java.awt.Rectangle;
+import java.awt.event.MouseEvent;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -98,7 +104,21 @@ public final class EventServicesTab implements FlowerFarmTab {
                 catalogCount), BorderLayout.NORTH);
 
         EventTableModel model = new EventTableModel(services);
-        table = new JTable(model);
+        table = new JTable(model) {
+            @Override public String getToolTipText(MouseEvent event) {
+                int row = rowAtPoint(event.getPoint());
+                int column = columnAtPoint(event.getPoint());
+                if (row >= 0 && column >= 0) {
+                    Object value = getValueAt(row, column);
+                    if (value != null && !value.toString().isBlank()) {
+                        String text = value.toString().replace("&", "&amp;")
+                                .replace("<", "&lt;").replace(">", "&gt;");
+                        return "<html>" + text + "</html>";
+                    }
+                }
+                return super.getToolTipText(event);
+            }
+        };
         table.setName("eventServices.table");
         FarmUi.configureTable(table,
                 "Wedding and memorial event service starters; select one or more services");
@@ -107,10 +127,12 @@ public final class EventServicesTab implements FlowerFarmTab {
         table.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
         TableRowSorter<EventTableModel> sorter = new TableRowSorter<>(model);
         table.setRowSorter(sorter);
-        table.getColumnModel().getColumn(0).setPreferredWidth(190);
-        table.getColumnModel().getColumn(1).setPreferredWidth(120);
-        table.getColumnModel().getColumn(2).setPreferredWidth(140);
-        table.getColumnModel().getColumn(3).setPreferredWidth(115);
+        table.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
+        int[] columnWidths = {230, 115, 170, 150};
+        for (int column = 0; column < columnWidths.length; column++) {
+            table.getColumnModel().getColumn(column).setPreferredWidth(columnWidths[column]);
+            table.getColumnModel().getColumn(column).setMinWidth(100);
+        }
 
         JTextField search = FarmUi.searchField(
                 "Event service search",
@@ -191,57 +213,159 @@ public final class EventServicesTab implements FlowerFarmTab {
 
         JTextArea details = FarmUi.displayArea(18, 40);
         details.setName("eventServices.details");
+        details.setFont(details.getFont().deriveFont(14f));
+        details.setBorder(BorderFactory.createEmptyBorder(12, 12, 12, 12));
         details.getAccessibleContext().setAccessibleName(
                 "Selected event service details and source");
         JScrollPane detailScroll = new JScrollPane(details);
+        detailScroll.setName("eventServices.detailScroll");
         detailScroll.setBorder(BorderFactory.createLineBorder(FarmUi.borderColor()));
+        detailScroll.getVerticalScrollBar().setUnitIncrement(18);
         table.getSelectionModel().addListSelectionListener(event -> {
             if (!event.getValueIsAdjusting()) {
                 showSelection(model, details);
             }
         });
-        JPanel serviceDetails = FarmUi.section(
-                "Selected service",
-                "Operational prompts are starters—not vendor quotes, contracts, permits, or legal advice.",
-                detailScroll);
-        serviceDetails.setMinimumSize(new Dimension(365, 260));
+        JPanel detailContent = new JPanel(new BorderLayout(0, FarmUi.CONTROL_GAP));
+        detailContent.setOpaque(false);
+        JLabel detailHint = new EventHint(
+                "Operational prompts are starters—not vendor quotes, contracts, permits, or legal advice.");
+        detailHint.setName("eventServices.detailHint");
+        detailContent.add(detailHint, BorderLayout.NORTH);
+        detailContent.add(detailScroll, BorderLayout.CENTER);
+        JPanel serviceDetails = FarmUi.section("Selected service", null, detailContent);
+        serviceDetails.setMinimumSize(new Dimension(320, 260));
 
+        JScrollPane tableScroll = FarmUi.tableScroll(table);
+        tableScroll.setMinimumSize(new Dimension(300, 260));
         JSplitPane catalogSplit = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT,
-                FarmUi.tableScroll(table), serviceDetails);
+                tableScroll, serviceDetails) {
+            private boolean dividerPlaced;
+
+            @Override public void doLayout() {
+                if (!dividerPlaced && getWidth() > 0) {
+                    setDividerLocation(0.52);
+                    dividerPlaced = true;
+                }
+                super.doLayout();
+            }
+        };
         catalogSplit.setName("eventServices.catalogSplit");
-        catalogSplit.setResizeWeight(0.61);
+        catalogSplit.setResizeWeight(0.52);
         catalogSplit.setContinuousLayout(true);
         catalogSplit.setBorder(null);
 
         JPanel catalog = new JPanel(new BorderLayout(0, FarmUi.CONTROL_GAP));
         catalog.setOpaque(false);
-        catalog.setMinimumSize(new Dimension(0, 250));
+        catalog.setMinimumSize(new Dimension(0, 350));
         catalog.add(filters, BorderLayout.NORTH);
         catalog.add(catalogSplit, BorderLayout.CENTER);
 
         JPanel builder = buildBriefBuilder(occasion);
-        builder.setMinimumSize(new Dimension(0, 190));
-        builder.setPreferredSize(new Dimension(0, 245));
+        builder.setMinimumSize(new Dimension(0, 400));
+        builder.setPreferredSize(new Dimension(0, 400));
+        JPanel catalogSection = FarmUi.section("Service catalog",
+                "Filter the starter library, then select one or several deliverables.", catalog);
+        catalogSection.setMinimumSize(new Dimension(0, 420));
         JSplitPane workspace = new JSplitPane(JSplitPane.VERTICAL_SPLIT,
-                FarmUi.section("Service catalog",
-                        "Filter the starter library, then select one or several deliverables.",
-                        catalog), builder);
+                catalogSection, builder) {
+            private boolean dividerPlaced;
+
+            @Override public void doLayout() {
+                if (!dividerPlaced && getHeight() > 0) {
+                    setDividerLocation(0.52);
+                    dividerPlaced = true;
+                }
+                super.doLayout();
+            }
+        };
         workspace.setName("eventServices.workspace");
-        workspace.setResizeWeight(0.60);
-        workspace.setDividerLocation(325);
+        workspace.setResizeWeight(0.52);
         workspace.setContinuousLayout(true);
         workspace.setBorder(null);
-        panel.add(workspace, BorderLayout.CENTER);
-        panel.add(FarmUi.formHint(
+        JPanel body = new EventBody(workspace);
+        body.setName("eventServices.body");
+        FarmUi.revealFocusedControls(body);
+        JScrollPane scroll = new JScrollPane(body,
+                JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED, JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+        scroll.setName("eventServices.scroll");
+        scroll.setBorder(BorderFactory.createEmptyBorder());
+        scroll.getVerticalScrollBar().setUnitIncrement(24);
+        panel.add(scroll, BorderLayout.CENTER);
+        JLabel scopeHint = new EventHint(
                 "Catering must be handled by an appropriately licensed provider. Confirm venue, "
-                        + "insurance, accessibility, cultural, privacy, image-rights, and local rules."),
-                BorderLayout.SOUTH);
+                        + "insurance, accessibility, cultural, privacy, image-rights, and local rules.");
+        scopeHint.setName("eventServices.scopeHint");
+        panel.add(scopeHint, BorderLayout.SOUTH);
 
         if (!services.isEmpty()) {
             table.setRowSelectionInterval(0, 0);
             showSelection(model, details);
         }
         applyRolePermissions(canWrite);
+    }
+
+    /** Quiet guidance follows the actual reader or page width after resizing. */
+    private static final class EventHint extends JLabel {
+        private static final long serialVersionUID = 1L;
+
+        private EventHint(String text) {
+            super("<html>" + text.replace("&", "&amp;").replace("<", "&lt;")
+                    .replace(">", "&gt;") + "</html>");
+            getAccessibleContext().setAccessibleName(text);
+            getAccessibleContext().setAccessibleDescription(text);
+        }
+
+        @Override public void updateUI() {
+            super.updateUI();
+            setForeground(FarmUi.mutedColor());
+            setFont(getFont().deriveFont(12f));
+        }
+
+        @Override public Dimension getPreferredSize() {
+            int width = getParent() == null || getParent().getWidth() <= 0 ? 340
+                    : getParent().getWidth() - getParent().getInsets().left
+                    - getParent().getInsets().right;
+            width = Math.max(100, width);
+            javax.swing.text.View content = (javax.swing.text.View)
+                    getClientProperty(javax.swing.plaf.basic.BasicHTML.propertyKey);
+            if (content == null) return super.getPreferredSize();
+            content.setSize(width, 0);
+            return new Dimension(width,
+                    (int) Math.ceil(content.getPreferredSpan(javax.swing.text.View.Y_AXIS)));
+        }
+
+        @Override public Dimension getMinimumSize() {
+            return new Dimension(0, getPreferredSize().height);
+        }
+    }
+
+    /** Keep both readers and the brief controls usable in a short desktop window. */
+    private static final class EventBody extends JPanel implements Scrollable {
+        private static final long serialVersionUID = 1L;
+
+        private EventBody(JComponent workspace) {
+            super(new BorderLayout());
+            setOpaque(false);
+            add(workspace, BorderLayout.CENTER);
+        }
+
+        @Override public Dimension getPreferredSize() {
+            Dimension preferred = super.getPreferredSize();
+            preferred.height = 840;
+            return preferred;
+        }
+        @Override public Dimension getPreferredScrollableViewportSize() { return getPreferredSize(); }
+        @Override public int getScrollableUnitIncrement(Rectangle visible, int orientation, int direction) {
+            return 24;
+        }
+        @Override public int getScrollableBlockIncrement(Rectangle visible, int orientation, int direction) {
+            return Math.max(24, visible.height - 24);
+        }
+        @Override public boolean getScrollableTracksViewportWidth() { return true; }
+        @Override public boolean getScrollableTracksViewportHeight() {
+            return getParent() != null && getParent().getHeight() >= getPreferredSize().height;
+        }
     }
 
     private JPanel buildBriefBuilder(JComboBox<String> occasionFilter) {
@@ -258,13 +382,21 @@ public final class EventServicesTab implements FlowerFarmTab {
         JTextField guestCount = new JTextField(7);
         guestCount.setName("eventServices.guestCount");
         guestCount.getAccessibleContext().setAccessibleName("Estimated guest count");
+        for (JTextField field : List.of(eventName, venue, guestCount)) {
+            FarmUi.entryControl(field, null, field.getAccessibleContext().getAccessibleName());
+        }
+        FarmUi.entryControl(eventDate, "YYYY-MM-DD", "Use YYYY-MM-DD when the date is known.");
 
         brief = FarmUi.displayArea(9, 70);
         brief.setName("eventServices.brief");
+        brief.setFont(brief.getFont().deriveFont(14f));
+        brief.setBorder(BorderFactory.createEmptyBorder(12, 12, 12, 12));
         brief.setEditable(true);
         brief.getAccessibleContext().setAccessibleName("Editable event service brief");
         JScrollPane briefScroll = new JScrollPane(brief);
+        briefScroll.setName("eventServices.briefScroll");
         briefScroll.setBorder(BorderFactory.createLineBorder(FarmUi.borderColor()));
+        briefScroll.getVerticalScrollBar().setUnitIncrement(18);
 
         JButton build = FarmUi.primaryButton("Build selected-service brief");
         build.setName("eventServices.buildBrief");
@@ -297,24 +429,50 @@ public final class EventServicesTab implements FlowerFarmTab {
                             : "CRM opened · existing instructions kept; copy brief when ready",
                     prepared ? FarmUi.Tone.SUCCESS : FarmUi.Tone.WARNING);
         });
-        feedback = FarmUi.statusBadge("Select services and build a brief", FarmUi.Tone.NEUTRAL);
+        feedback = FarmUi.wrappingStatusBadge("Select services and build a brief", FarmUi.Tone.NEUTRAL);
         feedback.setName("eventServices.feedback");
 
-        JPanel fields = FarmUi.toolbar(
-                new JLabel("Event / family:"), eventName,
-                new JLabel("Date:"), eventDate,
-                new JLabel("Venue:"), venue,
-                new JLabel("Guests:"), guestCount);
-        JPanel actions = FarmUi.toolbar(build, copy, startCrmButton, feedback);
+        JPanel fields = new JPanel(new GridBagLayout());
+        fields.setName("eventServices.briefFields");
+        fields.setOpaque(false);
+        addBriefField(fields, "Event / family:", eventName);
+        addBriefField(fields, "Date:", eventDate);
+        addBriefField(fields, "Venue:", venue);
+        addBriefField(fields, "Guests:", guestCount);
+        JPanel actions = FarmUi.toolbar(build, copy, startCrmButton);
+        actions.setName("eventServices.briefActions");
+        JPanel footer = new JPanel(new BorderLayout(0, FarmUi.CONTROL_GAP));
+        footer.setOpaque(false);
+        footer.add(actions, BorderLayout.NORTH);
+        footer.add(feedback, BorderLayout.SOUTH);
         JPanel content = new JPanel(new BorderLayout(0, FarmUi.CONTROL_GAP));
+        content.setName("eventServices.briefBuilder");
         content.setOpaque(false);
         content.add(fields, BorderLayout.NORTH);
         content.add(briefScroll, BorderLayout.CENTER);
-        content.add(actions, BorderLayout.SOUTH);
+        content.add(footer, BorderLayout.SOUTH);
         return FarmUi.section(
                 "Event brief builder",
                 "Build a compact handoff for the event record; CRM keeps physical flower lines separate.",
                 content);
+    }
+
+    private static void addBriefField(JPanel fields, String text, JComponent field) {
+        int position = fields.getComponentCount() / 2;
+        GridBagConstraints constraints = new GridBagConstraints();
+        constraints.gridx = (position % 2) * 2;
+        constraints.gridy = position / 2;
+        constraints.anchor = GridBagConstraints.LINE_START;
+        constraints.insets = new Insets(position < 2 ? 0 : FarmUi.CONTROL_GAP,
+                position % 2 == 0 ? 0 : FarmUi.SECTION_GAP, 0, FarmUi.CONTROL_GAP);
+        JLabel label = new JLabel(text);
+        label.setLabelFor(field);
+        fields.add(label, constraints);
+        constraints.gridx++;
+        constraints.weightx = 1;
+        constraints.fill = GridBagConstraints.HORIZONTAL;
+        constraints.insets = new Insets(position < 2 ? 0 : FarmUi.CONTROL_GAP, 0, 0, 0);
+        fields.add(field, constraints);
     }
 
     private void buildBrief(List<EventServiceProfile> selected,

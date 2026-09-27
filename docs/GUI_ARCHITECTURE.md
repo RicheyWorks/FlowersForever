@@ -58,6 +58,20 @@ while retaining a fixed status footer and readable record-column widths with
 horizontal scrolling. The rose preview uses the canvas's
 existing scene scaling to fit its panel; PNG exports retain their minimum size.
 
+Reference screens preserve useful reading space inside compact viewports. The
+plant guide keeps table-column widths, bounds its research selector, and gives
+profile text and source attribution an adjustable split. Rose actions and filter
+rows stay separate from their wrapping status. Event Services scrolls its catalog
+and brief builder together; brief fields use two labeled rows, and feedback wraps
+below the actions. Irrigation uses padded proportional text, independently
+scrollable plan/reference readers, and checklist labels sized to their viewport.
+All four opt into keyboard focus reveal. Pricing converts the chosen product's
+model row into its sorted view row before selecting it.
+
+Rendered reference examples: [Plant Guide](images/app-plant-guide.png) and
+[Event Services](images/app-event-services.png). These use fixture data and the
+same Swing components exercised by the compact light/dark visual checks.
+
 ```
 com.flowerfarm.gui
 ├── FlowerFarmGUI.java          # Lightweight orchestrator (Spring @Component), implements TabHost

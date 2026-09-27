@@ -19,12 +19,14 @@ import javax.swing.JTable;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
 import javax.swing.RowFilter;
+import javax.swing.Scrollable;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import javax.swing.table.AbstractTableModel;
 import javax.swing.table.TableRowSorter;
 import java.awt.BorderLayout;
 import java.awt.Dimension;
+import java.awt.Rectangle;
 import java.util.List;
 import java.util.Locale;
 
@@ -100,6 +102,7 @@ public final class PnwPlantGuideTab implements FlowerFarmTab {
         JTable table = new JTable(model);
         table.setName("plant.guide.table");
         FarmUi.configureTable(table, "Pacific Northwest plant guide table");
+        table.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
         TableRowSorter<PlantTableModel> sorter = new TableRowSorter<>(model);
         table.setRowSorter(sorter);
         table.getColumnModel().getColumn(0).setPreferredWidth(160);
@@ -200,22 +203,28 @@ public final class PnwPlantGuideTab implements FlowerFarmTab {
         filters.setLayout(new BoxLayout(filters, BoxLayout.Y_AXIS));
         JPanel searchRow = FarmUi.toolbar(
                 new JLabel("Search:"), search,
-                new JLabel("Type:"), type);
+                new JLabel("Type:"), type, results);
         searchRow.setAlignmentX(JComponent.LEFT_ALIGNMENT);
         JPanel siteRow = FarmUi.toolbar(
                 new JLabel("Origin:"), origin,
-                new JLabel("Light:"), light,
-                clear, planButton, results);
+                new JLabel("Light:"), light);
         siteRow.setAlignmentX(JComponent.LEFT_ALIGNMENT);
         filters.add(searchRow);
         filters.add(Box.createVerticalStrut(FarmUi.CONTROL_GAP));
         filters.add(siteRow);
+        JPanel planningRow = FarmUi.toolbar(clear, planButton, planningStatus);
+        planningRow.setAlignmentX(JComponent.LEFT_ALIGNMENT);
+        filters.add(Box.createVerticalStrut(FarmUi.CONTROL_GAP));
+        filters.add(planningRow);
 
         JTextArea details = FarmUi.displayArea(14, 34);
         details.setName("plant.profile.details");
         details.getAccessibleContext().setAccessibleName("Selected plant profile and source");
         JScrollPane detailScroll = new JScrollPane(details);
+        detailScroll.setName("plant.profile.scroll");
         detailScroll.setBorder(BorderFactory.createLineBorder(FarmUi.borderColor()));
+        detailScroll.setMinimumSize(new Dimension(0, 140));
+        detailScroll.getVerticalScrollBar().setUnitIncrement(20);
         detailScroll.getAccessibleContext().setAccessibleName("Selected plant profile scroll area");
         table.getSelectionModel().addListSelectionListener(event -> {
             if (!event.getValueIsAdjusting()) {
@@ -226,63 +235,162 @@ public final class PnwPlantGuideTab implements FlowerFarmTab {
         JComboBox<Source> sources = new JComboBox<>(
                 PnwPlantCatalog.sources().toArray(Source[]::new));
         sources.setName("plant.sourceSelector");
+        int sourceControlHeight = sources.getPreferredSize().height;
+        sources.setPreferredSize(new Dimension(330, sourceControlHeight));
+        sources.setMinimumSize(new Dimension(220, sourceControlHeight));
         sources.getAccessibleContext().setAccessibleName("Plant research source selector");
         JTextArea sourceDetails = FarmUi.displayArea(4, 34);
         sourceDetails.setName("plant.source.details");
         sourceDetails.getAccessibleContext().setAccessibleName("Selected research source URL");
-        sources.addActionListener(event -> showSource((Source) sources.getSelectedItem(),
-                sourceDetails));
+        sources.addActionListener(event -> {
+            Source selected = (Source) sources.getSelectedItem();
+            showSource(selected, sourceDetails);
+            sources.setToolTipText(selected == null ? null : selected.label());
+        });
         if (sources.getItemCount() > 0) {
             sources.setSelectedIndex(0);
             showSource((Source) sources.getSelectedItem(), sourceDetails);
+            sources.setToolTipText(((Source) sources.getSelectedItem()).label());
         }
+        JScrollPane sourceScroll = new JScrollPane(sourceDetails);
+        sourceScroll.setName("plant.source.scroll");
+        sourceScroll.setBorder(BorderFactory.createLineBorder(FarmUi.borderColor()));
+        sourceScroll.setMinimumSize(new Dimension(0, 55));
+        sourceScroll.getVerticalScrollBar().setUnitIncrement(20);
+        sourceScroll.getAccessibleContext().setAccessibleName("Research source attribution scroll area");
         JPanel sourcePanel = new JPanel(new BorderLayout(0, FarmUi.CONTROL_GAP));
         sourcePanel.setOpaque(false);
         sourcePanel.add(sources, BorderLayout.NORTH);
-        sourcePanel.add(sourceDetails, BorderLayout.CENTER);
+        sourcePanel.add(sourceScroll, BorderLayout.CENTER);
 
-        JPanel detailStack = new JPanel(new BorderLayout(0, FarmUi.SECTION_GAP));
-        detailStack.setOpaque(false);
-        detailStack.add(FarmUi.section(
+        JPanel profileSection = referenceSection(
                 "Selected profile",
                 "Every growing note retains its public source title and HTTPS address.",
-                detailScroll), BorderLayout.CENTER);
-        detailStack.add(FarmUi.section(
+                detailScroll);
+        profileSection.setPreferredSize(new Dimension(420, 250));
+        profileSection.setMinimumSize(new Dimension(300, 220));
+        JPanel sourceSection = referenceSection(
                 "Research library",
                 "Extension publications, Master Gardener resources, and university collections.",
-                sourcePanel), BorderLayout.SOUTH);
-        detailStack.setMinimumSize(new Dimension(340, 250));
+                sourcePanel);
+        sourceSection.setPreferredSize(new Dimension(420, 190));
+        sourceSection.setMinimumSize(new Dimension(300, 160));
+        JSplitPane detailStack = new JSplitPane(JSplitPane.VERTICAL_SPLIT,
+                profileSection, sourceSection);
+        detailStack.setName("plant.profileSource.split");
+        detailStack.getAccessibleContext().setAccessibleName("Plant profile and research library split");
+        detailStack.setResizeWeight(0.75);
+        detailStack.setContinuousLayout(true);
+        detailStack.setBorder(null);
+        detailStack.setPreferredSize(new Dimension(420, 446));
+        detailStack.setMinimumSize(new Dimension(300, 386));
+
+        JScrollPane tableScroll = FarmUi.tableScroll(table);
+        tableScroll.setPreferredSize(new Dimension(520, 446));
+        tableScroll.setMinimumSize(new Dimension(340, 220));
 
         JSplitPane split = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT,
-                FarmUi.tableScroll(table), detailStack);
+                tableScroll, detailStack);
         split.setName("plant.guide.split");
-        split.setResizeWeight(0.65);
+        split.setResizeWeight(0.55);
         split.setContinuousLayout(true);
         split.setBorder(null);
 
-        JPanel content = new JPanel(new BorderLayout(0, FarmUi.SECTION_GAP));
+        JPanel content = new ReferenceBody();
         content.setOpaque(false);
         content.add(FarmUi.section(
                 "Find the right plant",
                 "Filter first, then select a row for field notes and provenance.",
                 filters), BorderLayout.NORTH);
         content.add(split, BorderLayout.CENTER);
-        content.add(FarmUi.formHint(
+        JPanel footnotes = new JPanel();
+        footnotes.setOpaque(false);
+        footnotes.setLayout(new BoxLayout(footnotes, BoxLayout.Y_AXIS));
+        JLabel planningHint = FarmUi.formHint(
+                "The source is copied into notes; dates and yield stay farm decisions.");
+        planningHint.setAlignmentX(JComponent.LEFT_ALIGNMENT);
+        JLabel regionalHint = FarmUi.formHint(
                 "Regional reference only: confirm cultivar, microclimate, soil test, toxicity, "
-                        + "and current pest guidance before field decisions."), BorderLayout.SOUTH);
-        panel.add(content, BorderLayout.CENTER);
+                        + "and current pest guidance before field decisions.");
+        regionalHint.setAlignmentX(JComponent.LEFT_ALIGNMENT);
+        footnotes.add(planningHint);
+        footnotes.add(Box.createVerticalStrut(FarmUi.CONTROL_GAP));
+        footnotes.add(regionalHint);
+        content.add(footnotes, BorderLayout.SOUTH);
+        JScrollPane scroll = new JScrollPane(content,
+                JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED, JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+        scroll.setName("plant.guide.scroll");
+        scroll.setBorder(BorderFactory.createEmptyBorder());
+        scroll.getVerticalScrollBar().setUnitIncrement(24);
+        panel.add(scroll, BorderLayout.CENTER);
+        FarmUi.revealFocusedControls(content);
 
         if (!plants.isEmpty()) {
             table.setRowSelectionInterval(0, 0);
             showSelection(table, model, details);
         }
-        JPanel planningRow = FarmUi.toolbar(
-                FarmUi.formHint("The source is copied into notes; dates and yield stay farm decisions."),
-                planningStatus);
-        planningRow.setAlignmentX(JComponent.LEFT_ALIGNMENT);
-        filters.add(Box.createVerticalStrut(FarmUi.CONTROL_GAP));
-        filters.add(planningRow);
         applyRolePermissions(canWrite);
+    }
+
+    private static JPanel referenceSection(String title, String description, JComponent reader) {
+        JPanel content = new JPanel(new BorderLayout(0, FarmUi.CONTROL_GAP));
+        content.setOpaque(false);
+        content.add(new ReferenceHint(description), BorderLayout.NORTH);
+        content.add(reader, BorderLayout.CENTER);
+        return FarmUi.section(title, null, content);
+    }
+
+    /** Allow attribution hints to wrap when the reader divider is adjusted. */
+    private static final class ReferenceHint extends JLabel {
+        private static final long serialVersionUID = 1L;
+
+        private ReferenceHint(String text) {
+            super("<html>" + text.replace("&", "&amp;").replace("<", "&lt;")
+                    .replace(">", "&gt;") + "</html>");
+            getAccessibleContext().setAccessibleName(text);
+        }
+
+        @Override public void updateUI() {
+            super.updateUI();
+            setForeground(FarmUi.mutedColor());
+            setFont(getFont().deriveFont(12f));
+        }
+
+        @Override public Dimension getPreferredSize() {
+            int width = getParent() == null || getParent().getWidth() <= 0 ? 340
+                    : getParent().getWidth() - getParent().getInsets().left
+                    - getParent().getInsets().right;
+            width = Math.max(100, width);
+            javax.swing.text.View content = (javax.swing.text.View)
+                    getClientProperty(javax.swing.plaf.basic.BasicHTML.propertyKey);
+            if (content == null) return super.getPreferredSize();
+            content.setSize(width, 0);
+            return new Dimension(width,
+                    (int) Math.ceil(content.getPreferredSpan(javax.swing.text.View.Y_AXIS)));
+        }
+
+        @Override public Dimension getMinimumSize() {
+            return new Dimension(0, getPreferredSize().height);
+        }
+    }
+
+    /** Preserve readable readers and table rows while short windows scroll. */
+    private static final class ReferenceBody extends JPanel implements Scrollable {
+        private static final long serialVersionUID = 1L;
+
+        private ReferenceBody() { super(new BorderLayout(0, FarmUi.SECTION_GAP)); }
+
+        @Override public Dimension getPreferredScrollableViewportSize() { return getPreferredSize(); }
+        @Override public int getScrollableUnitIncrement(Rectangle visible, int orientation, int direction) {
+            return 24;
+        }
+        @Override public int getScrollableBlockIncrement(Rectangle visible, int orientation, int direction) {
+            return Math.max(24, visible.height - 24);
+        }
+        @Override public boolean getScrollableTracksViewportWidth() { return true; }
+        @Override public boolean getScrollableTracksViewportHeight() {
+            return getParent() != null && getParent().getHeight() >= getPreferredSize().height;
+        }
     }
 
     private static PnwPlantProfile selectedPlant(JTable table, PlantTableModel model) {

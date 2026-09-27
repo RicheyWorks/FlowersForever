@@ -10,12 +10,15 @@ import javax.swing.JButton;
 import javax.swing.JComboBox;
 import javax.swing.JComponent;
 import javax.swing.JLabel;
+import javax.swing.JScrollPane;
 import javax.swing.JTable;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
 import javax.swing.SwingUtilities;
 import java.awt.Component;
 import java.awt.Container;
+import java.awt.Point;
+import java.awt.event.FocusEvent;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -26,9 +29,11 @@ class EventServicesTabTest {
 
     @Test
     @DisplayName("keeps filters, catalog, details, and brief actions usable at compact size")
-    void keepsCompactWorkspaceVisible() {
-        SwingUserHarness user = SwingUserHarness.on(
-                new EventServicesTab(new Host()).getUIComponent()).layoutAt(1050, 700);
+    void keepsCompactWorkspaceVisible() throws Exception {
+        JComponent root = new EventServicesTab(new Host()).getUIComponent();
+        SwingUserHarness user = SwingUserHarness.on(root).layoutAt(1050, 700);
+        JScrollPane scroll = (JScrollPane) named(root, "eventServices.scroll");
+        assertThat(scroll).isNotNull();
 
         assertThat(user.visibleExtent("eventServices.search").width()).isGreaterThan(100);
         assertThat(user.visibleExtent("eventServices.occasionFilter").width())
@@ -36,9 +41,30 @@ class EventServicesTabTest {
         assertThat(user.visibleExtent("eventServices.categoryFilter").width())
                 .isGreaterThan(100);
         assertThat(user.visibleExtent("eventServices.table").height()).isGreaterThan(90);
+
+        Component brief = named(root, "eventServices.brief");
+        SwingUtilities.invokeAndWait(() -> {
+            FocusEvent focus = new FocusEvent(brief, FocusEvent.FOCUS_GAINED);
+            for (var listener : brief.getFocusListeners()) {
+                listener.focusGained(focus);
+            }
+            assertThat(scroll.getViewport().getViewPosition().y).isPositive();
+        });
         assertThat(user.visibleExtent("eventServices.brief").height()).isGreaterThan(45);
+
+        Component startCrm = named(root, "eventServices.startCrmBrief");
+        SwingUtilities.invokeAndWait(() -> {
+            scroll.getViewport().setViewPosition(new Point(0, 0));
+            FocusEvent focus = new FocusEvent(startCrm, FocusEvent.FOCUS_GAINED);
+            for (var listener : startCrm.getFocusListeners()) {
+                listener.focusGained(focus);
+            }
+            assertThat(scroll.getViewport().getViewPosition().y).isPositive();
+        });
         assertThat(user.visibleExtent("eventServices.startCrmBrief").width())
-                .isGreaterThan(90);
+                .isGreaterThan(90).isEqualTo(startCrm.getWidth());
+        assertThat(user.visibleExtent("eventServices.startCrmBrief").height())
+                .isEqualTo(startCrm.getHeight());
     }
 
     @Test

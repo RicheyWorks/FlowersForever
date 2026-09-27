@@ -9,6 +9,7 @@ import javax.swing.JPanel;
 import javax.swing.JTable;
 import javax.swing.table.DefaultTableModel;
 import java.awt.BorderLayout;
+import java.awt.event.MouseEvent;
 
 /** Interactive selling-unit reference for PNW flower-farm products. */
 public final class PricingInfoTab implements FlowerFarmTab {
@@ -72,7 +73,18 @@ public final class PricingInfoTab implements FlowerFarmTab {
         for (String[] row : GUIDANCE) {
             model.addRow(row);
         }
-        JTable table = new JTable(model);
+        JTable table = new JTable(model) {
+            @Override public String getToolTipText(MouseEvent event) {
+                int row = rowAtPoint(event.getPoint());
+                int column = columnAtPoint(event.getPoint());
+                if (row < 0 || column < 0) {
+                    return null;
+                }
+                String value = String.valueOf(getValueAt(row, column));
+                return "<html>" + value.replace("&", "&amp;")
+                        .replace("<", "&lt;").replace(">", "&gt;") + "</html>";
+            }
+        };
         table.setName("pricing.units.table");
         FarmUi.configureTable(table, "Pricing and selling unit guidance table");
         table.setAutoCreateRowSorter(true);
@@ -84,8 +96,9 @@ public final class PricingInfoTab implements FlowerFarmTab {
         productType.addActionListener(event -> {
             int index = productType.getSelectedIndex();
             if (index >= 0) {
-                table.setRowSelectionInterval(index, index);
-                table.scrollRectToVisible(table.getCellRect(index, 0, true));
+                int viewRow = table.convertRowIndexToView(index);
+                table.setRowSelectionInterval(viewRow, viewRow);
+                table.scrollRectToVisible(table.getCellRect(viewRow, 0, true));
                 FarmUi.updateStatusBadge(recommendation,
                         GUIDANCE[index][0] + " → " + GUIDANCE[index][1],
                         FarmUi.Tone.SUCCESS);
@@ -93,9 +106,11 @@ public final class PricingInfoTab implements FlowerFarmTab {
         });
         productType.setSelectedIndex(0);
 
-        JPanel chooser = FarmUi.toolbar(
-                new JLabel("What are you selling?"), productType,
-                FarmUi.formHint("The same unit should appear in inventory, orders, and reports."));
+        JPanel chooser = new JPanel(new BorderLayout(0, FarmUi.CONTROL_GAP));
+        chooser.setOpaque(false);
+        chooser.add(FarmUi.toolbar(new JLabel("What are you selling?"), productType), BorderLayout.NORTH);
+        chooser.add(FarmUi.formHint("The same unit should appear in inventory, orders, and reports."),
+                BorderLayout.SOUTH);
         JPanel content = new JPanel(new BorderLayout(0, FarmUi.SECTION_GAP));
         content.setOpaque(false);
         content.add(FarmUi.section(
