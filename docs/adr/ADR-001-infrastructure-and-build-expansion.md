@@ -4,6 +4,8 @@
 **Date:** 2026-07-16
 **Deciders:** Richmond (RicheyWorks)
 
+**2026-10-03 amendment:** The repository is private under personal ownership. The original public-repository/free-CodeQL cost assumption below no longer applies. The owner approved replacing the unavailable CodeQL upload and GitHub dependency-review checks with a standalone FindSecBugs gate for unreviewed Medium/High SECURITY findings and a full resolved-Maven-SBOM offline OSV gate. The approved 21 desktop/operator-path contextual heuristics retain raw findings and require exact fingerprints plus the complete production source inventory; any production change requires re-review. See [SECURITY.md](../../SECURITY.md#security-scans) for enforced thresholds, privacy, licenses and coverage limits. Existing build/test, Docker, coverage, general quality and release jobs remain in place. Private Actions minutes/storage can incur usage charges even though these scanner licenses require no additional purchase.
+
 ## Context
 
 FlowersForever v1.0.18 ships with minimal but working automation: CI runs `mvn clean verify` on Ubuntu + Temurin 17, Dependabot files weekly PRs, and a tag push publishes the fat JAR to GitHub Releases. There is no coverage measurement, no static analysis, no container image, no vulnerability scanning beyond Dependabot version bumps, and the only install artifact is a bare JAR that requires a local JDK 17.
@@ -74,7 +76,7 @@ Rejected outright: no deployment target exists that would justify k8s/IaC, and a
 2. [x] Headless guard in `FlowerFarmGUI.run()`
 3. [x] `Dockerfile` + `.dockerignore`; GHCR publish job in release workflow
 4. [x] CI: JDK 17/21 matrix + quality-report job + coverage artifact
-5. [x] `codeql.yml` + `dependency-review.yml` workflows
+5. [x] Original `codeql.yml` + `dependency-review.yml` workflows; replaced under the 2026-10-03 amendment by `security-oss.yml`
 6. [x] `installers.yml`: jpackage MSI + DMG attached to releases
 7. [x] Baseline recorded and ratchet set (2026-07-16, see below)
 8. [x] Code signing evaluated — deferred with defined trigger, see [ADR-002](ADR-002-code-signing.md)
@@ -84,6 +86,8 @@ Rejected outright: no deployment target exists that would justify k8s/IaC, and a
 SpotBugs baseline was 172 findings: 122 were `EI_EXPOSE_REP`/`EI_EXPOSE_REP2` — mutable-reference noise inherent to Spring constructor injection and JPA entities — now excluded via `config/spotbugs-exclude.xml`. The 12 priority-1 findings (10 platform-default-charset I/O calls, 2 silently swallowed exceptions, 1 per-call `Random`) were fixed in code, bringing the High-priority count to 0.
 
 Ratchet as implemented: the `quality` profile reports everything Medium+ (non-blocking) and **fails on any High-priority finding** (`spotbugs:check`, threshold High) — green at adoption, blocks regressions.
+
+Current-configuration correction (2026-10-03): the general `quality` profile sets `failOnError=false`; the historical High-priority ratchet claim above is not enforced by that configuration. It remains report-only. The new independent `security-oss` analysis and source-bound classifier enforce unreviewed Medium/High SECURITY findings and incomplete analysis without changing the general quality filter or threshold.
 
 Medium burn-down (2026-07-17): all 13 `NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE` fixed in connector code (captured `response.getBody()` / `path.getParent()` once instead of re-calling across the null check). `CT_CONSTRUCTOR_THROW` (8) and `DM_EXIT` (3) excluded with rationale in the filter file. Remaining backlog ≈14, mostly `REC_CATCH_EXCEPTION` — deliberate defensive catches, burn down opportunistically.
 

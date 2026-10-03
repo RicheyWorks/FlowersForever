@@ -41,6 +41,21 @@ class LSystemTest {
     }
 
     @Test
+    @DisplayName("default mutation preserves the base and rendering bounds")
+    void defaultMutationKeepsRenderingBounds() {
+        LSystem base = RoseLSystemPresets.bourbon();
+        String original = base.expand(3);
+        for (int i = 0; i < 20; i++) {
+            LSystem mutant = base.mutate(null);
+            assertThat(mutant.getDefaultAngleDegrees()).isBetween(8.0, 55.0);
+            assertThat(mutant.getDefaultStep()).isBetween(4.0, 28.0);
+            assertThat(mutant.getAxiom()).isEqualTo(base.getAxiom());
+            assertThat(mutant.expand(3)).isNotBlank();
+        }
+        assertThat(base.expand(3)).isEqualTo(original);
+    }
+
+    @Test
     @DisplayName("all presets expand without throwing")
     void allPresets() {
         for (LSystem system : RoseLSystemPresets.all()) {

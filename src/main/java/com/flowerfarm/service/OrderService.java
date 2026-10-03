@@ -133,7 +133,8 @@ public class OrderService {
                 "notes=" + saved.getNotes(),
                 1
         );
-        log.info("[crm] Order #{} status {} → {}", orderId, previous, saved.getStatus());
+        log.info("[crm] Order #{} status {} → {}",
+                LogValue.escape(orderId), LogValue.escape(previous), LogValue.escape(saved.getStatus()));
         return saved;
     }
 
@@ -233,7 +234,7 @@ public class OrderService {
                 .orElseThrow(() -> new IndexOutOfBoundsException("No order with id=" + orderId));
 
         if ("FULFILLED".equalsIgnoreCase(order.getStatus())) {
-            log.info("Order #{} already fulfilled — no inventory change.", orderId);
+            log.info("Order #{} already fulfilled — no inventory change.", LogValue.escape(orderId));
             return order;
         }
 

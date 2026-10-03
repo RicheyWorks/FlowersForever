@@ -5,6 +5,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Random;
+import java.security.SecureRandom;
 
 /**
  * Classic L-System (Lindenmayer system) generator for plant-like structures.
@@ -23,6 +24,7 @@ import java.util.Random;
 public final class LSystem {
 
     public static final int MAX_DEPTH = 7;
+    private static final SecureRandom DEFAULT_RANDOM = new SecureRandom();
 
     private final String name;
     private final String description;
@@ -83,7 +85,7 @@ public final class LSystem {
      * Produce a mutated copy: slight angle tweak and optional random rule tweak.
      */
     public LSystem mutate(Random rng) {
-        Random r = rng == null ? java.util.concurrent.ThreadLocalRandom.current() : rng;
+        Random r = rng == null ? DEFAULT_RANDOM : rng;
         double angleDelta = (r.nextDouble() - 0.5) * 12.0; // ±6°
         double stepDelta = (r.nextDouble() - 0.5) * 2.0;
         Map<Character, String> newRules = new LinkedHashMap<>(rules);

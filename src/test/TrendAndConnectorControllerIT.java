@@ -8,6 +8,7 @@ import com.flowerfarm.controller.TrendController;
 import com.flowerfarm.model.Item;
 import com.flowerfarm.model.SyncHistoryEntry;
 import com.flowerfarm.service.SyncHistoryService;
+import com.flowerfarm.service.ServerCsvExportService;
 import com.flowerfarm.service.TrendService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -40,6 +41,7 @@ class TrendAndConnectorControllerIT {
     @MockBean TrendService trendService;
     @MockBean ConnectorRegistry connectorRegistry;
     @MockBean SyncHistoryService syncHistoryService;
+    @MockBean ServerCsvExportService serverCsvExportService;
 
     // ── GET /api/trends ──────────────────────────────────────────────────────
 

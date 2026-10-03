@@ -243,7 +243,7 @@ public class ReportService {
 
             doc.close();
             log.info("Generated farm PDF report {} → {} ({} harvests, {} orders)",
-                    from, to, harvests.size(), orders.size());
+                    LogValue.escape(from), LogValue.escape(to), harvests.size(), orders.size());
             return baos.toByteArray();
         } catch (DocumentException e) {
             throw new IllegalStateException("Failed to build PDF report: " + e.getMessage(), e);

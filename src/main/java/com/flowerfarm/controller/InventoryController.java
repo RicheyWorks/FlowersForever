@@ -1,6 +1,8 @@
 package com.flowerfarm.controller;
 
 import com.flowerfarm.model.Item;
+import com.flowerfarm.controller.dto.FarmApiDtos.ItemRequest;
+import com.flowerfarm.controller.dto.FarmApiDtos.ItemResponse;
 import com.flowerfarm.service.InventoryService;
 import com.flowerfarm.service.InventoryService.LowStockReport;
 import org.springframework.http.HttpHeaders;
@@ -40,8 +42,8 @@ public class InventoryController {
 
     /** Returns all inventory items as a JSON array (ordered by id). */
     @GetMapping
-    public List<Item> getAll() {
-        return inventoryService.getAllItems();
+    public List<ItemResponse> getAll() {
+        return inventoryService.getAllItems().stream().map(ItemResponse::from).toList();
     }
 
     /** Dashboard-style inventory KPIs (sell value, cost basis, low stock). */
@@ -109,25 +111,25 @@ public class InventoryController {
 
     /** Returns items matching the search query (name or category). */
     @GetMapping("/search")
-    public List<Item> search(@RequestParam("q") String query) {
-        return inventoryService.searchItems(query);
+    public List<ItemResponse> search(@RequestParam("q") String query) {
+        return inventoryService.searchItems(query).stream().map(ItemResponse::from).toList();
     }
 
     /** Returns a single item by database id. */
     @GetMapping("/by-id/{id}")
     public ResponseEntity<?> getById(@PathVariable Long id) {
         return inventoryService.findById(id)
-                .<ResponseEntity<?>>map(ResponseEntity::ok)
+                .<ResponseEntity<?>>map(item -> ResponseEntity.ok(ItemResponse.from(item)))
                 .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND)
                         .body(Map.of("error", "No inventory item with id=" + id)));
     }
 
     /** Adds a new item from the JSON body. Returns 201 Created with the persisted item (incl. id). */
     @PostMapping
-    public ResponseEntity<?> addItem(@RequestBody Item item) {
+    public ResponseEntity<?> addItem(@RequestBody ItemRequest body) {
         try {
-            Item saved = inventoryService.addItem(item);
-            return ResponseEntity.status(HttpStatus.CREATED).body(saved);
+            Item saved = inventoryService.addItem(body.toItem());
+            return ResponseEntity.status(HttpStatus.CREATED).body(ItemResponse.from(saved));
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
@@ -135,10 +137,10 @@ public class InventoryController {
 
     /** Replaces the item at {@code index} with the JSON body. Returns 200 OK. */
     @PutMapping("/{index}")
-    public ResponseEntity<?> editItem(@PathVariable int index, @RequestBody Item item) {
+    public ResponseEntity<?> editItem(@PathVariable int index, @RequestBody ItemRequest body) {
         try {
-            Item saved = inventoryService.editItem(index, item);
-            return ResponseEntity.ok(saved);
+            Item saved = inventoryService.editItem(index, body.toItem());
+            return ResponseEntity.ok(ItemResponse.from(saved));
         } catch (IndexOutOfBoundsException e) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", e.getMessage()));
         } catch (IllegalArgumentException e) {
@@ -148,10 +150,10 @@ public class InventoryController {
 
     /** Replaces the item with the given database id. Preferred over index-based edit. */
     @PutMapping("/by-id/{id}")
-    public ResponseEntity<?> updateById(@PathVariable Long id, @RequestBody Item item) {
+    public ResponseEntity<?> updateById(@PathVariable Long id, @RequestBody ItemRequest body) {
         try {
-            Item saved = inventoryService.updateById(id, item);
-            return ResponseEntity.ok(saved);
+            Item saved = inventoryService.updateById(id, body.toItem());
+            return ResponseEntity.ok(ItemResponse.from(saved));
         } catch (IndexOutOfBoundsException e) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", e.getMessage()));
         } catch (IllegalArgumentException e) {
@@ -213,7 +215,7 @@ public class InventoryController {
                     "Native PNW rose, pink blooms, hardy in wet soils"
             );
             Item saved = inventoryService.addItem(rose);
-            return ResponseEntity.status(HttpStatus.CREATED).body(saved);
+            return ResponseEntity.status(HttpStatus.CREATED).body(ItemResponse.from(saved));
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }

@@ -78,7 +78,7 @@ jobs:
           cache: maven
 
       - name: SpotBugs + Checkstyle
-        run: mvn -B clean verify -Pquality -DskipTests
+        run: mvn -B -U clean verify -Pquality -DskipTests
 
       - name: Upload analysis reports
         uses: actions/upload-artifact@v7
