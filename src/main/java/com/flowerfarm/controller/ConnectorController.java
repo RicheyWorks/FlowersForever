@@ -5,7 +5,10 @@ import com.flowerfarm.connector.ConnectorResult;
 import com.flowerfarm.connector.SyncSummary;
 import com.flowerfarm.model.Item;
 import com.flowerfarm.model.SyncHistoryEntry;
+import com.flowerfarm.controller.dto.FarmApiDtos.HistoryResponse;
+import com.flowerfarm.controller.dto.FarmApiDtos.ItemResponse;
 import com.flowerfarm.service.SyncHistoryService;
+import com.flowerfarm.service.ServerCsvExportService;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -39,10 +42,13 @@ public class ConnectorController {
 
     private final ConnectorRegistry registry;
     private final SyncHistoryService syncHistoryService;
+    private final ServerCsvExportService serverCsvExportService;
 
-    public ConnectorController(ConnectorRegistry registry, SyncHistoryService syncHistoryService) {
+    public ConnectorController(ConnectorRegistry registry, SyncHistoryService syncHistoryService,
+                               ServerCsvExportService serverCsvExportService) {
         this.registry = registry;
         this.syncHistoryService = syncHistoryService;
+        this.serverCsvExportService = serverCsvExportService;
     }
 
     // ── Discovery ─────────────────────────────────────────────────────────────
@@ -62,7 +68,7 @@ public class ConnectorController {
      * {@code q} message/detail search, {@code limit} (default 100, max 500).
      */
     @GetMapping("/history")
-    public List<SyncHistoryEntry> history(
+    public List<HistoryResponse> history(
             @RequestParam(value = "connector", required = false) String connector,
             @RequestParam(value = "operation", required = false) String operation,
             @RequestParam(value = "success", required = false) Boolean success,
@@ -73,9 +79,9 @@ public class ConnectorController {
                 || success != null
                 || (query != null && !query.isBlank());
         if (!any) {
-            return syncHistoryService.recentForConnector(connector, limit);
+            return syncHistoryService.recentForConnector(connector, limit).stream().map(HistoryResponse::from).toList();
         }
-        return syncHistoryService.filter(connector, operation, success, query, limit);
+        return syncHistoryService.filter(connector, operation, success, query, limit).stream().map(HistoryResponse::from).toList();
     }
 
     /** Server-side CSV export of the (optionally filtered) audit log. */
@@ -90,7 +96,7 @@ public class ConnectorController {
         try {
             List<SyncHistoryEntry> rows = syncHistoryService.filter(
                     connector, operation, success, query, limit);
-            syncHistoryService.exportToCsv(filename, rows);
+            serverCsvExportService.exportCsv(filename, writer -> syncHistoryService.writeCsv(writer, rows));
             return ResponseEntity.ok(Map.of(
                     "message", "Exported " + rows.size() + " audit row(s) to " + filename,
                     "rows", String.valueOf(rows.size())));
@@ -188,7 +194,7 @@ public class ConnectorController {
                     "connector", name,
                     "message",   result.getMessage(),
                     "imported",  result.getPayload() != null ? result.getPayload().size() : 0,
-                    "items",     result.getPayload() != null ? result.getPayload() : List.of()
+                    "items",     result.getPayload() != null ? result.getPayload().stream().map(ItemResponse::from).toList() : List.of()
             ));
         }
         return errorResponse(name, result);

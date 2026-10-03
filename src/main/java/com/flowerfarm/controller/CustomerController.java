@@ -1,6 +1,7 @@
 package com.flowerfarm.controller;
 
-import com.flowerfarm.model.Customer;
+import com.flowerfarm.controller.dto.FarmApiDtos.CustomerRequest;
+import com.flowerfarm.controller.dto.FarmApiDtos.CustomerResponse;
 import com.flowerfarm.service.CustomerService;
 import com.flowerfarm.service.CustomerStatementService;
 import com.flowerfarm.service.CustomerStatementService.CustomerStatement;
@@ -29,14 +30,14 @@ public class CustomerController {
     }
 
     @GetMapping
-    public List<Customer> list() {
-        return customerService.getAll();
+    public List<CustomerResponse> list() {
+        return customerService.getAll().stream().map(CustomerResponse::from).toList();
     }
 
     @GetMapping("/{id}")
     public ResponseEntity<?> get(@PathVariable Long id) {
         return customerService.findById(id)
-                .<ResponseEntity<?>>map(ResponseEntity::ok)
+                .<ResponseEntity<?>>map(customer -> ResponseEntity.ok(CustomerResponse.from(customer)))
                 .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND)
                         .body(Map.of("error", "No customer with id=" + id)));
     }
@@ -101,23 +102,23 @@ public class CustomerController {
     }
 
     @GetMapping("/search")
-    public List<Customer> search(@RequestParam("q") String q) {
-        return customerService.search(q);
+    public List<CustomerResponse> search(@RequestParam("q") String q) {
+        return customerService.search(q).stream().map(CustomerResponse::from).toList();
     }
 
     @PostMapping
-    public ResponseEntity<?> add(@RequestBody Customer customer) {
+    public ResponseEntity<?> add(@RequestBody CustomerRequest body) {
         try {
-            return ResponseEntity.status(HttpStatus.CREATED).body(customerService.add(customer));
+            return ResponseEntity.status(HttpStatus.CREATED).body(CustomerResponse.from(customerService.add(body.toCustomer())));
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<?> update(@PathVariable Long id, @RequestBody Customer customer) {
+    public ResponseEntity<?> update(@PathVariable Long id, @RequestBody CustomerRequest body) {
         try {
-            return ResponseEntity.ok(customerService.update(id, customer));
+            return ResponseEntity.ok(CustomerResponse.from(customerService.update(id, body.toCustomer())));
         } catch (IndexOutOfBoundsException e) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", e.getMessage()));
         } catch (IllegalArgumentException e) {

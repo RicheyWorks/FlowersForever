@@ -975,22 +975,28 @@ public class HarvestService {
             entries = List.of();
         }
         try (java.io.BufferedWriter bw = new java.io.BufferedWriter(new java.io.FileWriter(filename.trim(), java.nio.charset.StandardCharsets.UTF_8))) {
-            bw.write("Id,Date,Crop,Quantity,Unit,BedOrField,Notes");
-            bw.newLine();
-            for (HarvestEntry e : entries) {
-                bw.write(String.format("%s,%s,%s,%.2f,%s,%s,\"%s\"",
-                        e.getId() == null ? "" : e.getId(),
-                        e.getHarvestDate(),
-                        csvEscape(e.getCropName()),
-                        e.getQuantity(),
-                        csvEscape(e.getUnit()),
-                        csvEscape(e.getBedOrField()),
-                        e.getNotes() == null ? "" : e.getNotes().replace("\"", "\"\"")));
-                bw.newLine();
-            }
-            log.info("Harvest log exported to '{}' ({} row(s)).", filename, entries.size());
+            writeCsv(bw, entries);
+            log.info("Harvest log exported to '{}' ({} row(s)).", LogValue.escape(filename), entries.size());
         } catch (java.io.IOException ex) {
             throw new IllegalStateException("Harvest export failed: " + ex.getMessage(), ex);
+        }
+    }
+
+    /** Serialize rows to an already opened writer; the caller owns the destination and writer lifetime. */
+    public void writeCsv(java.io.BufferedWriter writer, List<HarvestEntry> entries) throws java.io.IOException {
+        List<HarvestEntry> rows = entries == null ? List.of() : entries;
+        writer.write("Id,Date,Crop,Quantity,Unit,BedOrField,Notes");
+        writer.newLine();
+        for (HarvestEntry e : rows) {
+            writer.write(String.format("%s,%s,%s,%.2f,%s,%s,\"%s\"",
+                    e.getId() == null ? "" : e.getId(),
+                    e.getHarvestDate(),
+                    csvEscape(e.getCropName()),
+                    e.getQuantity(),
+                    csvEscape(e.getUnit()),
+                    csvEscape(e.getBedOrField()),
+                    e.getNotes() == null ? "" : e.getNotes().replace("\"", "\"\"")));
+            writer.newLine();
         }
     }
 

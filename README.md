@@ -48,11 +48,14 @@ Spring Boot **3.5.16** · modular Swing GUI · dual-mode connectors (offline JSO
 | **CI** | Every push/PR to `main` → `mvn clean verify` on JDK 17 + 21 (advisory), Docker build, static-analysis job |
 | **Quality** | JaCoCo coverage report every build; SpotBugs + Checkstyle via `-Pquality` (report-only) |
 | **Dependabot** | Weekly Maven + GitHub Actions PRs |
-| **Supply chain** | CodeQL scanning, PR dependency review, CycloneDX SBOM on every build |
+| **Security scans** | FindSecBugs blocks unreviewed Medium/High SECURITY findings; offline OSV blocks known vulnerabilities in the resolved Maven SBOM; private reports retained for seven days |
+| **Supply chain** | CycloneDX SBOM packaged with the application; weekly Dependabot PRs |
 | **Releases** | Tag `v*` → fat JAR + SBOM on GitHub Releases, image to GHCR, MSI/DMG installers via jpackage |
 | **Security** | Auth model & hardening — **[SECURITY.md](SECURITY.md)** |
 
 Decisions and trade-offs: **[docs/adr/ADR-001](docs/adr/ADR-001-infrastructure-and-build-expansion.md)**.
+
+The standalone security checks support this private repository without an additional scanner license. They have different coverage from CodeQL and GitHub's PR dependency review. Private Actions usage can still consume the account's included minutes or incur usage charges; see [security coverage and local commands](SECURITY.md#security-scans).
 
 ### Docker (headless REST-only)
 
@@ -204,6 +207,8 @@ REST: `GET /api/auth/me` (Basic), `GET /api/auth/accounts` (usernames only).
 Most printable routes also expose JSON and plain-text siblings (`/text` or bare path without `.pdf`).  
 Full market-day, filter, and connector endpoints: see controllers under `com.flowerfarm.controller`.
 
+HTTP harvest/audit CSV exports accept CSV leaf filenames and write beneath `flowerfarm.exports.directory` (default `exports/`). Configure that directory on the server. Desktop file chooser and operator-configured connector paths retain their local file selection behavior.
+
 ---
 
 ## Architecture
@@ -227,7 +232,7 @@ GUI design notes: **[docs/GUI_ARCHITECTURE.md](docs/GUI_ARCHITECTURE.md)**.
 
 ## Status
 
-**Current source: 1.0.19** — Spring Boot 3.5.16, offline-first dual-mode and market-day workflows with printable PDFs. The build pipeline configures coverage, SBOM, CodeQL, Docker/GHCR and native installers — see [ADR-001](docs/adr/ADR-001-infrastructure-and-build-expansion.md).
+**Current source: 1.0.19** — Spring Boot 3.5.16, offline-first dual-mode and market-day workflows with printable PDFs. The build pipeline configures coverage, SBOM, standalone security scans, Docker/GHCR and native installers — see [ADR-001](docs/adr/ADR-001-infrastructure-and-build-expansion.md). A configured workflow alone does not establish that a checkout passes its checks.
 
 The latest published stable release is [v1.0.18](https://github.com/RicheyWorks/FlowersForever/releases/latest). Build from source for the current checkout's changes.
 

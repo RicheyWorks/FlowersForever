@@ -141,7 +141,7 @@ public class InventoryService {
                 .orElseThrow(() -> new IndexOutOfBoundsException("No inventory item with id=" + id));
         existing.copyBusinessFieldsFrom(newItem);
         Item saved = repository.save(existing);
-        log.debug("Updated item id={}", id);
+        log.debug("Updated item id={}", LogValue.escape(id));
         return saved;
     }
 
@@ -158,7 +158,7 @@ public class InventoryService {
             throw new IndexOutOfBoundsException("No inventory item with id=" + id);
         }
         repository.deleteById(id);
-        log.debug("Deleted item id={}", id);
+        log.debug("Deleted item id={}", LogValue.escape(id));
     }
 
     /**

@@ -3,6 +3,7 @@ package com.flowerfarm.integration;
 import com.flowerfarm.controller.HarvestController;
 import com.flowerfarm.model.HarvestEntry;
 import com.flowerfarm.service.HarvestService;
+import com.flowerfarm.service.ServerCsvExportService;
 import com.flowerfarm.service.HarvestService.HarvestLogReport;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -30,6 +31,7 @@ class HarvestLogControllerIT {
     @Autowired MockMvc mockMvc;
 
     @MockBean HarvestService harvestService;
+    @MockBean ServerCsvExportService serverCsvExportService;
 
     private HarvestLogReport sample() {
         Map<String, Double> byCrop = new LinkedHashMap<>();

@@ -3,6 +3,7 @@ package com.flowerfarm.integration;
 import com.flowerfarm.controller.ConnectorController;
 import com.flowerfarm.connector.ConnectorRegistry;
 import com.flowerfarm.service.SyncHistoryService;
+import com.flowerfarm.service.ServerCsvExportService;
 import com.flowerfarm.service.SyncHistoryService.AuditReport;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -29,6 +30,7 @@ class AuditHistoryControllerIT {
 
     @MockBean ConnectorRegistry connectorRegistry;
     @MockBean SyncHistoryService syncHistoryService;
+    @MockBean ServerCsvExportService serverCsvExportService;
 
     private AuditReport sample() {
         return new AuditReport(
