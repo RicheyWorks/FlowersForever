@@ -21,3 +21,6 @@ build-out*.txt
 # Accidental bulk/attachment dumps (never commit)
 files-*.zip
 *.zip
+# Update signing keys must never be committed (docs/AUTO_UPDATES.md)
+update-signing*.key
+*.ed25519.key

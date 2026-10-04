@@ -22,6 +22,7 @@ import com.flowerfarm.service.ReportService;
 import com.flowerfarm.service.SyncHistoryService;
 import com.flowerfarm.service.TrendService;
 import com.flowerfarm.service.SeasonPlanService;
+import com.flowerfarm.update.UpdateMessages;
 import com.formdev.flatlaf.FlatDarkLaf;
 import com.formdev.flatlaf.FlatLightLaf;
 import org.springframework.boot.ApplicationArguments;
@@ -96,6 +97,8 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
     private CrmTab crmTab;
     private SeasonPlannerTab seasonPlannerTab;
     private ProductionStudioTab productionStudioTab;
+
+    private DesktopUpdateController updateController;
 
     private final Preferences prefs = Preferences.userNodeForPackage(FlowerFarmGUI.class);
     private boolean darkMode;
@@ -173,6 +176,12 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
         this.harnessBridge = Objects.requireNonNull(harnessBridge, "harnessBridge");
         this.dialogs = Objects.requireNonNull(dialogs, "dialogs");
         this.fileChooser = Objects.requireNonNull(fileChooser, "fileChooser");
+    }
+
+    /** Automatic updates are optional so headless tests and slices can build the frame without them. */
+    @Autowired(required = false)
+    void setUpdateController(DesktopUpdateController updateController) {
+        this.updateController = updateController;
     }
 
     // ── ApplicationRunner ─────────────────────────────────────────────────────
@@ -279,6 +288,10 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
             setStatus("Signed in as " + session.displayName() + " · " + session.roleHint());
         } else {
             setStatus("Ready · local mode (auth off)");
+        }
+        if (updateController != null) {
+            updateController.attach(new DesktopUpdateController.Host(frame, dialogs, this::setStatus,
+                    () -> confirmApplicationClose(false), this::savePreferences));
         }
     }
 
@@ -447,6 +460,9 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
         helpMenu.add(menuItem("PNW Rose Growing Guide", KeyEvent.VK_G,
                 "Open the Pacific Northwest rose variety reference.",
                 e -> selectTab("Rose Varieties")));
+        helpMenu.add(menuItem("Check for updates…", KeyEvent.VK_U,
+                "See whether a newer FlowersForever is ready, or turn automatic checks on or off.",
+                e -> checkForUpdates()));
         helpMenu.add(menuItem("About FlowersForever", KeyEvent.VK_A,
                 "Show the farm profile, application purpose, and active session.",
                 e -> dialogs.showMessage(frame,
@@ -460,6 +476,15 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
         menuBar.add(helpMenu);
 
         return menuBar;
+    }
+
+    private void checkForUpdates() {
+        if (updateController == null) {
+            dialogs.showMessage(frame, UpdateMessages.NOT_CONFIGURED, "FlowersForever updates",
+                    JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+        updateController.checkNow();
     }
 
     private void showWhoAmI() {
