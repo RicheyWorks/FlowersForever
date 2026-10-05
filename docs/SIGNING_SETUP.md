@@ -1,10 +1,23 @@
 # Native signing setup
 
-**Current plan:** Microsoft and Apple enrollment is intentionally deferred by
-the maintainer for about 15 days after the September 4, 2026 discussion. The
-maintainer will handle enrollment when ready. Until then, continue unsigned
-private-preview engineering and defer publisher-identity and credential
-requests. Enrollment is not a prerequisite for those private builds.
+**Status as of 2026-10-05 (BLACKBEARD inventory):**
+
+- Release workflow already signs Windows launchers + MSI with
+  `azure/artifact-signing-action@v2` behind the GitHub `release-signing`
+  environment (tag pushes only). App-side `AuthenticodePublisherVerifier` is
+  ready once `flowerfarm.updates.authenticode-subject` is set after the first
+  signed release.
+- **No code-signing certificate** on BLACKBEARD (`Cert:\CurrentUser\My` has no
+  Code Signing EKU). **No GitHub `release-signing` environment** yet (0 repo
+  environments). **No Azure Artifact Signing account** configured for this repo.
+- Ed25519 update key is separate and already live at
+  `%USERPROFILE%\FlowersForever-signing\update-signing.key` (update manifests /
+  installers for auto-update). Authenticode is the remaining SmartScreen gap.
+- **Next step needs Richey's yes:** paid Azure subscription + Artifact Signing
+  Basic (~$9.99/mo as published; confirm in portal) and identity validation.
+  Exact commands and GitHub secret names:
+  [Artifact Signing operator checklist](ARTIFACT_SIGNING_CHECKLIST.md).
+  Do **not** create Azure resources or store secrets until he approves spend.
 
 FlowersForever candidate builds remain private, unsigned, and non-publishing.
 An external pilot release requires both tagged-release signing jobs to pass in
@@ -34,6 +47,8 @@ membership](https://developer.apple.com/programs/enroll/). Confirm the price
 shown in each provider's portal before purchasing.
 
 ## 2. Configure Microsoft Artifact Signing
+
+Operator runbook with exact commands and the 2026-10-05 inventory: [Artifact Signing operator checklist](ARTIFACT_SIGNING_CHECKLIST.md).
 
 1. Create or select a **paid Azure subscription** and Microsoft Entra tenant.
    Artifact Signing does not support free, trial, or sponsored subscriptions;
