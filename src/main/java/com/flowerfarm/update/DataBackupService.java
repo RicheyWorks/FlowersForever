@@ -152,6 +152,27 @@ public final class DataBackupService {
         }
     }
 
+    /**
+     * Checks a backup's {@code .sha256} file and unpacks it into {@code staging} (which
+     * must not exist yet or be empty) without touching the live records. Returns the
+     * unpacked records folder, which always holds {@link #DATABASE_FILE}.
+     */
+    public Path unpack(Path archive, Path staging) throws UpdateVerificationException {
+        verifyChecksum(archive);
+        try {
+            Files.createDirectories(staging);
+            extract(archive, staging);
+            Path source = singleTopLevelDirectory(staging);
+            if (!Files.isRegularFile(source.resolve(DATABASE_FILE))) {
+                throw new UpdateVerificationException("The backup does not contain a FlowersForever database.");
+            }
+            return source;
+        } catch (IOException failure) {
+            throw new UpdateVerificationException("The backup could not be unpacked: " + failure.getMessage(),
+                    failure);
+        }
+    }
+
     /** Fails when another process (or this one) still has the H2 database open. */
     public static void requireDatabaseClosed(Path data) throws UpdateVerificationException {
         Path database = data.resolve(DATABASE_FILE);

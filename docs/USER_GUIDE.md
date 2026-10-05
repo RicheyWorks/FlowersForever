@@ -1580,6 +1580,23 @@ the product draft itself should also be discarded.
 - In tables, use the arrow keys to move between rows. Actions apply to the
   selected row; double-click loads a row on screens that support editing.
 
+## Backups
+
+Use **File > Back up now…** any time you want a checked copy of your farm records
+(the database plus photos). You can keep working while it runs. The usual folder is
+`Documents\FlowersForever Backups`; you can pick another folder or a USB drive.
+
+**File > Restore from a backup…** checks the backup first, saves your current
+records, then closes and reopens FlowersForever with the restored records. If
+those records do not open, FlowersForever puts the previous ones back by itself.
+
+**File > Automatic backups…** can save a backup every day or every week to a
+folder you choose, and keep the newest ones. If the drive is unplugged,
+FlowersForever only notes it in the status bar and tries again later.
+
+The PowerShell scripts in [Backup and restore](BACKUP_RESTORE.md) still work and
+use the same ZIP layout; either path can restore the other's backups.
+
 ## Updates
 
 When a new version is ready, FlowersForever says so when it opens: choose

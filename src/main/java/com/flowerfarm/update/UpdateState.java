@@ -55,6 +55,11 @@ public final class UpdateState {
     /** Versions that failed their health check here; never offered again automatically. */
     Set<String> failedVersions = new LinkedHashSet<>();
 
+    /** Where an app update stands; {@link Phase#IDLE} when nothing is in flight. */
+    public Phase phase() {
+        return phase;
+    }
+
     public UpdateState copy() {
         UpdateState copy = new UpdateState();
         copy.phase = phase;
