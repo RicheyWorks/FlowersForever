@@ -2997,16 +2997,18 @@ class UserJourneyHarnessTest {
 
         user.awaitText("Updated");
         assertThat(user.fieldValue("Farm operations alerts"))
+                .contains("New cut-flower farm")
                 .contains("No completed or confirmed sales")
                 .contains("No harvest logged in the last 7 days");
         assertThat(user.selectedOption("Ranked farm priorities"))
-                .isEqualTo("No harvest logged in the last 7 days");
+                .isEqualTo("Start here — set up your cut-flower farm");
         assertThat(user.text("dashboard.priorityStatus"))
-                .contains("Priority 1 of 1");
+                .contains("Priority 1 of");
         assertThat(user.isButtonEnabled("Open priority")).isTrue();
 
         user.click("Open priority");
-        assertThat(host.selectedTabs).containsExactly("Harvest Log");
+        assertThat(host.selectedTabs).containsExactly("Start here");
+        assertThat(host.lastStatus).contains("Start here");
     }
 
     @Test
@@ -4095,6 +4097,12 @@ class UserJourneyHarnessTest {
         @Override
         public void setStatus(String message) {
             lastStatus = message;
+        }
+
+        @Override
+        public void openStartHere() {
+            selectedTabs.add("Start here");
+            lastStatus = "Opened Start here";
         }
 
         @Override

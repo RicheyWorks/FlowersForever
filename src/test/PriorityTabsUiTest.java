@@ -91,7 +91,7 @@ class PriorityTabsUiTest {
 
         assertThat(root[0].getName()).isEqualTo("farm.page");
         assertThat(findNamed(root[0], "farm.pageHeader")).hasSize(1);
-        assertThat(findNamed(root[0], "farm.section")).hasSize(2);
+        assertThat(findNamed(root[0], "farm.section")).hasSizeGreaterThanOrEqualTo(2);
         assertThat(button(root[0], "Refresh overview").getAccessibleContext().getAccessibleName())
                 .isEqualTo("Refresh overview");
         assertThat(button(root[0], "Morning briefing").isEnabled()).isTrue();

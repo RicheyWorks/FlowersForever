@@ -3,6 +3,8 @@ package com.flowerfarm.gui.tabs;
 import com.flowerfarm.gui.FarmDialogs;
 import com.flowerfarm.gui.FarmFileChooser;
 import com.flowerfarm.gui.FarmUi;
+import com.flowerfarm.gui.StartHereGuide;
+import com.flowerfarm.gui.StartHerePanel;
 import com.flowerfarm.model.Item;
 import com.flowerfarm.service.HarvestService;
 import com.flowerfarm.service.InventoryService;
@@ -73,6 +75,8 @@ public class DashboardTab implements FlowerFarmTab {
     private JLabel priorityDetailLabel;
     private JButton priorityActionButton;
     private JComboBox<String> priorityQueue;
+    private StartHerePanel startHerePanel;
+    private boolean startHereDismissed;
     private JButton morningBriefingButton;
     private JButton dayCloseoutButton;
     private JLabel dailySheetStatusLabel;
@@ -561,6 +565,16 @@ public class DashboardTab implements FlowerFarmTab {
                                List<DashboardSourceFailure> partialFailures) {
         StringBuilder alerts = new StringBuilder();
         List<DashboardPriority> priorities = new ArrayList<>();
+        boolean emptyFarm = items.isEmpty() && weekHarvest <= 0;
+        updateStartHereVisibility(emptyFarm);
+        if (emptyFarm) {
+            alerts.append("• New cut-flower farm: start with today’s cut, a spreadsheet import, "
+                    + "or your first product (Help > Start here…)\n");
+            priorities.add(new DashboardPriority(1,
+                    "Start here — set up your cut-flower farm",
+                    "Start here",
+                    "Opened the Start here setup choices."));
+        }
         if (!partialFailures.isEmpty()) {
             alerts.append("⚠ Partial update: ")
                     .append(partialSourceSummary(partialFailures))
@@ -882,6 +896,8 @@ public class DashboardTab implements FlowerFarmTab {
         actionFooter.add(moreToolsRow, BorderLayout.CENTER);
         JPanel actionWorkspace = new JPanel(new BorderLayout(0, FarmUi.CONTROL_GAP));
         actionWorkspace.setOpaque(false);
+        startHerePanel = new StartHerePanel(this::onStartHereChoice);
+        startHerePanel.setVisible(false);
         priorityStatusLabel = FarmUi.wrappingStatusBadge(
                 "Refresh to identify the top priority", FarmUi.Tone.NEUTRAL);
         priorityStatusLabel.setName("dashboard.priorityStatus");
@@ -924,7 +940,12 @@ public class DashboardTab implements FlowerFarmTab {
         priorityChooser.setOpaque(false);
         priorityChooser.add(priorityRow, BorderLayout.NORTH);
         priorityChooser.add(priorityDetailLabel, BorderLayout.SOUTH);
-        actionWorkspace.add(priorityChooser, BorderLayout.NORTH);
+        JPanel northStack = new JPanel(new BorderLayout(0, FarmUi.CONTROL_GAP));
+        northStack.setOpaque(false);
+        northStack.setName("dashboard.todayNorth");
+        northStack.add(startHerePanel, BorderLayout.NORTH);
+        northStack.add(priorityChooser, BorderLayout.CENTER);
+        actionWorkspace.add(northStack, BorderLayout.NORTH);
         JPanel boundedActions = new JPanel(new BorderLayout());
         boundedActions.setOpaque(false);
         boundedActions.add(actions, BorderLayout.NORTH);
@@ -1071,8 +1092,38 @@ public class DashboardTab implements FlowerFarmTab {
         }
     }
 
+    private void updateStartHereVisibility(boolean emptyFarm) {
+        if (startHerePanel == null) {
+            return;
+        }
+        startHerePanel.setVisible(emptyFarm && !startHereDismissed);
+    }
+
+    private void onStartHereChoice(StartHereGuide.Choice choice) {
+        if (choice == StartHereGuide.Choice.DISMISS) {
+            startHereDismissed = true;
+            if (startHerePanel != null) {
+                startHerePanel.setVisible(false);
+            }
+        }
+        if (host == null) {
+            return;
+        }
+        switch (choice) {
+            case LOG_HARVEST -> host.showHarvestEntry("Dashboard", "Dashboard");
+            case IMPORT_SPREADSHEET -> host.importFromSpreadsheet();
+            case ADD_PRODUCT -> host.showAddInventoryItem("");
+            case DISMISS -> { /* status below */ }
+        }
+        host.setStatus(StartHereGuide.statusFor(choice));
+    }
+
     private void startDashboardPriority(DashboardPriority priority) {
         if (priority == null || host == null) {
+            return;
+        }
+        if ("Start here".equals(priority.targetTab())) {
+            host.openStartHere();
             return;
         }
         if (!priority.inventoryProducts().isEmpty()) {

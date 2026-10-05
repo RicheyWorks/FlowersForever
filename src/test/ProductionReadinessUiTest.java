@@ -207,12 +207,12 @@ class ProductionReadinessUiTest {
         });
 
         SwingMenuHarness.MenuSweep sweep = menu.clickEveryEnabledExcept(
-                "Import CSV…", "Import Excel…", "Exit");
+                "Import from spreadsheet…", "Import CSV…", "Import Excel…", "Exit");
         assertThat(sweep.intentionallyExcluded())
-                .containsExactly("Import CSV…", "Import Excel…", "Exit");
+                .containsExactly("Import from spreadsheet…", "Import CSV…", "Import Excel…", "Exit");
         assertThat(sweep.clicked()).contains(
                 "Export All to CSV…", "Refresh All Tabs", "Dark Mode",
-                "Run Harvest Forecast", "My access", "PNW Plant Guide",
+                "Run Harvest Forecast", "My access", "Start here…", "PNW Plant Guide",
                 "Wedding & Memorial Services", "PNW Rose Growing Guide",
                 "About FlowersForever");
         assertThat(files.transcript()).containsExactly(

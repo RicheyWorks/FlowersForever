@@ -162,6 +162,22 @@ public interface TabHost {
         setStatus("Opened Harvest Log for entry.");
     }
 
+    /**
+     * Open the cut-flower “Start here” choices (first cut, spreadsheet import,
+     * or add a product). Desktop hosts show the dialog; others leave a status tip.
+     */
+    default void openStartHere() {
+        setStatus("Use Help > Start here… to set up your cut-flower farm.");
+    }
+
+    /**
+     * Import products from a CSV or Excel spreadsheet. Desktop hosts offer the
+     * file type choice; others leave a status tip.
+     */
+    default void importFromSpreadsheet() {
+        setStatus("Use File > Import CSV… or Import Excel… to bring products from a spreadsheet.");
+    }
+
     /** Switch to Trend Analysis and forecast from weekly harvest history in the background. */
     void runTrendAnalysis();
 
