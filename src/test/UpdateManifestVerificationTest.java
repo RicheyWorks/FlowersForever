@@ -123,9 +123,33 @@ class UpdateManifestVerificationTest {
     }
 
     @Test
-    @DisplayName("the shipped trusted-key list holds no private material and loads cleanly")
-    void shippedTrustedKeysLoad() {
+    @DisplayName("the shipped trusted-key list holds only the production public key")
+    void shippedTrustedKeysLoad() throws Exception {
         TrustedKeys shipped = TrustedKeys.fromClasspath();
-        assertThat(shipped.size()).isGreaterThanOrEqualTo(0);
+        assertThat(shipped.size()).isEqualTo(1);
+        assertThat(shipped.find("ed5504416fae61ed")).isPresent();
+        String text = java.nio.file.Files.readString(
+                Path.of("src", "main", "resources", "update", "trusted-update-keys.properties"));
+        assertThat(text).doesNotContain("private=").doesNotContain("PRIVATE KEY");
+    }
+
+    @Test
+    @DisplayName("the published update list verifies with the shipped key and offers nothing yet")
+    void publishedPlaceholderManifestVerifies() throws Exception {
+        String published = "{\"format\":\"flowersforever-signed-manifest-v1\",\"keyId\":\"ed5504416fae61ed\","
+                + "\"payload\":\"ew0KICAic2NoZW1hIiA6IDEsDQogICJwcm9kdWN0IiA6ICJGbG93ZXJzRm9yZXZl"
+                + "ciIsDQogICJpc3N1ZWRBdCIgOiAiMjAyNi0xMC0wNVQwMjoxNTo1Ny41MDE1Mzla"
+                + "IiwNCiAgInBhdXNlZCIgOiBmYWxzZSwNCiAgInBhdXNlTWVzc2FnZSIgOiAiIiwN"
+                + "CiAgInJlbGVhc2VzIiA6IFsgXQ0KfQ==\","
+                + "\"signature\":\"ZCj6/xPUEC9Z+B/P+/vYEleDh5yiEeBxgbplxQCFMRGYbiCZHMXUiLEJE3ACo60c"
+                + "8dixRQ4gRZekh3zTBxXkBw==\"}";
+        UpdateManifest manifest = new SignedManifestVerifier(TrustedKeys.fromClasspath())
+                .verify(published.getBytes(StandardCharsets.UTF_8));
+        assertThat(manifest.releases()).isEmpty();
+        assertThat(manifest.paused()).isFalse();
+        String application = java.nio.file.Files.readString(
+                Path.of("src", "main", "resources", "application.properties"));
+        assertThat(application).contains("flowerfarm.updates.manifest-url=${FLOWERFARM_UPDATES_MANIFEST_URL:"
+                + "https://richeyworks.github.io/FlowersForever-updates/latest.json}");
     }
 }

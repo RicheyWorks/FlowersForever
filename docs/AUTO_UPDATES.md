@@ -6,9 +6,10 @@ downloads and checks it, backs up the farm records, installs, and checks the
 records on the first start of the new version. If that check fails, it goes back
 to the previous version and puts the records back exactly as they were.
 
-Status: built and covered by automated tests (headless). **Not yet tried with a
-real MSI upgrade on Windows**, and nothing happens in a shipped build until the
-two set-up steps below (publisher key and update address) are done. See
+Status: built and covered by automated tests (headless). The production
+publisher key and the update address
+(`https://richeyworks.github.io/FlowersForever-updates/latest.json`) are built in, and the published list has no releases yet.
+**Not yet tried with a real MSI upgrade on Windows.** See
 [What still needs a real Windows test](#what-still-needs-a-real-windows-test).
 
 ## What a farm sees
@@ -90,7 +91,7 @@ restore it by hand too. Pre-update backups are never deleted automatically.
 
 | Property (env var) | Default | Meaning |
 |---|---|---|
-| `flowerfarm.updates.manifest-url` (`FLOWERFARM_UPDATES_MANIFEST_URL`) | empty | HTTPS address of `latest.json`. Empty = no update checks. |
+| `flowerfarm.updates.manifest-url` (`FLOWERFARM_UPDATES_MANIFEST_URL`) | `https://richeyworks.github.io/FlowersForever-updates/latest.json` | HTTPS address of `latest.json`. Set it to an empty value to make no update checks. |
 | `flowerfarm.updates.channel` (`FLOWERFARM_UPDATES_CHANNEL`) | `stable` | `owner`, `early`, or `stable`. |
 | `flowerfarm.updates.enabled` (`FLOWERFARM_UPDATES_ENABLED`) | `true` | Master switch. |
 | `flowerfarm.updates.check-on-launch` | `true` | Check when the window opens. |
@@ -102,18 +103,16 @@ restore it by hand too. Pre-update backups are never deleted automatically.
 For the pilot, set the user environment variable `FLOWERFARM_UPDATES_CHANNEL=owner`
 on Richey's PC and `early` on the first tester's PC; everyone else stays on `stable`.
 
-**Building the address into the installer.** Pick one (recommended first):
-- Change the default in `src/main/resources/application.properties` to
-  `flowerfarm.updates.manifest-url=${FLOWERFARM_UPDATES_MANIFEST_URL:https://…/latest.json}` and release.
-- Or add `--java-options "-Dflowerfarm.updates.manifest-url=https://…/latest.json"` to the jpackage
-  app-image step in `scripts/build-release.ps1` / `release.yml`. (Not done in this change, because
-  editing those files triggers the Windows/macOS release workflow on pull requests.)
+**The address is built in** as the default in `src/main/resources/application.properties`,
+so every build from this branch on checks
+`https://richeyworks.github.io/FlowersForever-updates/latest.json`. Override it with the environment variable for testing.
 
 ## Where to host updates (free)
 
 The release repository is private, so testers' apps cannot download from it.
-Recommended: a separate **public, releases-only repository**, for example
-`RicheyWorks/FlowersForever-updates`, containing no source code:
+In use: the separate **public, releases-only repository**
+[`RicheyWorks/FlowersForever-updates`](https://github.com/RicheyWorks/FlowersForever-updates)
+(created 2026-10-04, GitHub Pages from `main`, no source code):
 
 - `latest.json` committed to the repository and served by **GitHub Pages**:
   `https://richeyworks.github.io/FlowersForever-updates/latest.json` (stable address, free, HTTPS).
@@ -123,16 +122,26 @@ Recommended: a separate **public, releases-only repository**, for example
 
 Trade-off: anyone who has the address can download the installer. Every file is
 signed, so nobody can push a fake update, but the pilot installers become
-reachable to anyone with the link. If that is not acceptable, a Cloudflare R2
+reachable to anyone with the link. If that is ever not acceptable, a Cloudflare R2
 bucket with a long unguessable public path (free tier 10 GB) works the same way;
-only the URLs change. **Owner decision.**
+only the URLs change (and the built-in address, in a release).
 
 ## Signing key
 
 - One Ed25519 key pair signs the manifest and every installer. The **public**
   key is built into the app in `src/main/resources/update/trusted-update-keys.properties`
-  (empty today, so shipped builds do not check for updates yet).
-- Create it once, on Richey's PC, **outside any git checkout** (the tool refuses a path inside a repo):
+  as `richeyworks-2026-10-04` (key id `ed5504416fae61ed`).
+- **Where the production private key lives:** `C:\Users\730ri\FlowersForever-signing\update-signing.key`
+  on BLACKBEARD. The folder is outside every git checkout, and its permissions were
+  reduced to the `730ri` account only (inherited permissions removed). That folder's
+  `publish\` subfolder holds the editable `manifest.unsigned.json` and the last signed
+  `latest.json` (neither is secret).
+- **Richey: copy `update-signing.key` to a USB drive as an offline backup** (ideally
+  an encrypted one, or a password manager attachment as a second copy), label it, and
+  keep it away from the PC. Without this file no further updates can be published to
+  installed copies; if the PC is lost and there is no backup, every tester would need
+  to reinstall by hand with a new key.
+- It was created with this command (already done; shown for a future key change):
   ```powershell
   mvn -B package -DskipTests
   pwsh scripts/update-release.ps1 keygen --out "$env:USERPROFILE\FlowersForever-signing\update-signing.key"
@@ -158,7 +167,7 @@ installer is used. A macOS Developer ID check is not written yet.
 
 ```powershell
 $key = "$env:USERPROFILE\FlowersForever-signing\update-signing.key"
-$site = '..\FlowersForever-updates'   # clone of the public releases-only repo
+$site = "$env:USERPROFILE\FlowersForever-signing\publish"   # editable manifest + signed latest.json
 # 1. Build both MSIs with the same --name/--vendor (the MSI upgrade code is derived from them).
 # 2. Record the release, owner channel first. Include the CURRENT version too, so
 #    installs can go back to it (once per version; it stays in the manifest):
@@ -171,14 +180,18 @@ pwsh scripts/update-release.ps1 add-release --manifest "$site\manifest.unsigned.
 # 3. Sign and check.
 pwsh scripts/update-release.ps1 sign --manifest "$site\manifest.unsigned.json" --private-key $key --out "$site\latest.json"
 pwsh scripts/update-release.ps1 verify --signed "$site\latest.json" --package "windows-msi=C:\releases\FlowersForever-1.2.1.msi"
-# 4. Upload the MSIs to the GitHub release, then commit and push latest.json.
+# 4. Upload the MSIs to a release of RicheyWorks/FlowersForever-updates, then publish latest.json:
+gh release create v1.2.1 --repo RicheyWorks/FlowersForever-updates --title "FlowersForever 1.2.1" C:\releases\FlowersForever-1.2.1.msi
+#    (commit latest.json to the repo's main branch; Pages serves it within a minute or two)
 # 5. Widen the rollout when it looks good:
 pwsh scripts/update-release.ps1 channels --manifest "$site\manifest.unsigned.json" --version 1.2.1 --channels owner,early
 #    (later: owner,early,stable), then sign + push again.
 # Emergency stop: pause (optionally --message "…"), sign, push. Undo with resume.
 ```
 
-`manifest.unsigned.json` holds no secrets and can live in the public repo.
+`manifest.unsigned.json` holds no secrets; it is kept beside the key so the public
+repository contains only the signed list. If it is lost, rebuild it by decoding the
+`payload` field of the published `latest.json` (Base64).
 
 ## What still needs a real Windows test
 
