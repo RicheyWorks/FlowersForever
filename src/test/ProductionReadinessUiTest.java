@@ -215,6 +215,7 @@ class ProductionReadinessUiTest {
                 "Run Harvest Forecast", "My access", "Start here…", "PNW Plant Guide",
                 "Wedding & Memorial Services", "PNW Rose Growing Guide",
                 "Contact / Report a problem…",
+                "Today’s reminders…",
                 "About FlowersForever");
         assertThat(files.transcript()).containsExactly(
                 "SAFE CANCEL SAVE Export Full Inventory to CSV · suggested exported_inventory.csv");
