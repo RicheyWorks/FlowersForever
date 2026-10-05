@@ -22,6 +22,7 @@ import com.flowerfarm.service.ReportService;
 import com.flowerfarm.service.SyncHistoryService;
 import com.flowerfarm.service.TrendService;
 import com.flowerfarm.service.SeasonPlanService;
+import com.flowerfarm.service.FloristAvailabilityExport;
 import com.flowerfarm.support.SupportGuide;
 import com.flowerfarm.update.AppVersion;
 import com.flowerfarm.update.UpdateMessages;
@@ -108,6 +109,7 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
     private DesktopUpdateController updateController;
     private DesktopBackupController backupController;
     private DesktopRemindersController remindersController;
+    private DesktopFloristExportController floristExportController;
 
     private final Preferences prefs = Preferences.userNodeForPackage(FlowerFarmGUI.class);
     private boolean darkMode;
@@ -211,6 +213,12 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
     @Autowired(required = false)
     void setRemindersController(DesktopRemindersController remindersController) {
         this.remindersController = remindersController;
+    }
+
+    /** Florist availability CSV / clipboard / email share. */
+    @Autowired(required = false)
+    void setFloristExportController(DesktopFloristExportController floristExportController) {
+        this.floristExportController = floristExportController;
     }
 
     // ── ApplicationRunner ─────────────────────────────────────────────────────
@@ -337,6 +345,13 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
                 remindersController.attachDashboardBanner(dashboard.remindersPanel());
             }
         }
+        if (floristExportController != null) {
+            floristExportController.attach(new DesktopFloristExportController.Host(
+                    frame, dialogs, fileChooser, clipboard, mailer, this::setStatus));
+            if (inventoryTab != null) {
+                inventoryTab.bindFloristShare(floristExportController::shareAvailability);
+            }
+        }
         javax.swing.SwingUtilities.invokeLater(() -> {
             maybeOfferStartHere();
             if (remindersController != null) {
@@ -445,6 +460,9 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
         fileMenu.add(menuItem("Export All to CSV…", KeyEvent.VK_A,
                 "Save all current inventory records to a CSV file.",
                 e -> exportAllToCsv()));
+        fileMenu.add(menuItem("Share availability with florists…", KeyEvent.VK_L,
+                "Copy or save a Florlist-friendly live stock list with this week’s planned stems.",
+                e -> shareFloristAvailability()));
         fileMenu.addSeparator();
         fileMenu.add(menuItem("Back up now…", KeyEvent.VK_B,
                 "Save a checked backup of all farm records while you keep working.",
@@ -985,6 +1003,16 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
             return;
         }
         remindersController.showToday();
+    }
+
+    private void shareFloristAvailability() {
+        if (floristExportController == null) {
+            dialogs.showMessage(frame,
+                    "Florist availability export is not available in this session.",
+                    FloristAvailabilityExport.TITLE, javax.swing.JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+        floristExportController.shareAvailability();
     }
 
 
