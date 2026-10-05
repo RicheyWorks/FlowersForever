@@ -22,6 +22,8 @@ import com.flowerfarm.service.ReportService;
 import com.flowerfarm.service.SyncHistoryService;
 import com.flowerfarm.service.TrendService;
 import com.flowerfarm.service.SeasonPlanService;
+import com.flowerfarm.support.SupportGuide;
+import com.flowerfarm.update.AppVersion;
 import com.flowerfarm.update.UpdateMessages;
 import com.formdev.flatlaf.FlatDarkLaf;
 import com.formdev.flatlaf.FlatLightLaf;
@@ -73,6 +75,9 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
     private final DesktopSession session;
     private final FarmProfile farmProfile;
     private final FarmDialogs dialogs;
+    private final FarmClipboard clipboard;
+    private final FarmMailer mailer;
+    private final FarmBrowser browser;
     private final FarmFileChooser fileChooser;
     private final InventoryService inventoryService;
     private final HarvestService harvestService;
@@ -115,6 +120,7 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
     private static final String PREF_INTEGRATIONS = "ui.integrationsExpanded";
     /** Once true, the automatic first-run Start here dialog stays quiet. */
     private static final String PREF_START_HERE_DONE = StartHereGuide.PREF_DONE;
+    private static final String PREF_SUPPORT_EMAIL = SupportGuide.PREF_EMAIL;
 
     @Autowired
     public FlowerFarmGUI(InventoryService inventoryService,
@@ -180,6 +186,9 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
         this.farmProfile = farmProfile;
         this.harnessBridge = Objects.requireNonNull(harnessBridge, "harnessBridge");
         this.dialogs = Objects.requireNonNull(dialogs, "dialogs");
+        this.clipboard = FarmClipboard.system();
+        this.mailer = FarmMailer.desktop();
+        this.browser = FarmBrowser.desktop();
         this.fileChooser = Objects.requireNonNull(fileChooser, "fileChooser");
         this.inventoryService = Objects.requireNonNull(inventoryService, "inventoryService");
         this.harvestService = Objects.requireNonNull(harvestService, "harvestService");
@@ -479,7 +488,7 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
         menuBar.add(accountMenu);
 
         JMenu helpMenu = menu("Help", KeyEvent.VK_H,
-                "Open growing guidance or application information.");
+                "Open growing guidance, contact support, or application information.");
         helpMenu.add(menuItem("Start here…", KeyEvent.VK_S,
                 "Set up a cut-flower farm: log today’s cut, import a spreadsheet, or add a product.",
                 e -> openStartHere()));
@@ -498,6 +507,9 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
         helpMenu.add(menuItem("Check for updates…", KeyEvent.VK_U,
                 "See whether a newer FlowersForever is ready, or turn automatic checks on or off.",
                 e -> checkForUpdates()));
+        helpMenu.add(menuItem("Contact / Report a problem…", KeyEvent.VK_C,
+                SupportGuide.menuDescription(),
+                e -> openSupport()));
         helpMenu.add(menuItem("About FlowersForever", KeyEvent.VK_A,
                 "Show the farm profile, application purpose, and active session.",
                 e -> dialogs.showMessage(frame,
@@ -915,6 +927,30 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
     public void openStartHere() {
         showStartHereDialog(false);
     }
+
+    private void openSupport() {
+        String version = AppVersion.current(null).toString();
+        String diagnostics = SupportGuide.liveDiagnostics(version);
+        String stored = prefs.get(PREF_SUPPORT_EMAIL, SupportGuide.DEFAULT_EMAIL);
+        String email = SupportGuide.sanitizeStoredEmail(stored);
+        if (!email.equals(SupportGuide.normalizeEmail(stored)) && !stored.isBlank()) {
+            prefs.put(PREF_SUPPORT_EMAIL, "");
+            setStatus(SupportGuide.statusClearedLegacy());
+        }
+        SupportPanel panel = new SupportPanel(email, version, diagnostics, clipboard, mailer, browser,
+                this::setStatus);
+        Object[] options = {"Close"};
+        dialogs.showOption(frame, panel, SupportGuide.TITLE,
+                javax.swing.JOptionPane.DEFAULT_OPTION, javax.swing.JOptionPane.PLAIN_MESSAGE,
+                null, options, options[0]);
+        String chosen = SupportGuide.sanitizeStoredEmail(panel.email());
+        String previous = email;
+        prefs.put(PREF_SUPPORT_EMAIL, chosen);
+        if (!chosen.equals(previous)) {
+            setStatus(SupportGuide.statusSaved(chosen));
+        }
+    }
+
 
     @Override
     public void importFromSpreadsheet() {

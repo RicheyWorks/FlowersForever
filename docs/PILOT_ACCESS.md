@@ -9,8 +9,12 @@ Repository access alone does not grant a license to use or redistribute it.
 - the correct Windows or macOS installer for the approved release;
 - the release `SHA256SUMS.txt` file and verification instructions;
 - the plain-language user guide and farm-workstation checklist;
-- initial backup setup and a restore walkthrough; and
-- a direct support path for onboarding and incident IDs.
+- initial backup setup and a restore walkthrough;
+- a direct support path for onboarding and incident IDs; and
+- in the app: **Help > Contact / Report a problem…** (prefilled version and computer
+  details; **Open GitHub Issues…** for
+  [RicheyWorks/FlowersForever](https://github.com/RicheyWorks/FlowersForever/issues/new),
+  or **Copy details** — no default support email that can bounce).
 
 ## Safe delivery and installation
 
