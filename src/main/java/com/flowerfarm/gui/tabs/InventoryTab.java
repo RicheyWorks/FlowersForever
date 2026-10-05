@@ -64,6 +64,8 @@ public class InventoryTab implements FlowerFarmTab {
     private JButton refreshBtn;
     private JButton reorderBtn;
     private JButton priceListBtn;
+    private JButton shareAvailabilityBtn;
+    private Runnable floristShare = () -> { };
     private JButton exportBtn;
     private JButton reviewNameConflictBtn;
     private JButton reviewDraftsBtn;
@@ -115,6 +117,14 @@ public class InventoryTab implements FlowerFarmTab {
         this.host = host;
         this.dialogs = java.util.Objects.requireNonNull(dialogs, "dialogs");
         this.files = java.util.Objects.requireNonNull(files, "files");
+    }
+
+
+    /** Wires File/Inventory florist availability share (optional desktop controller). */
+    public void bindFloristShare(Runnable shareAction) {
+        if (shareAction != null) {
+            floristShare = shareAction;
+        }
     }
 
     @Override
@@ -501,6 +511,10 @@ public class InventoryTab implements FlowerFarmTab {
         reorderBtn.setToolTipText("Products at or below a chosen amount, with suggested restock quantities.");
         priceListBtn = FarmUi.secondaryButton("Price list…");
         priceListBtn.setToolTipText("Wholesale / market price list PDF (in-stock by default). VIEWER OK.");
+        shareAvailabilityBtn = FarmUi.secondaryButton("Share availability…");
+        shareAvailabilityBtn.setName("inventory.shareAvailability");
+        shareAvailabilityBtn.setToolTipText(
+                "Copy or save live stock for florists (Florlist-friendly CSV) with this week’s planned stems.");
         exportBtn = FarmUi.secondaryButton("Export visible CSV…");
         reviewNameConflictBtn = FarmUi.secondaryButton("Review existing SKU");
         reviewNameConflictBtn.setName("inventory.reviewNameConflict");
@@ -516,13 +530,14 @@ public class InventoryTab implements FlowerFarmTab {
         deleteBtn.addActionListener(this::deleteSelected);
         reorderBtn.addActionListener(e -> showLowStockReorder());
         priceListBtn.addActionListener(e -> showPriceList());
+        shareAvailabilityBtn.addActionListener(e -> floristShare.run());
         exportBtn.addActionListener(e -> exportVisibleToCsv());
         reviewNameConflictBtn.addActionListener(e -> reviewExistingNameConflict());
 
         JPanel actionRows = new JPanel(new GridLayout(0, 1, 0, FarmUi.CONTROL_GAP));
         actionRows.setOpaque(false);
         actionRows.add(FarmUi.toolbar(stockCountBtn, editBtn, deleteBtn, reviewNameConflictBtn));
-        actionRows.add(FarmUi.toolbar(reorderBtn, priceListBtn, exportBtn));
+        actionRows.add(FarmUi.toolbar(reorderBtn, priceListBtn, shareAvailabilityBtn, exportBtn));
         draftStatusLabel = FarmUi.wrappingStatusBadge("No retained drafts", FarmUi.Tone.NEUTRAL);
         draftStatusLabel.setName("inventory.draftStatus");
         reviewDraftsBtn = FarmUi.secondaryButton("Review retained drafts…");
@@ -586,6 +601,9 @@ public class InventoryTab implements FlowerFarmTab {
                 && !refreshingInventory && !runningDocument;
         reorderBtn.setEnabled(documentsReady);
         priceListBtn.setEnabled(documentsReady);
+        if (shareAvailabilityBtn != null) {
+            shareAvailabilityBtn.setEnabled(documentsReady);
+        }
         exportBtn.setEnabled(documentsReady && inventoryTable.getRowCount() > 0);
         RetainedDraft selectedEdit = selectedItem == null ? null : retainedDraft(selectedItem, false);
         boolean hasNameConflict = selectedEdit != null && selectedEdit.conflictingName() != null;

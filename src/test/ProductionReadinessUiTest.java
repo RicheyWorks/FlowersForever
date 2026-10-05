@@ -211,7 +211,7 @@ class ProductionReadinessUiTest {
         assertThat(sweep.intentionallyExcluded())
                 .containsExactly("Import from spreadsheet…", "Import CSV…", "Import Excel…", "Exit");
         assertThat(sweep.clicked()).contains(
-                "Export All to CSV…", "Refresh All Tabs", "Dark Mode",
+                "Export All to CSV…", "Share availability with florists…", "Refresh All Tabs", "Dark Mode",
                 "Run Harvest Forecast", "My access", "Start here…", "PNW Plant Guide",
                 "Wedding & Memorial Services", "PNW Rose Growing Guide",
                 "Contact / Report a problem…",
