@@ -77,6 +77,7 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
     private final FarmDialogs dialogs;
     private final FarmClipboard clipboard;
     private final FarmMailer mailer;
+    private final FarmBrowser browser;
     private final FarmFileChooser fileChooser;
     private final InventoryService inventoryService;
     private final HarvestService harvestService;
@@ -187,6 +188,7 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
         this.dialogs = Objects.requireNonNull(dialogs, "dialogs");
         this.clipboard = FarmClipboard.system();
         this.mailer = FarmMailer.desktop();
+        this.browser = FarmBrowser.desktop();
         this.fileChooser = Objects.requireNonNull(fileChooser, "fileChooser");
         this.inventoryService = Objects.requireNonNull(inventoryService, "inventoryService");
         this.harvestService = Objects.requireNonNull(harvestService, "harvestService");
@@ -929,18 +931,23 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
     private void openSupport() {
         String version = AppVersion.current(null).toString();
         String diagnostics = SupportGuide.liveDiagnostics(version);
-        String email = prefs.get(PREF_SUPPORT_EMAIL, SupportGuide.DEFAULT_EMAIL);
-        SupportPanel panel = new SupportPanel(email, version, diagnostics, clipboard, mailer, this::setStatus);
+        String stored = prefs.get(PREF_SUPPORT_EMAIL, SupportGuide.DEFAULT_EMAIL);
+        String email = SupportGuide.sanitizeStoredEmail(stored);
+        if (!email.equals(SupportGuide.normalizeEmail(stored)) && !stored.isBlank()) {
+            prefs.put(PREF_SUPPORT_EMAIL, "");
+            setStatus(SupportGuide.statusClearedLegacy());
+        }
+        SupportPanel panel = new SupportPanel(email, version, diagnostics, clipboard, mailer, browser,
+                this::setStatus);
         Object[] options = {"Close"};
         dialogs.showOption(frame, panel, SupportGuide.TITLE,
                 javax.swing.JOptionPane.DEFAULT_OPTION, javax.swing.JOptionPane.PLAIN_MESSAGE,
                 null, options, options[0]);
-        String chosen = SupportGuide.normalizeEmail(panel.email());
-        if (SupportGuide.looksLikeEmail(chosen)) {
-            prefs.put(PREF_SUPPORT_EMAIL, chosen);
-            if (!chosen.equals(SupportGuide.normalizeEmail(email))) {
-                setStatus(SupportGuide.statusSaved(chosen));
-            }
+        String chosen = SupportGuide.sanitizeStoredEmail(panel.email());
+        String previous = email;
+        prefs.put(PREF_SUPPORT_EMAIL, chosen);
+        if (!chosen.equals(previous)) {
+            setStatus(SupportGuide.statusSaved(chosen));
         }
     }
 

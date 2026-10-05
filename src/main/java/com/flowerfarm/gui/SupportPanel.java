@@ -20,7 +20,7 @@ import java.util.Objects;
 import java.util.function.Consumer;
 
 /**
- * In-app support page: promise, changeable support email, diagnostics, copy or mailto.
+ * In-app support page: GitHub Issues, copy diagnostics, optional support email.
  */
 public final class SupportPanel extends JPanel {
 
@@ -31,14 +31,22 @@ public final class SupportPanel extends JPanel {
     private final String diagnostics;
     private final FarmClipboard clipboard;
     private final FarmMailer mailer;
+    private final FarmBrowser browser;
     private final Consumer<String> status;
 
     public SupportPanel(String supportEmail, String appVersion, String diagnosticsText,
                         FarmClipboard clipboard, FarmMailer mailer, Consumer<String> status) {
+        this(supportEmail, appVersion, diagnosticsText, clipboard, mailer, FarmBrowser.none(), status);
+    }
+
+    public SupportPanel(String supportEmail, String appVersion, String diagnosticsText,
+                        FarmClipboard clipboard, FarmMailer mailer, FarmBrowser browser,
+                        Consumer<String> status) {
         this.version = Objects.requireNonNullElse(appVersion, "unknown");
         this.diagnostics = Objects.requireNonNullElse(diagnosticsText, "");
         this.clipboard = Objects.requireNonNull(clipboard, "clipboard");
         this.mailer = Objects.requireNonNull(mailer, "mailer");
+        this.browser = Objects.requireNonNull(browser, "browser");
         this.status = Objects.requireNonNullElse(status, ignored -> { });
 
         setName("support.panel");
@@ -47,8 +55,9 @@ public final class SupportPanel extends JPanel {
         getAccessibleContext().setAccessibleName(SupportGuide.TITLE);
 
         email.setName("support.email");
-        email.setText(supportEmail == null ? "" : supportEmail);
-        email.getAccessibleContext().setAccessibleName("Support email");
+        email.setText(SupportGuide.sanitizeStoredEmail(supportEmail));
+        email.getAccessibleContext().setAccessibleName("Support email (optional)");
+        email.setToolTipText("Leave blank unless RicheyWorks gave you a support address.");
 
         details.setName("support.diagnostics");
         details.setEditable(false);
@@ -61,14 +70,19 @@ public final class SupportPanel extends JPanel {
 
         feedback.setName("support.feedback");
 
+        JButton openIssues = FarmUi.primaryButton("Open GitHub Issues…");
+        openIssues.setName("support.openIssues");
+        openIssues.setToolTipText("Open a new issue on RicheyWorks/FlowersForever and paste the copied details.");
+        openIssues.addActionListener(event -> openIssues());
+
         JButton copy = FarmUi.secondaryButton("Copy details");
         copy.setName("support.copy");
-        copy.setToolTipText("Copy the support address, subject, and version details to paste into email.");
+        copy.setToolTipText("Copy GitHub Issues link, optional email, subject, and version details.");
         copy.addActionListener(event -> copyDetails());
 
-        JButton openMail = FarmUi.primaryButton("Open email draft…");
+        JButton openMail = FarmUi.secondaryButton("Open email draft…");
         openMail.setName("support.openMail");
-        openMail.setToolTipText("Open a prefilled message in your email app.");
+        openMail.setToolTipText("Only when a real support email is set below.");
         openMail.addActionListener(event -> openEmailDraft());
 
         JPanel emailRow = new JPanel(new GridBagLayout());
@@ -79,7 +93,7 @@ public final class SupportPanel extends JPanel {
         at.anchor = GridBagConstraints.WEST;
         at.gridx = 0;
         at.gridy = 0;
-        emailRow.add(new JLabel("Support email:"), at);
+        emailRow.add(new JLabel("Support email (optional):"), at);
         at.gridx = 1;
         at.fill = GridBagConstraints.HORIZONTAL;
         at.weightx = 1;
@@ -88,8 +102,9 @@ public final class SupportPanel extends JPanel {
         JPanel actions = new JPanel(new FlowLayout(FlowLayout.LEFT, FarmUi.CONTROL_GAP, 0));
         actions.setOpaque(false);
         actions.setName("support.actions");
-        actions.add(openMail);
+        actions.add(openIssues);
         actions.add(copy);
+        actions.add(openMail);
 
         JPanel body = new JPanel(new BorderLayout(0, FarmUi.CONTROL_GAP));
         body.setOpaque(false);
@@ -105,11 +120,11 @@ public final class SupportPanel extends JPanel {
     }
 
     public String email() {
-        return email.getText() == null ? "" : email.getText().trim();
+        return SupportGuide.sanitizeStoredEmail(email.getText());
     }
 
     void setEmail(String value) {
-        email.setText(value == null ? "" : value);
+        email.setText(SupportGuide.sanitizeStoredEmail(value));
     }
 
     String feedbackText() {
@@ -119,13 +134,24 @@ public final class SupportPanel extends JPanel {
     private void copyDetails() {
         String subject = SupportGuide.emailSubject(version);
         String body = SupportGuide.emailBody(diagnostics);
-        String payload = SupportGuide.clipboardPayload(email(), subject, body);
-        clipboard.copyText(payload);
+        clipboard.copyText(SupportGuide.clipboardPayload(email(), subject, body));
         announce(SupportGuide.statusCopied());
     }
 
+    private void openIssues() {
+        String subject = SupportGuide.emailSubject(version);
+        String body = SupportGuide.emailBody(diagnostics);
+        clipboard.copyText(SupportGuide.clipboardPayload(email(), subject, body));
+        try {
+            browser.open(SupportGuide.issuesUri());
+            announce(SupportGuide.statusIssuesOpened());
+        } catch (Exception failed) {
+            announce(SupportGuide.statusIssuesUnavailable());
+        }
+    }
+
     private void openEmailDraft() {
-        String address = SupportGuide.normalizeEmail(email());
+        String address = email();
         if (!SupportGuide.looksLikeEmail(address)) {
             announce(SupportGuide.statusBadEmail());
             return;

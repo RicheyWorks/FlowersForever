@@ -1,7 +1,6 @@
 package com.flowerfarm.support;
 
-import com.flowerfarm.gui.FarmClipboard;
-import com.flowerfarm.gui.FarmMailer;
+import com.flowerfarm.gui.FarmBrowser;
 import com.flowerfarm.gui.SupportPanel;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -34,81 +33,93 @@ class SupportGuideTest {
     @Test
     @DisplayName("mailto encodes subject and body for a valid support address")
     void mailtoEncoding() {
-        URI uri = SupportGuide.mailtoUri("Support@RicheyWorks.com",
+        URI uri = SupportGuide.mailtoUri("Help@Example.com",
                 SupportGuide.emailSubject("1.2.0"),
                 SupportGuide.emailBody("FlowersForever version: 1.2.0"));
         assertThat(uri.getScheme()).isEqualTo("mailto");
-        assertThat(uri.toString()).startsWith("mailto:support@richeyworks.com?")
+        assertThat(uri.toString()).startsWith("mailto:help@example.com?")
                 .contains("subject=FlowersForever%20pilot%20help")
                 .contains("body=What%20I%20was%20trying%20to%20do");
     }
 
     @Test
-    @DisplayName("invalid emails are rejected before opening mail")
+    @DisplayName("invalid emails and the retired bouncing default are rejected")
     void emailValidation() {
-        assertThat(SupportGuide.looksLikeEmail("support@richeyworks.com")).isTrue();
+        assertThat(SupportGuide.DEFAULT_EMAIL).isBlank();
+        assertThat(SupportGuide.sanitizeStoredEmail("support@richeyworks.com")).isBlank();
+        assertThat(SupportGuide.sanitizeStoredEmail("Help@Example.com")).isEqualTo("help@example.com");
+        assertThat(SupportGuide.looksLikeEmail("help@example.com")).isTrue();
         assertThat(SupportGuide.looksLikeEmail("not-an-email")).isFalse();
         assertThat(SupportGuide.looksLikeEmail("a@b")).isFalse();
-        assertThat(SupportGuide.looksLikeEmail("a @b.com")).isFalse();
-        assertThatThrownBy(() -> SupportGuide.mailtoUri("nope", "s", "b"))
+        assertThatThrownBy(() -> SupportGuide.mailtoUri("", "s", "b"))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> SupportGuide.mailtoUri("support@richeyworks.com", "s", "b"))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
-    @DisplayName("copy payload carries To, subject, and diagnostics")
+    @DisplayName("copy payload prefers GitHub Issues when no support email is set")
     void clipboardPayload() {
-        String payload = SupportGuide.clipboardPayload(
-                "support@richeyworks.com",
+        String blank = SupportGuide.clipboardPayload(
+                "",
                 SupportGuide.emailSubject("1.2.0"),
                 SupportGuide.emailBody("FlowersForever version: 1.2.0"));
-        assertThat(payload).contains("To: support@richeyworks.com")
+        assertThat(blank).contains("GitHub Issues: " + SupportGuide.ISSUES_URL)
+                .doesNotContain("To:")
                 .contains("Subject: FlowersForever pilot help (1.2.0)")
-                .contains("FlowersForever version: 1.2.0")
-                .contains("What I was trying to do");
+                .contains("FlowersForever version: 1.2.0");
+
+        String withTo = SupportGuide.clipboardPayload(
+                "help@example.com",
+                SupportGuide.emailSubject("1.2.0"),
+                SupportGuide.emailBody("FlowersForever version: 1.2.0"));
+        assertThat(withTo).contains("To: help@example.com")
+                .contains("GitHub Issues: " + SupportGuide.ISSUES_URL);
     }
 
     @Test
-    @DisplayName("guidance promises same-day pilot reply without jargon")
+    @DisplayName("guidance points at GitHub Issues without a bouncing default inbox")
     void plainLanguage() {
-        assertThat(SupportGuide.pageGuidance()).contains("same day", "pilot", "Pacific");
-        assertThat(SupportGuide.menuDescription()).containsIgnoringCase("report");
+        assertThat(SupportGuide.pageGuidance()).contains("GitHub Issues", "pilot", "Pacific");
+        assertThat(SupportGuide.menuDescription()).containsIgnoringCase("GitHub");
+        assertThat(SupportGuide.ISSUES_URL)
+                .isEqualTo("https://github.com/RicheyWorks/FlowersForever/issues/new");
         assertThat(SupportGuide.TITLE).isEqualTo("Contact / Report a problem");
     }
 
     @Test
-    @DisplayName("support panel copies details and opens mailto with the typed address")
+    @DisplayName("support panel opens GitHub Issues and can still mailto a typed address")
     void panelActions() {
         List<String> copied = new ArrayList<>();
         AtomicReference<URI> mailed = new AtomicReference<>();
+        AtomicReference<URI> browsed = new AtomicReference<>();
         List<String> status = new ArrayList<>();
-        FarmClipboard clipboard = copied::add;
-        FarmMailer mailer = mailed::set;
         SupportPanel panel = new SupportPanel(
-                "old@example.com", "1.2.0",
+                "", "1.2.0",
                 SupportGuide.diagnostics("1.2.0", "Linux", "6.1", "amd64", "21"),
-                clipboard, mailer, status::add);
+                copied::add, mailed::set, browsed::set, status::add);
 
         assertThat(panel.getName()).isEqualTo("support.panel");
-        setEmail(panel, "pilot@richeyworks.com");
-        click(panel, "support.copy");
+        click(panel, "support.openIssues");
         assertThat(copied).hasSize(1);
-        assertThat(copied.get(0)).contains("To: pilot@richeyworks.com")
-                .contains("FlowersForever version: 1.2.0");
-        assertThat(status.get(status.size() - 1)).isEqualTo(SupportGuide.statusCopied());
+        assertThat(copied.get(0)).contains(SupportGuide.ISSUES_URL);
+        assertThat(browsed.get()).isEqualTo(SupportGuide.issuesUri());
+        assertThat(status.get(status.size() - 1)).isEqualTo(SupportGuide.statusIssuesOpened());
 
+        setEmail(panel, "pilot@example.com");
         click(panel, "support.openMail");
         assertThat(mailed.get()).isNotNull();
-        assertThat(mailed.get().toString()).startsWith("mailto:pilot@richeyworks.com?");
+        assertThat(mailed.get().toString()).startsWith("mailto:pilot@example.com?");
         assertThat(status.get(status.size() - 1)).isEqualTo(SupportGuide.statusMailOpened());
     }
 
     @Test
-    @DisplayName("open email with a bad address explains the problem and does not mail")
+    @DisplayName("open email with no address explains GitHub Issues / copy instead")
     void panelRejectsBadEmail() {
         AtomicReference<URI> mailed = new AtomicReference<>();
         List<String> status = new ArrayList<>();
         SupportPanel panel = new SupportPanel(
-                "bad", "1.2.0", "FlowersForever version: 1.2.0",
+                "", "1.2.0", "FlowersForever version: 1.2.0",
                 text -> { }, mailed::set, status::add);
         click(panel, "support.openMail");
         assertThat(mailed.get()).isNull();
@@ -121,7 +132,7 @@ class SupportGuideTest {
         List<String> copied = new ArrayList<>();
         List<String> status = new ArrayList<>();
         SupportPanel panel = new SupportPanel(
-                "support@richeyworks.com", "1.2.0", "FlowersForever version: 1.2.0",
+                "help@example.com", "1.2.0", "FlowersForever version: 1.2.0",
                 copied::add,
                 uri -> {
                     throw new UnsupportedOperationException("no mail");
@@ -130,6 +141,23 @@ class SupportGuideTest {
         click(panel, "support.openMail");
         assertThat(copied).hasSize(1);
         assertThat(status).containsExactly(SupportGuide.statusMailUnavailable());
+    }
+
+    @Test
+    @DisplayName("browser failure still leaves GitHub Issues details on the clipboard")
+    void issuesFallbackCopies() {
+        List<String> copied = new ArrayList<>();
+        List<String> status = new ArrayList<>();
+        FarmBrowser broken = uri -> {
+            throw new UnsupportedOperationException("no browser");
+        };
+        SupportPanel panel = new SupportPanel(
+                "", "1.2.0", "FlowersForever version: 1.2.0",
+                copied::add, uri -> { }, broken, status::add);
+        click(panel, "support.openIssues");
+        assertThat(copied).hasSize(1);
+        assertThat(copied.get(0)).contains(SupportGuide.ISSUES_URL);
+        assertThat(status).containsExactly(SupportGuide.statusIssuesUnavailable());
     }
 
     private static void setEmail(JPanel root, String value) {
