@@ -4,7 +4,9 @@ import com.flowerfarm.gui.FarmDialogs;
 import com.flowerfarm.gui.FarmFileChooser;
 import com.flowerfarm.gui.FarmUi;
 import com.flowerfarm.gui.StartHereGuide;
+import com.flowerfarm.gui.RemindersPanel;
 import com.flowerfarm.gui.StartHerePanel;
+import com.flowerfarm.service.GrowerReminder;
 import com.flowerfarm.model.Item;
 import com.flowerfarm.service.HarvestService;
 import com.flowerfarm.service.InventoryService;
@@ -76,6 +78,10 @@ public class DashboardTab implements FlowerFarmTab {
     private JButton priorityActionButton;
     private JComboBox<String> priorityQueue;
     private StartHerePanel startHerePanel;
+    private RemindersPanel remindersPanel;
+    private java.util.function.Consumer<GrowerReminder> reminderOpener = reminder -> { };
+    private Runnable reminderDismisser = () -> { };
+    private Runnable remindersRefresh = () -> { };
     private boolean startHereDismissed;
     private JButton morningBriefingButton;
     private JButton dayCloseoutButton;
@@ -688,6 +694,7 @@ public class DashboardTab implements FlowerFarmTab {
         alertsArea.setText(alerts.toString());
         alertsArea.setCaretPosition(0);
         updateDashboardPriority(priorities);
+        remindersRefresh.run();
     }
 
     private void updateDashboardPriority(List<DashboardPriority> priorities) {
@@ -898,6 +905,10 @@ public class DashboardTab implements FlowerFarmTab {
         actionWorkspace.setOpaque(false);
         startHerePanel = new StartHerePanel(this::onStartHereChoice);
         startHerePanel.setVisible(false);
+        remindersPanel = new RemindersPanel(
+                reminder -> reminderOpener.accept(reminder),
+                () -> reminderDismisser.run());
+        remindersPanel.setVisible(false);
         priorityStatusLabel = FarmUi.wrappingStatusBadge(
                 "Refresh to identify the top priority", FarmUi.Tone.NEUTRAL);
         priorityStatusLabel.setName("dashboard.priorityStatus");
@@ -943,7 +954,12 @@ public class DashboardTab implements FlowerFarmTab {
         JPanel northStack = new JPanel(new BorderLayout(0, FarmUi.CONTROL_GAP));
         northStack.setOpaque(false);
         northStack.setName("dashboard.todayNorth");
-        northStack.add(startHerePanel, BorderLayout.NORTH);
+        JPanel bannerStack = new JPanel(new BorderLayout(0, FarmUi.CONTROL_GAP));
+        bannerStack.setOpaque(false);
+        bannerStack.setName("dashboard.reminderBanners");
+        bannerStack.add(startHerePanel, BorderLayout.NORTH);
+        bannerStack.add(remindersPanel, BorderLayout.CENTER);
+        northStack.add(bannerStack, BorderLayout.NORTH);
         northStack.add(priorityChooser, BorderLayout.CENTER);
         actionWorkspace.add(northStack, BorderLayout.NORTH);
         JPanel boundedActions = new JPanel(new BorderLayout());
@@ -1090,6 +1106,26 @@ public class DashboardTab implements FlowerFarmTab {
             host.selectTab(tabTitle);
             host.setStatus(statusMsg);
         }
+    }
+
+    public void bindReminders(java.util.function.Consumer<GrowerReminder> onOpen,
+                               Runnable onDismiss, Runnable refresh) {
+        if (onOpen != null) {
+            reminderOpener = onOpen;
+        }
+        if (onDismiss != null) {
+            reminderDismisser = onDismiss;
+        }
+        if (refresh != null) {
+            remindersRefresh = refresh;
+        }
+    }
+
+    public RemindersPanel remindersPanel() {
+        if (panel == null) {
+            buildUI();
+        }
+        return remindersPanel;
     }
 
     private void updateStartHereVisibility(boolean emptyFarm) {

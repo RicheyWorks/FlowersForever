@@ -107,6 +107,7 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
 
     private DesktopUpdateController updateController;
     private DesktopBackupController backupController;
+    private DesktopRemindersController remindersController;
 
     private final Preferences prefs = Preferences.userNodeForPackage(FlowerFarmGUI.class);
     private boolean darkMode;
@@ -204,6 +205,12 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
     @Autowired(required = false)
     void setBackupController(DesktopBackupController backupController) {
         this.backupController = backupController;
+    }
+
+    /** Today’s reminders banner, Help menu, and optional tray nudge. */
+    @Autowired(required = false)
+    void setRemindersController(DesktopRemindersController remindersController) {
+        this.remindersController = remindersController;
     }
 
     // ── ApplicationRunner ─────────────────────────────────────────────────────
@@ -319,7 +326,23 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
             backupController.attach(new DesktopBackupController.Host(frame, dialogs, fileChooser, this::setStatus,
                     () -> confirmApplicationClose(false), this::savePreferences));
         }
-        javax.swing.SwingUtilities.invokeLater(this::maybeOfferStartHere);
+        if (remindersController != null) {
+            remindersController.attach(new DesktopRemindersController.Host(
+                    frame, dialogs, this::setStatus, this::selectTab,
+                    () -> showHarvestEntry(null, null)));
+            if (dashboard != null) {
+                dashboard.bindReminders(remindersController::openReminder,
+                        remindersController::hideBannerForToday,
+                        remindersController::refreshBanner);
+                remindersController.attachDashboardBanner(dashboard.remindersPanel());
+            }
+        }
+        javax.swing.SwingUtilities.invokeLater(() -> {
+            maybeOfferStartHere();
+            if (remindersController != null) {
+                remindersController.maybeNotifyOnStartup();
+            }
+        });
     }
 
     /** Frame-level integrations and status chrome, kept separate for theme verification. */
@@ -510,6 +533,9 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
         helpMenu.add(menuItem("Contact / Report a problem…", KeyEvent.VK_C,
                 SupportGuide.menuDescription(),
                 e -> openSupport()));
+        helpMenu.add(menuItem("Today’s reminders…", KeyEvent.VK_T,
+                "See due field tasks, packing, harvest catch-up, low stock, and Knowledge follow-ups.",
+                e -> openReminders()));
         helpMenu.add(menuItem("About FlowersForever", KeyEvent.VK_A,
                 "Show the farm profile, application purpose, and active session.",
                 e -> dialogs.showMessage(frame,
@@ -949,6 +975,16 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
         if (!chosen.equals(previous)) {
             setStatus(SupportGuide.statusSaved(chosen));
         }
+    }
+
+    private void openReminders() {
+        if (remindersController == null) {
+            dialogs.showMessage(frame,
+                    "Reminders are not available in this session.",
+                    RemindersPanel.TITLE, javax.swing.JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+        remindersController.showToday();
     }
 
 
