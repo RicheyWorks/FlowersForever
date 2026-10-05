@@ -74,6 +74,8 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
     private final FarmProfile farmProfile;
     private final FarmDialogs dialogs;
     private final FarmFileChooser fileChooser;
+    private final InventoryService inventoryService;
+    private final HarvestService harvestService;
     private final SwingHarnessBridge harnessBridge;
 
     // Created lazily on the EDT inside initialise() — never touched before run().
@@ -111,6 +113,8 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
     private static final String PREF_TAB_TITLE = "tab.lastTitle";
     private static final String PREF_DARK   = "ui.dark";
     private static final String PREF_INTEGRATIONS = "ui.integrationsExpanded";
+    /** Once true, the automatic first-run Start here dialog stays quiet. */
+    private static final String PREF_START_HERE_DONE = StartHereGuide.PREF_DONE;
 
     @Autowired
     public FlowerFarmGUI(InventoryService inventoryService,
@@ -177,6 +181,8 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
         this.harnessBridge = Objects.requireNonNull(harnessBridge, "harnessBridge");
         this.dialogs = Objects.requireNonNull(dialogs, "dialogs");
         this.fileChooser = Objects.requireNonNull(fileChooser, "fileChooser");
+        this.inventoryService = Objects.requireNonNull(inventoryService, "inventoryService");
+        this.harvestService = Objects.requireNonNull(harvestService, "harvestService");
     }
 
     /** Automatic updates are optional so headless tests and slices can build the frame without them. */
@@ -304,6 +310,7 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
             backupController.attach(new DesktopBackupController.Host(frame, dialogs, fileChooser, this::setStatus,
                     () -> confirmApplicationClose(false), this::savePreferences));
         }
+        javax.swing.SwingUtilities.invokeLater(this::maybeOfferStartHere);
     }
 
     /** Frame-level integrations and status chrome, kept separate for theme verification. */
@@ -394,11 +401,14 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
 
         JMenu fileMenu = menu("File", KeyEvent.VK_F,
                 "Import farm data, export a local backup, or exit FlowersForever.");
+        fileMenu.add(writeMenuItem("Import from spreadsheet…", KeyEvent.VK_I,
+                "Bring products from a CSV or Excel spreadsheet you already use.",
+                e -> importFromSpreadsheet()));
         fileMenu.add(writeMenuItem("Import CSV…", KeyEvent.VK_C,
-                "Import inventory records from a CSV file.",
+                "Import products from a CSV spreadsheet.",
                 e -> runImportConnector("csv", "CSV")));
         fileMenu.add(writeMenuItem("Import Excel…", KeyEvent.VK_E,
-                "Import inventory records from an Excel workbook.",
+                "Import products from an Excel spreadsheet.",
                 e -> runImportConnector("excel", "Excel")));
         fileMenu.add(menuItem("Export All to CSV…", KeyEvent.VK_A,
                 "Save all current inventory records to a CSV file.",
@@ -470,6 +480,10 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
 
         JMenu helpMenu = menu("Help", KeyEvent.VK_H,
                 "Open growing guidance or application information.");
+        helpMenu.add(menuItem("Start here…", KeyEvent.VK_S,
+                "Set up a cut-flower farm: log today’s cut, import a spreadsheet, or add a product.",
+                e -> openStartHere()));
+        helpMenu.addSeparator();
         JMenuItem growingGuide = menuItem("PNW Plant Guide", KeyEvent.VK_P,
                 "Open the sourced Pacific Northwest plant and crop reference.",
                 e -> selectTab("PNW Plant Guide"));
@@ -895,6 +909,62 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
                     : "Sync History".equals(tabTitle) ? "Activity History" : tabTitle;
             navigator.select(resolved);
         }
+    }
+
+    @Override
+    public void openStartHere() {
+        showStartHereDialog(false);
+    }
+
+    @Override
+    public void importFromSpreadsheet() {
+        Object[] options = {"CSV file…", "Excel workbook…", "Cancel"};
+        int choice = dialogs.showOption(frame,
+                "Bring products from a spreadsheet into Inventory.\n\n"
+                        + "CSV works for simple lists. Excel works for .xlsx workbooks.\n"
+                        + "You can also use File > Import CSV… or Import Excel… directly.",
+                "Import from spreadsheet",
+                javax.swing.JOptionPane.YES_NO_CANCEL_OPTION,
+                javax.swing.JOptionPane.QUESTION_MESSAGE,
+                null, options, options[0]);
+        if (choice == 0) {
+            runImportConnector("csv", "CSV");
+        } else if (choice == 1) {
+            runImportConnector("excel", "Excel");
+        }
+    }
+
+    private void maybeOfferStartHere() {
+        if (prefs.getBoolean(PREF_START_HERE_DONE, false)) {
+            return;
+        }
+        if (!StartHereGuide.looksEmpty(inventoryService.getAllItems().size(),
+                harvestService.getAll().size())) {
+            return;
+        }
+        showStartHereDialog(true);
+    }
+
+    private void showStartHereDialog(boolean automatic) {
+        Object[] options = StartHereGuide.dialogOptions();
+        int choice = dialogs.showOption(frame, StartHereGuide.body(), StartHereGuide.TITLE,
+                javax.swing.JOptionPane.DEFAULT_OPTION, javax.swing.JOptionPane.INFORMATION_MESSAGE,
+                null, options, options[0]);
+        StartHereGuide.Choice selected = StartHereGuide.choiceFromDialogIndex(choice);
+        if (automatic || selected == StartHereGuide.Choice.DISMISS) {
+            prefs.putBoolean(PREF_START_HERE_DONE, true);
+        }
+        applyStartHereChoice(selected);
+    }
+
+    private void applyStartHereChoice(StartHereGuide.Choice choice) {
+        switch (choice) {
+            case LOG_HARVEST -> showHarvestEntry(null, null);
+            case IMPORT_SPREADSHEET -> importFromSpreadsheet();
+            case ADD_PRODUCT -> showAddInventoryItem("");
+            case DISMISS -> { }
+        }
+        setStatus(StartHereGuide.statusFor(choice));
     }
 
     private void backUpNow() {

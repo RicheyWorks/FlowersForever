@@ -1084,7 +1084,8 @@ public class InventoryTab implements FlowerFarmTab {
         if (tableModel.getRowCount() == 0 && !inventoryViewFiltered()) {
             inventoryEmptyState.updateCopy(
                     "No inventory yet",
-                    "Add the first flower or farm product in Add item; it will appear here after save.");
+                    "Add the first flower in Add item, or use Help > Start here… / File > Import CSV… "
+                            + "to bring products from a spreadsheet.");
         } else {
             inventoryEmptyState.updateCopy(
                     "No inventory matches this view",

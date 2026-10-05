@@ -552,7 +552,7 @@ public class HarvestLogTab implements FlowerFarmTab {
         tableState.add(FarmUi.tableScroll(table), "table");
         harvestEmptyState = FarmUi.emptyStateView(
                 "No harvests yet",
-                "Log today's first cut above; it will appear here after save.");
+                "Use Quick entry — crop and quantity are enough for the first save.");
         tableState.add(harvestEmptyState.component(), "empty");
 
         JPanel history = new JPanel(new BorderLayout(0, FarmUi.SECTION_GAP));
@@ -2457,7 +2457,8 @@ public class HarvestLogTab implements FlowerFarmTab {
         if (allTotals.isEmpty()) {
             harvestEmptyState.updateCopy(
                     "No harvests yet",
-                    "Log today's first cut below; it will appear here after save.");
+                    "Use Quick entry below — crop and quantity are enough. Help > Start here… "
+                            + "also opens this path for a new farm.");
         } else {
             harvestEmptyState.updateCopy(
                     "No harvests match these filters",

@@ -85,6 +85,8 @@ shell caching require HTTPS (or localhost), but queued submissions retry wheneve
 the loaded page can reach the server.
 
 ## Start the morning
+New farm? Use **Help > Start here…** (or the Dashboard banner when Inventory and Harvest are empty): log today’s first cut, import a CSV/Excel spreadsheet, or add one product by hand. You do not need every tab on day one.
+
 
 1. Open **Dashboard** and choose **Refresh overview**.
    The inventory, harvest, sales, packing, and watering snapshot loads in the
