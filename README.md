@@ -282,6 +282,7 @@ Prepare the workstation with the [deployment checklist](docs/DEPLOYMENT.md), and
 | Try a five-minute walkthrough | [Demo runbook](docs/DEMO.md) |
 | Set up a farm workstation | [Deployment checklist](docs/DEPLOYMENT.md) |
 | Protect or recover my data | [Backup and restore](docs/BACKUP_RESTORE.md) |
+| Keep installs up to date automatically | [Automatic updates](docs/AUTO_UPDATES.md) |
 | Understand roles and security | [Security guide](SECURITY.md) |
 | Connect another service | [Connector sandbox guide](docs/CONNECTORS_SANDBOX.md) |
 | Connect an AI or automation tool | [AI harness guide](docs/AI_HARNESS.md) |

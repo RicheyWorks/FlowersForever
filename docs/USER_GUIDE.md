@@ -1579,3 +1579,16 @@ the product draft itself should also be discarded.
   the selected order and product-edit state.
 - In tables, use the arrow keys to move between rows. Actions apply to the
   selected row; double-click loads a row on screens that support editing.
+
+## Updates
+
+When a new version is ready, FlowersForever says so when it opens: choose
+**Update now** or **Later**. After the download is checked, **Install now** closes
+the app (after the usual unfinished-work check), backs up your farm records,
+installs the update, and opens again. If the new version does not start
+correctly, FlowersForever goes back to the previous version and puts your
+records back exactly as they were, then tells you what happened.
+
+Use **Help > Check for updates…** to check now or to turn automatic checks on or
+off. Working offline is fine; FlowersForever simply checks again next time.
+Details: [Automatic updates](AUTO_UPDATES.md).

@@ -74,6 +74,7 @@ not run a permanent background process after the browser is fully closed.
 2. Confirm the dashboard opens at 1366×768 without clipped primary actions.
 3. Confirm data is stored under `%LOCALAPPDATA%\FlowersForever\data`; packaged upgrades reuse this location.
 4. For an upgrade, confirm startup reports successful Flyway validation/migration before entering new work. Stop and restore the pre-upgrade backup if migration fails.
+   Automatic updates do this themselves: they back up first, run a first-launch database health check, and roll back to the previous installer and backup if it fails. See [Automatic updates](AUTO_UPDATES.md).
 5. Sign in as OWNER, HAND, and VIEWER. Verify OWNER and HAND can record work, VIEWER cannot mutate it, and only OWNER can clear audit history.
 6. Complete the morning briefing, irrigation review, harvest, inventory, customer/order, market packing, fulfillment, reports, exports, and closeout paths.
 7. Close and reopen the app; confirm the day's records remain.
@@ -168,3 +169,13 @@ protected GitHub `release-signing` environment.
 3. Install the prior approved MSI.
 4. If the prior version cannot read the upgraded store, run `scripts/restore-data.ps1` with the pre-upgrade ZIP. The restore tool preserves the displaced data in a timestamped `.before-restore-*` directory.
 5. Launch, verify inventory/customer/order totals, and record the rollback in the farm log.
+
+### After an automatic update rollback
+
+The app has already restored the pre-update backup and reinstalled the previous
+MSI. The records from the failed start are kept in
+`%LOCALAPPDATA%\FlowersForever\data.before-restore-*`, and the backup stays in
+`Documents\FlowersForever Backups`. Send `%LOCALAPPDATA%\FlowersForever\updates\update-state.json`
+and the logs in `updates\handoff\` to RicheyWorks. If the app says it could not
+finish going back, do not enter new work; follow steps 1-5 above with the
+`FlowersForever-before-<version>-*.zip` backup.

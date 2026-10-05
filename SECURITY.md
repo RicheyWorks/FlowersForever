@@ -170,6 +170,15 @@ is omitted from AI-facing observations and status responses; it is audit metadat
 under the shared local harness credential, not proof of an external human
 identity.
 
+### Automatic updates
+
+The desktop fetches one signed manifest over HTTPS (and, after consent, the
+installers it lists). Manifests and installers must carry an Ed25519 signature
+from a publisher key built into the app; size and SHA-256 must match; plain HTTP
+and unsigned or altered files are refused. No farm data is sent. Checks can be
+turned off by the farm or with `flowerfarm.updates.enabled=false`. The private
+signing key never enters the repository. See [Automatic updates](docs/AUTO_UPDATES.md).
+
 ### Data at rest
 
 Default inventory DB is local **H2** (`./data/flowerfarm.mv.db`) or optional **SQLite**. Protect the `data/` directory with OS file permissions on multi-user machines.

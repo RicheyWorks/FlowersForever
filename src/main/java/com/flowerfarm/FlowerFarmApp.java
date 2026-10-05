@@ -3,17 +3,25 @@ package com.flowerfarm;
 import com.flowerfarm.automation.mcp.McpDoctorBootstrap;
 import com.flowerfarm.automation.mcp.McpDoctorRunner;
 import com.flowerfarm.config.AppDataBootstrap;
+import com.flowerfarm.update.UpdateLaunchGuard;
+import com.flowerfarm.update.UpdateStartup;
 import org.springframework.boot.Banner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.WebApplicationType;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.context.event.ApplicationEnvironmentPreparedEvent;
 import org.springframework.context.ConfigurableApplicationContext;
 
+import java.awt.GraphicsEnvironment;
 import java.io.IOException;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.Statement;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.Arrays;
+import java.util.concurrent.atomic.AtomicReference;
 
 @SpringBootApplication
 public class FlowerFarmApp {
@@ -48,7 +56,16 @@ public class FlowerFarmApp {
         } else if (releaseSmoke) {
             app.setAdditionalProfiles("release-smoke");
         }
-        ConfigurableApplicationContext context = app.run(args);
+        boolean desktop = !mcp && !releaseSmoke && !Arrays.asList(args).contains("--cli");
+        ConfigurableApplicationContext context;
+        if (desktop) {
+            context = startDesktopWithUpdateGuard(app, args);
+            if (context == null) {
+                return;
+            }
+        } else {
+            context = app.run(args);
+        }
         if (mcpDoctor) {
             int exitCode = context.getBean(McpDoctorRunner.class).getExitCode();
             context.close();
@@ -63,6 +80,61 @@ public class FlowerFarmApp {
             } finally {
                 context.close();
             }
+        }
+    }
+
+    /**
+     * The first launch after an automatic update must pass its database health
+     * check; if Spring cannot start, the pre-update backup is restored and the
+     * previous version reinstalled (see docs/AUTO_UPDATES.md).
+     */
+    private static ConfigurableApplicationContext startDesktopWithUpdateGuard(SpringApplication app, String[] args) {
+        UpdateLaunchGuard guard = UpdateStartup.guardForThisProcess();
+        AtomicReference<String[]> datasource = new AtomicReference<>(new String[3]);
+        app.addListeners(event -> {
+            if (event instanceof ApplicationEnvironmentPreparedEvent prepared) {
+                var environment = prepared.getEnvironment();
+                datasource.set(new String[] {environment.getProperty("spring.datasource.url"),
+                        environment.getProperty("spring.datasource.username", "sa"),
+                        environment.getProperty("spring.datasource.password", "")});
+            }
+        });
+        app.addInitializers(context -> context.getBeanFactory().registerSingleton("updateLaunchGuard", guard));
+        UpdateStartup.Result<ConfigurableApplicationContext> result;
+        try {
+            result = UpdateStartup.start(guard, () -> app.run(args),
+                    () -> shutdownEmbeddedDatabase(datasource.get()), FlowerFarmApp::tellUser);
+        } catch (RuntimeException | Error failure) {
+            throw failure;
+        } catch (Exception failure) {
+            throw new IllegalStateException(failure);
+        }
+        if (result.started().isEmpty()) {
+            System.exit(result.exitCode());
+            return null;
+        }
+        return result.started().get();
+    }
+
+    private static void shutdownEmbeddedDatabase(String[] datasource) {
+        String url = datasource[0];
+        if (url == null || !url.startsWith("jdbc:h2:")) {
+            return;
+        }
+        try (Connection connection = DriverManager.getConnection(url + ";IFEXISTS=TRUE",
+                datasource[1], datasource[2]);
+             Statement statement = connection.createStatement()) {
+            statement.execute("SHUTDOWN");
+        } catch (java.sql.SQLException | RuntimeException alreadyClosed) {
+            // Nothing holds the records open.
+        }
+    }
+
+    private static void tellUser(String message) {
+        System.err.println(message);
+        if (!GraphicsEnvironment.isHeadless()) {
+            javax.swing.JOptionPane.showMessageDialog(null, message, "FlowersForever update",
+                    javax.swing.JOptionPane.WARNING_MESSAGE);
         }
     }
 

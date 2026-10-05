@@ -22,3 +22,4 @@
 - Irrigation falls back to Kitsap climatology when live weather is unavailable; it is operational guidance, not a soil-sensor or safety system.
 - Native installers are built by release CI. Candidate CI also launches an app image on clean Windows and macOS runners before preserving either installer. Local MSI creation requires a compatible JDK/jpackage and WiX toolchain.
 - The repository and release channel are private. Pilot installers may not be forwarded or redistributed.
+- Automatic updates are implemented and tested headlessly, but have not yet been exercised with real MSI upgrades, and stay inactive until the production publisher key and update address are built in. Each update shows one Windows permission prompt (per-machine MSI), and the macOS hand-off has not run on a Mac. See [Automatic updates](AUTO_UPDATES.md).
