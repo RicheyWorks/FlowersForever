@@ -2,6 +2,18 @@
 
 Packaged Windows installs keep operational data in `%LOCALAPPDATA%\FlowersForever\data`. Portable JAR runs keep `./data` unless `FLOWERFARM_DATA_DIR` is set.
 
+## In the app (no closing needed)
+
+The **File** menu has three backup commands:
+
+- **Back up now…** saves a backup while you keep working. FlowersForever takes a consistent copy of the open database, adds the `attachments` folder (so photo metadata and the verified bytes of each photo stay together), writes the ZIP plus its `.sha256` file, and then re-opens the ZIP to check every file before it says "backed up". The default folder is `Documents\FlowersForever Backups`; you can choose another folder or a USB drive.
+- **Restore from a backup…** checks the chosen backup first (checksum, contents, and that the records open in this version; a backup from a newer version is refused). It then saves a backup of your current records, closes FlowersForever, swaps the records in, and reopens. If the restored records do not open, FlowersForever puts the records you had before back by itself. The records from before a restore are also kept beside the data folder as `data.before-restore-<date>`. The result is shown once and recorded in Activity History.
+- **Automatic backups…** turns on daily or weekly backups to a folder you choose (ideally a USB drive or a synced folder on another device) and keeps the newest N automatic backups (default 10). Manual and before-restore backups are never deleted automatically. If the drive is unplugged, FlowersForever only notes it in the status bar and tries again later; after three missed backups it shows a warning.
+
+Backups from the app and from the scripts below use the same ZIP layout and `.sha256` check file, so either can restore the other's backups.
+
+## Backup scripts
+
 Close the app before either operation. This is required for a transactionally consistent embedded-database copy.
 
 ```powershell

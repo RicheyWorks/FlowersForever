@@ -2,9 +2,11 @@ package com.flowerfarm;
 
 import com.flowerfarm.automation.mcp.McpDoctorBootstrap;
 import com.flowerfarm.automation.mcp.McpDoctorRunner;
+import com.flowerfarm.backup.RestoreStartup;
 import com.flowerfarm.config.AppDataBootstrap;
 import com.flowerfarm.update.UpdateLaunchGuard;
 import com.flowerfarm.update.UpdateStartup;
+import com.flowerfarm.update.UpdateState;
 import org.springframework.boot.Banner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.WebApplicationType;
@@ -102,7 +104,9 @@ public class FlowerFarmApp {
         app.addInitializers(context -> context.getBeanFactory().registerSingleton("updateLaunchGuard", guard));
         UpdateStartup.Result<ConfigurableApplicationContext> result;
         try {
-            result = UpdateStartup.start(guard, () -> app.run(args),
+            result = UpdateStartup.start(guard, () -> RestoreStartup.forThisProcess().start(() -> app.run(args),
+                            () -> shutdownEmbeddedDatabase(datasource.get()),
+                            guard.decision() == UpdateState.Decision.NORMAL),
                     () -> shutdownEmbeddedDatabase(datasource.get()), FlowerFarmApp::tellUser);
         } catch (RuntimeException | Error failure) {
             throw failure;

@@ -99,6 +99,7 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
     private ProductionStudioTab productionStudioTab;
 
     private DesktopUpdateController updateController;
+    private DesktopBackupController backupController;
 
     private final Preferences prefs = Preferences.userNodeForPackage(FlowerFarmGUI.class);
     private boolean darkMode;
@@ -182,6 +183,12 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
     @Autowired(required = false)
     void setUpdateController(DesktopUpdateController updateController) {
         this.updateController = updateController;
+    }
+
+    /** In-app backups are optional for the same reason. */
+    @Autowired(required = false)
+    void setBackupController(DesktopBackupController backupController) {
+        this.backupController = backupController;
     }
 
     // ── ApplicationRunner ─────────────────────────────────────────────────────
@@ -293,6 +300,10 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
             updateController.attach(new DesktopUpdateController.Host(frame, dialogs, this::setStatus,
                     () -> confirmApplicationClose(false), this::savePreferences));
         }
+        if (backupController != null) {
+            backupController.attach(new DesktopBackupController.Host(frame, dialogs, fileChooser, this::setStatus,
+                    () -> confirmApplicationClose(false), this::savePreferences));
+        }
     }
 
     /** Frame-level integrations and status chrome, kept separate for theme verification. */
@@ -392,6 +403,16 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
         fileMenu.add(menuItem("Export All to CSV…", KeyEvent.VK_A,
                 "Save all current inventory records to a CSV file.",
                 e -> exportAllToCsv()));
+        fileMenu.addSeparator();
+        fileMenu.add(menuItem("Back up now…", KeyEvent.VK_B,
+                "Save a checked backup of all farm records while you keep working.",
+                e -> backUpNow()));
+        fileMenu.add(writeMenuItem("Restore from a backup…", KeyEvent.VK_R,
+                "Check a backup, save the current records, then reopen with the backup's records.",
+                e -> restoreFromBackup()));
+        fileMenu.add(writeMenuItem("Automatic backups…", KeyEvent.VK_U,
+                "Choose a folder or USB drive for regular automatic backups.",
+                e -> automaticBackups()));
         fileMenu.addSeparator();
         fileMenu.add(menuItem("Exit", KeyEvent.VK_X,
                 "Close FlowersForever after reviewing any unfinished work.",
@@ -874,6 +895,36 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
                     : "Sync History".equals(tabTitle) ? "Activity History" : tabTitle;
             navigator.select(resolved);
         }
+    }
+
+    private void backUpNow() {
+        if (backupController == null) {
+            showBackupsUnavailable();
+            return;
+        }
+        backupController.backUpNow();
+    }
+
+    private void restoreFromBackup() {
+        if (backupController == null) {
+            showBackupsUnavailable();
+            return;
+        }
+        backupController.restoreFromBackup();
+    }
+
+    private void automaticBackups() {
+        if (backupController == null) {
+            showBackupsUnavailable();
+            return;
+        }
+        backupController.automaticBackups();
+    }
+
+    private void showBackupsUnavailable() {
+        dialogs.showMessage(frame, "Backups from the menu are not available in this copy of FlowersForever. "
+                + "Use scripts/backup-data.ps1 instead (see docs/BACKUP_RESTORE.md).", "Backups",
+                javax.swing.JOptionPane.INFORMATION_MESSAGE);
     }
 
     @Override
