@@ -18,6 +18,8 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
@@ -84,6 +86,8 @@ class MarketDayPackingServiceTest {
 
         assertThat(plan.orderCount()).isEqualTo(2);
         assertThat(plan.scope()).isEqualTo("CONFIRMED");
+        assertThat(plan.plainText()).contains("Scope       : Confirmed orders")
+                .doesNotContain("Scope       : CONFIRMED");
         assertThat(plan.pipelineValue()).isEqualTo(40 * 2.5 + 10 * 12.0 + 20 * 2.5);
         assertThat(plan.pickList()).hasSize(2);
 
@@ -116,7 +120,9 @@ class MarketDayPackingServiceTest {
         assertThat(plan.plainText()).contains(
                 "Kitsap Blooms", "Sam Rivera", "360-555-0142", "sam@kitsap.example",
                 "account delivery note: Deliver to west loading dock");
-        assertThat(plan.plainText()).contains("handoff: Delivery · date: 2026-07-12");
+        assertThat(plan.plainText()).contains(
+                "handoff: Delivery · date: 2026-07-12",
+                "After load-out, complete checked confirmed orders to deduct inventory and record revenue.");
         assertThat(service.exportCsv(plan)).contains(
                 "contactName,phone,email,accountNotes,notes,orderDate",
                 ",DELIVERY,", "Sam Rivera,360-555-0142,sam@kitsap.example,"
@@ -126,7 +132,7 @@ class MarketDayPackingServiceTest {
 
     @Test
     @DisplayName("orders unresolved handoffs first, then market, delivery, and pickup loads")
-    void sequencesMixedHandoffsForLoadOut() {
+    void sequencesMixedHandoffsForLoadOut() throws Exception {
         LocalDate day = LocalDate.of(2026, 9, 12);
         Customer customer = new Customer("Buyer", "", "", "", "WHOLESALE", "");
         CustomerOrder pickup = packingOrder(customer, 14L, day, "PICKUP", "Pickup stems");
@@ -150,13 +156,18 @@ class MarketDayPackingServiceTest {
                 .containsExactly("UNSPECIFIED", "MARKET", "DELIVERY", "PICKUP");
         String text = plan.plainText();
         assertThat(text).contains(
-                "Unspecified handoffs: 1 confirmed order(s) need Pickup, Delivery, or Market");
+                "Unspecified handoffs: 1 confirmed order needs Pickup, Delivery, or Market");
         assertThat(text.indexOf("handoff: Unspecified"))
                 .isLessThan(text.indexOf("handoff: Market"));
         assertThat(text.indexOf("handoff: Market"))
                 .isLessThan(text.indexOf("handoff: Delivery"));
         assertThat(text.indexOf("handoff: Delivery"))
                 .isLessThan(text.indexOf("handoff: Pickup"));
+        PdfReader reader = new PdfReader(service.generatePackingPdf(plan));
+        String pdfText = new PdfTextExtractor(reader).getTextFromPage(1);
+        reader.close();
+        assertThat(pdfText).contains(
+                "ACTION REQUIRED: 1 confirmed order needs Pickup, Delivery, or Market before load-out.");
     }
 
     private static CustomerOrder packingOrder(
@@ -186,12 +197,14 @@ class MarketDayPackingServiceTest {
         MarketDayPlan plan = service.buildPlan(day, 1, true, false);
         assertThat(plan.orderCount()).isEqualTo(1);
         assertThat(plan.scope()).isEqualTo("CONFIRMED+DRAFT");
+        assertThat(plan.plainText()).contains("Scope       : Confirmed and draft orders")
+                .doesNotContain("Scope       : CONFIRMED+DRAFT");
         assertThat(plan.pickList().get(0).shortfall()).isFalse();
     }
 
     @Test
     @DisplayName("draft preview demand cannot block covered confirmed completion")
-    void previewDemandIsSeparatedFromConfirmedCompletionDemand() {
+    void previewDemandIsSeparatedFromConfirmedCompletionDemand() throws Exception {
         LocalDate day = LocalDate.of(2026, 7, 12);
         Customer customer = new Customer("Buyer", "", "", "", "MARKET", "");
         CustomerOrder confirmed = new CustomerOrder(customer, day, "CONFIRMED", "Load first");
@@ -211,6 +224,14 @@ class MarketDayPackingServiceTest {
         MarketDayPlan plan = service.buildPlan(day, 1, true, true);
 
         assertThat(plan.orderCount()).isEqualTo(3);
+        assertThat(plan.scope()).isEqualTo("CONFIRMED+DRAFT+FULFILLED");
+        assertThat(plan.toMap()).containsEntry("scope", "CONFIRMED+DRAFT+FULFILLED");
+        assertThat(plan.plainText())
+                .contains("Scope       : Confirmed, draft, and completed orders",
+                        "#1  Buyer  [MARKET]  Confirmed",
+                        "#2  Buyer  [MARKET]  Draft",
+                        "#3  Buyer  [MARKET]  Completed")
+                .doesNotContain("Scope       : CONFIRMED+DRAFT+FULFILLED");
         assertThat(plan.pipelineValue()).isEqualTo(30);
         assertThat(plan.confirmedOrderCount()).isEqualTo(1);
         assertThat(plan.confirmedValue()).isEqualTo(10);
@@ -228,6 +249,18 @@ class MarketDayPackingServiceTest {
                 .containsEntry("confirmedValue", 10.0)
                 .containsEntry("confirmedShortfallSkuCount", 0)
                 .containsKeys("pickList", "confirmedPickList");
+        byte[] pdf = service.generatePackingPdf(plan);
+        PdfReader reader = new PdfReader(pdf);
+        String pdfText = new PdfTextExtractor(reader).getTextFromPage(1);
+        reader.close();
+        assertThat(pdfText).contains("Scope: Confirmed, draft, and completed orders")
+                .doesNotContain("Scope: CONFIRMED+DRAFT+FULFILLED", " CONFIRMED $", " DRAFT $", " FULFILLED $");
+
+        MarketDayPlan completedPreview = service.buildPlan(day, 1, false, true);
+        assertThat(completedPreview.scope()).isEqualTo("CONFIRMED+FULFILLED");
+        assertThat(completedPreview.plainText())
+                .contains("Scope       : Confirmed and completed orders")
+                .doesNotContain("Scope       : CONFIRMED+FULFILLED");
     }
 
     @Test
@@ -711,7 +744,23 @@ class MarketDayPackingServiceTest {
         String text = new PdfTextExtractor(reader).getTextFromPage(1);
         reader.close();
         assertThat(text).contains(
+                "Scope: Confirmed orders",
+                "Load sequence: handoff review > Market > Delivery > Pickup",
+                "After load-out, complete checked confirmed orders to deduct inventory and record revenue.",
                 "Account delivery note: Deliver to west loading dock", "Notes: AM");
+        assertThat(text).doesNotContain("Scope: CONFIRMED");
         assertThatIllegalArgumentException().isThrownBy(() -> service.generatePackingPdf(null));
+        MarketDayPlan range = new MarketDayPlan(plan.marketDate(), day, day.plusDays(2),
+                plan.scope(), plan.orderCount(), plan.pipelineValue(), plan.customers(),
+                plan.pickList(), plan.shortfallSkuCount(), plan.plainText());
+        byte[] rangePdf = service.generatePackingPdf(range);
+        PdfReader rangeReader = new PdfReader(rangePdf);
+        String rangeText = new PdfTextExtractor(rangeReader).getTextFromPage(1);
+        rangeReader.close();
+        assertThat(rangeText).contains("Date: 2026-07-12 to 2026-07-14")
+                .doesNotContain("2026-07-12 2026-07-14");
+        Path sample = Path.of("target", "ui-previews", "market-day-packing-sample.pdf");
+        Files.createDirectories(sample.getParent());
+        Files.write(sample, rangePdf);
     }
 }

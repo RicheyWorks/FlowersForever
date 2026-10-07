@@ -251,6 +251,46 @@ class HarvestServiceTest {
     }
 
     @Test
+    @DisplayName("same-crop unit change with no quantity delta cannot rewrite harvest semantics")
+    void rejectsUnitChangeWithoutQuantityDelta() {
+        HarvestEntry existing = new HarvestEntry(
+                LocalDate.of(2026, 7, 10), "Potatoes", 10, "lb", "Field A", "");
+        existing.setId(21L);
+        when(repository.findByIdForUpdate(21L)).thenReturn(Optional.of(existing));
+
+        HarvestEntry incoming = new HarvestEntry(
+                LocalDate.of(2026, 7, 10), "Potatoes", 10, "kg", "Field A", "");
+
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> service.update(21L, incoming))
+                .withMessageContaining("explicit inventory conversion");
+        assertThat(existing.getUnit()).isEqualTo("lb");
+        assertThat(existing.getQuantity()).isEqualTo(10);
+        verify(repository, never()).save(any());
+        verifyNoInteractions(inventoryService);
+    }
+
+    @Test
+    @DisplayName("same-crop unit change with a negative delta cannot decrement wrong units")
+    void rejectsUnitChangeWithNegativeQuantityDelta() {
+        HarvestEntry existing = new HarvestEntry(
+                LocalDate.of(2026, 7, 10), "Potatoes", 10, "lb", "Field A", "");
+        existing.setId(22L);
+        when(repository.findByIdForUpdate(22L)).thenReturn(Optional.of(existing));
+
+        HarvestEntry incoming = new HarvestEntry(
+                LocalDate.of(2026, 7, 10), "Potatoes", 7, "kg", "Field A", "");
+
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> service.update(22L, incoming))
+                .withMessageContaining("explicit inventory conversion");
+        assertThat(existing.getUnit()).isEqualTo("lb");
+        assertThat(existing.getQuantity()).isEqualTo(10);
+        verify(repository, never()).save(any());
+        verifyNoInteractions(inventoryService);
+    }
+
+    @Test
     @DisplayName("update() crop rename reverses old and applies new")
     void updateCropRename() {
         HarvestEntry existing = new HarvestEntry(
