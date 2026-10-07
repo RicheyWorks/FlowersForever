@@ -110,6 +110,10 @@ public class FlowerFarmApp {
                     () -> shutdownEmbeddedDatabase(datasource.get()), FlowerFarmApp::tellUser);
         } catch (RuntimeException | Error failure) {
             throw failure;
+        } catch (com.flowerfarm.backup.DamagedRecordsException damaged) {
+            tellUser(damaged.getMessage());
+            System.exit(2);
+            return null;
         } catch (Exception failure) {
             throw new IllegalStateException(failure);
         }

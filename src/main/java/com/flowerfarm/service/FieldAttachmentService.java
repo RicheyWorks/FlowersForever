@@ -188,6 +188,7 @@ public class FieldAttachmentService {
             Path temporary = Files.createTempFile(incoming, "attachment-", ".tmp");
             try {
                 Files.write(temporary, bytes);
+                com.flowerfarm.safety.SafeFiles.force(temporary);
                 moveNewContent(temporary, destination);
             } finally {
                 Files.deleteIfExists(temporary);
