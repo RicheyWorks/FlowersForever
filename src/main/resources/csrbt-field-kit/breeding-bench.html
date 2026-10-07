@@ -1,0 +1,2711 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Breeding Bench</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<!-- Webfonts load without blocking first paint: a stylesheet request that
+     hangs (one bar of signal) otherwise holds the page blank indefinitely,
+     which breaks the offline constraint in ADR-031. See tools/audit_offline.py. -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Nunito+Sans:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" media="print" data-webfont>
+<noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Nunito+Sans:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap"></noscript>
+<script>(function(){var l=document.querySelector('link[data-webfont]');if(!l)return;
+  var on=function(){l.media="all";};
+  if(l.sheet){on();}else{l.addEventListener("load",on);l.addEventListener("error",function(){});}
+})();</script>
+<style>
+  :root {
+    color-scheme: light;
+    --page:#F5F1E6; --surface:#FFFDF7; --surface-2:#F3EEE0; --ink:#23281F; --ink-2:#4B5344;
+    --muted:#6B6B5E; --border:#E3DCC9; --s1:#2C784C; --s1-deep:#236240; --s2:#A94F26; --s3:#2B6C8F;
+    --soft:#E9F0E7; --warn-bg:#F6EAD8; --danger:#B23A32; --danger-bg:#F6E7E5; --gold:#8A6408;
+    --shadow:0 1px 2px rgba(35,40,31,.06),0 10px 28px rgba(35,40,31,.08);
+    --head:"Fraunces",Georgia,serif;
+    --body:"Nunito Sans",system-ui,-apple-system,sans-serif;
+    --mono:"JetBrains Mono",ui-monospace,Menlo,monospace;
+  }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { margin:0; background:var(--page); color:var(--ink); font:16px/1.5 var(--body);
+    -webkit-font-smoothing:antialiased; overscroll-behavior-y:contain; }
+  .app { max-width:960px; margin:0 auto; padding:14px 16px calc(104px + env(safe-area-inset-bottom)); }
+  .top { display:flex; align-items:baseline; justify-content:space-between; gap:10px; padding:6px 2px 12px; flex-wrap:wrap; }
+  .brand { font-family:var(--head); font-weight:700; font-size:22px; letter-spacing:-0.01em; }
+  .brand span { color:var(--s1); }
+  .top a { font-family:var(--mono); font-size:11.5px; color:var(--muted); text-decoration:none;
+    display:inline-flex; align-items:center; min-height:44px; padding:0 6px; margin:-10px -6px; touch-action:manipulation; }
+  .top a:hover { color:var(--s1); }
+
+  .tabbar { position:fixed; left:0; right:0; bottom:0; z-index:20;
+    background:color-mix(in srgb, var(--surface) 94%, transparent); backdrop-filter:blur(10px);
+    border-top:1px solid var(--border); padding:8px max(8px, env(safe-area-inset-left)) calc(8px + env(safe-area-inset-bottom)); }
+  .tabbar .row { max-width:960px; margin:0 auto; display:grid; grid-template-columns:repeat(6,1fr); gap:4px; }
+  .tab { display:flex; flex-direction:column; align-items:center; gap:2px; border:0; background:none;
+    font:700 10.5px var(--body); color:var(--muted); padding:7px 1px; border-radius:12px; cursor:pointer;
+    min-height:54px; touch-action:manipulation; transition:background .15s ease, color .15s ease; }
+  .tab .ico { font-size:20px; line-height:1; }
+  .tab.on { color:var(--s1); background:var(--soft); }
+  .tab:active { transform:scale(.96); }
+  .pane { display:none; animation:fade .18s ease; }
+  .pane.on { display:block; }
+  @keyframes fade { from{opacity:0;transform:translateY(4px);} to{opacity:1;transform:none;} }
+  @media (prefers-reduced-motion: reduce){ .pane{animation:none;} }
+
+  h2 { font-family:var(--head); font-weight:600; font-size:20px; margin:6px 0 2px; }
+  h3 { font-family:var(--head); font-weight:600; font-size:16.5px; margin:16px 0 4px; }
+  .hint { color:var(--muted); font-size:14px; margin:0 0 12px; }
+  .card { background:var(--surface); border:1px solid var(--border); border-radius:16px;
+    padding:16px; box-shadow:var(--shadow); margin-bottom:14px; }
+  .fine { font-size:12.5px; color:var(--muted); margin-top:10px; line-height:1.55; }
+
+  input[type=text], input[type=number], input[type=date], select, textarea {
+    background:var(--surface); color:var(--ink); border:1.5px solid var(--border); border-radius:12px;
+    padding:11px 14px; font:16px var(--body); min-height:48px; max-width:100%; }
+  textarea { min-height:78px; line-height:1.5; width:100%; }
+  input:focus, select:focus, textarea:focus { outline:none; border-color:var(--s1); box-shadow:0 0 0 3px rgba(44,120,76,.18); }
+  input[type=number] { width:110px; }
+  label.f { display:flex; flex-direction:column; gap:5px; font-size:13px; font-weight:700; color:var(--ink-2); min-width:0; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; }
+  .grid label.f input, .grid label.f select { width:100%; }
+
+  .btn { border:0; border-radius:12px; padding:12px 18px; font:800 15px var(--body); cursor:pointer;
+    min-height:48px; touch-action:manipulation; transition:transform .1s ease, background .15s ease; }
+  .btn:active { transform:scale(.97); }
+  .btn-go { background:var(--s1); color:#fff; } .btn-go:hover { background:var(--s1-deep); }
+  .btn-soft { background:var(--soft); color:var(--s1); }
+  .btn-ghost { background:none; border:1.5px solid var(--border); color:var(--ink-2); }
+  .btn-ghost:hover { border-color:var(--s1); color:var(--s1); }
+  .btn-row { display:flex; gap:8px; flex-wrap:wrap; margin-top:12px; align-items:end; }
+
+  .kopts { display:flex; flex-wrap:wrap; gap:8px; }
+  .kopt { border:1.5px solid var(--border); background:var(--surface); border-radius:14px; padding:10px 14px;
+    font:700 14px var(--body); color:var(--ink-2); cursor:pointer; min-height:46px; touch-action:manipulation;
+    display:inline-flex; flex-direction:column; align-items:flex-start; gap:1px; }
+  .kopt small { font-weight:400; font-size:11px; color:var(--muted); font-family:var(--mono); }
+  .kopt.on { border-color:var(--s1); background:var(--soft); color:var(--s1); }
+
+  .covscale { display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; }
+  .cv { border:1.5px solid var(--border); background:var(--surface); border-radius:11px; min-width:52px;
+    padding:8px 6px; font:800 15px var(--body); color:var(--ink-2); cursor:pointer; min-height:52px;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1px; touch-action:manipulation; }
+  .cv small { font:400 9.5px var(--mono); color:var(--muted); }
+  .cv.on { border-color:var(--s1); background:var(--soft); color:var(--s1); }
+  .cv.on small { color:var(--s1-deep); }
+
+  .tiles { display:flex; flex-wrap:wrap; gap:8px; margin:12px 0 2px; }
+  .tile { background:var(--surface-2); border:1px solid var(--border); border-radius:12px; padding:9px 14px; min-width:96px; }
+  .tile .v { font-family:var(--head); font-weight:700; font-size:21px; font-variant-numeric:tabular-nums; }
+  .tile .l { font-size:11px; color:var(--muted); }
+  .verdict { border-radius:12px; padding:13px 16px; margin:12px 0 2px; font-size:15.5px; line-height:1.55;
+    border-left:4px solid var(--s1); background:var(--soft); color:var(--ink-2); }
+  .verdict b { color:var(--ink); }
+  .verdict.warn { border-left-color:var(--s2); background:var(--warn-bg); }
+  .verdict.act { border-left-color:var(--danger); background:var(--danger-bg); }
+
+  .tw { overflow-x:auto; -webkit-overflow-scrolling:touch; margin:10px 0; }
+  table { border-collapse:collapse; width:100%; font-size:14px; }
+  th,td { border:1px solid var(--border); padding:6px 9px; text-align:left; vertical-align:top; white-space:nowrap; }
+  th { background:var(--soft); font-family:var(--head); font-weight:600; font-size:13px; }
+  td.n, th.n { text-align:right; font-variant-numeric:tabular-nums; font-family:var(--mono); font-size:13px; }
+  td i { font-style:italic; color:var(--ink-2); }
+
+  .rowlist { display:grid; grid-template-columns:minmax(0,1fr); gap:8px; margin-top:10px; }
+  /* minmax(0,1fr), not the implicit auto track: an auto track is at least its
+     widest row's min-content, and a row whose badge, count and remove button
+     do not shrink pushed a phone's page 4px sideways once a host was recorded
+     (the harness's page walk found it, ADR-128). */
+  .row2 { display:flex; align-items:center; gap:10px; background:var(--surface); border:1px solid var(--border);
+    border-radius:12px; padding:10px 13px; font-size:15px; }
+  .row2.inv { border-left:3px solid var(--danger); }
+  .row2 .g { flex:1 1 220px; min-width:0; }
+  /* A row wraps rather than squeezes: below 220px for the name, the badge,
+     the count and the remove button take the next line together (ADR-128). */
+  .row2 { flex-wrap:wrap; }
+  .row2 .g b { font-family:var(--head); font-size:15.5px; }
+  .row2 .g b i { font-style:italic; font-weight:400; color:var(--ink-2); font-size:14px; }
+  .row2 .g span { display:block; color:var(--muted); font-size:12.5px; font-family:var(--mono); margin-top:1px;
+    overflow:hidden; text-overflow:ellipsis; }
+  .row2 .cov { font-family:var(--head); font-weight:700; font-size:17px; color:var(--s1); min-width:46px; text-align:right; }
+  .row2 button { border:0; background:none; color:var(--muted); font-size:15px; padding:9px 11px; cursor:pointer; min-height:44px; min-width:44px; }
+  .row2 button:hover { color:var(--danger); }
+
+  .bars { display:grid; gap:6px; margin-top:10px; }
+  .bar { display:grid; grid-template-columns:132px 1fr 54px; gap:8px; align-items:center; font-size:13.5px; }
+  .bar .nm { font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .bar .tr { display:block; background:var(--surface-2); border:1px solid var(--border); border-radius:8px; height:20px; overflow:hidden; }
+  .bar .fl { display:block; height:100%; background:var(--s1); border-radius:7px 0 0 7px; transition:width .4s ease; }
+  .bar .fl.inv { background:var(--s2); }
+  .bar .pc { text-align:right; font-variant-numeric:tabular-nums; color:var(--ink-2); font-family:var(--mono); font-size:12.5px; }
+
+  .label { background:#fff; border:1px solid var(--ink); border-radius:2px; padding:14px 16px; margin-top:10px;
+    font:12.5px/1.5 var(--body); color:#000; max-width:440px; }
+  .label .inst { font-family:var(--head); font-weight:700; font-size:12px; letter-spacing:.06em;
+    text-transform:uppercase; text-align:center; border-bottom:1px solid #000; padding-bottom:5px; margin-bottom:7px; }
+  .label .sci { font-style:italic; font-weight:700; font-size:14px; }
+  .label .row { margin:3px 0; }
+  .label .k { font-weight:700; }
+  .label .coll { margin-top:8px; padding-top:6px; border-top:1px solid #999; display:flex; justify-content:space-between; }
+
+  pre.export { background:#23281F; color:#E8E4D5; border-radius:12px; padding:14px 16px; overflow-x:auto;
+    font:12.5px/1.65 var(--mono); max-height:340px; }
+  code { font-family:var(--mono); font-size:.82em; background:var(--surface-2); border:1px solid var(--border); border-radius:5px; padding:1px 5px; }
+
+  .toast { position:fixed; left:50%; bottom:84px; transform:translateX(-50%) translateY(90px); z-index:30;
+    background:var(--ink); color:#F5F1E6; border-radius:999px; padding:10px 22px; font:700 14px var(--body);
+    transition:transform .25s ease; pointer-events:none; max-width:88vw; text-align:center; }
+  .toast.on { transform:translateX(-50%) translateY(0); }
+
+  @media print {
+    .tabbar, .btn, .kopts, .covscale, .top a, .noprint { display:none !important; }
+    body { background:#fff; } .pane { display:block !important; }
+    .app { padding-bottom:0; } .card { break-inside:avoid; } table { font-size:10pt; }
+    pre.export { background:#fff; color:#000; border:1px solid #ccc; max-height:none; }
+    .label { break-inside:avoid; page-break-inside:avoid; }
+  }
+
+
+  /* ---- fungal additions ---- */
+  .sw { display:flex; flex-wrap:wrap; gap:7px; margin-top:6px; }
+  .swc { border:1.5px solid var(--border); background:var(--surface); border-radius:12px; padding:7px 11px 8px;
+    font:700 12.5px var(--body); color:var(--ink-2); cursor:pointer; min-height:56px; touch-action:manipulation;
+    display:flex; flex-direction:column; align-items:center; gap:5px; min-width:74px; }
+  .swc .chip { width:44px; height:18px; border-radius:5px; border:1px solid rgba(35,40,31,.28); display:block; }
+  .swc.on { border-color:var(--s1); background:var(--soft); color:var(--s1); }
+
+  .chk { display:flex; flex-wrap:wrap; gap:7px; margin-top:6px; }
+  .ck { border:1.5px solid var(--border); background:var(--surface); border-radius:999px; padding:9px 14px;
+    font:700 13.5px var(--body); color:var(--ink-2); cursor:pointer; min-height:44px; touch-action:manipulation; }
+  .ck.on { border-color:var(--s1); background:var(--soft); color:var(--s1); }
+  .ck.on::before { content:"\2713 "; }
+
+  .rg { display:grid; gap:9px; margin-top:8px; }
+  .rgi { border:1px solid var(--border); background:var(--surface); border-radius:13px; padding:11px 13px; }
+  .rgi .hd { display:flex; align-items:center; justify-content:space-between; gap:9px; flex-wrap:wrap; }
+  .rgi .nm { font-family:var(--head); font-weight:700; font-size:15px; }
+  .rgi .nm em { font-style:normal; font-family:var(--mono); font-size:11.5px; color:var(--muted); margin-left:6px; }
+  .rgi .wh { font-size:12.5px; color:var(--muted); line-height:1.5; margin-top:5px; }
+  .rgi input[type=text] { width:100%; margin-top:8px; min-height:44px; }
+  .rgi.haz { border-left:3px solid var(--s2); }
+
+  .guild { display:inline-block; font:700 10.5px var(--mono); letter-spacing:.05em; text-transform:uppercase;
+    border-radius:999px; padding:3px 9px; border:1px solid var(--border); background:var(--surface-2); color:var(--ink-2); }
+  .guild.ecm { border-color:var(--s1); color:var(--s1); background:var(--soft); }
+  .guild.woodsap, .guild.littersap { border-color:var(--s3); color:var(--s3); background:#E6EEF3; }
+  .guild.par { border-color:var(--danger); color:var(--danger); background:var(--danger-bg); }
+  .guild.lich { border-color:var(--gold); color:#7a5c07; background:#F5EFD9; }
+  .guild.myco { border-color:var(--s2); color:var(--s2); background:var(--warn-bg); }
+  .guild.mixed { border-style:dashed; }
+
+  .mx td.h0 { color:var(--muted); }
+  .mx td.h1 { background:#EDF4EA; font-weight:700; }
+  .mx td.h2 { background:var(--s1); color:#fff; font-weight:700; }
+
+  .never { border:2px solid var(--danger); background:var(--danger-bg); border-radius:14px; padding:15px 17px;
+    margin:14px 0; font-size:15px; line-height:1.6; color:var(--ink); }
+  .never b { font-family:var(--head); display:block; font-size:16px; margin-bottom:5px; color:var(--danger); }
+
+  .drylog { display:grid; grid-template-columns:repeat(auto-fit,minmax(128px,1fr)); gap:9px; margin-top:8px; }
+
+
+  /* ---- bench additions ---- */
+  .stat { display:grid; grid-template-columns:repeat(auto-fit,minmax(132px,1fr)); gap:9px; margin:12px 0 2px; }
+  .st { background:var(--surface-2); border:1px solid var(--border); border-radius:12px; padding:10px 13px; }
+  .st .v { font-family:var(--head); font-weight:700; font-size:22px; font-variant-numeric:tabular-nums; line-height:1.1; }
+  .st .l { font-size:11px; color:var(--muted); margin-top:2px; line-height:1.35; }
+  .st.hi .v { color:var(--s1); } .st.bad .v { color:var(--danger); } .st.warnv .v { color:var(--s2); }
+  .eq { font-family:var(--mono); font-size:12.5px; background:var(--surface-2); border:1px solid var(--border);
+    border-radius:9px; padding:9px 12px; margin:9px 0; color:var(--ink-2); overflow-x:auto; }
+  .scat { display:block; width:100%; height:auto; background:var(--surface); border:1px solid var(--border);
+    border-radius:12px; margin-top:10px; }
+  .warnbox { border:2px solid var(--s2); background:var(--warn-bg); border-radius:14px; padding:14px 17px;
+    margin:14px 0; font-size:15px; line-height:1.6; }
+  .warnbox b { font-family:var(--head); display:block; font-size:16px; margin-bottom:4px; color:var(--s2); }
+  .refuse { border:2px solid var(--danger); background:var(--danger-bg); border-radius:14px; padding:15px 18px;
+    margin:14px 0; font-size:15px; line-height:1.6; }
+  .refuse b { font-family:var(--head); display:block; font-size:16px; margin-bottom:4px; color:var(--danger); }
+  td.ok { color:var(--s1); font-weight:700; } td.no { color:var(--danger); font-weight:700; }
+
+
+  /* ============ Field Entry Kit v1.8.0 ============
+     Large-target, high-contrast entry controls. Sizing is driven by --tap
+     rather than per-component numbers so one token retunes the whole kit for
+     gloves, cold hands or a wall-mounted tablet. */
+  :root {
+    --tap: 60px;            /* primary control height  */
+    --tap-sm: 48px;         /* secondary control height */
+    --fek-r: 16px;
+    /* These three moved for WCAG AA and the move was made in the pages, by
+       hand, and never came back here -- because the CSS half of fek_emit was
+       dead code and nobody could tell. Source and pages agreed only by
+       ramp-1 moved here too: at its old teal, white label text on a selected
+       button measured 3.94:1 and the .92-white sub-line 3.59:1, both under AA.
+       No page had caught it because none defaulted to a ramp-1 option until the
+       deployment log did. Every ramp is now checked against both, in
+       verify_contrast_slice.
+       The pre-fix ramp values are named in verify_contrast_slice,
+       which greps for them literally across every page -- so they are not
+       repeated here, because a comment naming them is itself a page carrying
+       them, and the suite is right not to care why. */
+    --ramp-0:#2B6C8F; --ramp-1:#2F7373; --ramp-2:#2C784C;
+    --ramp-3:#8A6408; --ramp-4:#A94F26; --ramp-5:#B23A32;
+    --fek-line:#C7C0AC;
+    /* v1.8.0 (ADR-254): the edge of a box you write in. --fek-line is a
+       decorative line (a drop zone's dash, a card's rule) and reads 1.79:1;
+       a control's edge carries the WCAG 1.4.11 floor of 3:1, and this is the
+       colour every page's own rule already gives its inputs. */
+    --fek-edge:#8E8160;
+  }
+  .fek-lab { display:block; font:800 15px var(--body); color:var(--ink-2);
+    letter-spacing:.01em; margin:0 0 6px; }
+  .fek-lab .u { font:600 12.5px var(--mono); color:var(--muted); margin-left:6px; }
+  .fek-help { font-size:13.5px; color:var(--muted); line-height:1.5; margin:6px 0 0; }
+  .fek-row { margin:0 0 20px; }
+
+  /* --- stepper: the workhorse numeric entry --- */
+  .fek-step { display:flex; align-items:stretch; gap:0; border:2px solid var(--border);
+    border-radius:var(--fek-r); overflow:hidden; background:var(--surface); max-width:340px; }
+  .fek-step button { border:0; background:var(--surface-2); color:var(--ink);
+    font:800 30px var(--body); line-height:1; width:calc(var(--tap) + 8px); min-height:var(--tap);
+    cursor:pointer; touch-action:manipulation; transition:background .12s; }
+  .fek-step button:hover { background:var(--soft); color:var(--s1); }
+  .fek-step button:active { background:var(--s1); color:#fff; }
+  .fek-step .val { flex:1; min-width:0; text-align:center; border:0; background:none;
+    font:800 30px var(--head); color:var(--ink); font-variant-numeric:tabular-nums;
+    -moz-appearance:textfield; padding:0 4px; }
+  .fek-step .val::-webkit-outer-spin-button,
+  .fek-step .val::-webkit-inner-spin-button { -webkit-appearance:none; margin:0; }
+  .fek-step .val:focus { outline:none; background:var(--soft); }
+
+  /* --- segmented ordinal dial with a colour ramp --- */
+  .fek-dial { display:flex; flex-wrap:wrap; gap:8px; }
+  .fek-dial button { flex:1 1 auto; min-width:72px; min-height:var(--tap);
+    border:2px solid var(--border); border-radius:var(--fek-r); background:var(--surface);
+    font:800 17px var(--body); color:var(--ink-2); cursor:pointer; touch-action:manipulation;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px;
+    padding:6px 8px; transition:transform .08s, border-color .12s, background .12s; }
+  .fek-dial button small { font:600 11px var(--mono); color:var(--muted); letter-spacing:.02em; }
+  .fek-dial button:active { transform:scale(.96); }
+  .fek-dial button.on { color:#fff; border-color:transparent; }
+  .fek-dial button.on small { color:rgba(255,255,255,.92); }
+  .fek-dial button.on[data-r="0"]{background:var(--ramp-0);}
+  .fek-dial button.on[data-r="1"]{background:var(--ramp-1);}
+  .fek-dial button.on[data-r="2"]{background:var(--ramp-2);}
+  .fek-dial button.on[data-r="3"]{background:var(--ramp-3);}
+  .fek-dial button.on[data-r="4"]{background:var(--ramp-4);}
+  .fek-dial button.on[data-r="5"]{background:var(--ramp-5);}
+
+  /* --- field: a typed value from an instrument readout ---
+     A stepper is the wrong control for a number you READ off a machine to three
+     decimals: you would tap two thousand times to reach 1.842. This is a plain
+     numeric entry sized like the rest of the kit, with the unit shown and the
+     decimal keypad requested, and nothing that pretends the value is scrollable. */
+  .fek-field { display:flex; align-items:stretch; gap:0; border:2px solid var(--border);
+    border-radius:var(--fek-r); overflow:hidden; background:var(--surface); max-width:340px; }
+  .fek-field input { flex:1; min-width:0; border:0; background:none; text-align:right;
+    font:800 26px var(--head); color:var(--ink); font-variant-numeric:tabular-nums;
+    -moz-appearance:textfield; padding:0 12px; min-height:var(--tap); }
+  .fek-field input::-webkit-outer-spin-button,
+  .fek-field input::-webkit-inner-spin-button { -webkit-appearance:none; margin:0; }
+  .fek-field input:focus { outline:none; background:var(--soft); }
+  .fek-field input::placeholder { color:var(--muted); font-weight:600; font-size:20px; }
+  .fek-field .u { display:flex; align-items:center; padding:0 14px; background:var(--surface-2);
+    font:700 13px var(--mono); color:var(--muted); border-left:2px solid var(--border); white-space:nowrap; }
+  .fek-field.empty { border-style:dashed; }
+
+  /* --- a box the browser could not parse (v1.4.0, ADR-151) ---
+     Not the same state as empty, and it must not look like it. An empty box is
+     "not recorded yet"; this one holds the reader's own characters and hands
+     the page back the empty string, so without a state of its own the two are
+     one thing on screen as well as in the value. */
+  .fek-step.bad, .fek-field.bad { border-color:var(--ramp-5); border-style:solid; }
+  .fek-bad { font:700 13.5px var(--body); color:var(--ramp-5); margin:6px 0 0; }
+  input[type="number"].fek-badbox { border-color:var(--ramp-5) !important; }
+
+  /* --- big toggle chips --- */
+  .fek-chips { display:flex; flex-wrap:wrap; gap:9px; }
+  .fek-chip { min-height:var(--tap-sm); border:2px solid var(--border); border-radius:999px;
+    background:var(--surface); font:800 15.5px var(--body); color:var(--ink-2);
+    padding:0 20px; cursor:pointer; touch-action:manipulation; display:inline-flex;
+    align-items:center; gap:8px; transition:transform .08s, border-color .12s, background .12s; }
+  .fek-chip:active { transform:scale(.96); }
+  .fek-chip.on { border-color:var(--s1); background:var(--soft); color:var(--s1-deep); }
+  .fek-chip.on::before { content:"\2713"; font-size:17px; }
+
+  /* --- slider with a live bubble --- */
+  .fek-slide { display:flex; align-items:center; gap:14px; }
+  .fek-slide input[type=range] { flex:1; min-width:0; height:var(--tap-sm); -webkit-appearance:none;
+    background:transparent; cursor:pointer; touch-action:manipulation; }
+  .fek-slide input[type=range]::-webkit-slider-runnable-track { height:14px; border-radius:8px;
+    background:linear-gradient(90deg,var(--ramp-0),var(--ramp-2),var(--ramp-3),var(--ramp-5)); }
+  .fek-slide input[type=range]::-moz-range-track { height:14px; border-radius:8px;
+    background:linear-gradient(90deg,var(--ramp-0),var(--ramp-2),var(--ramp-3),var(--ramp-5)); }
+  .fek-slide input[type=range]::-webkit-slider-thumb { -webkit-appearance:none; width:34px; height:34px;
+    border-radius:50%; background:#fff; border:3px solid var(--ink); margin-top:-10px;
+    box-shadow:0 2px 6px rgba(35,40,31,.3); }
+  .fek-slide input[type=range]::-moz-range-thumb { width:34px; height:34px; border-radius:50%;
+    background:#fff; border:3px solid var(--ink); box-shadow:0 2px 6px rgba(35,40,31,.3); }
+  .fek-slide .bub { font:800 26px var(--head); font-variant-numeric:tabular-nums; color:var(--ink);
+    min-width:86px; text-align:right; }
+  .fek-slide .bub span { font:600 13px var(--mono); color:var(--muted); margin-left:3px; }
+
+  /* --- big picker: replaces <select> for long lists --- */
+  .fek-pick { border:2px solid var(--border); border-radius:var(--fek-r); background:var(--surface);
+    overflow:hidden; }
+  .fek-pick .search { width:100%; border:0; border-bottom:2px solid var(--border);
+    font:700 17px var(--body); padding:0 16px; min-height:var(--tap); background:var(--surface-2); }
+  .fek-pick .search:focus { outline:none; background:var(--soft); }
+  .fek-pick .opts { max-height:264px; overflow-y:auto; -webkit-overflow-scrolling:touch; }
+  .fek-pick .opt { display:block; width:100%; text-align:left; border:0; border-bottom:1px solid var(--border);
+    background:none; font:700 16.5px var(--body); color:var(--ink); min-height:var(--tap-sm);
+    padding:10px 16px; cursor:pointer; touch-action:manipulation; }
+  .fek-pick .opt small { display:block; font:400 12.5px var(--mono); color:var(--muted); margin-top:2px; }
+  .fek-pick .opt:hover { background:var(--soft); }
+  .fek-pick .opt.on { background:var(--s1); color:#fff; }
+  .fek-pick .opt.on small { color:rgba(255,255,255,.92); }
+  .fek-pick .none { padding:16px; color:var(--muted); font-size:14px; }
+
+  /* --- readout tiles, sized to be read at arm's length --- */
+  .fek-tiles { display:grid; grid-template-columns:repeat(auto-fit,minmax(148px,1fr)); gap:11px; margin:14px 0 2px; }
+  .fek-tile { border:2px solid var(--border); border-radius:var(--fek-r); padding:13px 15px; background:var(--surface); }
+  .fek-tile .v { font:800 30px var(--head); font-variant-numeric:tabular-nums; line-height:1.05; color:var(--ink); }
+  .fek-tile .l { font:700 12px var(--body); color:var(--muted); margin-top:4px; letter-spacing:.02em; }
+  .fek-tile.good { border-color:var(--ramp-2); } .fek-tile.good .v { color:var(--ramp-2); }
+  .fek-tile.warn { border-color:var(--ramp-3); } .fek-tile.warn .v { color:#8a6508; }
+  .fek-tile.bad  { border-color:var(--ramp-5); } .fek-tile.bad  .v { color:var(--ramp-5); }
+  .fek-tile.cold { border-color:var(--ramp-0); } .fek-tile.cold .v { color:var(--ramp-0); }
+
+  /* --- banner: the verdict, big --- */
+  .fek-banner { border-radius:var(--fek-r); padding:16px 19px; margin:14px 0; font-size:16px;
+    line-height:1.55; border-left:7px solid var(--ramp-2); background:var(--soft); color:var(--ink-2); }
+  .fek-banner b { font-family:var(--head); color:var(--ink); font-size:17.5px; display:block; margin-bottom:4px; }
+  .fek-banner.warn { border-left-color:var(--ramp-3); background:var(--warn-bg); }
+  .fek-banner.bad  { border-left-color:var(--ramp-5); background:var(--danger-bg); }
+  .fek-banner.cold { border-left-color:var(--ramp-0); background:#E6EEF3; }
+
+  /* --- photographs: the record carries the reference, not the image ---
+     (v1.5.0, ADR-201). Sized for a gloved thumb like the rest of the kit, and
+     the thumbnail is large enough to tell two bark shots apart at arm's
+     length, which is the only reason it is on screen at all. */
+  .fek-drop { border:2.5px dashed var(--fek-line); border-radius:var(--fek-r);
+    background:var(--surface); padding:18px 16px; text-align:center;
+    transition:border-color .12s, background .12s; }
+  .fek-drop.on { border-color:var(--ramp-2); background:var(--soft); border-style:solid; }
+  .fek-drop p { margin:0 0 10px; font-size:15px; color:var(--ink-2); }
+  .fek-drop button { min-height:var(--tap); border:0; border-radius:var(--fek-r);
+    background:var(--ramp-2); color:#fff; font:800 16px var(--body); padding:0 22px;
+    cursor:pointer; touch-action:manipulation; }
+  .fek-drop button:active { transform:scale(.97); }
+  .fek-photos { display:grid; grid-template-columns:repeat(auto-fill,minmax(210px,1fr));
+    gap:12px; margin-top:14px; }
+  .fek-photo { border:2px solid var(--border); border-radius:var(--fek-r);
+    background:var(--surface); overflow:hidden; }
+  .fek-photo img { display:block; width:100%; height:150px; object-fit:cover; background:var(--surface-2); }
+  .fek-photo .m { padding:10px 12px 12px; }
+  .fek-photo .m code { display:block; font:500 11.5px var(--mono); color:var(--muted);
+    word-break:break-all; line-height:1.45; }
+  .fek-photo .m input, .fek-photo .m textarea { width:100%; margin-top:8px; border:1.5px solid var(--fek-edge);
+    border-radius:10px; padding:9px 10px; font:15px var(--body); background:var(--surface);
+    color:var(--ink); min-height:44px; }
+  .fek-photo .m textarea { min-height:62px; resize:vertical; }
+  .fek-photo .rm, .fek-photo .act { margin-top:8px; min-height:44px; width:100%; border:1.5px solid var(--fek-line);
+    border-radius:10px; background:none; color:var(--ink-2); font:700 14px var(--body); cursor:pointer; }
+  .fek-photo .rm:hover { border-color:var(--ramp-5); color:var(--ramp-5); }
+  .fek-photo .act:hover { border-color:var(--ramp-2); color:var(--ramp-2); }
+  .fek-await { margin:8px 0 0; padding:9px 11px; border:1.5px dashed var(--accent, #7A6A3A);
+    border-radius:10px; background:var(--surface-2, #F3EEE0); }
+  .fek-await b { color:var(--accent, #7A6A3A); }
+  .fek-await ul { margin:6px 0 0; padding:0 0 0 18px; font-family:var(--mono, monospace);
+    font-size:11.5px; color:var(--ink-2, #4B5344); line-height:1.6; }
+  .fek-await .cap { color:var(--muted, #6B6B5E); }
+  .fek-shot { font:700 13.5px var(--body); color:var(--ink-2); margin:10px 0 0; min-height:1.2em; }
+  .fek-shot.bad { color:var(--ramp-5); }
+  @media print { .fek-drop, .fek-photo .rm, .fek-photo .act { display:none !important; }
+                 .fek-photo img { height:auto; } }
+
+  @media (max-width:420px){ :root { --tap:56px; --tap-sm:46px; } .fek-step .val { font-size:26px; } }
+  @media print { .fek-step button, .fek-pick .search { display:none; } }
+  /* ============ Keep (local autosave) v1.4.0 ============ */
+  .keep { display:flex; flex-wrap:wrap; align-items:center; gap:10px;
+    background:var(--surface-2, #F3EEE0); border:1px solid var(--border, #E3DCC9);
+    border-radius:12px; padding:10px 13px; margin:12px 0 2px; }
+  .keep .st { font-family:var(--mono, monospace); font-size:11.5px; color:var(--muted, #6B6B5E);
+    line-height:1.5; flex:1 1 220px; min-width:0; }
+  .keep .st b { color:var(--ink, #23281F); }
+  .keep.bad { border-color:var(--danger, #B23A32); background:var(--danger-bg, #F6E7E5); }
+  .keep.bad .st b { color:var(--danger, #B23A32); }
+  .keep button { border:1.5px solid var(--border, #E3DCC9); background:none; border-radius:10px;
+    padding:0 14px; min-height:var(--tap, 44px); font:700 13px var(--body, sans-serif);
+    color:var(--ink-2, #4B5344); cursor:pointer; touch-action:manipulation; }
+  .keep button:hover { border-color:var(--danger, #B23A32); color:var(--danger, #B23A32); }
+  .keep .note { flex:1 1 100%; font-size:12px; color:var(--muted, #6B6B5E); line-height:1.5; }
+  @media print { .keep { display:none !important; } }
+
+  .rail { margin:26px 0 4px; }
+  .rail .rl { font-family:var(--mono); font-size:11px; letter-spacing:.14em; text-transform:uppercase; color:var(--muted); margin:0 2px 8px; }
+  .rail .chips { display:flex; flex-wrap:wrap; gap:8px; }
+  .rail a { display:inline-flex; align-items:center; gap:7px; text-decoration:none; font:700 13.5px var(--body);
+    color:var(--ink-2); background:var(--surface); border:1px solid var(--border); border-radius:999px;
+    padding:9px 15px; min-height:44px; box-shadow:var(--shadow); touch-action:manipulation; }
+  .rail a:hover { border-color:var(--s1); color:var(--s1); }
+  .rail a[aria-current="page"] { background:var(--soft); border-color:var(--s1); color:var(--s1); }
+  .rail a.ref { font-weight:600; color:var(--muted); background:none; box-shadow:none; }
+  @media print { .rail { display:none !important; } }
+
+  /* WCAG 1.4.11 non-text contrast: the visible edge of a control you are meant
+     to write in is the only thing telling you where to write, so it carries the
+     3:1 floor. Decorative card borders are not controls and stay quiet. */
+  input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]),
+  select, textarea { border-color: #8E8160; }
+  /* ============ Outbox (what has not left this device) v1.0.0 ============ */
+  .outbox { background:var(--surface-2, #F3EEE0); border:1px solid var(--border, #E3DCC9);
+    border-radius:12px; padding:10px 13px; margin:4px 0 2px; }
+  .outbox .st { font-family:var(--mono, monospace); font-size:11.5px; color:var(--muted, #6B6B5E);
+    line-height:1.5; margin:0; }
+  .outbox .st b { color:var(--ink, #23281F); }
+  .outbox ul.pend { margin:7px 0 0; padding:0 0 0 18px; font-family:var(--mono, monospace);
+    font-size:11.5px; color:var(--ink-2, #4B5344); line-height:1.6; }
+  .outbox ul.pend li::marker { color:var(--muted, #6B6B5E); }
+  .outbox ul.pend .why { color:var(--muted, #6B6B5E); }
+  .outbox .note { margin:7px 0 0; font-size:12px; color:var(--muted, #6B6B5E); line-height:1.5; }
+  .outbox.hot { border-color:var(--accent, #7A6A3A); }
+  .outbox.hot .st b { color:var(--accent, #7A6A3A); }
+  .outbox.bad { border-color:var(--danger, #B23A32); background:var(--danger-bg, #F6E7E5); }
+  .outbox.bad .st b { color:var(--danger, #B23A32); }
+  @media print { .outbox { display:none !important; } }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="top">
+    <div class="brand">🥕 Breeding <span>Bench</span></div>
+    <a href="ecology.html">part of the science kit →</a>
+  </div>
+
+  <!-- ============ POPULATION ============ -->
+  <section class="pane on" id="p-pop">
+    <h2>Population</h2>
+    <p class="hint">How many plants you keep seed from decides whether the variety survives contact with
+      you. This is the number most seed savers get wrong.</p>
+    <div class="card">
+      <div id="popPick"></div>
+      <div id="popN"></div>
+    </div>
+    <div class="card" id="popOut"></div>
+    <div class="card" id="neOut"></div>
+  </section>
+
+  <!-- ============ ISOLATION ============ -->
+  <section class="pane" id="p-iso">
+    <h2>Isolation</h2>
+    <p class="hint">What else is flowering nearby, and how far away it needs to be.</p>
+    <div class="card" id="isoRefuse"></div>
+    <div class="card">
+      <div id="isoPick"></div>
+      <div id="isoEntry"></div>
+    </div>
+    <div class="card" id="isoOut"></div>
+  </section>
+
+  <!-- ============ SELECT ============ -->
+  <section class="pane" id="p-sel">
+    <h2>Selection</h2>
+    <p class="hint">Save seed from the best plants and the population moves. This is how far, and how fast.</p>
+    <div class="card">
+      <h3 style="margin-top:0">Truncation selection</h3>
+      <div id="selEntry"></div>
+    </div>
+    <div class="card" id="selOut"></div>
+    <div class="card">
+      <h3 style="margin-top:0">Roguing log</h3>
+      <p class="hint" style="margin-bottom:8px">Pulling off-types before they shed pollen is selection too,
+        and it is the half people forget to write down.</p>
+      <div id="rogEntry"></div>
+      <div class="btn-row">
+        <button class="btn btn-go" id="rAdd" type="button">Log roguing</button>
+        <button class="btn btn-ghost" id="rUndo" type="button">↩ Undo</button>
+      </div>
+      <div class="rowlist" id="rList"></div>
+      <div id="rogOut"></div>
+    </div>
+  </section>
+
+  <!-- ============ TRIAL ============ -->
+  <section class="pane" id="p-tri">
+    <h2>Variety trial</h2>
+    <p class="hint">Replicated and blocked, or it is a garden anecdote. Enter one plot yield at a time.</p>
+    <div class="card">
+      <div id="triEntry"></div>
+      <div class="btn-row">
+        <button class="btn btn-go" id="tAdd" type="button">Add plot</button>
+        <button class="btn btn-ghost" id="tUndo" type="button">↩ Undo</button>
+        <button class="btn btn-ghost" id="tClear" type="button">Clear trial</button>
+        <button class="btn btn-ghost" id="tDemo" type="button">Worked example</button>
+      </div>
+    </div>
+    <div class="card" id="triOut"></div>
+    <div class="card" id="triTable"></div>
+  </section>
+
+  <!-- ============ SEED ============ -->
+  <section class="pane" id="p-seed">
+    <h2>Seed</h2>
+    <p class="hint">A germination test is the only thing that tells you what you actually have in the jar.</p>
+    <div class="card">
+      <h3 style="margin-top:0">Germination test</h3>
+      <div id="germEntry"></div>
+      <div id="germOut"></div>
+    </div>
+    <div class="card">
+      <h3 style="margin-top:0">Storage</h3>
+      <div id="storEntry"></div>
+      <div id="storOut"></div>
+    </div>
+  </section>
+
+  <!-- ============ METHOD ============ -->
+  <section class="pane" id="p-met">
+    <h2>Method</h2>
+    <div id="keepBox"></div>
+    <div id="sendBox"></div>
+
+    <!-- ADR-208. EIGHTEEN typed values across a roguing log and a replicated yield
+         trial, and no way to get any of it off the screen. The audit that exists to
+         find exactly this missed the page for months, because it asks whether a page
+         has an output BUTTON and this one had a number box captioned "Plants you plan
+         to save seed from" -- a label with `save` in it, pressed as if it were an
+         export, handing nothing over, and filed as a silent button nothing named. -->
+    <div class="card">
+      <h3 style="margin-top:0">Take the bench with you</h3>
+      <p class="hint" style="margin-top:0">The roguing log and the yield trial, as one sheet, with the
+        population and selection figures they were read against. The CSV is one section per table, which
+        is what a spreadsheet opens cleanly and what a trial report needs beside it.</p>
+      <div class="btn-row">
+        <button class="btn btn-go" id="bCopy" type="button">Copy the bench sheet</button>
+        <button class="btn btn-ghost" id="bDown" type="button">Download bench.csv</button>
+      </div>
+      <p class="hint" style="margin-top:8px">If your viewer blocks downloads (some hosted viewers
+        do, silently), use <b>Copy the bench sheet</b> and paste into a file. The outbox below
+        tracks the copy and not the download, because a refused download says nothing a page can
+        hear.</p>
+      <div id="bOut" class="hint" style="margin-top:8px"></div>
+    </div>
+
+    <div class="card">
+      <h3 style="margin-top:0">Minimum population</h3>
+      <p class="fine" style="margin-top:0">The rule this page applies is <b>seed saved from at least 20
+        inbreeding or 100 outbreeding individuals per variety</b> &mdash; the seed-savers' <b>rule of thumb</b>,
+        not a measured threshold; the per-crop literature refines it in both directions, and here is how far.
+        <span class="src">Seed Savers Exchange</span>&rsquo;s crop-specific chart asks for <b>10&ndash;20</b>
+        plants of a self-pollinator, <b>80</b> brassicas, and <b>200</b> corn, carrots or onions &mdash; a
+        lower floor for inbreeders than this page uses and a higher one for outbreeders. One number across all
+        crops is a <b>deliberate simplification rather than an oversight</b>: a floor you remember beats a
+        table you look up, and the crop notes carry the species detail. Both halves matter, and they fail
+        differently.</p>
+      <p class="fine">For an <b>inbreeder</b> — beans, peas, lettuce, tomatoes — the plants are already
+        near-homozygous, so a small sample loses little. Twenty is about avoiding a bottleneck and catching
+        the occasional off-type, not about inbreeding.</p>
+      <p class="fine">For an <b>outbreeder</b> — corn, brassicas, carrots, onions, beets — the plants carry
+        a load of recessive alleles that heterozygosity has been hiding. Sample too few and you force those
+        into the open. <b>Corn, carrots and onions are the classic sufferers</b>, and sweet corn wants at
+        least <b>100 plants and preferably 200 or more</b> — the population <i>The Seed Garden</i>
+        recommends for long-term stewardship of a corn variety (Colley &amp; Zystro, 2015).</p>
+      <div class="fek-banner warn"><b>The floor is a floor, not a target.</b> It is the point below which
+        you are actively damaging the variety. If you are trying to conserve diversity rather than merely
+        maintain it, more is better with no sharp upper limit, and the honest advice for a home grower is to
+        grow as many as the space allows.</div>
+    </div>
+
+    <div class="card">
+      <h3 style="margin-top:0">Effective population size</h3>
+      <p class="fine" style="margin-top:0">The number that governs inbreeding is not how many plants you
+        grew but <b>N<sub>e</sub></b>, the effective population size — and unequal contribution pushes it
+        below the headcount. With N<sub>m</sub> pollen parents and N<sub>f</sub> seed parents contributing
+        equally within each group:</p>
+      <div class="eq">N<sub>e</sub> = 4 N<sub>m</sub> N<sub>f</sub> / (N<sub>m</sub> + N<sub>f</sub>)</div>
+      <p class="fine">The consequence is unforgiving. Ten pollen parents and ninety seed parents is a hundred
+        plants and an N<sub>e</sub> of 36. <b>The rarer sex caps you.</b></p>
+      <p class="fine">Inbreeding then accumulates each generation at</p>
+      <div class="eq">&Delta;F = 1 / (2 N<sub>e</sub>)</div>
+      <p class="fine">so N<sub>e</sub> = 20 adds <b>2.5% per generation</b> and compounds. Ten generations of
+        that is a different variety, and the decline shows up first as vigour and seed set rather than as the
+        trait you were watching.</p>
+      <p class="fine">These formulas assume an idealised population — random mating, non-overlapping
+        generations, no selection. Real seed saving violates all three, so read N<sub>e</sub> as an optimistic
+        upper bound rather than a measurement.</p>
+    </div>
+
+    <div class="card">
+      <h3 style="margin-top:0">Isolation</h3>
+      <p class="fine" style="margin-top:0">Two distances on this page are cited: <b>two miles for sweet
+        corn</b> and <b>half a mile between squash varieties of the same species</b> (NMSU H-262). Everything
+        else is <b>yours to enter</b>, and that is deliberate.</p>
+      <p class="fine">Published isolation tables disagree with each other by an order of magnitude, because
+        the right distance depends on pollinator pressure, wind, intervening barriers, the size of both
+        populations, and — most of all — on <b>what the seed is for</b>. Seed you will sow yourself next year
+        tolerates contamination that certified seed production does not. A page that printed one number for
+        all of that would be confidently wrong most of the time.</p>
+      <p class="fine">Distance is not the only tool. <b>Time isolation</b> — staggering sowings so two
+        varieties do not flower together — works where space does not. Bagging and hand-pollination is
+        absolute where it is practical. A hedge or a building between two plots is worth more than the same
+        distance across open ground.</p>
+      <p class="fine">Note the species traps this page carries in its crop notes, because they cause more
+        surprise crosses than distance ever does: all of cabbage, broccoli, kale, collards, kohlrabi, Brussels
+        sprouts and cauliflower are <i>one species</i>; the three common squash species do not cross with each
+        other but do cross freely within themselves; carrot crosses with the Queen Anne's lace in the verge;
+        and beetroot, chard and sugar beet are one species.</p>
+    </div>
+
+    <div class="card">
+      <h3 style="margin-top:0">Selection</h3>
+      <p class="fine" style="margin-top:0">Saving seed from the best <b>p</b> proportion of a population is
+        <b>truncation selection</b>, and its intensity follows from p alone:</p>
+      <div class="eq">i = &phi;(x) / p, &nbsp; where x = &Phi;<sup>-1</sup>(1 &minus; p)</div>
+      <p class="fine">Keeping the top 10% gives i = &phi;(1.2816) / 0.10 &asymp; 1.755; the top 50% gives
+        i = &phi;(0) / 0.50 &asymp; 0.798 &mdash; that is i = &phi;(x) &divide; p evaluated at those cutoffs
+        (Falconer &amp; Mackay, 1996), written out with p substituted so you can check both without leaving
+        the page. Then the expected response is</p>
+      <div class="eq">R = i &times; h&sup2; &times; &sigma;<sub>P</sub></div>
+      <p class="fine">the same breeder's equation the <a href="selection-log.html">Selection Log</a> uses on
+        wild populations, and it carries the same warnings. h&sup2; is a property of <em>this</em> population
+        in <em>this</em> environment; a field estimate is inflated by the environment parents and offspring
+        share; and the predicted response frequently fails to appear.</p>
+      <div class="fek-banner warn"><b>Intensity fights population size, and the fight is the whole craft.</b>
+        Selecting the top 5% of 100 plants leaves you five parents. That is a strong selection differential
+        and an N<sub>e</sub> around 5, which adds 10% inbreeding in one generation. The gain you make on the
+        trait is paid for in vigour you will notice two generations later. Grow a bigger population, or select
+        less hard.</div>
+      <p class="fine"><b>Roguing</b> — pulling off-types before they shed pollen — is selection with the same
+        arithmetic, applied in the negative. It is also the step most often left out of the record, which is
+        why it has a log here.</p>
+    </div>
+
+    <div class="card">
+      <h3 style="margin-top:0">Trials</h3>
+      <p class="fine" style="margin-top:0">The trial analysis is a <b>randomised complete block design</b>.
+        Blocks absorb the field gradient — the wet corner, the shaded end — so that what is left is the
+        difference between varieties rather than the difference between places.</p>
+      <div class="eq">LSD<sub>0.05</sub> = t<sub>0.025, df</sub> &times; &radic;(2 &times; MSE / r)</div>
+      <p class="fine">Two entry means differing by more than the LSD are conventionally called different.
+        <b>CV%</b> = 100&radic;MSE / grand mean measures how noisy the trial was; for vegetable yield trials
+        a CV under roughly <b>15%</b> is conventionally considered acceptable and above 25% suggests the
+        trial cannot answer the question. Both of those are conventions, not thresholds.</p>
+      <div class="fek-banner bad"><b>The LSD lies when you have many entries.</b> It is a pairwise test at
+        5%, so across ten entries there are forty-five comparisons and you should expect two apparent
+        differences from noise alone. Use it to compare each entry against a named control, which is one
+        comparison per entry, and treat "these two middling entries differ" as a hypothesis rather than a
+        result. One site and one season is one site and one season, whatever the LSD says.</div>
+      <p class="fine">A trial with <b>one replicate</b> has no error term and no LSD, because there is
+        nothing to estimate the noise from. The page will compute means and refuse the rest.</p>
+    </div>
+
+    <div class="card">
+      <h3 style="margin-top:0">Seed</h3>
+      <p class="fine" style="margin-top:0">A germination test is a proportion, so it carries a binomial
+        standard error <code>SE = &radic;(p(1&minus;p)/n)</code>. Testing 20 seeds and getting 18 up is
+        90%&nbsp;&plusmn;&nbsp;6.7% — that is a real interval, and it is why 100 seeds is the usual test size
+        where you can spare them.</p>
+      <p class="fine">Storage life: <b>most high-quality, correctly stored seed stays viable at least
+        3&ndash;5 years</b> — a <b>range</b>, not a constant, and one that varies enormously by species. Onion,
+        parsnip and leek are short-lived and worth retesting annually; brassicas, tomatoes and cucurbits often
+        run far longer than five years. The rule of thumb that matters more than any number is that
+        <b>cool and dry beats either alone</b>, and that seed put away damp does not keep however cold it is.</p>
+      <p class="fine">This page does not predict your seed's remaining life from a stored curve, because that
+        depends on your moisture content and your storage temperature. It tracks the test results you actually
+        got, which is the thing that answers the question.</p>
+    </div>
+
+    <div class="card">
+      <h3 style="margin-top:0">Sources</h3>
+      <p class="fine" style="margin-top:0">Population floor: Learn Seed Saving. Sweet corn population and
+        the two cited isolation distances: NMSU Extension H-262. Effective population size, &Delta;F,
+        truncation-selection intensity, the breeder's equation and the RCBD analysis are standard quantitative
+        genetics and experimental design. Everything labelled a <em>convention</em> on this page is a working
+        rule of thumb rather than a sourced threshold — see <a href="adr-031.html">ADR-031</a> for the rule
+        this kit applies when deciding which numbers it is allowed to ship.</p>
+    </div>
+  </section>
+
+  <div class="rail">
+    <p class="rl">Record it — in the field</p>
+    <div class="chips">
+      <a href="field-notebook.html"><span>📓</span>Field Notebook</a>
+      <a href="ethogram.html"><span>🐾</span>Ethogram</a>
+      <a href="selection-log.html"><span>📏</span>Selection Log</a>
+      <a href="stand-sheet.html"><span>🌲</span>Stand Sheet</a>
+      <a href="releve.html"><span>🌾</span>Relevé</a>
+      <a href="collection-sheet.html"><span>🍄</span>Collection Sheet</a>
+      <a href="farm-scout.html"><span>🧑‍🌾</span>Farm Scout</a>
+      <a href="pheno-tracker.html"><span>🌱</span>Pheno Tracker</a>
+      <a href="deployment-log.html"><span>🎙️</span>Deployment Log</a>
+    </div>
+    <p class="rl" style="margin-top:16px">At the bench</p>
+    <div class="chips">
+      <a href="cp-bench.html"><span>🫙</span>CP Bench</a>
+      <a href="soil-bench.html"><span>🪱</span>Soil Bench</a>
+      <a href="breeding-bench.html" aria-current="page"><span>🥕</span>Breeding Bench</a>
+      <a href="cell-bench.html"><span>🔬</span>Cell Bench</a>
+      <a href="micro-bench.html"><span>🧫</span>Micro Bench</a>
+      <a href="soil-recipes.html"><span>🧱</span>Soil Recipes</a>
+      <a href="greenhouse.html"><span>🌡️</span>Greenhouse</a>
+    </div>
+    <p class="rl" style="margin-top:16px">Analyse it</p>
+    <div class="chips">
+      <a href="survey-design.html"><span>🧭</span>Survey Design</a>
+      <a href="ordination.html"><span>📉</span>Ordination</a>
+      <a href="food-web.html"><span>🕸️</span>Food Web Builder</a>
+      <a href="field-season.html"><span>🎯</span>Field Season</a>
+    </div>
+    <p class="rl" style="margin-top:16px">Print it</p>
+    <div class="chips">
+      <a href="plant-characters.html"><span>🌱</span>Plant Characters</a>
+      <a href="fungal-characters.html"><span>🔬</span>Fungal Characters</a>
+      <a href="cp-characters.html"><span>🪤</span>CP Characters</a>
+    </div>
+    <div class="chips" style="margin-top:16px">
+      <a class="ref" href="breeding-suite.html">↑ Breeding suite</a>
+      <a class="ref" href="ecology.html">← kit hub</a>
+      <a class="ref" href="ecology-field-card.html">field card</a>
+      <a class="ref" href="ecology-glossary.html">glossary</a>
+    </div>
+  </div>
+  </div>
+  </div>
+</div>
+
+<div class="tabbar"><div class="row">
+  <button class="tab on" data-pane="p-pop" type="button"><span class="ico">👥</span>Population</button>
+  <button class="tab" data-pane="p-iso" type="button"><span class="ico">📐</span>Isolation</button>
+  <button class="tab" data-pane="p-sel" type="button"><span class="ico">🎯</span>Selection</button>
+  <button class="tab" data-pane="p-tri" type="button"><span class="ico">🔬</span>Trial</button>
+  <button class="tab" data-pane="p-seed" type="button"><span class="ico">🌾</span>Seed</button>
+  <button class="tab" data-pane="p-met" type="button"><span class="ico">📖</span>Method</button>
+</div></div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<script>
+
+/* ---- Field Entry Kit v1.8.0 : constructors return {el, get, set} ---- */
+var FEK = (function(){
+  function el(t,c,h){ var e=document.createElement(t); if(c) e.className=c;
+    if(h!=null) e.innerHTML=h; return e; }
+  /* Where the line falls, and why it falls there.
+     A component's OWN label is written by whoever built the page and often
+     carries deliberate markup -- "Pod parent <span class="u">seed bearer</span>".
+     That stays HTML. The label on an OPTION, a chip or a tile is data: a
+     species you typed, a cross you recorded, a source you named. v1.1 passed
+     those straight into innerHTML, so a plant named with a < became markup.
+     Escaped here rather than at each call site, because a component whose
+     safety depends on every caller remembering is a component that will bite
+     somebody. Verified against the whole kit first: no option, chip or tile
+     label anywhere passes markup on purpose. */
+  /* No object literal here on purpose: the map form needs an escaped double
+     quote as a key, and this file is a Python string emitting JavaScript, so
+     that quote has to survive two layers of escaping. It did not, and every
+     consumer got a syntax error that took FEK down with it. A chain of
+     comparisons has nothing to escape. */
+  function escv(s){ return String(s==null?"":s).replace(/[&<>"']/g,function(c){
+    return c==="&"?"&amp;":c==="<"?"&lt;":c===">"?"&gt;":c==='"'?"&quot;":"&#39;"; }); }
+  function buzz(m){ try{ if(navigator.vibrate) navigator.vibrate(m||8);}catch(e){} }
+
+  /* ---- a rejected keystroke buffer is not an empty one (v1.4.0, ADR-151) ----
+     `<input type=number>` has a value the page reads and a raw buffer the page
+     cannot see, and when the browser cannot parse the buffer the value it
+     hands over is the EMPTY STRING -- the same string a box nobody touched
+     hands over. Both numeric components here treated that as "not recorded":
+     the stepper and the field each reported null, the row went dashed-empty,
+     and the reader's characters sat in a box the sheet had decided was blank.
+     `validity.badInput` is the only thing that separates them, because it is
+     about the buffer rather than the value. Fixed once, here, rather than in
+     the seven pages that mount these components -- which is what this file is
+     for. */
+  function badBuffer(inp){ return !!(inp && inp.validity && inp.validity.badInput); }
+  function badMark(wrap, box, inp, label, on){
+    var line = wrap.__fekBad;
+    if(on && !line){ line = wrap.__fekBad = el("p","fek-bad"); wrap.appendChild(line); }
+    if(line) line.textContent = on
+      ? ((label||"this box") + " holds something that is not a number")
+      : "";
+    if(box) box.classList.toggle("bad", !!on);
+    if(on) inp.setAttribute("aria-invalid","true"); else inp.removeAttribute("aria-invalid");
+    return on;
+  }
+
+  /* ---- field registry (v1.4.0) ----
+     A component writes through to a hidden field via the page's own onchange.
+     That is fine going out and useless coming back: nothing could put a
+     restored value INTO the widget, so an autosaved session showed default
+     dials over correct data -- a lie on screen, which is worse than no
+     autosave. A component that declares `field:"sElev"` is registered here,
+     and FEK.setField puts a value back through the widget's own set(). Purely
+     additive: a component with no `field` behaves exactly as before. */
+  var REG = {};
+  function reg(o, h){ if(o && o.field) REG[o.field] = h; return h; }
+  function setField(id, v){
+    var h = REG[id];
+    if(!h) return false;
+    try { h.set(v); } catch(e){ return false; }
+    return true;
+  }
+  function fields(){ var out=[]; for(var k in REG) if(REG.hasOwnProperty(k)) out.push(k); return out; }
+  /* v1.7.0 (ADR-210). What every registered widget is holding, read through its
+     own get(). The registry existed so a restored value could go back IN; there
+     was no way to get one OUT except through a hidden input the page had to
+     remember to write to -- so a control that declared a field but had no
+     element behind it was invisible to the autosave, and a control that
+     declared nothing was invisible twice over. A page's typed numbers came back
+     as defaults over correct data, which is the lie ADR-160 introduced the
+     registry to stop. */
+  function values(){
+    var out = {}, k;
+    for (k in REG) if (REG.hasOwnProperty(k)) {
+      try { out[k] = REG[k].get(); } catch (e) { }
+    }
+    return out;
+  }
+
+  function step(o){
+    o=o||{}; var min=(o.min==null?-Infinity:o.min), max=(o.max==null?Infinity:o.max);
+    var stepv=o.step||1, dec=o.dec==null?(String(stepv).split(".")[1]||"").length:o.dec;
+    var v=o.value==null?0:o.value;
+    var wrap=el("div","fek-row"), lab=el("label","fek-lab",
+      (o.label||"")+(o.unit?'<span class="u">'+o.unit+'</span>':""));
+    var box=el("div","fek-step");
+    var minus=el("button",null,"&minus;"), inp=el("input"), plus=el("button",null,"+");
+    minus.type="button"; plus.type="button"; inp.type="number"; inp.className="val";
+    inp.setAttribute("inputmode","decimal");
+    if(o.label) inp.setAttribute("aria-label",o.label);
+    /* nullable: the control can hold "not recorded", which is not the same as
+       zero. Aspect 0 is north; a duff depth of 0 cm is an observation. An empty
+       nullable stepper reports null and the first bump starts from o.start. */
+    var nullable = !!o.nullable;
+    if(nullable && o.value==null) v=null;
+    function clamp(x){ return Math.min(max,Math.max(min,x)); }
+    function render(){
+      if(v==null){ inp.value=""; wrap.classList.add("is-empty"); box.classList.add("empty"); return; }
+      wrap.classList.remove("is-empty"); box.classList.remove("empty");
+      inp.value=(dec?v.toFixed(dec):String(v));
+    }
+    function set(x,quiet){
+      if(nullable && (x==null || x==="" || (typeof x==="number" && !isFinite(x)))) v=null;
+      else v=clamp(isFinite(x)?x:0);
+      render(); if(!quiet&&o.onchange) o.onchange(v);
+    }
+    function bump(d){
+      if(v==null) set(clamp(o.start==null?0:o.start));
+      else set(+(v+d*stepv).toFixed(6));
+      buzz();
+    }
+    function clear(){ if(nullable) set(null); }
+    minus.addEventListener("click",function(){ bump(-1); });
+    plus.addEventListener("click",function(){ bump(1); });
+    var hold;
+    function holdOn(d){ return function(){ clearInterval(hold);
+      hold=setInterval(function(){ bump(d); },110); }; }
+    function holdOff(){ clearInterval(hold); }
+    minus.addEventListener("pointerdown",holdOn(-1)); plus.addEventListener("pointerdown",holdOn(1));
+    ["pointerup","pointerleave","pointercancel"].forEach(function(ev){
+      minus.addEventListener(ev,holdOff); plus.addEventListener(ev,holdOff); });
+    inp.addEventListener("input",function(){
+      if(badMark(wrap, box, inp, o.label, badBuffer(inp))){
+        // A nullable stepper goes to "not recorded", the same as a cleared box,
+        // because there is no number to hold either way -- what changes is that
+        // the row now SAYS which of the two happened. A fixed stepper keeps the
+        // value it had, and says so, rather than silently reading as unchanged.
+        if(nullable && v!==null){ v=null; box.classList.add("empty"); if(o.onchange) o.onchange(null); }
+        return; }
+      if(nullable && inp.value===""){ v=null; box.classList.add("empty");
+        if(o.onchange) o.onchange(null); return; }
+      var x=parseFloat(inp.value);
+      if(isFinite(x)){ v=clamp(x); box.classList.remove("empty"); if(o.onchange) o.onchange(v); } });
+    // BLUR MUST NOT ERASE THE EVIDENCE. render() writes v back into the box, so
+    // a blur over bad input would replace the reader's characters with the old
+    // number and take the message down with them -- the page quietly deciding
+    // it knew better. The buffer is still bad; leave it, and leave the line up.
+    inp.addEventListener("blur",function(){ if(!badBuffer(inp)) render(); });
+    box.appendChild(minus); box.appendChild(inp); box.appendChild(plus);
+    wrap.appendChild(lab); wrap.appendChild(box);
+    if(o.help) wrap.appendChild(el("p","fek-help",o.help));
+    render();
+    return reg(o, { el:wrap, get:function(){return v;}, set:function(x){set(x,true);},
+             clear:clear, nullable:nullable });
+  }
+
+  /* field: a value typed from an instrument readout. No steppers — see the CSS note. */
+  function field(o){
+    o=o||{};
+    var min=(o.min==null?-Infinity:o.min), max=(o.max==null?Infinity:o.max);
+    var dec=(o.dec==null?3:o.dec), v=(o.value==null?null:o.value);
+    var wrap=el("div","fek-row"), lab=el("label","fek-lab",
+      (o.label||"")+(o.unit?'<span class="u">'+o.unit+'</span>':""));
+    var box=el("div","fek-field"), inp=el("input");
+    inp.type="number"; inp.setAttribute("inputmode","decimal");
+    if(o.step!=null) inp.step=o.step;
+    inp.placeholder = o.placeholder==null ? "—" : o.placeholder;
+    if(o.label) inp.setAttribute("aria-label",o.label);
+    function paint(){ box.classList.toggle("empty", v==null); }
+    function set(x,quiet){
+      if(x==null || x===""){ v=null; inp.value=""; }
+      else { var n=parseFloat(x);
+        v = isFinite(n) ? Math.min(max,Math.max(min,n)) : null;
+        inp.value = (v==null?"":String(v)); }
+      paint(); if(!quiet&&o.onchange) o.onchange(v);
+    }
+    inp.addEventListener("input",function(){
+      if(badMark(wrap, box, inp, o.label, badBuffer(inp))){
+        if(v!==null){ v=null; paint(); if(o.onchange) o.onchange(null); }
+        return; }
+      if(inp.value===""){ v=null; paint(); if(o.onchange) o.onchange(null); return; }
+      var n=parseFloat(inp.value);
+      if(isFinite(n)){ v=Math.min(max,Math.max(min,n)); paint(); if(o.onchange) o.onchange(v); } });
+    inp.addEventListener("blur",function(){
+      if(badBuffer(inp)) return;
+      if(v!=null && isFinite(v)) inp.value = (dec==null?String(v):String(+v.toFixed(dec)));
+      paint(); });
+    box.appendChild(inp);
+    if(o.unitBox!==false && o.unit) box.appendChild(el("div","u",o.unit));
+    wrap.appendChild(lab); wrap.appendChild(box);
+    if(o.help) wrap.appendChild(el("p","fek-help",o.help));
+    set(v,true);
+    return reg(o, { el:wrap, get:function(){return v;}, set:function(x){set(x,true);},
+             clear:function(){ set(null,true); }, nullable:true });
+  }
+
+  function dial(o){
+    o=o||{}; var opts=o.options||[], cur=o.value==null?null:o.value;
+    var wrap=el("div","fek-row"), lab=el("label","fek-lab",o.label||"");
+    var box=el("div","fek-dial"), btns=[];
+    opts.forEach(function(op,i){
+      var b=el("button",null,'<span>'+escv(op.label)+'</span>'+(op.sub?'<small>'+escv(op.sub)+'</small>':""));
+      b.type="button";
+      b.setAttribute("data-r", op.ramp==null ? String(Math.min(5,Math.round(i*5/Math.max(1,opts.length-1)))) : String(op.ramp));
+      b.addEventListener("click",function(){
+        cur = (cur===op.value && o.clearable!==false) ? null : op.value;
+        paint(); buzz(); if(o.onchange) o.onchange(cur);
+      });
+      btns.push(b); box.appendChild(b);
+    });
+    function paint(){ btns.forEach(function(b,i){ b.classList.toggle("on", opts[i].value===cur); }); }
+    paint();
+    wrap.appendChild(lab); wrap.appendChild(box);
+    if(o.help) wrap.appendChild(el("p","fek-help",o.help));
+    return reg(o, { el:wrap, get:function(){return cur;},
+             set:function(x){ cur=x; paint(); } });
+  }
+
+  function chips(o){
+    o=o||{}; var opts=o.options||[], sel={};
+    (o.value||[]).forEach(function(v){ sel[v]=1; });
+    var wrap=el("div","fek-row"), lab=el("label","fek-lab",o.label||"");
+    var box=el("div","fek-chips"), btns=[];
+    opts.forEach(function(op){
+      var b=el("button","fek-chip",escv(op.label)); b.type="button";
+      b.addEventListener("click",function(){
+        if(o.single){ sel={}; sel[op.value]=1; }
+        else if(sel[op.value]) delete sel[op.value]; else sel[op.value]=1;
+        paint(); buzz(); if(o.onchange) o.onchange(Object.keys(sel));
+      });
+      btns.push(b); box.appendChild(b);
+    });
+    function paint(){ btns.forEach(function(b,i){ b.classList.toggle("on",!!sel[opts[i].value]); }); }
+    paint();
+    wrap.appendChild(lab); wrap.appendChild(box);
+    if(o.help) wrap.appendChild(el("p","fek-help",o.help));
+    return reg(o, { el:wrap, get:function(){return Object.keys(sel);},
+             set:function(a){ sel={}; (a||[]).forEach(function(v){sel[v]=1;}); paint(); } });
+  }
+
+  function slider(o){
+    o=o||{};
+    var nullable=!!o.nullable;
+    var v = (nullable && o.value==null) ? null : (o.value==null?(o.min||0):o.value);
+    var wrap=el("div","fek-row"), lab=el("label","fek-lab",o.label||"");
+    var box=el("div","fek-slide"), r=el("input"), bub=el("div","bub");
+    r.type="range"; r.min=o.min==null?0:o.min; r.max=o.max==null?100:o.max;
+    r.step=o.step||1; r.value=v;
+    if(o.label) r.setAttribute("aria-label",o.label);
+    function paint(){
+      if(v==null){ bub.innerHTML='<span style="opacity:.6">not recorded</span>'; return; }
+      bub.innerHTML=(o.fmt?o.fmt(v):v)+(o.unit?'<span>'+o.unit+'</span>':"");
+    }
+    r.addEventListener("input",function(){ v=parseFloat(r.value); paint(); if(o.onchange) o.onchange(v); });
+    if(nullable && v==null) r.value = (o.min==null?0:o.min);
+    paint();
+    box.appendChild(r); box.appendChild(bub);
+    wrap.appendChild(lab); wrap.appendChild(box);
+    if(o.help) wrap.appendChild(el("p","fek-help",o.help));
+    return reg(o, { el:wrap, get:function(){return v;},
+             set:function(x){ v=(nullable&&x==null)?null:x; if(x!=null) r.value=x; paint(); },
+             clear:function(){ if(nullable){ v=null; paint(); } }, nullable:nullable });
+  }
+
+  function picker(o){
+    o=o||{}; var opts=o.options||[], cur=o.value==null?null:o.value, q="";
+    var wrap=el("div","fek-row"), lab=el("label","fek-lab",o.label||"");
+    var box=el("div","fek-pick"), s=el("input","search"), list=el("div","opts");
+    s.type="text"; s.placeholder=o.placeholder||"type to filter…";
+    s.setAttribute("autocomplete","off");
+    if(o.label) s.setAttribute("aria-label",o.label+" filter");
+    function paint(){
+      list.innerHTML="";
+      var qq=q.toLowerCase();
+      var shown=opts.filter(function(op){
+        return !qq || (op.label+" "+(op.sub||"")).toLowerCase().indexOf(qq)>=0; });
+      if(!shown.length){ list.appendChild(el("div","none","No match. Clear the filter to see all "+opts.length+".")); return; }
+      shown.slice(0,200).forEach(function(op){
+        var b=el("button","opt"+(op.value===cur?" on":""),
+          escv(op.label)+(op.sub?'<small>'+escv(op.sub)+'</small>':""));
+        b.type="button";
+        b.addEventListener("click",function(){ cur=op.value; paint(); buzz(); if(o.onchange) o.onchange(cur); });
+        list.appendChild(b);
+      });
+    }
+    s.addEventListener("input",function(){ q=s.value; paint(); });
+    box.appendChild(s); box.appendChild(list);
+    wrap.appendChild(lab); wrap.appendChild(box);
+    if(o.help) wrap.appendChild(el("p","fek-help",o.help));
+    paint();
+    return reg(o, { el:wrap, get:function(){return cur;}, set:function(x){ cur=x; paint(); } });
+  }
+
+  function tiles(list){
+    var box=el("div","fek-tiles");
+    (list||[]).forEach(function(t){
+      box.appendChild(el("div","fek-tile"+(t.tone?" "+t.tone:""),
+        '<div class="v">'+escv(t.v)+'</div><div class="l">'+escv(t.l)+'</div>'));
+    });
+    return box;
+  }
+  function banner(title,body,tone){
+    return el("div","fek-banner"+(tone?" "+tone:""),"<b>"+title+"</b>"+body);
+  }
+
+  /* ==================== PHOTOGRAPHS (v1.5.0, ADR-201) ====================
+     THE RECORD CARRIES THE REFERENCE, NOT THE IMAGE.
+
+     One page in this kit took a photograph and twenty did not, on a kit that
+     emits Darwin Core with `associatedMedia` left empty everywhere. A field
+     record whose voucher is a sentence is a weaker record than one that names
+     the frame.
+
+     The image itself does not go into the record, for three reasons that all
+     point the same way. A CSV cell cannot hold a JPEG. A base64 photograph
+     inside a .eco export turns a 40 kB record into a 4 MB one, and the export
+     is a thing people paste into a message. And a photograph's home is the
+     camera roll or the card, where it already is -- Darwin Core asks
+     `associatedMedia` for an IDENTIFIER of the media, not the media.
+
+     So what the record carries is what lets a person -- or a script -- put the
+     row and the file back together six months later:
+
+         filename | bytes | captured | crc32
+
+     CRC-32 AND NOT SHA-256, deliberately. `crypto.subtle` does not exist on a
+     `file://` page, because a file URL is not a secure context, and this kit
+     is opened off a card in the field as often as it is served over https as
+     an artifact. A digest that is only available in one of those two is worse
+     than a weaker one that is the same in both: the whole point is that the
+     number written on the sheet in the field still matches the number computed
+     back at the desk. This is an INTEGRITY check -- has this file changed, is
+     this the same file -- and it is not, and must not be described as,
+     cryptographic.
+
+     CAPTURED IS THE FILE'S MTIME, NOT EXIF. `File.lastModified` is what a
+     browser will give a page without parsing the JPEG, and for a frame straight
+     off a camera it is the shutter. For a file that has been copied between
+     cards, or round-tripped through a messaging app, it is the copy's time.
+     The field is named `captured` because that is what it usually means, and
+     the page says plainly that a copy carries the copy's time.
+
+     THE IMAGES ARE NEVER UPLOADED and never leave the tab. They are object
+     URLs revoked the moment a photograph is removed, so a session that adds and
+     drops a hundred frames does not hold a hundred blobs. Closing the tab
+     discards them, which is correct: the originals are where they belong. */
+  var CRCT = (function(){
+    var t = new Array(256), c, n, k;
+    for (n = 0; n < 256; n++) {
+      c = n;
+      for (k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+      t[n] = c >>> 0;
+    }
+    return t;
+  })();
+  function crc32(bytes){
+    var c = 0xFFFFFFFF, i;
+    for (i = 0; i < bytes.length; i++) c = CRCT[(c ^ bytes[i]) & 0xFF] ^ (c >>> 8);
+    c = (c ^ 0xFFFFFFFF) >>> 0;
+    /* eight hex digits always: a crc of 0x0000A1B2 written as "a1b2" is a
+       different string from the one the next reader computes, and a checksum
+       you have to remember to pad is a checksum that will be compared wrong. */
+    return ("0000000" + c.toString(16)).slice(-8);
+  }
+  function iso(ms){
+    /* Local minutes, not UTC, because a field sheet is read where it was
+       written. ISO-shaped so it sorts. */
+    if (!ms) return "";
+    var d = new Date(ms), p = function(n){ return (n < 10 ? "0" : "") + n; };
+    return d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate())
+         + " " + p(d.getHours()) + ":" + p(d.getMinutes());
+  }
+  function photos(o){
+    o = o || {};
+    var list = [], max = (o.max == null ? 40 : o.max);
+    var wrap = el("div", "fek-row"), lab = el("label", "fek-lab", o.label || "Photographs");
+    var zone = el("div", "fek-drop");
+    /* THE ZONE NEEDS A NAME OF ITS OWN. A drop listener leaves no mark a
+       selector can find, and the control the page's own snapshot offers under
+       this component's label is the hidden FILE INPUT -- so a task that says
+       "drop these on the photographs" landed on the input and was refused as
+       not a drop zone. The id is the address; a page that mounts this without
+       one can still be driven through the file input, and cannot be driven by
+       a drop. */
+    zone.id = o.dropId || (o.field ? o.field + "Drop" : "");
+    if (!zone.id) zone.removeAttribute("id");
+    var inp = el("input");
+    inp.type = "file"; inp.accept = o.accept || "image/*"; inp.multiple = true;
+    inp.style.display = "none";
+    if (o.label) inp.setAttribute("aria-label", o.label);
+    var btn = el("button", null, "📷 Add photos");
+    btn.type = "button";
+    zone.appendChild(el("p", null, o.prompt ||
+      "<b>Shoot the character, not the specimen.</b> Camera or gallery, or drop files here."));
+    zone.appendChild(inp); zone.appendChild(btn);
+    var grid = el("div", "fek-photos");
+    /* Its own live region, by the rule ADR-199 put on every other message in
+       this kit: an addition that is refused -- a PDF dropped on a photo zone,
+       a frame too many -- is announced rather than silently ignored. */
+    var shot = el("p", "fek-shot");
+    shot.setAttribute("role", "status"); shot.setAttribute("aria-live", "polite");
+
+    /* FRAMES THIS SHEET KNOWS ABOUT AND DOES NOT HOLD (v1.6.0, ADR-206).
+       A page can restore what you typed. It cannot restore a photograph: a
+       page cannot hand a File back to a file input, and this component has
+       always refused to pretend otherwise. But a restored sheet that came back
+       quietly WITHOUT its frames is worse than one that admits it, because the
+       reader believes their morning is back. So the record survives the
+       restore even though the bytes do not, the component says which frames
+       are missing and names them, and it takes them back BY CHECKSUM: drop the
+       same files in again and the label and note you typed -- the expensive
+       part -- come back with them. */
+    var await_ = [];
+    var awaitBox = el("div", "fek-await");
+    awaitBox.style.display = "none";
+
+    /* NAMED FOR WHOEVER READS THE PAGE (v1.8.0, ADR-254). The cards are what
+       the page says it holds -- each frame's name, size, checksum and time --
+       and the grid had no id, so no report reader could see a card: a task
+       could attach a photograph and hold everything it exported and nothing
+       it showed. The zone's id names all three: <id>List the cards, <id>Msg
+       what the last addition said, <id>AwaitList the frames on the record and
+       not on this device. */
+    if (zone.id) {
+      grid.id = zone.id + "List"; shot.id = zone.id + "Msg"; awaitBox.id = zone.id + "AwaitList";
+    }
+
+    function say(t, bad){ shot.textContent = t || ""; shot.classList.toggle("bad", !!bad); }
+    function changed(){
+      if (o.onchange) o.onchange(records());
+      /* A REAL EVENT, BECAUSE A PHOTOGRAPH IS AN EDIT (v1.6.0, ADR-206).
+         Adding a frame fires no input and no change -- the file input is
+         hidden and a drop is neither -- so every autosave in this kit sat
+         still while a reader photographed four stations, and a session that
+         was ONLY photographs was saved by nothing. One bubbling event, so the
+         page does not have to remember to wire it and a page added tomorrow
+         is covered on the day it mounts the component. */
+      try { wrap.dispatchEvent(new CustomEvent("fek-change", { bubbles: true })); }
+      catch (e) {}
+    }
+    function records(){
+      /* The awaited frames are IN the record. A photograph that was taken has
+         an identifier whether or not this browser still holds the bytes, and
+         an export that dropped it would lose the only link between the row and
+         a file sitting on a camera. `have` says which is which. */
+      return list.map(function(p){
+        return { name: p.name, bytes: p.bytes, captured: p.captured, crc: p.crc,
+                 label: p.label, note: p.note, have: true };
+      }).concat(await_.map(function(p){
+        return { name: p.name, bytes: p.bytes, captured: p.captured, crc: p.crc,
+                 label: p.label, note: p.note, have: false };
+      }));
+    }
+    function renderAwait(){
+      if (!await_.length) { awaitBox.style.display = "none"; awaitBox.innerHTML = ""; return; }
+      awaitBox.style.display = "";
+      awaitBox.innerHTML = "<b>" + await_.length + " photograph"
+        + (await_.length === 1 ? " is" : "s are") + " on this record and not on this device.</b> "
+        + "A saved sheet keeps what you typed; it cannot keep an image. Add the same file"
+        + (await_.length === 1 ? "" : "s") + " again and the caption you wrote comes back with "
+        + (await_.length === 1 ? "it" : "them") + " \u2014 matched by checksum, so it has to be "
+        + "the same frame."
+        + "<ul>" + await_.map(function(p){
+            return "<li>" + escv(p.name) + " <span class=\"cap\">" + p.bytes + " bytes \u00b7 crc "
+                 + p.crc + (p.label ? " · " + escv(p.label) : "") + "</span></li>";
+          }).join("") + "</ul>";
+    }
+    function render(){
+      grid.innerHTML = "";
+      list.forEach(function(p, i){
+        var d = el("div", "fek-photo");
+        var im = el("img"); im.src = p.url;
+        im.alt = p.label || ("photograph " + (i + 1) + " — " + p.name);
+        var m = el("div", "m");
+        /* a space before each break (v1.8.0): the lines are one run of
+           text to anything that reads the card rather than looks at it --
+           "IMG_0431.jpg160 bytes" -- the ADR-253 run cell's defect again */
+        m.appendChild(el("code", null,
+          escv(p.name) + " <br>" + p.bytes + " bytes · crc " + p.crc
+          + (p.captured ? " <br>" + escv(p.captured) : "")));
+        var lv = el("input"); lv.type = "text"; lv.value = p.label;
+        lv.placeholder = o.labelPlaceholder || "voucher / specimen №";
+        lv.setAttribute("aria-label", "voucher for " + p.name);
+        var nt = el("textarea"); nt.value = p.note;
+        nt.placeholder = o.notePlaceholder || "What does this show?";
+        nt.setAttribute("aria-label", "note on " + p.name);
+        var rm = el("button", "rm", "Remove"); rm.type = "button";
+        lv.addEventListener("input", function(){ p.label = lv.value; changed(); });
+        nt.addEventListener("input", function(){ p.note = nt.value; changed(); });
+        rm.addEventListener("click", function(){
+          try { URL.revokeObjectURL(p.url); } catch (e) {}
+          list.splice(list.indexOf(p), 1);
+          render(); say("Removed " + p.name); changed(); buzz();
+        });
+        m.appendChild(lv); m.appendChild(nt);
+        /* A PAGE'S OWN ACTIONS ON A FRAME (v1.8.0, ADR-254). The stand sheet
+           kept a pane of its own for one button -- link this frame to the
+           species picked on the tally -- and with it lost every caption on a
+           reload, because only this component keeps a frame's record. An
+           action is {label, run(record)}: run returns a string to refuse with
+           (nothing changes) or {label?, note?, say?} to write back. */
+        (o.actions || []).forEach(function(a){
+          var ab = el("button", "act", escv(a.label)); ab.type = "button";
+          ab.addEventListener("click", function(){
+            var r = a.run({ name: p.name, bytes: p.bytes, captured: p.captured, crc: p.crc,
+                            label: p.label, note: p.note });
+            if (typeof r === "string") { say(r, true); return; }
+            if (!r) return;
+            if (r.label != null) p.label = String(r.label);
+            if (r.note != null) p.note = String(r.note);
+            render(); say(r.say || ""); changed();
+          });
+          m.appendChild(ab);
+        });
+        m.appendChild(rm);
+        d.appendChild(im); d.appendChild(m);
+        grid.appendChild(d);
+      });
+    }
+    function add(files){
+      var fs = Array.prototype.slice.call(files || []);
+      if (!fs.length) return;
+      var notImages = fs.filter(function(f){ return !/^image\//.test(f.type || ""); });
+      fs = fs.filter(function(f){ return /^image\//.test(f.type || ""); });
+      var room = Math.max(0, max - list.length), over = fs.length - room;
+      if (over > 0) fs = fs.slice(0, room);
+      var pending = fs.length, added = 0, back = 0;
+      /* A refusal is SAID, not swallowed: the reader who dropped six files and
+         got four has to be able to find out which two, and why. */
+      function done(){
+        if (pending) return;
+        var parts = [];
+        if (added) parts.push(added + " photograph" + (added === 1 ? "" : "s") + " added");
+        if (back) parts.push(back + " matched by checksum, caption restored");
+        if (notImages.length)
+          parts.push(notImages.length + " not an image: "
+                     + notImages.map(function(f){ return f.name; }).slice(0, 3).join(", "));
+        if (over > 0) parts.push(over + " over the limit of " + max);
+        say(parts.join(" — ") || "Nothing added", !added);
+        if (added) { render(); renderAwait(); changed(); buzz(12); }
+      }
+      if (!pending) { done(); return; }
+      fs.forEach(function(f){
+        var rd = new FileReader();
+        rd.onload = function(){
+          var bytes = new Uint8Array(rd.result);
+          var sum = crc32(bytes), lab = "", note = "", i;
+          /* BY CHECKSUM, NOT BY NAME. A camera roll renames on export and two
+             cards both start at DSC_0001; the checksum is the only thing that
+             says this is the frame the caption was written about. */
+          for (i = 0; i < await_.length; i++) {
+            if (await_[i].crc === sum && await_[i].bytes === bytes.length) {
+              lab = await_[i].label || ""; note = await_[i].note || "";
+              await_.splice(i, 1); back++;
+              break;
+            }
+          }
+          list.push({ name: f.name || ("photo-" + (list.length + 1) + ".jpg"),
+                      bytes: bytes.length, captured: iso(f.lastModified),
+                      crc: sum, label: lab, note: note,
+                      url: URL.createObjectURL(f) });
+          added++; pending--; done();
+        };
+        rd.onerror = function(){ pending--; done(); };
+        rd.readAsArrayBuffer(f);
+      });
+    }
+    btn.addEventListener("click", function(){ inp.click(); });
+    inp.addEventListener("change", function(){ add(inp.files); inp.value = ""; });
+    ["dragenter", "dragover"].forEach(function(ev){
+      zone.addEventListener(ev, function(e){ e.preventDefault(); zone.classList.add("on"); }); });
+    ["dragleave", "dragend"].forEach(function(ev){
+      zone.addEventListener(ev, function(){ zone.classList.remove("on"); }); });
+    /* The harness stamps data-h-drop on anything that registers a drop
+       listener, so this zone is drivable by the door with no page markup. */
+    zone.addEventListener("drop", function(e){
+      e.preventDefault(); zone.classList.remove("on");
+      if (e.dataTransfer && e.dataTransfer.files) add(e.dataTransfer.files);
+    });
+    wrap.appendChild(lab); wrap.appendChild(zone); wrap.appendChild(shot);
+    wrap.appendChild(awaitBox); wrap.appendChild(grid);
+    if (o.help) wrap.appendChild(el("p", "fek-help", o.help));
+    render();
+    return reg(o, {
+      el: wrap, get: records, count: function(){ return list.length; },
+      /* set() is deliberately not a way to put images back: a page cannot
+         hand a File to a file input, and a component that pretended to
+         restore a photograph from a record would be restoring a caption. */
+      set: function(){ return false; },
+      /* ...and THIS is what an autosave gets instead (v1.6.0, ADR-206). The
+         records come back, the bytes do not, and the component says so where
+         the reader will see it rather than coming back quietly one frame
+         short. Frames the sheet already holds are left alone -- a restore that
+         listed a photograph you are looking at would be noise. */
+      restore: function(recs){
+        if (!recs || !recs.length) return 0;
+        var held = {}, i;
+        for (i = 0; i < list.length; i++) held[list[i].crc] = 1;
+        await_ = recs.filter(function(r){
+          return r && r.crc && !held[r.crc];
+        }).map(function(r){
+          return { name: r.name, bytes: r.bytes, captured: r.captured, crc: r.crc,
+                   label: r.label || "", note: r.note || "" };
+        });
+        renderAwait();
+        /* ...AND THE PAGE IS TOLD (v1.8.0, ADR-254). A page draws its sheet
+           from get(), which lists the awaited frames, but a restore fired no
+           onchange -- so a page that restored its photographs after it had
+           drawn its sheet came back with the frames on the card and not in
+           the sheet: the collection sheet and the relevé, whose restores ran
+           in that order, lost the photographs section until the next edit.
+           Not a fek-change: a restore is not an edit to save. */
+        if (await_.length && o.onchange) o.onchange(records());
+        return await_.length;
+      },
+      awaiting: function(){ return await_.slice(); },
+      clear: function(){
+        list.forEach(function(p){ try { URL.revokeObjectURL(p.url); } catch (e) {} });
+        list = []; await_ = []; render(); renderAwait(); say(""); changed();
+      },
+      /* `associatedMedia` the way Darwin Core asks for it: identifiers,
+         concatenated and separated. The separator is " | " because a filename
+         may hold a comma and a record that splits wrong is worse than one that
+         is hard to read. */
+      media: function(){
+        /* Awaited frames are named too. A photograph that was taken has an
+           identifier whether or not this browser still holds it, and a deposit
+           that dropped it would break the only link between the row and a file
+           on a camera. */
+        return list.concat(await_).map(function(p){
+          return p.name + " (crc32 " + p.crc + (p.captured ? ", " + p.captured : "") + ")";
+        }).join(" | ");
+      }
+    });
+  }
+  /* ---- the same rule for a box FEK did not build (v1.4.0, ADR-151) ----
+     The components above now say when a box holds something the browser could
+     not read as a number. Every page that mounts them also carries number
+     boxes of its OWN -- an elevation, an effort value, five camera settings --
+     and those had the same silence for the same reason: `.value` comes back ""
+     and the page reads a blank. One delegated listener rather than a wrapper
+     per box, because the boxes a page builds LATER -- a row added, a pane
+     rendered, a measurement grid opened -- have to be covered too, and a guard
+     that only knew about the boxes present at load would go quiet exactly when
+     the sheet gets long. Capture phase, so the note is up before the page's own
+     handler decides what the box now means. */
+  function boxName(inp){
+    var a=inp.getAttribute("aria-label"); if(a && a.trim()) return a.trim();
+    var l=inp.closest?inp.closest("label"):null;
+    if(l){ var t="",i; for(i=0;i<l.childNodes.length;i++){ var n=l.childNodes[i];
+             if(n.nodeType===3) t+=n.nodeValue; }
+           t=t.replace(/\s+/g," ").trim(); if(t) return t; }
+    if(inp.id){ var lb=document.querySelector('label[for="'+inp.id+'"]');
+                if(lb) return lb.textContent.replace(/\s+/g," ").trim(); }
+    var ph=inp.getAttribute("placeholder");
+    return (ph && ph.trim()) ? ph.trim() : "this box";
+  }
+  function guardBox(inp){
+    var bad = !!(inp.validity && inp.validity.badInput);
+    var note = inp.__fekBadNote;
+    if(bad && !note){
+      note = inp.__fekBadNote = el("p","fek-bad");
+      var after = (inp.closest ? inp.closest("label") : null) || inp;
+      if(after.parentNode) after.parentNode.insertBefore(note, after.nextSibling);
+    }
+    if(note) note.textContent = bad ? (boxName(inp)+" holds something that is not a number") : "";
+    inp.classList.toggle("fek-badbox", bad);
+    if(bad) inp.setAttribute("aria-invalid","true"); else inp.removeAttribute("aria-invalid");
+  }
+  function guard(){
+    document.addEventListener("input",function(ev){
+      var inp=ev.target;
+      if(!inp || inp.tagName!=="INPUT" || inp.type!=="number") return;
+      // a component built here already says it, in its own row
+      if(inp.closest && inp.closest(".fek-step, .fek-field")) return;
+      guardBox(inp);
+    }, true);
+  }
+  if(document.readyState==="loading")
+    document.addEventListener("DOMContentLoaded",guard);
+  else guard();
+
+  function mount(host,parts){
+    var h=typeof host==="string"?document.getElementById(host):host;
+    h.innerHTML=""; parts.forEach(function(p){ h.appendChild(p.el||p); }); return h;
+  }
+  /* Exported because a page building a component LABEL -- which stays HTML by
+     design -- still has to escape the data inside it. A private copy of an
+     escaper in one page was how the last one got lost when the kit was
+     re-emitted over it. */
+  return { version:"1.8.0", esc:escv, setField:setField, fields:fields, values:values, step:step, field:field, dial:dial, chips:chips, slider:slider,
+           picker:picker, photos:photos, crc32:crc32, tiles:tiles, banner:banner, mount:mount, buzz:buzz, guard:guard };
+})();
+/* ---- Keep v1.4.0 : local autosave, and honesty about what that is ---- */
+var KEEP = (function(){
+  /* The handle the last wire() returned, so a reader outside the page's closure
+     can ask the page what it is holding (v1.3.0, ADR-209). */
+  var LIVE = null;
+  function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g,function(c){
+    return c==="&"?"&amp;":c==="<"?"&lt;":c===">"?"&gt;":c==='"'?"&quot;":"&#39;"; }); }
+
+  /* Probe rather than assume. Safari in private mode used to throw on the
+     first write; storage can also be disabled by enterprise policy or by the
+     user, and in a sandboxed frame the accessor itself throws. All three look
+     identical to a page that only wraps setItem in a try. */
+  function usable(){
+    try {
+      var k = "__keep_probe__";
+      window.localStorage.setItem(k, "1");
+      window.localStorage.removeItem(k);
+      return true;
+    } catch(e){ return false; }
+  }
+
+  function when(ts){
+    if(!ts) return "";
+    try {
+      var d = new Date(ts), now = new Date();
+      var same = d.toDateString() === now.toDateString();
+      var hm = ("0"+d.getHours()).slice(-2) + ":" + ("0"+d.getMinutes()).slice(-2);
+      return same ? ("today " + hm) : (d.toISOString().slice(0,10) + " " + hm);
+    } catch(e){ return ""; }
+  }
+
+  function wire(o){
+    o = o || {};
+    var key = o.key, host = typeof o.mount === "string" ? document.getElementById(o.mount) : o.mount;
+    var fmt = o.format == null ? 1 : o.format;
+    var ok = usable(), lastErr = null, savedAt = null, restoredFrom = null, timer = null;
+    var noun = o.noun || "your work";
+
+    function read(){
+      if(!ok) return null;
+      try {
+        var raw = window.localStorage.getItem(key);
+        if(!raw) return null;
+        var p = JSON.parse(raw);
+        /* A format stamp, so a page that changes its state shape does not
+           restore a shape it can no longer read and fail in a way the user
+           reads as data loss. */
+        if(!p || p.format !== fmt) return null;
+        return p;
+      } catch(e){ return null; }
+    }
+
+    function write(){
+      timer = null;
+      if(!ok) return;
+      var body;
+      try { body = o.snapshot(); } catch(e){ lastErr = "could not read the page state"; paint(); return; }
+      if(body == null){
+        try { window.localStorage.removeItem(key); }catch(e){}
+        savedAt = null; lastErr = null; paint(); return;
+      }
+      try {
+        window.localStorage.setItem(key, JSON.stringify({ format:fmt, at:Date.now(), body:body }));
+        savedAt = Date.now(); lastErr = null;
+      } catch(e){
+        /* Do not swallow this. A quota failure that says nothing is worse than
+           no autosave at all, because it teaches the user to trust it. */
+        lastErr = (e && e.name === "QuotaExceededError")
+          ? "this browser's storage is full" : "this browser refused the write";
+      }
+      paint();
+    }
+
+    function touch(){
+      if(!ok) return;
+      if(timer) clearTimeout(timer);
+      timer = setTimeout(write, o.debounce == null ? 500 : o.debounce);
+    }
+
+    function flush(){ if(timer){ clearTimeout(timer); } write(); }
+
+    function forget(){
+      /* Cancel the pending write first. Without this the debounced save from
+         the edit that preceded the click -- or from the click itself, on a
+         page that listens for clicks -- lands a few hundred milliseconds later
+         and puts the copy straight back, which makes the button look like it
+         did nothing. */
+      if(timer){ clearTimeout(timer); timer = null; }
+      try { window.localStorage.removeItem(key); }catch(e){}
+      savedAt = null; restoredFrom = null; lastErr = null; paint();
+      if(o.onforget) o.onforget();
+    }
+
+    function paint(){
+      if(!host) return;
+      /* noprint: this is screen chrome -- a status line about a browser and a
+         button -- and the print audit is right to count anything else that
+         vanishes on paper as content lost. */
+      host.className = "keep noprint" + ((!ok || lastErr) ? " bad" : "");
+      var msg;
+      if(!ok){
+        msg = "<b>This browser is not keeping anything.</b> Storage is unavailable here &mdash; a "
+            + "private window, or site data switched off. Nothing is being saved, so export before "
+            + "you close the tab.";
+      } else if(lastErr){
+        msg = "<b>Autosave failed &mdash; " + esc(lastErr) + ".</b> What is on screen is not saved. "
+            + "Export it now.";
+      } else if(savedAt){
+        msg = "Saved on this device <b>" + esc(when(savedAt)) + "</b>"
+            + (restoredFrom ? " &middot; restored from " + esc(when(restoredFrom)) : "") + ".";
+      } else if(restoredFrom){
+        msg = "Restored " + esc(noun) + " from <b>" + esc(when(restoredFrom)) + "</b> on this device.";
+      } else {
+        msg = "Autosave is on. " + esc(noun.charAt(0).toUpperCase() + noun.slice(1))
+            + " will still be here if you close the tab.";
+      }
+      /* THE BUTTON IS BUILT ONCE (v1.2.0, ADR-207).
+         This wrote the whole strip with innerHTML on every repaint, so the
+         forget button was DESTROYED AND RE-CREATED whenever the autosave
+         changed state -- and the autosave changes state on every save. A
+         control that does not survive a repaint cannot be stamped, addressed
+         or kept in focus across one: audit_focus reported it as "mounted after
+         the last stamp and could not be measured", intermittently, on whichever
+         page happened to save while the sweep was looking. Only the words
+         change now. */
+      if(!host.firstChild){
+        var st = document.createElement("p"); st.className = "st";
+        var btn = document.createElement("button");
+        btn.type = "button"; btn.setAttribute("data-keep-forget", "");
+        btn.textContent = "Forget this device's copy";
+        btn.addEventListener("click", function(){
+          forget();
+          if(o.ontoast) o.ontoast("Saved copy removed from this device");
+        });
+        var note = document.createElement("p"); note.className = "note";
+        note.innerHTML = '<b>This is not a backup.</b> It is one browser on one device, and it goes '
+          + 'when site data is cleared, in a private window, or on any other machine. It exists so a '
+          + 'phone call does not cost you a morning. The exports are the durable copy.';
+        host.appendChild(st); host.appendChild(btn); host.appendChild(note);
+      }
+      host.firstChild.innerHTML = msg;
+    }
+
+    var got = read();
+    if(got){
+      var accepted = false;
+      try { accepted = o.restore(got.body) !== false; } catch(e){ accepted = false; }
+      if(accepted){ restoredFrom = got.at; }
+    }
+    paint();
+    /* A PHOTOGRAPH IS AN EDIT (v1.1.0, ADR-206). FEK.photos fires `fek-change`
+       when frames are added, removed or captioned; nothing else does, because
+       a hidden file input and a drop produce neither `input` nor `change`. A
+       page that had to remember to wire this is a page that would forget. */
+    try {
+      document.addEventListener("fek-change", function(){ touch(); }, true);
+    } catch(e){}
+    /* A tab closing mid-debounce is exactly the case this exists for. */
+    try {
+      window.addEventListener("pagehide", function(){ if(timer) flush(); });
+      document.addEventListener("visibilitychange", function(){
+        if(document.visibilityState === "hidden" && timer) flush(); });
+    } catch(e){}
+
+    var h = { touch:touch, flush:flush, forget:forget, usable:function(){ return ok; },
+             restored:function(){ return restoredFrom; }, savedAt:function(){ return savedAt; },
+             error:function(){ return lastErr; },
+             /* v1.1.0 (ADR-203). The page already describes its own state once,
+                here, for the autosave. The outbox needs the same description to
+                say whether it has left the device -- and a SECOND description
+                would be a second thing to keep in step, so the one that is
+                already exercised by every restore is the one it gets. Read
+                through this handle rather than by the page passing its snapshot
+                twice, because two references can be wired to two functions and
+                only one of them would ever be tested. */
+             snapshot:function(){ return o.snapshot(); } };
+    /* v1.3.0 (ADR-209). The live handle, reachable from outside the page's own
+       closure. A page wires KEEP inside an IIFE and keeps the handle in a local,
+       so the description of its state that the autosave and the outbox both
+       already read was reachable from nowhere else -- and an audit asking "how
+       much did that tap take" had to count rows on the screen instead. Rows on
+       the screen are not records: a plate shown once in a list and once in a
+       results table is one record counted twice, and a rule built on that cries
+       wolf on a row remover while under-reading a delete that cascades.
+       One description, read by everything that needs it (ADR-141). */
+    LIVE = h;
+    return h;
+  }
+
+  /* ---- generic form capture ----
+     Every page in the kit keeps its typed state in elements with ids -- real
+     inputs for text and dates, hidden write-through fields for the FEK
+     widgets. Capturing them by walking the DOM means a page that gains a field
+     does not also have to remember to add it to a list, which is how a
+     hand-maintained list of fields quietly stops covering the newest one. */
+  function formSnapshot(){
+    var out = {}, i, els = document.querySelectorAll("input[id], textarea[id]");
+    for(i=0;i<els.length;i++){
+      var e = els[i];
+      if(e.type === "file" || e.type === "button" || e.type === "submit") continue;
+      out[e.id] = (e.type === "checkbox" || e.type === "radio") ? (e.checked ? "1" : "") : e.value;
+    }
+    /* v1.4.0 (ADR-210). ...AND EVERY FEK CONTROL THAT DECLARES A FIELD BUT HAS
+       NO ELEMENT BEHIND IT. Walking the DOM finds a page's typed state only
+       where the page also remembered to write it into a hidden input; a
+       component that declared `field:"selN"` and nothing else was invisible
+       here, and its value came back as the widget's default over correct data.
+       Only the ones the DOM walk did not already find, so every page that has
+       been keeping its state through hidden inputs keeps writing exactly the
+       blob it wrote yesterday. */
+    try {
+      if (typeof FEK !== "undefined" && FEK && typeof FEK.values === "function") {
+        var fv = FEK.values(), fk;
+        for (fk in fv) if (fv.hasOwnProperty(fk) && !out.hasOwnProperty(fk)
+                           && fv[fk] != null && fv[fk] !== "") out[fk] = fv[fk];
+      }
+    } catch (e) { }
+    return out;
+  }
+  /* Restoring the hidden field is only half the job: the widget above it still
+     shows its construction default, and a correct value under a wrong-looking
+     dial is worse than no restore at all. FEK.setField (v1.3.0) puts the value
+     back through the widget for every component that declared its field. */
+  function formRestore(map){
+    if(!map) return 0;
+    var n = 0, id;
+    for(id in map){
+      if(!map.hasOwnProperty(id)) continue;
+      var e = document.getElementById(id);
+      if(!e){
+        /* v1.4.0: a field with no element behind it is a FEK control that
+           declared one; put the value back through the widget's own set(). */
+        if(typeof FEK !== "undefined" && FEK.setField && FEK.setField(id, map[id])) n++;
+        continue;
+      }
+      if(e.type === "checkbox" || e.type === "radio") e.checked = !!map[id];
+      else e.value = map[id];
+      if(typeof FEK !== "undefined" && FEK.setField){
+        var v = map[id];
+        if(e.type === "number" || /^-?\d+(\.\d+)?$/.test(String(v))) {
+          FEK.setField(id, v === "" ? null : parseFloat(v));
+        } else {
+          FEK.setField(id, v === "" ? null : v);
+        }
+      }
+      n++;
+    }
+    return n;
+  }
+
+  return { version:"1.4.0", wire:wire, usable:usable, live:function(){ return LIVE; },
+           formSnapshot:formSnapshot, formRestore:formRestore };
+})();
+/* ---- Outbox v1.0.0 : what has not left this device ---- */
+var OUT = (function(){
+  function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g,function(c){
+    return c==="&"?"&amp;":c==="<"?"&lt;":c===">"?"&gt;":c==='"'?"&quot;":"&#39;"; }); }
+
+  /* UTF-8 by hand rather than TextEncoder, because the two would be two code
+     paths and only one of them would ever be exercised -- and because what is
+     hashed has to be the same bytes on the phone in the field as on the laptop
+     that checks it. Surrogate pairs are joined: a filename or a note holding an
+     emoji must hash as the character it is, not as two halves. */
+  function utf8(s){
+    var out = [], i, c, c2, u;
+    for (i = 0; i < s.length; i++) {
+      c = s.charCodeAt(i);
+      if (c < 0x80) { out.push(c); continue; }
+      if (c < 0x800) { out.push(0xC0 | (c >> 6), 0x80 | (c & 63)); continue; }
+      if (c >= 0xD800 && c <= 0xDBFF && i + 1 < s.length
+          && (c2 = s.charCodeAt(i + 1)) >= 0xDC00 && c2 <= 0xDFFF) {
+        u = 0x10000 + ((c - 0xD800) << 10) + (c2 - 0xDC00); i++;
+        out.push(0xF0 | (u >> 18), 0x80 | ((u >> 12) & 63),
+                 0x80 | ((u >> 6) & 63), 0x80 | (u & 63));
+        continue;
+      }
+      out.push(0xE0 | (c >> 12), 0x80 | ((c >> 6) & 63), 0x80 | (c & 63));
+    }
+    return out;
+  }
+
+  /* ONE hash for the kit. FEK's, because the photographs already carry CRC-32
+     and a sheet whose two checksums disagreed would be a sheet nobody could
+     reconcile. No fallback: a second implementation here would drift silently,
+     and an outbox that hashed with something nothing else uses would report
+     "unchanged" for the wrong reason. */
+  function hash(o){
+    if (typeof FEK === "undefined" || !FEK || typeof FEK.crc32 !== "function") return null;
+    return FEK.crc32(utf8(JSON.stringify(o)));
+  }
+
+  function usable(){
+    try {
+      var k = "__out_probe__";
+      window.localStorage.setItem(k, "1");
+      window.localStorage.removeItem(k);
+      return true;
+    } catch(e){ return false; }
+  }
+
+  function when(ts){
+    if(!ts) return "";
+    try {
+      var d = new Date(ts), now = new Date();
+      var same = d.toDateString() === now.toDateString();
+      var hm = ("0"+d.getHours()).slice(-2) + ":" + ("0"+d.getMinutes()).slice(-2);
+      return same ? ("today " + hm) : (d.toISOString().slice(0,10) + " " + hm);
+    } catch(e){ return ""; }
+  }
+
+  function kb(n){
+    if(!n) return "0 bytes";
+    return n < 1024 ? (n + " bytes") : ((n/1024).toFixed(n < 10240 ? 1 : 0) + " kB");
+  }
+
+  /* One outbox per page, and the module-level sent() finds it. A page's copy
+     helper is defined long before the outbox is wired, so it cannot close over
+     a handle; guarding the call with `typeof` is exactly how ADR-201 lost an
+     export writer for a season. Instead a send that arrives before wiring is
+     REMEMBERED and reported by wire(), which turns a wiring-order mistake into
+     a red line instead of a silence. */
+  var LIVE = null, EARLY = [];
+
+  function wire(o){
+    o = o || {};
+    var key = o.key, host = typeof o.mount === "string" ? document.getElementById(o.mount) : o.mount;
+    var keep = o.keep, defs = o.exports || [], fmt = o.format == null ? 1 : o.format;
+    var ok = usable(), lastErr = null, sends = {}, timer = null;
+
+    function def(id){ var i; for(i=0;i<defs.length;i++) if(defs[i].id === id) return defs[i]; return null; }
+
+    /* The sheet's state comes from KEEP's snapshot and from nowhere else. Two
+       descriptions of "what is on this page" would be two things to keep in
+       step, and the one the outbox used would be the one nobody tested. */
+    function state(){
+      if(!keep || typeof keep.snapshot !== "function") return undefined;
+      try { return keep.snapshot(); } catch(e){ return undefined; }
+    }
+    function nowCrc(){
+      var st = state();
+      if(st === undefined) return null;
+      if(st === null) return "";
+      return hash(st);
+    }
+
+    function load(){
+      if(!ok) return;
+      try {
+        var raw = window.localStorage.getItem(key);
+        if(!raw) return;
+        var p = JSON.parse(raw);
+        if(!p || p.format !== fmt || !p.sends) return;
+        var id;
+        /* Only ids this sheet still declares. An export that was renamed or
+           removed leaves a stamp that can never go stale and would sit in the
+           ledger claiming a copy of something that no longer exists. */
+        for(id in p.sends) if(p.sends.hasOwnProperty(id) && def(id)) sends[id] = p.sends[id];
+      } catch(e){}
+    }
+    function save(){
+      if(!ok) return;
+      try { window.localStorage.setItem(key, JSON.stringify({format:fmt, sends:sends})); }
+      catch(e){
+        lastErr = (e && e.name === "QuotaExceededError")
+          ? "this browser's storage is full, so the outbox will forget what has gone when the tab closes"
+          : "this browser refused to keep the outbox, so it will forget what has gone when the tab closes";
+      }
+    }
+
+    /* THE SHEET AS IT CAME OUT OF THE BOX IS NOT WORK.
+       Three of these pages fill a date in for you, so "the snapshot is not
+       null" is not the same question as "is there anything here to send", and
+       an outbox that opened saying four exports were overdue on a sheet nobody
+       had touched would be ignored by the second morning. So the baseline is
+       the state at wire time -- UNLESS the autosave just restored something,
+       in which case every export is genuinely outstanding and saying so is the
+       entire point. */
+    var base = null;
+
+    function status(){
+      var crc = nowCrc(), rows = [], i, d, s;
+      for(i=0;i<defs.length;i++){
+        d = defs[i]; s = sends[d.id];
+        rows.push({ id:d.id, label:d.label, records:(d.records !== false),
+                    sent:!!s, at:(s?s.at:0), bytes:(s?s.bytes:0),
+                    stale: !!s && crc !== null && crc !== "" && s.crc !== crc });
+      }
+      var never = [], stale = [], last = 0, lastLabel = "", carry = [];
+      var blank = (crc === "") || (base !== null && crc === base);
+      for(i=0;i<rows.length;i++){
+        if(rows[i].at > last){ last = rows[i].at; lastLabel = rows[i].label; }
+        /* A copy that does not carry the sheet's records is DECLARED -- so that
+           no call site can hand out bytes this ledger has never heard of -- but
+           it is not counted. An outbox that nagged you to re-copy an AI prompt
+           every time you added a stem would be an outbox nobody reads, and an
+           outbox nobody reads is worse than none, because the page still looks
+           like it is keeping track. */
+        if(!rows[i].records) continue;
+        carry.push(rows[i]);
+        if(blank) continue;
+        if(!rows[i].sent) never.push(rows[i]);
+        else if(rows[i].stale) stale.push(rows[i]);
+      }
+      return { crc:crc, empty:blank, unreadable:(crc === null), rows:rows,
+               carry:carry, never:never, stale:stale, pending:never.length + stale.length,
+               last:last, lastLabel:lastLabel, err:lastErr, storing:ok };
+    }
+
+    function sent(id, bytes){
+      var d = def(id);
+      if(!d){
+        lastErr = 'an export this sheet does not declare: "' + String(id) + '". '
+                + 'Something left this device and the outbox cannot tell you what';
+        paint(); return false;
+      }
+      var crc = nowCrc();
+      if(crc === null){
+        lastErr = "the outbox could not read this sheet, so it has NOT marked "
+                + d.label + " as gone";
+        paint(); return false;
+      }
+      sends[id] = { crc:crc, at:Date.now(), bytes:(bytes|0) };
+      lastErr = null;
+      save(); paint();
+      return true;
+    }
+
+    function paint(){
+      if(!host) return;
+      var st = status(), msg, tone = "";
+      if(st.unreadable){
+        tone = " bad";
+        msg = "<b>The outbox cannot read this sheet.</b> It is not tracking what has left, so "
+            + "treat nothing here as sent.";
+      } else if(st.err){
+        tone = " bad";
+        msg = "<b>" + esc(st.err) + ".</b>";
+      } else if(st.empty){
+        msg = "Nothing on this sheet yet. The outbox starts counting when you do.";
+      } else if(st.pending === 0){
+        msg = "<b>Everything here has left this device.</b> Last export "
+            + esc(when(st.last)) + (st.lastLabel ? " \u2014 " + esc(st.lastLabel) : "") + ".";
+      } else {
+        tone = " hot";
+        msg = "<b>" + st.pending + " of " + st.carry.length + " export"
+            + (st.carry.length === 1 ? "" : "s") + " on this sheet " + (st.pending === 1 ? "has" : "have")
+            + " not left this device</b>"
+            + (st.last ? " \u2014 last export " + esc(when(st.last)) + "." : " at all.");
+      }
+      var li = "", i, r;
+      for(i=0;i<st.carry.length;i++){
+        r = st.carry[i];
+        if(!r.sent) li += "<li>" + esc(r.label) + " <span class=\"why\">never</span></li>";
+        else if(r.stale) li += "<li>" + esc(r.label) + " <span class=\"why\">changed since "
+                             + esc(when(r.at)) + "</span></li>";
+      }
+      host.className = "outbox noprint" + tone;
+      host.innerHTML =
+        '<p class="st" role="status" aria-live="polite">' + msg + '</p>'
+        + (li ? '<ul class="pend">' + li + '</ul>' : '')
+        + '<p class="note"><b>This is a ledger, not a transport.</b> A page opened from a card '
+        + 'cannot send anything by itself \u2014 what it can do is tell you exactly what is on '
+        + 'this device and nowhere else, so a few minutes of signal go on the right bytes.'
+        + (st.storing ? "" : " Storage is unavailable here, so this list starts again when the tab closes.")
+        + '</p>';
+    }
+
+    /* Repaint on anything that could have changed the sheet, debounced. No page
+       wiring: a page that gained a control would otherwise have to remember to
+       tell the outbox, and the one it forgot would be the one that went stale
+       quietly. */
+    function touch(){
+      if(timer) clearTimeout(timer);
+      timer = setTimeout(function(){ timer = null; paint(); }, o.debounce == null ? 400 : o.debounce);
+    }
+    try {
+      ["input", "change", "click"].forEach(function(ev){
+        document.addEventListener(ev, touch, true); });
+    } catch(e){}
+
+    load();
+    base = (keep && typeof keep.restored === "function" && keep.restored()) ? null : nowCrc();
+    var h = { sent:sent, status:status, paint:paint, touch:touch,
+              usable:function(){ return ok; }, error:function(){ return lastErr; } };
+    LIVE = h;
+    if(EARLY.length){
+      /* An export that happened before the outbox existed is a wiring-order
+         fault, and it is reported rather than replayed: the stamp it would have
+         taken is the state at a moment that has already gone. */
+      lastErr = "an export left this device before the outbox was wired ("
+              + EARLY.map(function(e){ return String(e[0]); }).join(", ") + ")";
+      EARLY = [];
+    }
+    paint();
+    return h;
+  }
+
+  return { version:"1.0.0", wire:wire, utf8:utf8, hash:hash,
+           sent:function(id, bytes){
+             if(!LIVE){ EARLY.push([id, bytes]); return false; }
+             return LIVE.sent(id, bytes);
+           },
+           status:function(){ return LIVE ? LIVE.status() : null; } };
+})();
+</script>
+<script>
+/* ---------------------------------------------------------------------------
+   Suite B data.
+
+   MATING SYSTEM is established biology and ships (gate 1). It drives the
+   minimum-population rule: >=20 individuals for inbreeders, >=100 for
+   outbreeders (Learn Seed Saving).
+
+   ISOLATION DISTANCE mostly does NOT ship. Published tables disagree by an
+   order of magnitude, and the right number depends on pollinator pressure,
+   wind, barriers, and whether you are maintaining a variety for yourself or
+   producing seed someone else will rely on. Two figures are cited and ship
+   with their source (NMSU H-262); everything else is grower-entered, exactly
+   like the breakpoints in Micro Bench. ADR-031 gate 3.
+--------------------------------------------------------------------------- */
+var CROPS = [
+ {id:"tom",  n:"tomato",            sys:"self",  pol:"self",   note:"Modern varieties have short styles and rarely outcross; some heirlooms and potato-leaf types outcross more."},
+ {id:"pep",  n:"pepper",            sys:"mixed", pol:"insect", note:"Self-fertile but bees cross them readily. Treat as an outcrosser if hot and sweet types are near each other."},
+ {id:"bean", n:"bean, common",      sys:"self",  pol:"self",   note:"Cleistogamous - it pollinates before the flower opens. One of the easiest seeds to save true."},
+ {id:"pea",  n:"pea",               sys:"self",  pol:"self",   note:"As reliable as beans. Peas and beans do not cross with each other."},
+ {id:"let",  n:"lettuce",           sys:"self",  pol:"self",   note:"Self-pollinating; bolting plants need space and time but not much isolation."},
+ {id:"egg",  n:"eggplant",          sys:"mixed", pol:"insect", note:"Mostly selfing, with meaningful insect outcrossing."},
+ {id:"okra", n:"okra",              sys:"mixed", pol:"insect", note:"Partially outcrossing; bees work the large flowers hard."},
+ {id:"soy",  n:"soybean",           sys:"self",  pol:"self",   note:"Highly self-pollinated."},
+ {id:"corn", n:"corn, sweet",       sys:"cross", pol:"wind",   minN:100, pref:200, iso:3200,
+  isoNote:"two miles", isoSrc:"NMSU H-262",
+  note:"Wind-pollinated and promiscuous. Also the crop where inbreeding depression bites hardest and fastest."},
+ {id:"sqp",  n:"squash, C. pepo",   sys:"cross", pol:"insect", iso:800, isoNote:"half a mile", isoSrc:"NMSU H-262",
+  note:"Crosses freely with other C. pepo - courgette, acorn, delicata, most pumpkins - but not with other Cucurbita species."},
+ {id:"sqm",  n:"squash, C. maxima", sys:"cross", pol:"insect", iso:800, isoNote:"half a mile", isoSrc:"NMSU H-262",
+  note:"Hubbard, buttercup, kabocha. Crosses within C. maxima only."},
+ {id:"sqo",  n:"squash, C. moschata",sys:"cross",pol:"insect", iso:800, isoNote:"half a mile", isoSrc:"NMSU H-262",
+  note:"Butternut and its relatives. Crosses within C. moschata only."},
+ {id:"cuc",  n:"cucumber",          sys:"cross", pol:"insect", note:"Does not cross with melon or squash despite the family."},
+ {id:"mel",  n:"melon",             sys:"cross", pol:"insect", note:"Cantaloupe, honeydew and Armenian cucumber are all C. melo and cross freely."},
+ {id:"wat",  n:"watermelon",        sys:"cross", pol:"insect", note:"Citrullus - does not cross with any Cucumis or Cucurbita."},
+ {id:"bra",  n:"brassica, B. oleracea",sys:"cross",pol:"insect",
+  note:"Cabbage, broccoli, kale, collards, kohlrabi, Brussels sprouts and cauliflower are ONE species and cross freely with each other."},
+ {id:"brar", n:"brassica, B. rapa", sys:"cross", pol:"insect", note:"Turnip, pak choi, mizuna, broccoli raab. Crosses within B. rapa."},
+ {id:"car",  n:"carrot",            sys:"cross", pol:"insect",
+  note:"Crosses with wild Queen Anne's lace, which grows in most road verges. Flagged as highly susceptible to inbreeding depression."},
+ {id:"oni",  n:"onion",             sys:"cross", pol:"insect", note:"Flagged as highly susceptible to inbreeding depression."},
+ {id:"beet", n:"beet / chard",      sys:"cross", pol:"wind",   note:"Beetroot, sugar beet and chard are one species. Wind-pollinated, so distances are large."},
+ {id:"spin", n:"spinach",           sys:"cross", pol:"wind",   note:"Dioecious and wind-pollinated - you need both sexes and real distance."},
+ {id:"rad",  n:"radish",            sys:"cross", pol:"insect", note:"Self-incompatible; needs a real population, not a few plants."},
+ {id:"sun",  n:"sunflower",         sys:"cross", pol:"insect", note:"Largely self-incompatible."},
+ {id:"cel",  n:"celery",            sys:"cross", pol:"insect", note:"Crosses with celeriac - same species."},
+ {id:"leek", n:"leek",              sys:"cross", pol:"insect", note:"Crosses with other A. ampeloprasum including elephant garlic."},
+ {id:"amar", n:"amaranth",          sys:"cross", pol:"wind",   note:"Grain and vegetable types cross; wind-pollinated."},
+ {id:"buck", n:"buckwheat",         sys:"cross", pol:"insect", note:"Self-incompatible with two flower morphs - needs a population."},
+ {id:"parsl",n:"parsley",           sys:"cross", pol:"insect", note:"Crosses with other parsley types; biennial."}
+];
+
+var PURPOSE = [
+ {value:"maintain", label:"Maintain a variety",  sub:"keep it true",   ramp:2},
+ {value:"conserve", label:"Conserve diversity",  sub:"keep the range", ramp:3},
+ {value:"breed",    label:"Actively breed",      sub:"move a trait",   ramp:4}
+];
+var PURPOSE_NOTE = {
+ maintain:"Enough plants to avoid drifting away from the variety and to avoid inbreeding depression. The published floor applies directly.",
+ conserve:"You are trying to keep rare alleles that a small sample would lose by chance. Larger than maintenance, and the published floor is a minimum rather than a target.",
+ breed:"You are deliberately narrowing the population to move a trait, which costs diversity on purpose. The floor still applies to whatever you keep, or the next generation inbreeds."
+};
+</script>
+<script>
+(function(){
+  "use strict";
+  var $=function(i){return document.getElementById(i);};
+  function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,function(c){
+    return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c];});}
+  var tt;function toast(m){var t=$("toast");t.textContent=m;t.classList.add("on");
+    clearTimeout(tt);tt=setTimeout(function(){t.classList.remove("on");},1700);}
+  function f(x,d){return isFinite(x)?x.toFixed(d==null?1:d):"—";}
+  function cropBy(id){for(var i=0;i<CROPS.length;i++) if(CROPS[i].id===id) return CROPS[i]; return null;}
+
+  /* ------------------------------------------------------------- stats --- */
+  /* Acklam's inverse normal CDF; |error| < 1.15e-9 */
+  function qnorm(p){
+    if(p<=0||p>=1) return NaN;
+    var a=[-3.969683028665376e+01,2.209460984245205e+02,-2.759285104469687e+02,
+            1.383577518672690e+02,-3.066479806614716e+01,2.506628277459239e+00],
+        b=[-5.447609879822406e+01,1.615858368580409e+02,-1.556989798598866e+02,
+            6.680131188771972e+01,-1.328068155288572e+01],
+        c=[-7.784894002430293e-03,-3.223964580411365e-01,-2.400758277161838e+00,
+           -2.549732539343734e+00,4.374664141464968e+00,2.938163982698783e+00],
+        d=[7.784695709041462e-03,3.224671290700398e-01,2.445134137142996e+00,
+           3.754408661907416e+00];
+    var pl=0.02425, q, r;
+    if(p<pl){ q=Math.sqrt(-2*Math.log(p));
+      return (((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q+c[5])/((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+1); }
+    if(p>1-pl){ q=Math.sqrt(-2*Math.log(1-p));
+      return -(((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q+c[5])/((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+1); }
+    q=p-0.5; r=q*q;
+    return (((((a[0]*r+a[1])*r+a[2])*r+a[3])*r+a[4])*r+a[5])*q/
+           (((((b[0]*r+b[1])*r+b[2])*r+b[3])*r+b[4])*r+1);
+  }
+  function dnorm(x){ return Math.exp(-x*x/2)/Math.sqrt(2*Math.PI); }
+  /* selection intensity for truncation at proportion p saved */
+  function intensity(p){ if(!(p>0&&p<1)) return NaN; return dnorm(qnorm(1-p))/p; }
+  /* two-tailed t at alpha=.05; table for small df, normal approx beyond */
+  var TT={1:12.706,2:4.303,3:3.182,4:2.776,5:2.571,6:2.447,7:2.365,8:2.306,9:2.262,10:2.228,
+          11:2.201,12:2.179,13:2.160,14:2.145,15:2.131,16:2.120,17:2.110,18:2.101,19:2.093,20:2.086,
+          21:2.080,22:2.074,23:2.069,24:2.064,25:2.060,26:2.056,27:2.052,28:2.048,29:2.045,30:2.042,
+          40:2.021,50:2.009,60:2.000,80:1.990,100:1.984,120:1.980};
+  function tcrit(df){
+    if(df<1) return NaN;
+    if(TT[df]) return TT[df];
+    var ks=Object.keys(TT).map(Number).sort(function(a,b){return a-b;});
+    if(df>120) return 1.960;
+    for(var i=0;i<ks.length-1;i++){
+      if(df>ks[i]&&df<ks[i+1]){
+        var t=(df-ks[i])/(ks[i+1]-ks[i]);
+        return TT[ks[i]]+t*(TT[ks[i+1]]-TT[ks[i]]);
+      }
+    }
+    return 1.960;
+  }
+  function mean(a){var s=0;a.forEach(function(v){s+=v;});return a.length?s/a.length:NaN;}
+
+  /* =========================================================== POPULATION = */
+  var cropCtl,purpCtl,nCtl,nmCtl,nfCtl;
+  function popUI(){
+    cropCtl=FEK.picker({field:"bbCrop",label:"Crop",placeholder:"filter 28 crops…",
+      options:CROPS.map(function(c){ return {value:c.id,label:c.n,
+        sub:(c.sys==="self"?"self-pollinating":c.sys==="cross"?"cross-pollinating":"mixed")+
+            " · "+(c.pol==="wind"?"wind":c.pol==="insect"?"insect":"self")}; }),
+      onchange:popOut});
+    purpCtl=FEK.dial({field:"bbPurp",label:"What the seed is for",options:PURPOSE,value:"maintain",clearable:false,
+      onchange:popOut});
+    nCtl=FEK.step({field:"bbN",label:"Plants you plan to save seed from",unit:"plants",value:20,min:1,max:2000,step:5,
+      help:"The headcount, before accounting for who actually contributed pollen."});
+    nmCtl=FEK.step({field:"bbNm",label:"Pollen parents contributing",unit:"plants",value:20,min:1,max:2000,step:5});
+    nfCtl=FEK.step({field:"bbNf",label:"Seed parents contributing",unit:"plants",value:20,min:1,max:2000,step:5});
+    FEK.mount("popPick",[cropCtl,purpCtl]);
+    FEK.mount("popN",[nCtl,nmCtl,nfCtl]);
+    ["popN"].forEach(function(id){ $(id).addEventListener("click",function(){ setTimeout(popOut,0); }); });
+    $("popN").addEventListener("input",popOut);
+  }
+  /* A CROP'S BREEDING CLASS AND THE PROVENANCE OF ITS MINIMUM ARE TWO FACTS,
+     and this returned one slot for both. A crop with a cited minimum got
+     why:"cited for this crop", which the warning below then read out as
+     "this crop is cited for this crop" -- and sweet corn, the one crop where
+     "outbreeder" carries the whole argument, was exactly such a crop. Found by
+     the fourth and fifth blind trials. */
+  function klassOf(c){
+    if(c.sys==="cross") return "an outbreeder";
+    if(c.sys==="mixed") return "treated as an outbreeder — it outcrosses enough to matter";
+    return "an inbreeder";
+  }
+  function minFor(c){
+    if(!c) return null;
+    if(c.minN) return {n:c.minN, pref:c.pref, klass:klassOf(c), cited:true};
+    if(c.sys==="cross") return {n:100, klass:klassOf(c)};
+    if(c.sys==="mixed") return {n:100, klass:klassOf(c)};
+    return {n:20, klass:klassOf(c)};
+  }
+  function popOut(){
+    var box=$("popOut"), c=cropBy(cropCtl.get()), N=nCtl.get(), purp=purpCtl.get();
+    if(!c){ box.innerHTML='<p class="fine" style="margin:0">Pick a crop.</p>'; $("neOut").innerHTML=""; return; }
+    var m=minFor(c);
+    var ok=N>=m.n, great=m.pref? N>=m.pref : N>=m.n*2;
+    box.innerHTML='<h3 style="margin-top:0">'+esc(c.n)+'</h3>';
+    box.appendChild(FEK.tiles([
+      {v:N, l:"you plan to keep", tone:ok?"good":"bad"},
+      {v:m.n+(m.pref?" ("+m.pref+")":""), l:"published minimum"+(m.pref?" (preferred)":"")},
+      {v:c.sys==="self"?"self":c.sys==="cross"?"cross":"mixed", l:"mating system"},
+      {v:c.pol==="wind"?"wind":c.pol==="insect"?"insect":"self", l:"pollinated by"}
+    ]));
+    if(!ok) box.appendChild(FEK.banner("Below the published minimum of "+m.n+".",
+      "The rule is at least 20 individuals for an inbreeder and 100 for an outbreeder; this crop is "+
+      esc(m.klass)+(m.cited?", and carries a cited minimum of its own":"")+". At "+N+" you are "+
+      (m.n-N)+" short. "+
+      (c.sys!=="self"
+        ? "For an outbreeder that is not a rounding error: the plants carry recessive alleles that heterozygosity has been hiding, and a small sample forces them into the open as lost vigour and poor seed set."
+        : "For an inbreeder the cost is milder — mostly a bottleneck and a lost chance to spot off-types — but the floor exists for a reason."),"bad"));
+    else if(great) box.appendChild(FEK.banner("Comfortably above the floor.",
+      "At "+N+" against a minimum of "+m.n+" you have room for roguing and for losses without dropping under.","good"));
+    else box.appendChild(FEK.banner("Just above the floor.",
+      "You meet the minimum of "+m.n+", but it is a <b>floor, not a target</b> — the point below which you "+
+      "actively damage the variety. Losses, poor germination and roguing all eat into it, so plan a margin.","warn"));
+    box.appendChild(FEK.banner(PURPOSE.filter(function(p){return p.value===purp;})[0].label,
+      PURPOSE_NOTE[purp],"cold"));
+    if(c.note) box.appendChild(FEK.banner("About "+esc(c.n),esc(c.note),"cold"));
+    neOut();
+  }
+  function neOut(){
+    var box=$("neOut"), nm=nmCtl.get(), nf=nfCtl.get();
+    if(!(nm>0&&nf>0)){ box.innerHTML=""; return; }
+    var Ne=4*nm*nf/(nm+nf), dF=1/(2*Ne);
+    box.innerHTML='<h3 style="margin-top:0">Effective population size</h3>';
+    box.appendChild(FEK.tiles([
+      {v:f(Ne,1), l:"Nₑ", tone:Ne>=100?"good":(Ne>=20?"warn":"bad")},
+      {v:f(dF*100,2)+"%", l:"ΔF per generation", tone:dF*100<=0.5?"good":(dF*100<=2.5?"warn":"bad")},
+      {v:f((1-Math.pow(1-dF,10))*100,1)+"%", l:"after 10 generations",
+       tone:(1-Math.pow(1-dF,10))*100<=5?"good":"warn"},
+      {v:nm+" / "+nf, l:"pollen / seed parents"}
+    ]));
+    box.appendChild(FEK.banner("Nₑ = 4 × "+nm+" × "+nf+" / ("+nm+" + "+nf+") = "+f(Ne,1),
+      (Math.abs(nm-nf)>Math.max(nm,nf)*0.25
+        ? "<b>The rarer sex is capping you.</b> "+nm+" pollen parents and "+nf+" seed parents is "+(nm+nf)+
+          " plants but an effective size of "+f(Ne,1)+". Balancing the two contributions is the cheapest way "+
+          "to raise Nₑ — it costs no extra ground."
+        : "Contributions are reasonably balanced, so Nₑ is close to the headcount. That is the best case, "+
+          "and it still assumes random mating and equal contribution within each group.")+
+      " ΔF = 1/(2Nₑ) = "+f(dF*100,2)+"% inbreeding added per generation, compounding.",
+      Ne>=100?"good":(Ne>=20?"warn":"bad")));
+    if(Ne<20) box.appendChild(FEK.banner("Nₑ under 20 is a salvage situation.",
+      "At this effective size you add "+f(dF*100,1)+"% inbreeding every generation. Decline shows up first "+
+      "as vigour and seed set rather than as the trait you were watching, and by the time it is obvious it "+
+      "is several generations deep. Widen the parent pool or bring in unrelated seed of the same variety.","bad"));
+  }
+
+  /* ============================================================ ISOLATION = */
+  var isoCrop,isoDist,isoUse;
+  function isoUI(){
+    $("isoRefuse").innerHTML="";
+    $("isoRefuse").appendChild(FEK.banner("Most isolation distances are yours to enter, not mine to supply.",
+      "Two are cited here and ship with their source. Every other published table disagrees with every other "+
+      "published table by an order of magnitude, because the right distance depends on pollinator pressure, "+
+      "wind, barriers, population size, and above all on whether the seed is for your own garden or for "+
+      "someone else to rely on. Enter the figure you are working to and the page records it with the source. "+
+      "(<a href=\"adr-031.html\">ADR-031</a>, gate 3.)","bad"));
+    isoCrop=FEK.picker({field:"bbIsoCrop",label:"Crop",placeholder:"filter…",
+      options:CROPS.map(function(c){ return {value:c.id,label:c.n,
+        sub:c.iso?("cited: "+c.isoNote+" · "+c.isoSrc):"no cited distance — enter yours"}; }),
+      onchange:isoOut});
+    isoDist=FEK.step({field:"bbIsoDist",label:"Distance to the nearest other variety",unit:"m",value:100,min:0,max:5000,step:25});
+    isoUse=FEK.chips({field:"bbIsoUse",label:"What the seed is for",single:true,value:["own"],
+      options:[{value:"own",label:"My own garden"},{value:"share",label:"Sharing / selling"}],
+      onchange:isoOut});
+    FEK.mount("isoPick",[isoCrop]); FEK.mount("isoEntry",[isoDist,isoUse]);
+    $("isoEntry").addEventListener("click",function(){ setTimeout(isoOut,0); });
+    $("isoEntry").addEventListener("input",isoOut);
+  }
+  function isoOut(){
+    var box=$("isoOut"), c=cropBy(isoCrop.get()), d=isoDist.get(), use=(isoUse.get()[0]||"own");
+    if(!c){ box.innerHTML='<p class="fine" style="margin:0">Pick a crop.</p>'; return; }
+    box.innerHTML='<h3 style="margin-top:0">'+esc(c.n)+'</h3>';
+    var tiles=[{v:f(d,0)+" m", l:"your distance"},
+               {v:c.pol==="wind"?"wind":c.pol==="insect"?"insect":"self", l:"pollen travels by"},
+               {v:c.sys==="self"?"self":c.sys==="cross"?"cross":"mixed", l:"mating system"}];
+    if(c.iso) tiles.push({v:c.isoNote, l:"cited ("+c.isoSrc+")", tone:d>=c.iso?"good":"bad"});
+    box.appendChild(FEK.tiles(tiles));
+    if(c.iso){
+      box.appendChild(FEK.banner(
+        d>=c.iso ? ("Meets the cited "+c.isoNote+".")
+                 : ("Short of the cited "+c.isoNote+" ("+c.iso+" m)."),
+        "This is one of the two distances on this page with a source: <b>"+esc(c.isoSrc)+"</b>. "+
+        (d>=c.iso ? "That figure is for producing seed that stays true; for your own garden you may accept less, and you should say so in the record."
+                  : "You are "+f(c.iso-d,0)+" m short. Consider time isolation — staggering sowings so the two do not flower together — or bagging and hand-pollinating, either of which beats distance."),
+        d>=c.iso?"good":"bad"));
+    } else {
+      box.appendChild(FEK.banner("No cited distance for this crop.",
+        "Enter the figure you are working to and record where it came from. As orientation rather than "+
+        "instruction: <b>wind-pollinated</b> crops need far more distance than insect-pollinated ones, and "+
+        "<b>self-pollinating</b> crops need very little. This crop is "+
+        (c.pol==="wind"?"<b>wind</b>-pollinated and "+(c.sys==="cross"?"an outcrosser — the demanding combination.":"")
+         :c.pol==="insect"?"<b>insect</b>-pollinated.":"<b>self</b>-pollinating, the easy case.")+"","warn"));
+    }
+    if(use==="share") box.appendChild(FEK.banner("Seed you are sharing or selling.",
+      "Someone else will sow this and will not know what went wrong if it comes out crossed. That is the case "+
+      "for the full distance, for bagging, or for not saving that variety this year.","warn"));
+    else box.appendChild(FEK.banner("Seed for your own garden.",
+      "A little contamination is recoverable — you will see the off-types next year and can rogue them. "+
+      "Record the distance you actually used so that next year's surprises have an explanation.","cold"));
+    if(c.note) box.appendChild(FEK.banner("Watch out",esc(c.note),"cold"));
+  }
+
+  /* ============================================================ SELECTION = */
+  var selN,selK,selH2,selSD, rogN,rogWhy;
+  function selUI(){
+    selN=FEK.step({field:"bbSelN",label:"Plants grown",unit:"plants",value:100,min:2,max:5000,step:10});
+    selK=FEK.step({field:"bbSelK",label:"Plants kept as parents",unit:"plants",value:10,min:1,max:5000,step:1});
+    selH2=FEK.slider({field:"bbSelH2",label:"Heritability h² you are assuming",min:0,max:1,step:0.05,value:0.35,
+      fmt:function(v){return v.toFixed(2);},
+      help:"A guess unless you have measured it. Selection Log measures it properly from parent–offspring pairs."});
+    selSD=FEK.step({field:"bbSelSD",label:"Phenotypic SD of the trait",unit:"units",value:10,min:0.01,max:10000,step:1,
+      help:"In whatever units the trait is measured — grams, days, centimetres."});
+    FEK.mount("selEntry",[selN,selK,selH2,selSD]);
+    $("selEntry").addEventListener("click",function(){ setTimeout(selOut,0); });
+    $("selEntry").addEventListener("input",selOut);
+    rogN=FEK.step({field:"bbRogN",label:"Plants rogued",unit:"plants",value:1,min:1,max:1000,step:1});
+    rogWhy=FEK.chips({field:"bbRogWhy",label:"Why",single:true,value:["offtype"],
+      options:[{value:"offtype",label:"Off-type"},{value:"disease",label:"Disease"},
+               {value:"bolt",label:"Bolted early"},{value:"weak",label:"Weak"},{value:"other",label:"Other"}]});
+    FEK.mount("rogEntry",[rogN,rogWhy]);
+  }
+  function selOut(){
+    var box=$("selOut"), N=selN.get(), K=selK.get(), h2=selH2.get(), sd=selSD.get();
+    if(K>N){ box.innerHTML='<h3 style="margin-top:0">Response</h3>';
+      box.appendChild(FEK.banner("You cannot keep more parents than you grew.",
+        "Kept ("+K+") exceeds grown ("+N+"). Fix one of them.","bad")); return; }
+    var p=K/N, i=intensity(p), R=i*h2*sd;
+    var Ne=K, dF=1/(2*Ne);
+    box.innerHTML='<h3 style="margin-top:0">Response</h3>';
+    box.appendChild(FEK.tiles([
+      {v:f(p*100,1)+"%", l:"proportion kept"},
+      {v:f(i,3), l:"intensity i", tone:i>1.5?"good":""},
+      {v:f(R,2), l:"expected R per generation", tone:"good"},
+      {v:K, l:"Nₑ if these are the only parents", tone:K>=100?"good":(K>=20?"warn":"bad")},
+      {v:f(dF*100,2)+"%", l:"ΔF per generation", tone:dF*100<=0.5?"good":(dF*100<=2.5?"warn":"bad")}
+    ]));
+    box.appendChild(FEK.banner("Keeping the top "+f(p*100,1)+"% gives i = "+f(i,3)+".",
+      "R = i × h² × σ<sub>P</sub> = "+f(i,3)+" × "+f(h2,2)+" × "+f(sd,2)+" = <b>"+f(R,2)+
+      "</b> units per generation, if h² is right and the environment does not move.","good"));
+    if(K<20) box.appendChild(FEK.banner("Selecting this hard costs you a population.",
+      "Keeping "+K+" parents is an effective size around "+K+", which adds <b>"+f(dF*100,1)+
+      "% inbreeding in one generation</b>. You will see the gain on the trait and pay for it in vigour and "+
+      "seed set two generations later. Grow more plants, or select less hard — those are the only two levers.","bad"));
+    else if(K<100) box.appendChild(FEK.banner("Watch the population cost.",
+      "Keeping "+K+" parents adds "+f(dF*100,2)+"% inbreeding per generation. That is survivable for an "+
+      "inbreeder and worth watching for an outcrosser.","warn"));
+    box.appendChild(FEK.banner("h² here is an assumption, not a measurement.",
+      "Unless you measured it from parent–offspring pairs, the response above is only as good as the number "+
+      "you dialled in. <a href=\"selection-log.html\">Selection Log</a> measures it properly, and prints the "+
+      "reasons a field h² is usually an overestimate.","cold"));
+  }
+  var rogues=[];
+  $("rAdd").addEventListener("click",function(){
+    rogues.push({n:rogN.get(),why:rogWhy.get()[0]||"other"});
+    rogList(); rogOut(); FEK.buzz(12); toast("Logged"); });
+  $("rUndo").addEventListener("click",function(){
+    if(!rogues.length){toast("Nothing to undo");return;} rogues.pop(); rogList(); rogOut(); });
+  function rogList(){
+    var box=$("rList");
+    if(!rogues.length){ box.innerHTML='<p class="fine" style="margin:0">Nothing rogued yet.</p>'; return; }
+    var LAB={offtype:"Off-type",disease:"Disease",bolt:"Bolted early",weak:"Weak",other:"Other"};
+    box.innerHTML=rogues.slice().reverse().map(function(r){
+      return '<div class="row2"><div class="g"><b>'+esc(LAB[r.why]||r.why)+'</b><span>removed before flowering</span></div>'+
+        '<span class="cov">'+r.n+'</span></div>'; }).join("");
+  }
+  function rogOut(){
+    var box=$("rogOut");
+    if(!rogues.length){ box.innerHTML=""; return; }
+    var tot=rogues.reduce(function(a,r){return a+r.n;},0);
+    var N=selN.get(), left=N-tot;
+    box.innerHTML="";
+    box.appendChild(FEK.tiles([
+      {v:tot, l:"rogued in total"},
+      {v:left, l:"left standing", tone:left>0?"":"bad"},
+      {v:N?f(tot/N*100,1)+"%":"—", l:"of the population"}
+    ]));
+    box.appendChild(FEK.banner("Roguing is selection.",
+      "Removing "+tot+" plants before they shed pollen changes the parent pool exactly as saving seed from "+
+      "the best does — and it lowers the effective population size by the same arithmetic. "+
+      (left>0 && left<20
+        ? "<b>You are down to "+left+" plants standing.</b> That is below the inbreeder floor, let alone the outbreeder one."
+        : "Recording it is what makes next year's population maths honest."),
+      (left>0&&left<20)?"bad":"good"));
+  }
+
+  /* ================================================================ TRIAL = */
+  var plots=[], tEnt,tBlk,tYld;
+  function triUI(){
+    tEnt=FEK.step({label:"Entry (variety number)",unit:"",value:1,min:1,max:99,step:1});
+    tBlk=FEK.step({label:"Block",unit:"",value:1,min:1,max:20,step:1});
+    tYld=FEK.step({label:"Plot yield",unit:"kg",value:0,min:0,max:100000,step:0.5,dec:2});
+    FEK.mount("triEntry",[tEnt,tBlk,tYld]);
+  }
+  $("tAdd").addEventListener("click",function(){
+    plots.push({e:tEnt.get(),b:tBlk.get(),y:tYld.get()});
+    triOut(); FEK.buzz(12); toast("Plot added"); });
+  $("tUndo").addEventListener("click",function(){
+    if(!plots.length){toast("Nothing to undo");return;} plots.pop(); triOut(); });
+  /* ADR-209: the door has called this DESTRUCTIVE since ADR-112 and the page
+     asked nothing. One tap, four plots, no undo, next to the Add button. */
+  $("tClear").addEventListener("click",function(){
+    if(plots.length && !confirm("Clear the trial? "+plots.length+" plot"+
+       (plots.length===1?"":"s")+" go and there is no undo. Copy the bench sheet first "+
+       "if you want them.")) return;
+    plots=[]; triOut(); });
+  $("tDemo").addEventListener("click",function(){
+    /* 4 entries x 3 blocks. Entry means 10/12/11/14, block effects 0/-1/+1, plus a
+       residual matrix whose row and column sums are both zero -- so the entry and
+       block means stay exact while SSE = 1.00 and the analysis is not degenerate. */
+    plots=[];
+    var em=[10,12,11,14], be=[0,-1,1];
+    var res=[[0.5,-0.5,0],[-0.5,0.5,0],[0,0,0],[0,0,0]];
+    for(var e=1;e<=4;e++) for(var b=1;b<=3;b++)
+      plots.push({e:e,b:b,y:+(em[e-1]+be[b-1]+res[e-1][b-1]).toFixed(2)});
+    triOut(); toast("4 entries × 3 blocks loaded"); FEK.buzz(14); });
+
+  function rcbd(){
+    if(!plots.length) return null;
+    var ents=[],blks=[];
+    plots.forEach(function(p){ if(ents.indexOf(p.e)<0) ents.push(p.e);
+                               if(blks.indexOf(p.b)<0) blks.push(p.b); });
+    ents.sort(function(a,b){return a-b;}); blks.sort(function(a,b){return a-b;});
+    var t=ents.length, r=blks.length, n=plots.length;
+    if(n!==t*r) return {incomplete:true,t:t,r:r,n:n,ents:ents,blks:blks};
+    var G=0; plots.forEach(function(p){ G+=p.y; });
+    var gm=G/n;
+    var em={},bm={};
+    ents.forEach(function(e){ em[e]=mean(plots.filter(function(p){return p.e===e;}).map(function(p){return p.y;})); });
+    blks.forEach(function(b){ bm[b]=mean(plots.filter(function(p){return p.b===b;}).map(function(p){return p.y;})); });
+    var ssT=0,ssB=0,ssTot=0;
+    ents.forEach(function(e){ ssT+=r*Math.pow(em[e]-gm,2); });
+    blks.forEach(function(b){ ssB+=t*Math.pow(bm[b]-gm,2); });
+    plots.forEach(function(p){ ssTot+=Math.pow(p.y-gm,2); });
+    var ssE=ssTot-ssT-ssB;
+    var dfE=(t-1)*(r-1);
+    var mse=dfE>0?ssE/dfE:NaN;
+    var lsd=dfE>0?tcrit(dfE)*Math.sqrt(2*mse/r):NaN;
+    var cv=gm?100*Math.sqrt(mse)/gm:NaN;
+    return {t:t,r:r,n:n,ents:ents,blks:blks,gm:gm,em:em,bm:bm,
+            ssT:ssT,ssB:ssB,ssE:ssE,dfE:dfE,mse:mse,lsd:lsd,cv:cv};
+  }
+  function triOut(){
+    var box=$("triOut"), tbl=$("triTable"), a=rcbd();
+    if(!a){ box.innerHTML='<h3 style="margin-top:0">Analysis</h3>'+
+      '<p class="fine" style="margin:0">Add some plots.</p>'; tbl.innerHTML=""; return; }
+    box.innerHTML='<h3 style="margin-top:0">Analysis</h3>';
+    if(a.incomplete){
+      box.appendChild(FEK.banner("The design is not complete.",
+        "You have "+a.n+" plots across "+a.t+" entries and "+a.r+" blocks, which needs "+(a.t*a.r)+
+        ". A randomised complete block analysis needs every entry in every block. Fill the gaps, or "+
+        "analyse it as something else.","bad"));
+      tbl.innerHTML=""; return;
+    }
+    if(a.r<2){
+      box.appendChild(FEK.tiles([{v:a.t,l:"entries"},{v:a.r,l:"blocks",tone:"bad"},
+                                 {v:f(a.gm,2),l:"grand mean"}]));
+      box.appendChild(FEK.banner("One replicate is not a trial.",
+        "With a single block there is no error term, so there is no LSD and no way to tell a real difference "+
+        "from noise. The entry means below are just the plot yields. Two blocks is the bare minimum and three "+
+        "is where it starts being worth the ground.","bad"));
+    } else {
+      box.appendChild(FEK.tiles([
+        {v:a.t, l:"entries"},
+        {v:a.r, l:"blocks"},
+        {v:f(a.gm,2)+" kg", l:"grand mean"},
+        {v:f(a.mse,3), l:"MSE"},
+        {v:f(a.lsd,2)+" kg", l:"LSD₀.₀₅", tone:"good"},
+        {v:f(a.cv,1)+"%", l:"CV", tone:a.cv<=15?"good":(a.cv<=25?"warn":"bad")}
+      ]));
+      box.appendChild(FEK.banner("LSD₀.₀₅ = "+f(a.lsd,2)+" kg",
+        "t<sub>0.025,"+a.dfE+"</sub> × √(2 × "+f(a.mse,3)+" / "+a.r+"). Two entry means differing by more "+
+        "than this are conventionally called different — one comparison at a time.","good"));
+      if(a.cv>25) box.appendChild(FEK.banner("CV of "+f(a.cv,1)+"% is high.",
+        "Above roughly 25% the trial is too noisy to separate anything but very large differences. Look for "+
+        "the cause — plot size, edge effects, uneven establishment — before trusting any comparison.","bad"));
+      else if(a.cv>15) box.appendChild(FEK.banner("CV of "+f(a.cv,1)+"% is on the high side.",
+        "Under about 15% is the conventional target for a vegetable yield trial. These are conventions, not "+
+        "thresholds.","warn"));
+      else box.appendChild(FEK.banner("CV of "+f(a.cv,1)+"% is tidy.",
+        "Under the conventional 15% target for a yield trial, so the LSD is doing real work.","good"));
+      if(a.t>4) box.appendChild(FEK.banner("With "+a.t+" entries there are "+(a.t*(a.t-1)/2)+" pairwise comparisons.",
+        "At 5% each you should expect roughly "+f(a.t*(a.t-1)/2*0.05,1)+" apparent differences from noise "+
+        "alone. Compare each entry against a named control instead, and treat any other difference as a "+
+        "hypothesis for next season.","bad"));
+    }
+    /* table */
+    var srt=a.ents.slice().sort(function(x,y){ return a.em[y]-a.em[x]; });
+    var best=a.em[srt[0]];
+    var h='<h3 style="margin-top:0">Entry means</h3><div class="tw"><table>'+
+      '<tr><th>entry</th><th class="n">mean</th><th class="n">vs best</th>'+
+      (a.r>=2?'<th class="n">differs from best?</th>':'')+'</tr>';
+    srt.forEach(function(e){
+      var d=best-a.em[e];
+      h+='<tr><td>Entry '+e+'</td><td class="n">'+f(a.em[e],2)+'</td><td class="n">'+
+         (d>0?"−"+f(d,2):"—")+'</td>'+
+         (a.r>=2?('<td class="'+(d>a.lsd?"no":"ok")+'">'+(d>a.lsd?"yes":(d>0?"no":"—"))+'</td>'):'')+
+         '</tr>';
+    });
+    h+='</table></div>';
+    h+='<div class="tw"><table><tr><th>block</th><th class="n">mean</th></tr>';
+    a.blks.forEach(function(b){ h+='<tr><td>Block '+b+'</td><td class="n">'+f(a.bm[b],2)+'</td></tr>'; });
+    h+='</table></div>';
+    h+='<p class="fine">Block means are shown because a big spread between them is the design earning its '+
+       'keep — that is the field gradient being taken out of the entry comparison rather than left in it.</p>';
+    tbl.innerHTML=h;
+  }
+
+  /* ================================================================= SEED = */
+  var gN,gUp,sYear,sCrop;
+  function seedUI(){
+    gN=FEK.step({field:"bbGN",label:"Seeds tested",unit:"seeds",value:100,min:1,max:1000,step:10});
+    gUp=FEK.step({field:"bbGUp",label:"Seeds germinated",unit:"seeds",value:0,min:0,max:1000,step:1});
+    FEK.mount("germEntry",[gN,gUp]);
+    $("germEntry").addEventListener("click",function(){ setTimeout(germOut,0); });
+    $("germEntry").addEventListener("input",germOut);
+    sYear=FEK.step({field:"bbSYear",label:"Seasons in storage",unit:"years",value:1,min:0,max:30,step:1});
+    sCrop=FEK.picker({field:"bbSCrop",label:"Crop",placeholder:"filter…",
+      options:CROPS.map(function(c){ return {value:c.id,label:c.n}; }), onchange:storOut});
+    FEK.mount("storEntry",[sCrop,sYear]);
+    $("storEntry").addEventListener("click",function(){ setTimeout(storOut,0); });
+    $("storEntry").addEventListener("input",storOut);
+  }
+  function germOut(){
+    var box=$("germOut"), n=gN.get(), k=gUp.get();
+    if(k>n){ box.innerHTML=""; box.appendChild(FEK.banner("More germinated than you sowed.",
+      "You entered "+k+" up from "+n+" sown.","bad")); return; }
+    var p=k/n, se=Math.sqrt(p*(1-p)/n);
+    box.innerHTML="";
+    box.appendChild(FEK.tiles([
+      {v:f(p*100,1)+"%", l:"germination", tone:p>=0.8?"good":(p>=0.5?"warn":"bad")},
+      {v:"±"+f(se*100,1)+"%", l:"binomial SE", tone:se*100<=5?"good":"warn"},
+      {v:n, l:"seeds tested", tone:n>=100?"good":"warn"},
+      {v:f(Math.max(0,(p-1.96*se)*100),1)+"–"+f(Math.min(100,(p+1.96*se)*100),1)+"%", l:"95% interval"}
+    ]));
+    if(n<50) box.appendChild(FEK.banner("Only "+n+" seeds tested.",
+      "The interval above is wide for a reason: a proportion from a small sample moves a lot. One hundred "+
+      "seeds is the usual test size where you can spare them; 20 will tell you whether the lot is alive but "+
+      "not much more.","warn"));
+    /* 1/p CLAMPED AT p = 1% read out as "about 100.0 seeds per plant wanted"
+       at a germination of zero, which is a number where there is none: no
+       seed count gets you a plant from a lot that does not come up. Found by
+       the fifth blind trial. */
+    if(p<=0) box.appendChild(FEK.banner("No sowing rate follows from this.",
+      "Nothing germinated, so there is no number of seeds per plant to quote — the lot is dead or the "+
+      "test was wrong. Re-test before you plan around it.","bad"));
+    else box.appendChild(FEK.banner("Sowing rate follows from this.",
+      "At "+f(p*100,1)+"% you need about "+f(1/p,1)+" seeds per plant wanted, before "+
+      "field losses. A germination test in a warm tray flatters what happens in cold spring ground.","cold"));
+  }
+  function storOut(){
+    var box=$("storOut"), y=sYear.get(), c=cropBy(sCrop.get());
+    box.innerHTML="";
+    box.appendChild(FEK.tiles([{v:y, l:"seasons stored", tone:y<=3?"good":(y<=5?"warn":"bad")}]));
+    box.appendChild(FEK.banner(
+      y<=3 ? "Inside the conventional window." : y<=5 ? "At the edge of the conventional window."
+           : "Past the conventional window.",
+      "The working figure is that <b>most high-quality, correctly stored seed stays viable at least "+
+      "3–5 years</b>. That is a <b>range and a convention</b>, not a shelf life: onion, parsnip and leek are "+
+      "notoriously short-lived, while brassicas, tomatoes and cucurbits often run well past five years. "+
+      (y>3?"Run a germination test before you commit ground to it.":"A test still costs nothing but a week.")+
+      (c?" This page holds no species-specific longevity figure for "+esc(c.n)+" — that varies too much by "+
+         "storage moisture and temperature to ship a number for.":""),
+      y<=3?"good":(y<=5?"warn":"bad")));
+    box.appendChild(FEK.banner("Cool and dry beats either alone.",
+      "Seed put away damp does not keep however cold it is, and the usual rule of thumb is that the sum of "+
+      "temperature in °F and relative humidity should stay under about 100. That is a rule of thumb.","cold"));
+  }
+
+  /* ---------------------------------------------------------------- tabs - */
+  document.querySelectorAll(".tab").forEach(function(tb){
+    tb.addEventListener("click",function(){
+      document.querySelectorAll(".tab").forEach(function(t){t.classList.toggle("on",t===tb);});
+      document.querySelectorAll(".pane").forEach(function(p){p.classList.toggle("on",p.id===tb.dataset.pane);});
+      window.scrollTo(0,0); FEK.buzz();
+    });
+  });
+  popUI(); popOut(); isoUI(); isoOut(); selUI(); selOut(); rogList(); rogOut();
+  triUI(); triOut(); seedUI(); germOut(); storOut();
+
+  /* ================================================ THE BENCH SHEET ===== */
+  /* ADR-208. This page kept a morning's work from ADR-207 on and could hand
+     none of it over. Work that survives the tab and cannot leave the device is
+     not yet a record; it is a screen you are afraid to close. */
+  function copyText(s, m, id){
+    /* ADR-203/207. execCommand REPORTS FAILURE BY RETURNING FALSE and throws in
+       only some of the ways it can fail, so the return value is what decides
+       whether this copy happened; and the mark goes in the SUCCESS path, never
+       on the click. */
+    function ok(){ toast(m || "Copied"); FEK.buzz(); OUT.sent(id, s.length); }
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(s).then(ok, function(){ lg(s, ok); });
+    } else lg(s, ok);
+  }
+  function lg(s, ok){
+    var a=document.createElement("textarea"); a.value=s; a.style.position="fixed";
+    a.style.opacity="0"; document.body.appendChild(a); a.select();
+    var okc=false; try{ okc=document.execCommand("copy"); }catch(e){}
+    document.body.removeChild(a);
+    if(okc) ok(); else toast("Copy failed");
+  }
+  var ROGWHY = {offtype:"Off-type", disease:"Disease", bolt:"Bolted early",
+                weak:"Weak", other:"Other"};
+  function benchRows(){
+    var out = [];
+    out.push(["population", "field", "value", ""]);
+    /* ADR-264: the crop by its name. The sheet wrote the picker's internal id --
+       "tom" -- in the one row that says what the population is, while the
+       storage row four lines down wrote "tomato". */
+    var _crop = cropBy(cropCtl && cropCtl.get && cropCtl.get());
+    out.push(["population", "crop", _crop ? _crop.n : "", ""]);
+    out.push(["population", "plants grown", (selN && selN.get()), ""]);
+    out.push(["population", "plants kept as parents", (selK && selK.get()), ""]);
+    out.push(["population", "heritability assumed", (selH2 && selH2.get()), ""]);
+    out.push(["population", "phenotypic SD", (selSD && selSD.get()), ""]);
+    out.push(["roguing", "n", "plants", "why"]);
+    rogues.forEach(function(r,i){
+      out.push(["roguing", i+1, r.n, ROGWHY[r.why] || r.why]); });
+    out.push(["trial", "n", "entry", "block", "yield"]);
+    plots.forEach(function(p,i){ out.push(["trial", i+1, p.e, p.b, p.y]); });
+    /* ADR-211: WHAT THE BENCH WORKED OUT, and not only what was typed into it.
+       The sheet carried the population, the roguing and the trial rows and none
+       of the ten figures this page derives from them: the selection response,
+       the two inbreeding rates, the isolation distance against its citation,
+       the published minimum, what is left standing, and the storage age. */
+    out.push(["derived", "quantity", "value", "unit", "basis"]);
+    try {
+      var _N = selN.get(), _K = selK.get(), _h2 = selH2.get(), _sd = selSD.get();
+      if (_N > 0 && _K > 0 && _K <= _N) {
+        var _p = _K / _N, _i = intensity(_p), _R = _i * _h2 * _sd, _dFs = 1 / (2 * _K);
+        out.push(["derived", "proportion kept", f(_p*100,1), "%", _K + " of " + _N]);
+        out.push(["derived", "intensity i", f(_i,3), "SD units", ""]);
+        out.push(["derived", "expected R per generation", f(_R,2), "trait units",
+                  "i x h2 x sdP, h2 = " + _h2 + ", sdP = " + _sd]);
+        out.push(["derived", "dF per generation (parents kept)", f(_dFs*100,2), "%",
+                  "Ne = " + _K]);
+      }
+    } catch (e) { }
+    try {
+      var _nm = nmCtl.get(), _nf = nfCtl.get();
+      if (_nm > 0 && _nf > 0) {
+        var _Ne = 4*_nm*_nf/(_nm+_nf), _dF = 1/(2*_Ne);
+        out.push(["derived", "Ne", f(_Ne,1), "", _nm + " pollen / " + _nf + " seed parents"]);
+        out.push(["derived", "dF per generation", f(_dF*100,2), "%", ""]);
+        out.push(["derived", "after 10 generations", f((1-Math.pow(1-_dF,10))*100,1), "%", ""]);
+      }
+    } catch (e) { }
+    try {
+      var _c = cropBy(isoCrop.get()), _d = isoDist.get();
+      if (_c) out.push(["derived", "your isolation distance", f(_d,0), "m",
+                        _c.iso ? (_c.isoNote + " cited (" + _c.isoSrc + ")") : "no cited distance"]);
+      var _mc = cropBy(cropCtl.get()), _m = _mc && minFor(_mc);
+      if (_m) out.push(["derived", "published minimum population", _m.n, "plants",
+                        _m.pref ? ("preferred " + _m.pref) : ""]);
+    } catch (e) { }
+    if (rogues.length) {
+      var _tot = rogues.reduce(function(a,r){ return a + r.n; }, 0);
+      var _pop = 0; try { _pop = selN.get(); } catch (e) { }
+      out.push(["derived", "rogued in total", _tot, "plants",
+                _pop > 0 ? f(_tot / _pop * 100, 1) + "% of " + _pop : ""]);
+      try { out.push(["derived", "left standing", selN.get() - _tot, "plants", ""]); } catch (e) { }
+    }
+    try { out.push(["derived", "seasons stored", sYear.get(), "seasons",
+                    (cropBy(sCrop.get()) || {}).n || ""]); } catch (e) { }
+    /* ADR-264: THE TRIAL'S ANALYSIS. The sheet carried every plot and none of
+       what the trial pane works out from them -- the design, the grand mean,
+       the error mean square, the LSD and the CV. audit_carried called the
+       grand mean carried because a plot yielded 12 and the mean was 12.00. */
+    var _a = rcbd();
+    if (_a && _a.incomplete) {
+      out.push(["derived", "trial design", "incomplete", "",
+                _a.n + " plots for " + _a.t + " entries x " + _a.r + " blocks"]);
+    } else if (_a) {
+      out.push(["derived", "trial entries", _a.t, "", ""]);
+      out.push(["derived", "trial blocks", _a.r, "", _a.r < 2 ? "one replicate: no error term" : ""]);
+      out.push(["derived", "grand mean", f(_a.gm, 2), "kg", _a.n + " plots"]);
+      if (_a.r >= 2) {
+        out.push(["derived", "MSE", f(_a.mse, 3), "", "df " + _a.dfE]);
+        out.push(["derived", "LSD 0.05", f(_a.lsd, 2), "kg",
+                  "t(0.025, " + _a.dfE + ") = " + tcrit(_a.dfE)]);
+        out.push(["derived", "CV", f(_a.cv, 1), "%", ""]);
+      }
+    }
+    return out;
+  }
+  function csvCell(v){
+    var t = String(v==null?"":v);
+    return /[",\n]/.test(t) ? '"'+t.replace(/"/g,'""')+'"' : t;
+  }
+  function benchCsv(){
+    return benchRows().map(function(r){ return r.map(csvCell).join(","); }).join("\n") + "\n";
+  }
+  function benchCount(){ return rogues.length + plots.length; }
+  function benchOut(){
+    var b=$("bOut"); if(!b) return;
+    b.innerHTML = benchCount()
+      ? ("<b>" + rogues.length + " roguing</b> and <b>" + plots.length
+         + " plot</b> row(s), with the population and selection figures beside them.")
+      : "Nothing logged yet \u2014 the sheet builds itself as you work.";
+  }
+  $("bCopy").addEventListener("click", function(){
+    if(!benchCount()){ toast("Nothing logged yet"); return; }
+    copyText(benchCsv(), "Bench sheet copied", "sheet");
+  });
+  $("bDown").addEventListener("click", function(){
+    if(!benchCount()){ toast("Nothing logged yet"); return; }
+    var csv = benchCsv();
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([csv], {type:"text/csv"}));
+    a.download = "breeding-bench.csv";
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    /* ADR-212: A SANDBOXED FRAME REFUSES A PAGE-STARTED DOWNLOAD SILENTLY, and
+       this kit is read as published artifacts. The handler below already knew
+       that -- it is why the outbox is not marked here -- and then said
+       "bench.csv downloaded" anyway, which is the sentence the outbox
+       was spared from telling. The download is still attempted, because where
+       it works it is the better route; the bytes also go on the clipboard,
+       which is a channel that reports failure, and the message says which of
+       the two the reader can count on. */
+    copyText(csv, "bench.csv copied \u2014 some viewers block a page-started "
+                 + "download, so the copy is your sheet", "sheet");
+  });
+  benchOut();
+  document.addEventListener("click", function(){ setTimeout(benchOut, 0); }, true);
+
+  /* ---- ADR-207: a page that takes records must keep them ----
+     This bench accepted a screen's worth of typed values and kept none of
+     them: close the tab, lose the morning. Six pages were in that state, and
+     they were the last -- the kit's rule is now that a page which takes
+     records keeps them, or says in its suite why it does not. */
+  var KEPT = KEEP.wire({
+    key: "csrbtBreedingBench",
+    format: 1,
+    mount: "keepBox",
+    noun: "this bench",
+    ontoast: toast,
+    snapshot: function(){
+      var st = { rogues:rogues, plots:plots };
+      var any = rogues.length || plots.length;
+      var f = KEEP.formSnapshot(), k;
+      if(!any) for(k in f) if(f.hasOwnProperty(k) && String(f[k]).trim() !== "") { any = true; break; }
+      return any ? { fields: f, state: st } : null;
+    },
+    restore: function(b){
+      if(!b || !b.state) return false;
+      KEEP.formRestore(b.fields);
+      var st = b.state;
+      rogues.length=0; (st.rogues||[]).forEach(function(x){ rogues.push(x); });
+      plots.length=0;  (st.plots||[]).forEach(function(x){ plots.push(x); });
+      rogList(); rogOut(); triOut(); popOut(); isoOut(); selOut(); germOut(); storOut();
+      benchOut();          /* ADR-210: the export card counts what is on the bench */
+      return true;
+    }
+  });
+  ["input", "change", "click"].forEach(function(ev){
+    document.addEventListener(ev, function(){ KEPT.touch(); }, true); });
+
+  /* ---- ADR-208: and a page that keeps records must be able to hand them over ---- */
+  var SENT = OUT.wire({
+    key: "csrbtBreedingBenchOut",
+    format: 1,
+    mount: "sendBox",
+    keep: KEPT,
+    exports: [
+      { id:"sheet", label:"the bench sheet" },
+    ]
+  });
+
+})();
+</script>
+</body>
+</html>
