@@ -7,6 +7,7 @@ import com.flowerfarm.model.HarvestEntry;
 import com.flowerfarm.model.HarvestGrade;
 import com.flowerfarm.service.HarvestService;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import javax.swing.AbstractButton;
 import javax.swing.Icon;
@@ -14,11 +15,21 @@ import javax.swing.JComponent;
 import javax.swing.JComboBox;
 import javax.swing.JTable;
 import javax.swing.SwingUtilities;
+import javax.swing.TransferHandler;
 import javax.swing.table.DefaultTableModel;
 import java.awt.Component;
 import java.awt.Container;
+import java.awt.datatransfer.DataFlavor;
+import java.awt.datatransfer.StringSelection;
+import java.awt.datatransfer.Transferable;
+import java.awt.datatransfer.UnsupportedFlavorException;
 import java.awt.event.ActionEvent;
 import java.awt.event.MouseEvent;
+import java.io.File;
+import java.io.IOException;
+import java.io.StringReader;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
@@ -40,6 +51,32 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class HarvestDraftSafetyTest {
+    @Test
+    void configuredUnitSeedsQuickAndBatchEntryWithoutCreatingAnUnsavedDraft()
+            throws Exception {
+        SwingDialogHarness dialogs = new SwingDialogHarness()
+                .choose("Replace harvest draft?", "Clear form");
+        Fixture fixture = build(service(), dialogs, "each");
+
+        assertThat(fixture.user().fieldValue("Harvest unit")).isEqualTo("each");
+        fixture.user().selectTab("Batch entry");
+        assertThat(fixture.user().fieldValue("Batch default unit")).isEqualTo("each");
+        fixture.user().selectTab("Quick entry");
+        assertThat(fixture.tab().applicationExitWarning()).isNull();
+
+        fixture.user().type("Harvest crop or variety", "Potatoes")
+                .type("Harvest unit", "lbs");
+        assertThat(fixture.tab().applicationExitWarning()).contains("unsaved quick-entry");
+        entryAction(fixture, "Clear form");
+        assertThat(fixture.user().fieldValue("Harvest unit")).isEqualTo("each");
+        assertThat(fixture.tab().applicationExitWarning()).isNull();
+        dialogs.assertComplete();
+
+        fixture.user().selectTab("Batch entry").click("Use sample lines");
+        assertThat(fixture.user().fieldValue("Batch harvest lines"))
+                .contains("Example crop").doesNotContain("Rose");
+    }
+
     @Test
     void pristineAndUneditedLoadedFormsDoNotWarnOnExit() throws Exception {
         Fixture fixture = build(service(), new SwingDialogHarness());
@@ -149,6 +186,121 @@ class HarvestDraftSafetyTest {
         assertThat(fixture.user().fieldValue("Batch harvest notes")).isEqualTo("Keep the stems cool");
         assertThat(fixture.tab().applicationExitWarning()).contains("unsaved batch");
         dialogs.assertComplete();
+    }
+
+    @Test
+    void droppedTextStagesHarvestLinesAndShowsPreviewWithoutLogging() throws Exception {
+        HarvestService service = service();
+        Fixture fixture = build(service, new SwingDialogHarness());
+        fixture.user().selectTab("Batch entry");
+        AtomicReference<Boolean> imported = new AtomicReference<>();
+        SwingUtilities.invokeAndWait(() -> imported.set(fixture.tab().importBatchDrop(
+                new StringSelection("Crop,Quantity,Unit,Bed\nPotatoes,24,lbs,Field A\nApples,8,bins,Block 2"))));
+
+        assertThat(imported.get()).isTrue();
+        assertThat(fixture.user().fieldValue("Batch harvest lines"))
+                .startsWith("# Crop,Quantity,Unit,Bed")
+                .contains("Potatoes,24,lbs,Field A", "Apples,8,bins,Block 2");
+        assertThat(fixture.user().isButtonEnabled("Log batch harvest")).isTrue();
+        assertThat(fixture.host().status).contains("batch draft", "Review the preview");
+        assertThat(fixture.tab().applicationExitWarning()).contains("unsaved batch harvest lines");
+        verify(service, never()).addBatch(anyList());
+    }
+
+    @Test
+    void droppedPlainTextReaderStagesTheSameBatchDraft() throws Exception {
+        Fixture fixture = build(service(), new SwingDialogHarness());
+        fixture.user().selectTab("Batch entry");
+        DataFlavor plainText = new DataFlavor("text/plain;class=java.io.Reader");
+        Transferable transfer = new Transferable() {
+            @Override public DataFlavor[] getTransferDataFlavors() {
+                return new DataFlavor[]{plainText};
+            }
+            @Override public boolean isDataFlavorSupported(DataFlavor flavor) {
+                return plainText.equals(flavor);
+            }
+            @Override public Object getTransferData(DataFlavor flavor)
+                    throws UnsupportedFlavorException {
+                if (!isDataFlavorSupported(flavor)) {
+                    throw new UnsupportedFlavorException(flavor);
+                }
+                return new StringReader("Carrots,10,bunches,East Field");
+            }
+        };
+        AtomicReference<Boolean> imported = new AtomicReference<>();
+        SwingUtilities.invokeAndWait(() -> imported.set(fixture.tab().importBatchDrop(transfer)));
+
+        assertThat(imported.get()).isTrue();
+        assertThat(fixture.user().fieldValue("Batch harvest lines"))
+                .isEqualTo("Carrots,10,bunches,East Field");
+        assertThat(fixture.user().isButtonEnabled("Log batch harvest")).isTrue();
+    }
+
+    @Test
+    void droppedFileReplacesBatchOnlyAfterConsentAndKeepsContext(@TempDir Path directory)
+            throws Exception {
+        Path file = directory.resolve("morning.csv");
+        Files.writeString(file, "\uFEFFCrop,Qty,Unit,Bed\nRoses,12,stems,North Bed\n");
+        SwingDialogHarness dialogs = new SwingDialogHarness()
+                .choose("Replace batch harvest lines?", "Keep batch")
+                .choose("Replace batch harvest lines?", "Use dropped lines");
+        Fixture fixture = build(service(), dialogs);
+        fixture.user().selectTab("Batch entry").type("Batch harvest lines", "Peony,24")
+                .type("Batch harvest notes", "Cool before loading");
+        AtomicReference<Boolean> first = new AtomicReference<>();
+        AtomicReference<Boolean> second = new AtomicReference<>();
+        SwingUtilities.invokeAndWait(() -> first.set(fixture.tab().importBatchDrop(
+                fileTransfer(file.toFile()))));
+        assertThat(first.get()).isFalse();
+        assertThat(fixture.user().fieldValue("Batch harvest lines")).isEqualTo("Peony,24");
+
+        SwingUtilities.invokeAndWait(() -> second.set(fixture.tab().importBatchDrop(
+                fileTransfer(file.toFile()))));
+        assertThat(second.get()).isTrue();
+        assertThat(fixture.user().fieldValue("Batch harvest lines"))
+                .startsWith("# Crop,Qty,Unit,Bed").contains("Roses,12,stems,North Bed");
+        assertThat(fixture.user().fieldValue("Batch harvest notes"))
+                .isEqualTo("Cool before loading");
+        assertThat(fixture.user().isButtonEnabled("Log batch harvest")).isTrue();
+        dialogs.assertComplete();
+    }
+
+    @Test
+    void unsupportedFileKeepsExistingBatchAndReportsReason(@TempDir Path directory)
+            throws Exception {
+        Path file = directory.resolve("invoice.pdf");
+        Files.writeString(file, "not a harvest list");
+        Fixture fixture = build(service(), new SwingDialogHarness());
+        fixture.user().selectTab("Batch entry").type("Batch harvest lines", "Peony,24");
+        AtomicReference<Boolean> imported = new AtomicReference<>();
+        SwingUtilities.invokeAndWait(() -> imported.set(fixture.tab().importBatchDrop(
+                fileTransfer(file.toFile()))));
+
+        assertThat(imported.get()).isFalse();
+        assertThat(fixture.user().fieldValue("Batch harvest lines")).isEqualTo("Peony,24");
+        assertThat(fixture.host().status).contains("batch draft kept", ".csv or .txt");
+    }
+
+    @Test
+    void viewerCannotDropBatchLinesAndNormalTextImportStillWorks() throws Exception {
+        Fixture fixture = build(service(), new SwingDialogHarness());
+        fixture.user().selectTab("Batch entry");
+        AtomicReference<Boolean> pasted = new AtomicReference<>();
+        SwingUtilities.invokeAndWait(() -> {
+            javax.swing.JTextArea area = (javax.swing.JTextArea) findAccessible(
+                    fixture.root(), "Batch harvest lines");
+            TransferHandler handler = area.getTransferHandler();
+            pasted.set(handler.importData(new TransferHandler.TransferSupport(
+                    area, new StringSelection("Peony,24"))));
+        });
+        assertThat(pasted.get()).isTrue();
+        assertThat(fixture.user().fieldValue("Batch harvest lines")).isEqualTo("Peony,24");
+        SwingUtilities.invokeAndWait(() -> fixture.tab().applyRolePermissions(false));
+        AtomicReference<Boolean> imported = new AtomicReference<>();
+        SwingUtilities.invokeAndWait(() -> imported.set(fixture.tab().importBatchDrop(
+                new StringSelection("Apples,8"))));
+        assertThat(imported.get()).isFalse();
+        assertThat(fixture.user().fieldValue("Batch harvest lines")).isEqualTo("Peony,24");
     }
 
     @Test
@@ -347,10 +499,16 @@ class HarvestDraftSafetyTest {
     }
 
     private static Fixture build(HarvestService service, FarmDialogs dialogs) throws Exception {
+        return build(service, dialogs, "stems");
+    }
+
+    private static Fixture build(HarvestService service, FarmDialogs dialogs,
+                                 String defaultUnit) throws Exception {
         AtomicReference<Fixture> fixture = new AtomicReference<>();
         SwingUtilities.invokeAndWait(() -> {
             Host host = new Host();
             HarvestLogTab tab = new HarvestLogTab(service, host, dialogs);
+            tab.setDefaultUnit(defaultUnit);
             JComponent panel = tab.getUIComponent();
             fixture.set(new Fixture(tab, panel, SwingUserHarness.on(panel), host));
             tab.initialize();
@@ -366,7 +524,7 @@ class HarvestDraftSafetyTest {
                 .type("Harvest bed or field", "Tunnel 4")
                 .type("Harvest notes", "Shade before packing")
                 .type("Harvest lot code", "PEONY-TEST")
-                .select("Harvest quality grade", "SELECT")
+                .select("Harvest quality grade", "Select")
                 .type("Harvest loss or cull quantity", "3")
                 .type("Harvest storage location", "Cooler D");
     }
@@ -430,6 +588,42 @@ class HarvestDraftSafetyTest {
             }
         }
         return null;
+    }
+
+    private static Component findAccessible(Component root, String accessibleName) {
+        if (root instanceof javax.accessibility.Accessible accessible
+                && accessible.getAccessibleContext() != null
+                && accessibleName.equals(
+                accessible.getAccessibleContext().getAccessibleName())) {
+            return root;
+        }
+        if (root instanceof Container container) {
+            for (Component child : container.getComponents()) {
+                Component match = findAccessible(child, accessibleName);
+                if (match != null) {
+                    return match;
+                }
+            }
+        }
+        return null;
+    }
+
+    private static Transferable fileTransfer(File file) {
+        return new Transferable() {
+            @Override public DataFlavor[] getTransferDataFlavors() {
+                return new DataFlavor[]{DataFlavor.javaFileListFlavor};
+            }
+            @Override public boolean isDataFlavorSupported(DataFlavor flavor) {
+                return DataFlavor.javaFileListFlavor.equals(flavor);
+            }
+            @Override public Object getTransferData(DataFlavor flavor)
+                    throws UnsupportedFlavorException, IOException {
+                if (!isDataFlavorSupported(flavor)) {
+                    throw new UnsupportedFlavorException(flavor);
+                }
+                return List.of(file);
+            }
+        };
     }
 
     private static AbstractButton button(Component root, String label) {

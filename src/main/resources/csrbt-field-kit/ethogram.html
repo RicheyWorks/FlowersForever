@@ -1,0 +1,3058 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Ethogram — behaviour sampling, time budgets &amp; reliability</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<!-- Webfonts load without blocking first paint: a stylesheet request that
+     hangs (one bar of signal) otherwise holds the page blank indefinitely,
+     which breaks the offline constraint in ADR-031. See tools/audit_offline.py. -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Nunito+Sans:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" media="print" data-webfont>
+<noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Nunito+Sans:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap"></noscript>
+<script>(function(){var l=document.querySelector('link[data-webfont]');if(!l)return;
+  var on=function(){l.media="all";};
+  if(l.sheet){on();}else{l.addEventListener("load",on);l.addEventListener("error",function(){});}
+})();</script>
+<style>
+  :root {
+    color-scheme: light;
+    --page:#F5F1E6; --surface:#FFFDF7; --surface-2:#F3EEE0; --ink:#23281F; --ink-2:#4B5344;
+    --muted:#6B6B5E; --border:#E3DCC9; --s1:#2C784C; --s1-deep:#236240; --s2:#A94F26; --s3:#2B6C8F;
+    --soft:#E9F0E7; --warn-bg:#F6EAD8; --danger:#B23A32; --danger-bg:#F6E7E5; --gold:#8A6408;
+    --shadow:0 1px 2px rgba(35,40,31,.06),0 10px 28px rgba(35,40,31,.08);
+    --head:"Fraunces",Georgia,serif;
+    --body:"Nunito Sans",system-ui,-apple-system,sans-serif;
+    --mono:"JetBrains Mono",ui-monospace,Menlo,monospace;
+  }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { margin:0; background:var(--page); color:var(--ink); font:16px/1.5 var(--body);
+    -webkit-font-smoothing:antialiased; overscroll-behavior-y:contain; }
+  .app { max-width:960px; margin:0 auto; padding:14px 16px calc(104px + env(safe-area-inset-bottom)); }
+  .top { display:flex; align-items:baseline; justify-content:space-between; gap:10px; padding:6px 2px 12px; flex-wrap:wrap; }
+  .brand { font-family:var(--head); font-weight:700; font-size:22px; letter-spacing:-0.01em; }
+  .brand span { color:var(--s1); }
+  .top a { font-family:var(--mono); font-size:11.5px; color:var(--muted); text-decoration:none;
+    display:inline-flex; align-items:center; min-height:44px; padding:0 6px; margin:-10px -6px; touch-action:manipulation; }
+  .top a:hover { color:var(--s1); }
+
+  .tabbar { position:fixed; left:0; right:0; bottom:0; z-index:20;
+    background:color-mix(in srgb, var(--surface) 94%, transparent); backdrop-filter:blur(10px);
+    border-top:1px solid var(--border); padding:8px max(8px, env(safe-area-inset-left)) calc(8px + env(safe-area-inset-bottom)); }
+  .tabbar .row { max-width:960px; margin:0 auto; display:grid; grid-template-columns:repeat(6,1fr); gap:4px; }
+  .tab { display:flex; flex-direction:column; align-items:center; gap:2px; border:0; background:none;
+    font:700 10.5px var(--body); color:var(--muted); padding:7px 1px; border-radius:12px; cursor:pointer;
+    min-height:54px; touch-action:manipulation; transition:background .15s ease, color .15s ease; }
+  .tab .ico { font-size:20px; line-height:1; }
+  .tab.on { color:var(--s1); background:var(--soft); }
+  .tab:active { transform:scale(.96); }
+  .pane { display:none; animation:fade .18s ease; }
+  .pane.on { display:block; }
+  @keyframes fade { from{opacity:0;transform:translateY(4px);} to{opacity:1;transform:none;} }
+  @media (prefers-reduced-motion: reduce){ .pane{animation:none;} }
+
+  h2 { font-family:var(--head); font-weight:600; font-size:20px; margin:6px 0 2px; }
+  h3 { font-family:var(--head); font-weight:600; font-size:16.5px; margin:16px 0 4px; }
+  .hint { color:var(--muted); font-size:14px; margin:0 0 12px; }
+  .card { background:var(--surface); border:1px solid var(--border); border-radius:16px;
+    padding:16px; box-shadow:var(--shadow); margin-bottom:14px; }
+  .fine { font-size:12.5px; color:var(--muted); margin-top:10px; line-height:1.55; }
+
+  input[type=text], input[type=number], input[type=date], select, textarea {
+    background:var(--surface); color:var(--ink); border:1.5px solid var(--border); border-radius:12px;
+    padding:11px 14px; font:16px var(--body); min-height:48px; max-width:100%; }
+  textarea { min-height:78px; line-height:1.5; width:100%; }
+  input:focus, select:focus, textarea:focus { outline:none; border-color:var(--s1); box-shadow:0 0 0 3px rgba(44,120,76,.18); }
+  input[type=number] { width:110px; }
+  label.f { display:flex; flex-direction:column; gap:5px; font-size:13px; font-weight:700; color:var(--ink-2); min-width:0; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; }
+  .grid label.f input, .grid label.f select { width:100%; }
+
+  .btn { border:0; border-radius:12px; padding:12px 18px; font:800 15px var(--body); cursor:pointer;
+    min-height:48px; touch-action:manipulation; transition:transform .1s ease, background .15s ease; }
+  .btn:active { transform:scale(.97); }
+  .btn-go { background:var(--s1); color:#fff; } .btn-go:hover { background:var(--s1-deep); }
+  .btn-soft { background:var(--soft); color:var(--s1); }
+  .btn-ghost { background:none; border:1.5px solid var(--border); color:var(--ink-2); }
+  .btn-ghost:hover { border-color:var(--s1); color:var(--s1); }
+  .btn-row { display:flex; gap:8px; flex-wrap:wrap; margin-top:12px; align-items:end; }
+
+  .kopts { display:flex; flex-wrap:wrap; gap:8px; }
+  .kopt { border:1.5px solid var(--border); background:var(--surface); border-radius:14px; padding:10px 14px;
+    font:700 14px var(--body); color:var(--ink-2); cursor:pointer; min-height:46px; touch-action:manipulation;
+    display:inline-flex; flex-direction:column; align-items:flex-start; gap:1px; }
+  .kopt small { font-weight:400; font-size:11px; color:var(--muted); font-family:var(--mono); }
+  .kopt.on { border-color:var(--s1); background:var(--soft); color:var(--s1); }
+
+  .covscale { display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; }
+  .cv { border:1.5px solid var(--border); background:var(--surface); border-radius:11px; min-width:52px;
+    padding:8px 6px; font:800 15px var(--body); color:var(--ink-2); cursor:pointer; min-height:52px;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1px; touch-action:manipulation; }
+  .cv small { font:400 9.5px var(--mono); color:var(--muted); }
+  .cv.on { border-color:var(--s1); background:var(--soft); color:var(--s1); }
+  .cv.on small { color:var(--s1-deep); }
+
+  .tiles { display:flex; flex-wrap:wrap; gap:8px; margin:12px 0 2px; }
+  .tile { background:var(--surface-2); border:1px solid var(--border); border-radius:12px; padding:9px 14px; min-width:96px; }
+  .tile .v { font-family:var(--head); font-weight:700; font-size:21px; font-variant-numeric:tabular-nums; }
+  .tile .l { font-size:11px; color:var(--muted); }
+  .verdict { border-radius:12px; padding:13px 16px; margin:12px 0 2px; font-size:15.5px; line-height:1.55;
+    border-left:4px solid var(--s1); background:var(--soft); color:var(--ink-2); }
+  .verdict b { color:var(--ink); }
+  .verdict.warn { border-left-color:var(--s2); background:var(--warn-bg); }
+  .verdict.act { border-left-color:var(--danger); background:var(--danger-bg); }
+
+  .tw { overflow-x:auto; -webkit-overflow-scrolling:touch; margin:10px 0; }
+  table { border-collapse:collapse; width:100%; font-size:14px; }
+  th,td { border:1px solid var(--border); padding:6px 9px; text-align:left; vertical-align:top; white-space:nowrap; }
+  th { background:var(--soft); font-family:var(--head); font-weight:600; font-size:13px; }
+  td.n, th.n { text-align:right; font-variant-numeric:tabular-nums; font-family:var(--mono); font-size:13px; }
+  td i { font-style:italic; color:var(--ink-2); }
+
+  .rowlist { display:grid; grid-template-columns:minmax(0,1fr); gap:8px; margin-top:10px; }
+  /* minmax(0,1fr), not the implicit auto track: an auto track is at least its
+     widest row's min-content, and a row whose badge, count and remove button
+     do not shrink pushed a phone's page 4px sideways once a host was recorded
+     (the harness's page walk found it, ADR-128). */
+  .row2 { display:flex; align-items:center; gap:10px; background:var(--surface); border:1px solid var(--border);
+    border-radius:12px; padding:10px 13px; font-size:15px; }
+  .row2.inv { border-left:3px solid var(--danger); }
+  .row2 .g { flex:1 1 220px; min-width:0; }
+  /* A row wraps rather than squeezes: below 220px for the name, the badge,
+     the count and the remove button take the next line together (ADR-128). */
+  .row2 { flex-wrap:wrap; }
+  .row2 .g b { font-family:var(--head); font-size:15.5px; }
+  .row2 .g b i { font-style:italic; font-weight:400; color:var(--ink-2); font-size:14px; }
+  .row2 .g span { display:block; color:var(--muted); font-size:12.5px; font-family:var(--mono); margin-top:1px;
+    overflow:hidden; text-overflow:ellipsis; }
+  .row2 .cov { font-family:var(--head); font-weight:700; font-size:17px; color:var(--s1); min-width:46px; text-align:right; }
+  .row2 button { border:0; background:none; color:var(--muted); font-size:15px; padding:9px 11px; cursor:pointer; min-height:44px; min-width:44px; }
+  .row2 button:hover { color:var(--danger); }
+
+  .bars { display:grid; gap:6px; margin-top:10px; }
+  .bar { display:grid; grid-template-columns:132px 1fr 54px; gap:8px; align-items:center; font-size:13.5px; }
+  .bar .nm { font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .bar .tr { display:block; background:var(--surface-2); border:1px solid var(--border); border-radius:8px; height:20px; overflow:hidden; }
+  .bar .fl { display:block; height:100%; background:var(--s1); border-radius:7px 0 0 7px; transition:width .4s ease; }
+  .bar .fl.inv { background:var(--s2); }
+  .bar .pc { text-align:right; font-variant-numeric:tabular-nums; color:var(--ink-2); font-family:var(--mono); font-size:12.5px; }
+
+  .label { background:#fff; border:1px solid var(--ink); border-radius:2px; padding:14px 16px; margin-top:10px;
+    font:12.5px/1.5 var(--body); color:#000; max-width:440px; }
+  .label .inst { font-family:var(--head); font-weight:700; font-size:12px; letter-spacing:.06em;
+    text-transform:uppercase; text-align:center; border-bottom:1px solid #000; padding-bottom:5px; margin-bottom:7px; }
+  .label .sci { font-style:italic; font-weight:700; font-size:14px; }
+  .label .row { margin:3px 0; }
+  .label .k { font-weight:700; }
+  .label .coll { margin-top:8px; padding-top:6px; border-top:1px solid #999; display:flex; justify-content:space-between; }
+
+  pre.export { background:#23281F; color:#E8E4D5; border-radius:12px; padding:14px 16px; overflow-x:auto;
+    font:12.5px/1.65 var(--mono); max-height:340px; }
+  code { font-family:var(--mono); font-size:.82em; background:var(--surface-2); border:1px solid var(--border); border-radius:5px; padding:1px 5px; }
+
+  .toast { position:fixed; left:50%; bottom:84px; transform:translateX(-50%) translateY(90px); z-index:30;
+    background:var(--ink); color:#F5F1E6; border-radius:999px; padding:10px 22px; font:700 14px var(--body);
+    transition:transform .25s ease; pointer-events:none; max-width:88vw; text-align:center; }
+  .toast.on { transform:translateX(-50%) translateY(0); }
+
+  @media print {
+    .tabbar, .btn, .kopts, .covscale, .top a, .noprint { display:none !important; }
+    body { background:#fff; } .pane { display:block !important; }
+    .app { padding-bottom:0; } .card { break-inside:avoid; } table { font-size:10pt; }
+    pre.export { background:#fff; color:#000; border:1px solid #ccc; max-height:none; }
+    .label { break-inside:avoid; page-break-inside:avoid; }
+  }
+
+
+  /* ---- fungal additions ---- */
+  .sw { display:flex; flex-wrap:wrap; gap:7px; margin-top:6px; }
+  .swc { border:1.5px solid var(--border); background:var(--surface); border-radius:12px; padding:7px 11px 8px;
+    font:700 12.5px var(--body); color:var(--ink-2); cursor:pointer; min-height:56px; touch-action:manipulation;
+    display:flex; flex-direction:column; align-items:center; gap:5px; min-width:74px; }
+  .swc .chip { width:44px; height:18px; border-radius:5px; border:1px solid rgba(35,40,31,.28); display:block; }
+  .swc.on { border-color:var(--s1); background:var(--soft); color:var(--s1); }
+
+  .chk { display:flex; flex-wrap:wrap; gap:7px; margin-top:6px; }
+  .ck { border:1.5px solid var(--border); background:var(--surface); border-radius:999px; padding:9px 14px;
+    font:700 13.5px var(--body); color:var(--ink-2); cursor:pointer; min-height:44px; touch-action:manipulation; }
+  .ck.on { border-color:var(--s1); background:var(--soft); color:var(--s1); }
+  .ck.on::before { content:"\2713 "; }
+
+  .rg { display:grid; gap:9px; margin-top:8px; }
+  .rgi { border:1px solid var(--border); background:var(--surface); border-radius:13px; padding:11px 13px; }
+  .rgi .hd { display:flex; align-items:center; justify-content:space-between; gap:9px; flex-wrap:wrap; }
+  .rgi .nm { font-family:var(--head); font-weight:700; font-size:15px; }
+  .rgi .nm em { font-style:normal; font-family:var(--mono); font-size:11.5px; color:var(--muted); margin-left:6px; }
+  .rgi .wh { font-size:12.5px; color:var(--muted); line-height:1.5; margin-top:5px; }
+  .rgi input[type=text] { width:100%; margin-top:8px; min-height:44px; }
+  .rgi.haz { border-left:3px solid var(--s2); }
+
+  .guild { display:inline-block; font:700 10.5px var(--mono); letter-spacing:.05em; text-transform:uppercase;
+    border-radius:999px; padding:3px 9px; border:1px solid var(--border); background:var(--surface-2); color:var(--ink-2); }
+  .guild.ecm { border-color:var(--s1); color:var(--s1); background:var(--soft); }
+  .guild.woodsap, .guild.littersap { border-color:var(--s3); color:var(--s3); background:#E6EEF3; }
+  .guild.par { border-color:var(--danger); color:var(--danger); background:var(--danger-bg); }
+  .guild.lich { border-color:var(--gold); color:#7a5c07; background:#F5EFD9; }
+  .guild.myco { border-color:var(--s2); color:var(--s2); background:var(--warn-bg); }
+  .guild.mixed { border-style:dashed; }
+
+  .mx td.h0 { color:var(--muted); }
+  .mx td.h1 { background:#EDF4EA; font-weight:700; }
+  .mx td.h2 { background:var(--s1); color:#fff; font-weight:700; }
+
+  .never { border:2px solid var(--danger); background:var(--danger-bg); border-radius:14px; padding:15px 17px;
+    margin:14px 0; font-size:15px; line-height:1.6; color:var(--ink); }
+  .never b { font-family:var(--head); display:block; font-size:16px; margin-bottom:5px; color:var(--danger); }
+
+  .drylog { display:grid; grid-template-columns:repeat(auto-fit,minmax(128px,1fr)); gap:9px; margin-top:8px; }
+
+
+  /* ---- behaviour additions ---- */
+  .clock { font-family:var(--head); font-weight:700; font-size:40px; font-variant-numeric:tabular-nums;
+    letter-spacing:-0.02em; line-height:1; }
+  .clock.warn { color:var(--s2); }
+  .nowstate { display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; margin-top:8px; }
+  .nowstate b { font-family:var(--head); font-size:20px; color:var(--s1); }
+  .nowstate span { font-family:var(--mono); font-size:13px; color:var(--muted); }
+
+  .bgrid { display:grid; grid-template-columns:repeat(auto-fill,minmax(136px,1fr)); gap:9px; margin-top:8px; }
+  .bb { position:relative; border:1.5px solid var(--border); background:var(--surface); border-radius:15px;
+    min-height:78px; padding:11px 12px 9px; cursor:pointer; text-align:left; touch-action:manipulation;
+    font-family:var(--body); box-shadow:var(--shadow); transition:border-color .12s, background .12s, transform .08s; }
+  .bb:active { transform:scale(.97); }
+  .bb .nm { font-weight:800; font-size:15px; display:block; line-height:1.25; }
+  .bb .cd { font:400 10.5px var(--mono); color:var(--muted); letter-spacing:.06em; }
+  .bb .ct { position:absolute; right:10px; bottom:7px; font-family:var(--head); font-weight:700;
+    font-size:19px; color:var(--s1); font-variant-numeric:tabular-nums; }
+  .bb.state { border-left:4px solid var(--s3); }
+  .bb.event { border-left:4px solid var(--s2); }
+  .bb.on { border-color:var(--s1); background:var(--soft); }
+  .bb.on .nm { color:var(--s1-deep); }
+  .bb.oz { border-color:var(--s2); background:var(--warn-bg); }
+
+  .kind { display:inline-block; font:700 10px var(--mono); letter-spacing:.08em; text-transform:uppercase;
+    border-radius:999px; padding:2px 8px; border:1px solid var(--border); }
+  .kind.state { border-color:var(--s3); color:var(--s3); background:#E6EEF3; }
+  .kind.event { border-color:var(--s2); color:var(--s2); background:var(--warn-bg); }
+
+  .subjrow { display:flex; gap:7px; flex-wrap:wrap; margin-top:8px; }
+  .sj { border:1.5px solid var(--border); background:var(--surface); border-radius:999px; padding:9px 15px;
+    font:700 14px var(--body); color:var(--ink-2); cursor:pointer; min-height:44px; touch-action:manipulation; }
+  .sj.on { border-color:var(--s1); background:var(--soft); color:var(--s1); }
+
+  .mx2 { font-variant-numeric:tabular-nums; }
+  .mx2 td.d0 { color:var(--muted); }
+  .mx2 td.d1 { background:#EDF4EA; }
+  .mx2 td.d2 { background:var(--s1); color:#fff; font-weight:700; }
+  .mx2 td.self { background:repeating-linear-gradient(45deg,var(--surface-2),var(--surface-2) 4px,var(--border) 4px,var(--border) 5px); }
+
+  .incoh { border-radius:12px; padding:13px 16px; margin:12px 0 2px; font-size:15px; line-height:1.55;
+    border-left:4px solid var(--danger); background:var(--danger-bg); color:var(--ink-2); }
+  .incoh b { font-family:var(--head); color:var(--danger); display:block; margin-bottom:3px; }
+
+  .rail { margin:26px 0 4px; }
+  .rail .rl { font-family:var(--mono); font-size:11px; letter-spacing:.14em; text-transform:uppercase; color:var(--muted); margin:0 2px 8px; }
+  .rail .chips { display:flex; flex-wrap:wrap; gap:8px; }
+  .rail a { display:inline-flex; align-items:center; gap:7px; text-decoration:none; font:700 13.5px var(--body);
+    color:var(--ink-2); background:var(--surface); border:1px solid var(--border); border-radius:999px;
+    padding:9px 15px; min-height:44px; box-shadow:var(--shadow); touch-action:manipulation; }
+  .rail a:hover { border-color:var(--s1); color:var(--s1); }
+  .rail a[aria-current="page"] { background:var(--soft); border-color:var(--s1); color:var(--s1); }
+  .rail a.ref { font-weight:600; color:var(--muted); background:none; box-shadow:none; }
+  @media print { .rail { display:none !important; } }
+
+  /* ============ Field Entry Kit v1.8.0 ============
+     Large-target, high-contrast entry controls. Sizing is driven by --tap
+     rather than per-component numbers so one token retunes the whole kit for
+     gloves, cold hands or a wall-mounted tablet. */
+  :root {
+    --tap: 60px;            /* primary control height  */
+    --tap-sm: 48px;         /* secondary control height */
+    --fek-r: 16px;
+    /* These three moved for WCAG AA and the move was made in the pages, by
+       hand, and never came back here -- because the CSS half of fek_emit was
+       dead code and nobody could tell. Source and pages agreed only by
+       ramp-1 moved here too: at its old teal, white label text on a selected
+       button measured 3.94:1 and the .92-white sub-line 3.59:1, both under AA.
+       No page had caught it because none defaulted to a ramp-1 option until the
+       deployment log did. Every ramp is now checked against both, in
+       verify_contrast_slice.
+       The pre-fix ramp values are named in verify_contrast_slice,
+       which greps for them literally across every page -- so they are not
+       repeated here, because a comment naming them is itself a page carrying
+       them, and the suite is right not to care why. */
+    --ramp-0:#2B6C8F; --ramp-1:#2F7373; --ramp-2:#2C784C;
+    --ramp-3:#8A6408; --ramp-4:#A94F26; --ramp-5:#B23A32;
+    --fek-line:#C7C0AC;
+    /* v1.8.0 (ADR-254): the edge of a box you write in. --fek-line is a
+       decorative line (a drop zone's dash, a card's rule) and reads 1.79:1;
+       a control's edge carries the WCAG 1.4.11 floor of 3:1, and this is the
+       colour every page's own rule already gives its inputs. */
+    --fek-edge:#8E8160;
+  }
+  .fek-lab { display:block; font:800 15px var(--body); color:var(--ink-2);
+    letter-spacing:.01em; margin:0 0 6px; }
+  .fek-lab .u { font:600 12.5px var(--mono); color:var(--muted); margin-left:6px; }
+  .fek-help { font-size:13.5px; color:var(--muted); line-height:1.5; margin:6px 0 0; }
+  .fek-row { margin:0 0 20px; }
+
+  /* --- stepper: the workhorse numeric entry --- */
+  .fek-step { display:flex; align-items:stretch; gap:0; border:2px solid var(--border);
+    border-radius:var(--fek-r); overflow:hidden; background:var(--surface); max-width:340px; }
+  .fek-step button { border:0; background:var(--surface-2); color:var(--ink);
+    font:800 30px var(--body); line-height:1; width:calc(var(--tap) + 8px); min-height:var(--tap);
+    cursor:pointer; touch-action:manipulation; transition:background .12s; }
+  .fek-step button:hover { background:var(--soft); color:var(--s1); }
+  .fek-step button:active { background:var(--s1); color:#fff; }
+  .fek-step .val { flex:1; min-width:0; text-align:center; border:0; background:none;
+    font:800 30px var(--head); color:var(--ink); font-variant-numeric:tabular-nums;
+    -moz-appearance:textfield; padding:0 4px; }
+  .fek-step .val::-webkit-outer-spin-button,
+  .fek-step .val::-webkit-inner-spin-button { -webkit-appearance:none; margin:0; }
+  .fek-step .val:focus { outline:none; background:var(--soft); }
+
+  /* --- segmented ordinal dial with a colour ramp --- */
+  .fek-dial { display:flex; flex-wrap:wrap; gap:8px; }
+  .fek-dial button { flex:1 1 auto; min-width:72px; min-height:var(--tap);
+    border:2px solid var(--border); border-radius:var(--fek-r); background:var(--surface);
+    font:800 17px var(--body); color:var(--ink-2); cursor:pointer; touch-action:manipulation;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px;
+    padding:6px 8px; transition:transform .08s, border-color .12s, background .12s; }
+  .fek-dial button small { font:600 11px var(--mono); color:var(--muted); letter-spacing:.02em; }
+  .fek-dial button:active { transform:scale(.96); }
+  .fek-dial button.on { color:#fff; border-color:transparent; }
+  .fek-dial button.on small { color:rgba(255,255,255,.92); }
+  .fek-dial button.on[data-r="0"]{background:var(--ramp-0);}
+  .fek-dial button.on[data-r="1"]{background:var(--ramp-1);}
+  .fek-dial button.on[data-r="2"]{background:var(--ramp-2);}
+  .fek-dial button.on[data-r="3"]{background:var(--ramp-3);}
+  .fek-dial button.on[data-r="4"]{background:var(--ramp-4);}
+  .fek-dial button.on[data-r="5"]{background:var(--ramp-5);}
+
+  /* --- field: a typed value from an instrument readout ---
+     A stepper is the wrong control for a number you READ off a machine to three
+     decimals: you would tap two thousand times to reach 1.842. This is a plain
+     numeric entry sized like the rest of the kit, with the unit shown and the
+     decimal keypad requested, and nothing that pretends the value is scrollable. */
+  .fek-field { display:flex; align-items:stretch; gap:0; border:2px solid var(--border);
+    border-radius:var(--fek-r); overflow:hidden; background:var(--surface); max-width:340px; }
+  .fek-field input { flex:1; min-width:0; border:0; background:none; text-align:right;
+    font:800 26px var(--head); color:var(--ink); font-variant-numeric:tabular-nums;
+    -moz-appearance:textfield; padding:0 12px; min-height:var(--tap); }
+  .fek-field input::-webkit-outer-spin-button,
+  .fek-field input::-webkit-inner-spin-button { -webkit-appearance:none; margin:0; }
+  .fek-field input:focus { outline:none; background:var(--soft); }
+  .fek-field input::placeholder { color:var(--muted); font-weight:600; font-size:20px; }
+  .fek-field .u { display:flex; align-items:center; padding:0 14px; background:var(--surface-2);
+    font:700 13px var(--mono); color:var(--muted); border-left:2px solid var(--border); white-space:nowrap; }
+  .fek-field.empty { border-style:dashed; }
+
+  /* --- a box the browser could not parse (v1.4.0, ADR-151) ---
+     Not the same state as empty, and it must not look like it. An empty box is
+     "not recorded yet"; this one holds the reader's own characters and hands
+     the page back the empty string, so without a state of its own the two are
+     one thing on screen as well as in the value. */
+  .fek-step.bad, .fek-field.bad { border-color:var(--ramp-5); border-style:solid; }
+  .fek-bad { font:700 13.5px var(--body); color:var(--ramp-5); margin:6px 0 0; }
+  input[type="number"].fek-badbox { border-color:var(--ramp-5) !important; }
+
+  /* --- big toggle chips --- */
+  .fek-chips { display:flex; flex-wrap:wrap; gap:9px; }
+  .fek-chip { min-height:var(--tap-sm); border:2px solid var(--border); border-radius:999px;
+    background:var(--surface); font:800 15.5px var(--body); color:var(--ink-2);
+    padding:0 20px; cursor:pointer; touch-action:manipulation; display:inline-flex;
+    align-items:center; gap:8px; transition:transform .08s, border-color .12s, background .12s; }
+  .fek-chip:active { transform:scale(.96); }
+  .fek-chip.on { border-color:var(--s1); background:var(--soft); color:var(--s1-deep); }
+  .fek-chip.on::before { content:"\2713"; font-size:17px; }
+
+  /* --- slider with a live bubble --- */
+  .fek-slide { display:flex; align-items:center; gap:14px; }
+  .fek-slide input[type=range] { flex:1; min-width:0; height:var(--tap-sm); -webkit-appearance:none;
+    background:transparent; cursor:pointer; touch-action:manipulation; }
+  .fek-slide input[type=range]::-webkit-slider-runnable-track { height:14px; border-radius:8px;
+    background:linear-gradient(90deg,var(--ramp-0),var(--ramp-2),var(--ramp-3),var(--ramp-5)); }
+  .fek-slide input[type=range]::-moz-range-track { height:14px; border-radius:8px;
+    background:linear-gradient(90deg,var(--ramp-0),var(--ramp-2),var(--ramp-3),var(--ramp-5)); }
+  .fek-slide input[type=range]::-webkit-slider-thumb { -webkit-appearance:none; width:34px; height:34px;
+    border-radius:50%; background:#fff; border:3px solid var(--ink); margin-top:-10px;
+    box-shadow:0 2px 6px rgba(35,40,31,.3); }
+  .fek-slide input[type=range]::-moz-range-thumb { width:34px; height:34px; border-radius:50%;
+    background:#fff; border:3px solid var(--ink); box-shadow:0 2px 6px rgba(35,40,31,.3); }
+  .fek-slide .bub { font:800 26px var(--head); font-variant-numeric:tabular-nums; color:var(--ink);
+    min-width:86px; text-align:right; }
+  .fek-slide .bub span { font:600 13px var(--mono); color:var(--muted); margin-left:3px; }
+
+  /* --- big picker: replaces <select> for long lists --- */
+  .fek-pick { border:2px solid var(--border); border-radius:var(--fek-r); background:var(--surface);
+    overflow:hidden; }
+  .fek-pick .search { width:100%; border:0; border-bottom:2px solid var(--border);
+    font:700 17px var(--body); padding:0 16px; min-height:var(--tap); background:var(--surface-2); }
+  .fek-pick .search:focus { outline:none; background:var(--soft); }
+  .fek-pick .opts { max-height:264px; overflow-y:auto; -webkit-overflow-scrolling:touch; }
+  .fek-pick .opt { display:block; width:100%; text-align:left; border:0; border-bottom:1px solid var(--border);
+    background:none; font:700 16.5px var(--body); color:var(--ink); min-height:var(--tap-sm);
+    padding:10px 16px; cursor:pointer; touch-action:manipulation; }
+  .fek-pick .opt small { display:block; font:400 12.5px var(--mono); color:var(--muted); margin-top:2px; }
+  .fek-pick .opt:hover { background:var(--soft); }
+  .fek-pick .opt.on { background:var(--s1); color:#fff; }
+  .fek-pick .opt.on small { color:rgba(255,255,255,.92); }
+  .fek-pick .none { padding:16px; color:var(--muted); font-size:14px; }
+
+  /* --- readout tiles, sized to be read at arm's length --- */
+  .fek-tiles { display:grid; grid-template-columns:repeat(auto-fit,minmax(148px,1fr)); gap:11px; margin:14px 0 2px; }
+  .fek-tile { border:2px solid var(--border); border-radius:var(--fek-r); padding:13px 15px; background:var(--surface); }
+  .fek-tile .v { font:800 30px var(--head); font-variant-numeric:tabular-nums; line-height:1.05; color:var(--ink); }
+  .fek-tile .l { font:700 12px var(--body); color:var(--muted); margin-top:4px; letter-spacing:.02em; }
+  .fek-tile.good { border-color:var(--ramp-2); } .fek-tile.good .v { color:var(--ramp-2); }
+  .fek-tile.warn { border-color:var(--ramp-3); } .fek-tile.warn .v { color:#8a6508; }
+  .fek-tile.bad  { border-color:var(--ramp-5); } .fek-tile.bad  .v { color:var(--ramp-5); }
+  .fek-tile.cold { border-color:var(--ramp-0); } .fek-tile.cold .v { color:var(--ramp-0); }
+
+  /* --- banner: the verdict, big --- */
+  .fek-banner { border-radius:var(--fek-r); padding:16px 19px; margin:14px 0; font-size:16px;
+    line-height:1.55; border-left:7px solid var(--ramp-2); background:var(--soft); color:var(--ink-2); }
+  .fek-banner b { font-family:var(--head); color:var(--ink); font-size:17.5px; display:block; margin-bottom:4px; }
+  .fek-banner.warn { border-left-color:var(--ramp-3); background:var(--warn-bg); }
+  .fek-banner.bad  { border-left-color:var(--ramp-5); background:var(--danger-bg); }
+  .fek-banner.cold { border-left-color:var(--ramp-0); background:#E6EEF3; }
+
+  /* --- photographs: the record carries the reference, not the image ---
+     (v1.5.0, ADR-201). Sized for a gloved thumb like the rest of the kit, and
+     the thumbnail is large enough to tell two bark shots apart at arm's
+     length, which is the only reason it is on screen at all. */
+  .fek-drop { border:2.5px dashed var(--fek-line); border-radius:var(--fek-r);
+    background:var(--surface); padding:18px 16px; text-align:center;
+    transition:border-color .12s, background .12s; }
+  .fek-drop.on { border-color:var(--ramp-2); background:var(--soft); border-style:solid; }
+  .fek-drop p { margin:0 0 10px; font-size:15px; color:var(--ink-2); }
+  .fek-drop button { min-height:var(--tap); border:0; border-radius:var(--fek-r);
+    background:var(--ramp-2); color:#fff; font:800 16px var(--body); padding:0 22px;
+    cursor:pointer; touch-action:manipulation; }
+  .fek-drop button:active { transform:scale(.97); }
+  .fek-photos { display:grid; grid-template-columns:repeat(auto-fill,minmax(210px,1fr));
+    gap:12px; margin-top:14px; }
+  .fek-photo { border:2px solid var(--border); border-radius:var(--fek-r);
+    background:var(--surface); overflow:hidden; }
+  .fek-photo img { display:block; width:100%; height:150px; object-fit:cover; background:var(--surface-2); }
+  .fek-photo .m { padding:10px 12px 12px; }
+  .fek-photo .m code { display:block; font:500 11.5px var(--mono); color:var(--muted);
+    word-break:break-all; line-height:1.45; }
+  .fek-photo .m input, .fek-photo .m textarea { width:100%; margin-top:8px; border:1.5px solid var(--fek-edge);
+    border-radius:10px; padding:9px 10px; font:15px var(--body); background:var(--surface);
+    color:var(--ink); min-height:44px; }
+  .fek-photo .m textarea { min-height:62px; resize:vertical; }
+  .fek-photo .rm, .fek-photo .act { margin-top:8px; min-height:44px; width:100%; border:1.5px solid var(--fek-line);
+    border-radius:10px; background:none; color:var(--ink-2); font:700 14px var(--body); cursor:pointer; }
+  .fek-photo .rm:hover { border-color:var(--ramp-5); color:var(--ramp-5); }
+  .fek-photo .act:hover { border-color:var(--ramp-2); color:var(--ramp-2); }
+  .fek-await { margin:8px 0 0; padding:9px 11px; border:1.5px dashed var(--accent, #7A6A3A);
+    border-radius:10px; background:var(--surface-2, #F3EEE0); }
+  .fek-await b { color:var(--accent, #7A6A3A); }
+  .fek-await ul { margin:6px 0 0; padding:0 0 0 18px; font-family:var(--mono, monospace);
+    font-size:11.5px; color:var(--ink-2, #4B5344); line-height:1.6; }
+  .fek-await .cap { color:var(--muted, #6B6B5E); }
+  .fek-shot { font:700 13.5px var(--body); color:var(--ink-2); margin:10px 0 0; min-height:1.2em; }
+  .fek-shot.bad { color:var(--ramp-5); }
+  @media print { .fek-drop, .fek-photo .rm, .fek-photo .act { display:none !important; }
+                 .fek-photo img { height:auto; } }
+
+  @media (max-width:420px){ :root { --tap:56px; --tap-sm:46px; } .fek-step .val { font-size:26px; } }
+  @media print { .fek-step button, .fek-pick .search { display:none; } }
+  /* ============ Keep (local autosave) v1.4.0 ============ */
+  .keep { display:flex; flex-wrap:wrap; align-items:center; gap:10px;
+    background:var(--surface-2, #F3EEE0); border:1px solid var(--border, #E3DCC9);
+    border-radius:12px; padding:10px 13px; margin:12px 0 2px; }
+  .keep .st { font-family:var(--mono, monospace); font-size:11.5px; color:var(--muted, #6B6B5E);
+    line-height:1.5; flex:1 1 220px; min-width:0; }
+  .keep .st b { color:var(--ink, #23281F); }
+  .keep.bad { border-color:var(--danger, #B23A32); background:var(--danger-bg, #F6E7E5); }
+  .keep.bad .st b { color:var(--danger, #B23A32); }
+  .keep button { border:1.5px solid var(--border, #E3DCC9); background:none; border-radius:10px;
+    padding:0 14px; min-height:var(--tap, 44px); font:700 13px var(--body, sans-serif);
+    color:var(--ink-2, #4B5344); cursor:pointer; touch-action:manipulation; }
+  .keep button:hover { border-color:var(--danger, #B23A32); color:var(--danger, #B23A32); }
+  .keep .note { flex:1 1 100%; font-size:12px; color:var(--muted, #6B6B5E); line-height:1.5; }
+  @media print { .keep { display:none !important; } }
+  /* ============ Outbox (what has not left this device) v1.0.0 ============ */
+  .outbox { background:var(--surface-2, #F3EEE0); border:1px solid var(--border, #E3DCC9);
+    border-radius:12px; padding:10px 13px; margin:4px 0 2px; }
+  .outbox .st { font-family:var(--mono, monospace); font-size:11.5px; color:var(--muted, #6B6B5E);
+    line-height:1.5; margin:0; }
+  .outbox .st b { color:var(--ink, #23281F); }
+  .outbox ul.pend { margin:7px 0 0; padding:0 0 0 18px; font-family:var(--mono, monospace);
+    font-size:11.5px; color:var(--ink-2, #4B5344); line-height:1.6; }
+  .outbox ul.pend li::marker { color:var(--muted, #6B6B5E); }
+  .outbox ul.pend .why { color:var(--muted, #6B6B5E); }
+  .outbox .note { margin:7px 0 0; font-size:12px; color:var(--muted, #6B6B5E); line-height:1.5; }
+  .outbox.hot { border-color:var(--accent, #7A6A3A); }
+  .outbox.hot .st b { color:var(--accent, #7A6A3A); }
+  .outbox.bad { border-color:var(--danger, #B23A32); background:var(--danger-bg, #F6E7E5); }
+  .outbox.bad .st b { color:var(--danger, #B23A32); }
+  @media print { .outbox { display:none !important; } }
+
+
+  /* WCAG 1.4.11 non-text contrast: the visible edge of a control you are meant
+     to write in is the only thing telling you where to write, so it carries the
+     3:1 floor. Decorative card borders are not controls and stay quiet. */
+  input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]),
+  select, textarea { border-color: #8E8160; }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="top">
+    <div class="brand">🐾 Etho<span>gram</span></div>
+    <a href="ecology.html">part of the ecology kit →</a>
+  </div>
+
+  <!-- ============ RECORD ============ -->
+  <section class="pane on" id="p-rec">
+    <h2>Record</h2>
+    <p class="hint" id="recHint"></p>
+
+    <div class="card">
+      <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap">
+        <div>
+          <div class="clock" id="clock">00:00</div>
+          <div class="nowstate" id="nowState"></div>
+        </div>
+        <div class="btn-row" style="margin-top:0">
+          <button class="btn btn-go" id="rStart" type="button">Start</button>
+          <button class="btn btn-ghost" id="rStop" type="button">Stop</button>
+          <button class="btn btn-ghost" id="rUndo" type="button">↩ Undo</button>
+        </div>
+      </div>
+      <div id="scanBox"></div>
+      <h3>Focal subject</h3>
+      <div class="subjrow" id="subjRow"></div>
+    </div>
+
+    <div class="card">
+      <h3 style="margin-top:0">States <span class="kind state">one at a time</span></h3>
+      <div class="bgrid" id="stateGrid"></div>
+      <h3>Events <span class="kind event">counted</span></h3>
+      <div class="bgrid" id="eventGrid"></div>
+      <p class="fine" id="modeNote"></p>
+    </div>
+
+    <div class="card"><h3 style="margin-top:0">Log</h3><div class="rowlist" id="logList"></div></div>
+  </section>
+
+  <!-- ============ DESIGN ============ -->
+  <section class="pane" id="p-des">
+    <h2>Design</h2>
+    <p class="hint">Decide this <em>before</em> you watch anything. The sampling rule and the recording rule
+      together determine what your numbers can legitimately mean &mdash; and this page changes how the
+      recorder behaves to match.</p>
+
+    <div class="card">
+      <h3 style="margin-top:0">Sampling rule &mdash; whom you watch</h3>
+      <div class="kopts" id="dSample"></div>
+      <p class="fine" id="dSampleNote"></p>
+
+      <h3>Recording rule &mdash; when you write it down</h3>
+      <div class="kopts" id="dRecord"></div>
+      <p class="fine" id="dRecordNote"></p>
+
+      <div id="coherence"></div>
+
+      <h3>Timing</h3>
+      <div id="timeEntry"></div>
+      <input type="hidden" id="dScan" value="30"><input type="hidden" id="dLen" value="10">
+      <div class="grid">
+        <label class="f">observer<input type="text" id="dObs" autocomplete="off"></label>
+        <label class="f">date<input type="date" id="dDate"></label>
+        <label class="f">site<input type="text" id="dSite" placeholder="Bear Cr. meadow" autocomplete="off"></label>
+        <label class="f">study species<input type="text" id="dSp" placeholder="Marmota flaviventris" autocomplete="off"></label>
+      </div>
+      <label class="f" style="margin-top:10px">conditions<textarea id="dCond" placeholder="Overcast, 14 °C, light wind. Group of 6, two juveniles. Observed from 40 m with 10×42."></textarea></label>
+    </div>
+
+    <div class="card">
+      <h3 style="margin-top:0">Subjects</h3>
+      <p class="hint" style="margin-bottom:8px">One per individual you can tell apart. If you cannot tell
+        them apart, say so &mdash; pooled data across unidentified individuals is pseudoreplication, and the
+        Method tab explains what that costs you.</p>
+      <div class="btn-row" style="margin-top:0">
+        <label class="f" style="flex:1;min-width:170px">add subject<input type="text" id="sNew" placeholder="F-blue / juv-1 / unmarked" autocomplete="off"></label>
+        <button class="btn btn-soft" id="sAdd" type="button">Add</button>
+      </div>
+      <div class="subjrow" id="subjEdit"></div>
+    </div>
+
+    <div class="card">
+      <h3 style="margin-top:0">Ethogram</h3>
+      <p class="hint" style="margin-bottom:8px">A behaviour is only usable if another observer would score it
+        the same way. Define each one so that it can be judged in a second, without inferring motive.</p>
+      <div class="btn-row" style="margin-top:0">
+        <label class="f" style="flex:1;min-width:150px">name<input type="text" id="eName" autocomplete="off"></label>
+        <label class="f">code<input type="text" id="eCode" style="width:96px" autocomplete="off"></label>
+        <button class="btn btn-soft" id="eAdd" type="button">Add</button>
+      </div>
+      <div id="kindEntry" style="margin-top:12px"></div>
+      <input type="hidden" id="eKind" value="state">
+      <label class="f" style="margin-top:10px">definition<textarea id="eDesc" placeholder="Head raised above shoulder height, eyes open, not feeding or moving. Ends when the head drops or the animal moves."></textarea></label>
+      <div class="rowlist" id="ethoList"></div>
+      <p class="fine" id="ethoStat"></p>
+    </div>
+
+    <div class="card">
+      <h3 style="margin-top:0">Photographs</h3>
+      <p class="fine" style="margin-top:0">A behaviour is only usable if another observer would score it the same way, and a definition in words is the weakest part of that promise. A frame of the posture the definition describes is what makes an ethogram portable between observers.</p>
+      <div id="photoEntry"></div>
+      <p class="fine"><b>The export carries the reference, not the image.</b> The frames stay in this tab and are never uploaded; closing it discards them, and the originals are in your camera roll. What travels is the filename, a CRC-32 and when the file was taken &mdash; enough to put a row and a frame back together later. The CRC is an integrity check, not a cryptographic one.</p>
+    </div>
+  </section>
+
+  <!-- ============ BUDGET ============ -->
+  <section class="pane" id="p-bud">
+    <h2>Time budget &amp; rates</h2>
+    <p class="hint">What the session says, computed the way the design you declared allows.</p>
+    <div class="card" id="budBox"></div>
+    <div class="card" id="rateBox"></div>
+    <div class="card" id="transBox"></div>
+    <div class="card noprint">
+      <h3 style="margin-top:0">Export</h3>
+      <div class="btn-row">
+        <button class="btn btn-go" id="csvCopy" type="button">Copy log CSV</button>
+        <button class="btn btn-soft" id="ecoCopy" type="button">Copy session sheet</button>
+        <button class="btn btn-ghost" id="budCopy" type="button">Copy budget CSV</button>
+        <button class="btn btn-ghost" id="packExport" type="button">Export ethogram</button>
+        <button class="btn btn-ghost" id="packPrompt" type="button">Copy the AI prompt</button>
+        <label class="btn btn-ghost" style="display:inline-flex;align-items:center">Import ethogram
+          <input type="file" id="packFile" accept=".json,application/json" style="display:none"></label>
+      </div>
+      <p class="fine" id="packStat"></p>
+      <div id="keepBox"></div>
+      <div id="sendBox"></div>
+      <pre class="export" id="ecoOut"># start a session — the sheet builds itself</pre>
+    </div>
+  </section>
+
+  <!-- ============ RELIABILITY ============ -->
+  <section class="pane" id="p-rel">
+    <h2>Inter-observer reliability</h2>
+    <p class="hint">Two observers score the same scans independently. Cohen's &kappa; asks how much they
+      agreed <em>beyond what chance alone would give</em>.</p>
+
+    <div class="card">
+      <p class="hint" style="margin-top:0">Paste each observer's sequence of behaviour codes, in the same
+        order, separated by spaces or commas. The two must be the same length.</p>
+      <label class="f">observer A<textarea id="kA" placeholder="FOR FOR VIG REST LOC FOR VIG VIG REST FOR"></textarea></label>
+      <label class="f" style="margin-top:10px">observer B<textarea id="kB" placeholder="FOR VIG VIG REST LOC FOR VIG REST REST FOR"></textarea></label>
+      <div class="btn-row">
+        <button class="btn btn-go" id="kGo" type="button">Compute &kappa;</button>
+        <button class="btn btn-ghost" id="kClear" type="button">Clear</button>
+      </div>
+      <div id="kOut"></div>
+    </div>
+
+    <div class="card" id="kMatrix"></div>
+  </section>
+
+  <!-- ============ METHOD ============ -->
+  <section class="pane" id="p-met">
+    <h2>Method</h2>
+    <p class="hint">Every number this page produces, what it rests on, and where it stops being honest.</p>
+
+    <div class="card">
+      <h3 style="margin-top:0">What the entry layer records</h3>
+      <p>The controls are the shared <b>Field Entry Kit</b>, sized for a gloved thumb on a wet tablet.
+        Two choices here are about the record rather than the ergonomics.</p>
+      <p><b>Interval and session length have real defaults, not a blank state.</b> 30&nbsp;s and
+        10&nbsp;min are conventional starting points, not recommendations &mdash; the right interval depends on how
+        fast your animal switches behaviours, and nothing on this page can know that. But a scan sample
+        with no interval is not an under-specified design, it is not a design: the timer would have
+        nothing to count. So these two are the only numeric fields on the page that begin filled in.</p>
+      <p><b>State and event are a dial, not a dropdown, because the choice changes what the data can
+        answer.</b> A state is scored as time and a point sample estimates the <em>proportion of time</em>
+        in it. An event is scored as a count, and a point sample cannot give you a rate at all &mdash; you
+        would be sampling instants and reporting them as if they were an interval. The page refuses to
+        print a rate in point-sampling mode for exactly this reason, and says so where the rate would
+        have gone.</p>
+    </div>
+
+    <div class="card">
+      <h3 style="margin-top:0">The four sampling rules</h3>
+      <p class="fine" style="margin-top:0">The vocabulary here follows <b>Altmann (1974)</b>, which is still the
+        paper the field argues from.</p>
+      <div class="tw"><table>
+        <tr><th>rule</th><th>what you do</th><th>what it gives you &mdash; and does not</th></tr>
+        <tr><td><b>ad libitum</b></td><td>Write down whatever you happen to notice.</td>
+          <td>Biased toward whatever is conspicuous, close, or performed by the boldest animal. Legitimate for
+            <em>generating</em> hypotheses and for building a first ethogram. <b>Never</b> a source of rates or budgets.</td></tr>
+        <tr><td><b>focal animal</b></td><td>One named subject for a fixed period; record everything it does.</td>
+          <td>The workhorse. Gives true durations and true frequencies for that individual. Costs you the rest of the group.</td></tr>
+        <tr><td><b>scan</b></td><td>At fixed instants, record what each visible subject is doing.</td>
+          <td>Group-wide time budgets cheaply. Rare and brief behaviours are almost never caught, so it is poor for events.</td></tr>
+        <tr><td><b>behaviour</b></td><td>Watch the whole group; record every occurrence of one or two chosen behaviours.</td>
+          <td>The right tool for rare, conspicuous acts &mdash; fights, copulations, provisioning. Says nothing about anything you did not choose.</td></tr>
+      </table></div>
+    </div>
+
+    <div class="card">
+      <h3 style="margin-top:0">The three recording rules</h3>
+      <div class="tw"><table>
+        <tr><th>rule</th><th>estimates</th><th>the catch</th></tr>
+        <tr><td><b>continuous</b></td><td>True duration and true frequency.</td>
+          <td>Expensive, and only honest if you can genuinely keep up. A continuous record you fell behind on is worse than a point sample.</td></tr>
+        <tr><td><b>instantaneous</b> (point)</td><td>Proportion of samples in a state &rarr; unbiased estimate of proportion of <em>time</em>.</td>
+          <td>Unbiased for states only. It cannot estimate frequency, and it will miss behaviours shorter than the interval entirely.</td></tr>
+        <tr><td><b>one-zero</b></td><td>Whether a behaviour occurred at all in each interval.</td>
+          <td><b>Biased for both.</b> It overestimates duration &mdash; a one-second act scores a whole interval &mdash; and underestimates frequency, because five occurrences score the same as one. See below.</td></tr>
+      </table></div>
+      <div class="verdict act"><b>On one-zero.</b> Altmann's critique is that a one-zero score is not an unbiased
+        estimator of duration, of frequency, or of anything else with a name; the quantity it estimates has no
+        biological meaning of its own. It survives because it is easy and because the numbers correlate with
+        duration well enough to look useful. This page will let you use it, will label every figure it produces
+        as one-zero, and <b>will not convert those figures into a time budget or a rate</b>. If you report them,
+        report them as what they are: the proportion of intervals containing the behaviour.</div>
+    </div>
+
+    <div class="card">
+      <h3 style="margin-top:0">Time budget</h3>
+      <p class="fine" style="margin-top:0">Under <b>continuous</b> recording the budget is
+        <code>Σ duration in state / total observed time</code>. Under <b>instantaneous</b> it is
+        <code>points in state / total points</code>, with a binomial standard error
+        <code>SE = √(p(1−p)/n)</code> &mdash; the same estimator a line-point intercept uses on vegetation,
+        for the same reason.</p>
+      <p class="fine"><b>Observed time is not elapsed time.</b> Any period the subject was out of sight is
+        excluded from the denominator, which is why <i>out of sight</i> is a first-class state here rather
+        than a gap in the record. A budget computed over elapsed time silently attributes the animal's
+        invisible minutes to whatever it was doing when it vanished.</p>
+      <p class="fine"><b>Bout length</b> is the mean duration of an uninterrupted spell in a state. It is
+        meaningful only under continuous recording, and it is sensitive to how you defined the state's
+        end &mdash; a definition that ends a bout at every head-turn produces many short bouts and says
+        nothing about the animal.</p>
+    </div>
+
+    <div class="card">
+      <h3 style="margin-top:0">Transitions</h3>
+      <p class="fine" style="margin-top:0">The matrix counts how often state <i>i</i> was followed by state
+        <i>j</i>, then divides each row by its total to give transition probabilities. Two honest limits.
+        First, this is a <b>first-order Markov</b> summary: it assumes where the animal goes next depends only
+        on where it is now, which is usually false &mdash; what it was doing two states ago, and for how long,
+        generally matter. Second, the diagonal is <b>structurally empty</b>, because states here are mutually
+        exclusive and a state cannot follow itself; that is a property of the coding scheme, not a finding
+        about the animal. Rows built on a handful of transitions are noise &mdash; the page marks those.</p>
+    </div>
+
+    <div class="card">
+      <h3 style="margin-top:0">Reliability</h3>
+      <p class="fine" style="margin-top:0"><b>Cohen's κ = (p<sub>o</sub> − p<sub>e</sub>) / (1 − p<sub>e</sub>)</b>,
+        where p<sub>o</sub> is the proportion of samples the two observers scored identically and
+        p<sub>e</sub> is the agreement expected if each observer had assigned categories at random with
+        their own marginal frequencies. κ = 1 is perfect; κ = 0 is chance; negative κ is worse than chance.</p>
+      <p class="fine">The bands this page prints &mdash; slight, fair, moderate, substantial, almost perfect
+        &mdash; are the <b>Landis &amp; Koch (1977) convention</b>. They are a widely used rule of thumb and
+        <b>not a statistical result</b>: the authors said as much when they proposed them. Report κ itself and
+        the number of samples, not the adjective.</p>
+      <p class="fine">κ is also depressed when one category dominates, because p<sub>e</sub> rises &mdash; two
+        observers who agree on 95% of samples can still score a low κ if 95% of samples are &ldquo;resting&rdquo;.
+        That is the <em>prevalence problem</em>, and it is a reason to read κ beside the raw agreement rather
+        than instead of it. Both are printed.</p>
+    </div>
+
+    <div class="card">
+      <h3 style="margin-top:0">Pseudoreplication, and the thing that invalidates most student data</h3>
+      <p class="fine" style="margin-top:0">If you record forty scans of one animal, your sample size for a
+        question about the <em>species</em> is one, not forty. Repeated measures on the same individual are
+        not independent, and treating them as independent is the commonest fatal error in behavioural
+        coursework. The fix is to make the <b>individual</b> the unit of analysis: compute each subject's
+        budget, then analyse across subjects. This page reports per-subject figures for exactly that reason,
+        and it will tell you when everything came from one animal.</p>
+      <p class="fine">If you genuinely cannot tell individuals apart, say so in the write-up and treat the
+        group as the unit. That is a real limitation, and stating it is worth more than a p-value built on
+        a sample size you did not have.</p>
+    </div>
+
+    <div class="card">
+      <h3 style="margin-top:0">The ethogram is a pack</h3>
+      <p class="fine" style="margin-top:0">The behaviours loaded here are a general vertebrate starting set.
+        They are <b>data, not code</b>: export from the Budget tab to see the schema, edit, and import back &mdash;
+        import validates every field and refuses the whole file with a list of what is wrong.
+        <b>Copy the AI prompt</b> produces a prompt carrying the schema and the definition-quality rules, so
+        you can have an ethogram drafted for any taxon &mdash; then check it against animals, because a
+        generated ethogram is a hypothesis about what the animal does.</p>
+    </div>
+  </section>
+
+  <div class="rail">
+    <p class="rl">Record it — in the field</p>
+    <div class="chips">
+      <a href="field-notebook.html"><span>📓</span>Field Notebook</a>
+      <a href="ethogram.html" aria-current="page"><span>🐾</span>Ethogram</a>
+      <a href="selection-log.html"><span>📏</span>Selection Log</a>
+      <a href="stand-sheet.html"><span>🌲</span>Stand Sheet</a>
+      <a href="releve.html"><span>🌾</span>Relevé</a>
+      <a href="collection-sheet.html"><span>🍄</span>Collection Sheet</a>
+      <a href="farm-scout.html"><span>🧑‍🌾</span>Farm Scout</a>
+      <a href="pheno-tracker.html"><span>🌱</span>Pheno Tracker</a>
+      <a href="deployment-log.html"><span>🎙️</span>Deployment Log</a>
+    </div>
+    <p class="rl" style="margin-top:16px">At the bench</p>
+    <div class="chips">
+      <a href="cp-bench.html"><span>🫙</span>CP Bench</a>
+      <a href="soil-bench.html"><span>🪱</span>Soil Bench</a>
+      <a href="breeding-bench.html"><span>🥕</span>Breeding Bench</a>
+      <a href="cell-bench.html"><span>🔬</span>Cell Bench</a>
+      <a href="micro-bench.html"><span>🧫</span>Micro Bench</a>
+      <a href="soil-recipes.html"><span>🧱</span>Soil Recipes</a>
+      <a href="greenhouse.html"><span>🌡️</span>Greenhouse</a>
+    </div>
+    <p class="rl" style="margin-top:16px">Analyse it</p>
+    <div class="chips">
+      <a href="survey-design.html"><span>🧭</span>Survey Design</a>
+      <a href="ordination.html"><span>📉</span>Ordination</a>
+      <a href="food-web.html"><span>🕸️</span>Food Web Builder</a>
+      <a href="field-season.html"><span>🎯</span>Field Season</a>
+    </div>
+    <p class="rl" style="margin-top:16px">Print it</p>
+    <div class="chips">
+      <a href="plant-characters.html"><span>🌱</span>Plant Characters</a>
+      <a href="fungal-characters.html"><span>🔬</span>Fungal Characters</a>
+      <a href="cp-characters.html"><span>🪤</span>CP Characters</a>
+    </div>
+    <div class="chips" style="margin-top:16px">
+      <a class="ref" href="ecology.html">← kit hub</a>
+      <a class="ref" href="ecology-field-card.html">field card</a>
+      <a class="ref" href="ecology-glossary.html">glossary</a>
+    </div>
+  </div>
+  </div>
+  </div>
+</div>
+
+<div class="tabbar"><div class="row">
+  <button class="tab on" data-pane="p-rec" type="button"><span class="ico">🐾</span>Record</button>
+  <button class="tab" data-pane="p-des" type="button"><span class="ico">📐</span>Design</button>
+  <button class="tab" data-pane="p-bud" type="button"><span class="ico">📊</span>Budget</button>
+  <button class="tab" data-pane="p-rel" type="button"><span class="ico">⚖️</span>Reliability</button>
+  <button class="tab" data-pane="p-met" type="button"><span class="ico">📖</span>Method</button>
+</div></div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<script>
+
+/* ---- Field Entry Kit v1.8.0 : constructors return {el, get, set} ---- */
+var FEK = (function(){
+  function el(t,c,h){ var e=document.createElement(t); if(c) e.className=c;
+    if(h!=null) e.innerHTML=h; return e; }
+  /* Where the line falls, and why it falls there.
+     A component's OWN label is written by whoever built the page and often
+     carries deliberate markup -- "Pod parent <span class="u">seed bearer</span>".
+     That stays HTML. The label on an OPTION, a chip or a tile is data: a
+     species you typed, a cross you recorded, a source you named. v1.1 passed
+     those straight into innerHTML, so a plant named with a < became markup.
+     Escaped here rather than at each call site, because a component whose
+     safety depends on every caller remembering is a component that will bite
+     somebody. Verified against the whole kit first: no option, chip or tile
+     label anywhere passes markup on purpose. */
+  /* No object literal here on purpose: the map form needs an escaped double
+     quote as a key, and this file is a Python string emitting JavaScript, so
+     that quote has to survive two layers of escaping. It did not, and every
+     consumer got a syntax error that took FEK down with it. A chain of
+     comparisons has nothing to escape. */
+  function escv(s){ return String(s==null?"":s).replace(/[&<>"']/g,function(c){
+    return c==="&"?"&amp;":c==="<"?"&lt;":c===">"?"&gt;":c==='"'?"&quot;":"&#39;"; }); }
+  function buzz(m){ try{ if(navigator.vibrate) navigator.vibrate(m||8);}catch(e){} }
+
+  /* ---- a rejected keystroke buffer is not an empty one (v1.4.0, ADR-151) ----
+     `<input type=number>` has a value the page reads and a raw buffer the page
+     cannot see, and when the browser cannot parse the buffer the value it
+     hands over is the EMPTY STRING -- the same string a box nobody touched
+     hands over. Both numeric components here treated that as "not recorded":
+     the stepper and the field each reported null, the row went dashed-empty,
+     and the reader's characters sat in a box the sheet had decided was blank.
+     `validity.badInput` is the only thing that separates them, because it is
+     about the buffer rather than the value. Fixed once, here, rather than in
+     the seven pages that mount these components -- which is what this file is
+     for. */
+  function badBuffer(inp){ return !!(inp && inp.validity && inp.validity.badInput); }
+  function badMark(wrap, box, inp, label, on){
+    var line = wrap.__fekBad;
+    if(on && !line){ line = wrap.__fekBad = el("p","fek-bad"); wrap.appendChild(line); }
+    if(line) line.textContent = on
+      ? ((label||"this box") + " holds something that is not a number")
+      : "";
+    if(box) box.classList.toggle("bad", !!on);
+    if(on) inp.setAttribute("aria-invalid","true"); else inp.removeAttribute("aria-invalid");
+    return on;
+  }
+
+  /* ---- field registry (v1.4.0) ----
+     A component writes through to a hidden field via the page's own onchange.
+     That is fine going out and useless coming back: nothing could put a
+     restored value INTO the widget, so an autosaved session showed default
+     dials over correct data -- a lie on screen, which is worse than no
+     autosave. A component that declares `field:"sElev"` is registered here,
+     and FEK.setField puts a value back through the widget's own set(). Purely
+     additive: a component with no `field` behaves exactly as before. */
+  var REG = {};
+  function reg(o, h){ if(o && o.field) REG[o.field] = h; return h; }
+  function setField(id, v){
+    var h = REG[id];
+    if(!h) return false;
+    try { h.set(v); } catch(e){ return false; }
+    return true;
+  }
+  function fields(){ var out=[]; for(var k in REG) if(REG.hasOwnProperty(k)) out.push(k); return out; }
+  /* v1.7.0 (ADR-210). What every registered widget is holding, read through its
+     own get(). The registry existed so a restored value could go back IN; there
+     was no way to get one OUT except through a hidden input the page had to
+     remember to write to -- so a control that declared a field but had no
+     element behind it was invisible to the autosave, and a control that
+     declared nothing was invisible twice over. A page's typed numbers came back
+     as defaults over correct data, which is the lie ADR-160 introduced the
+     registry to stop. */
+  function values(){
+    var out = {}, k;
+    for (k in REG) if (REG.hasOwnProperty(k)) {
+      try { out[k] = REG[k].get(); } catch (e) { }
+    }
+    return out;
+  }
+
+  function step(o){
+    o=o||{}; var min=(o.min==null?-Infinity:o.min), max=(o.max==null?Infinity:o.max);
+    var stepv=o.step||1, dec=o.dec==null?(String(stepv).split(".")[1]||"").length:o.dec;
+    var v=o.value==null?0:o.value;
+    var wrap=el("div","fek-row"), lab=el("label","fek-lab",
+      (o.label||"")+(o.unit?'<span class="u">'+o.unit+'</span>':""));
+    var box=el("div","fek-step");
+    var minus=el("button",null,"&minus;"), inp=el("input"), plus=el("button",null,"+");
+    minus.type="button"; plus.type="button"; inp.type="number"; inp.className="val";
+    inp.setAttribute("inputmode","decimal");
+    if(o.label) inp.setAttribute("aria-label",o.label);
+    /* nullable: the control can hold "not recorded", which is not the same as
+       zero. Aspect 0 is north; a duff depth of 0 cm is an observation. An empty
+       nullable stepper reports null and the first bump starts from o.start. */
+    var nullable = !!o.nullable;
+    if(nullable && o.value==null) v=null;
+    function clamp(x){ return Math.min(max,Math.max(min,x)); }
+    function render(){
+      if(v==null){ inp.value=""; wrap.classList.add("is-empty"); box.classList.add("empty"); return; }
+      wrap.classList.remove("is-empty"); box.classList.remove("empty");
+      inp.value=(dec?v.toFixed(dec):String(v));
+    }
+    function set(x,quiet){
+      if(nullable && (x==null || x==="" || (typeof x==="number" && !isFinite(x)))) v=null;
+      else v=clamp(isFinite(x)?x:0);
+      render(); if(!quiet&&o.onchange) o.onchange(v);
+    }
+    function bump(d){
+      if(v==null) set(clamp(o.start==null?0:o.start));
+      else set(+(v+d*stepv).toFixed(6));
+      buzz();
+    }
+    function clear(){ if(nullable) set(null); }
+    minus.addEventListener("click",function(){ bump(-1); });
+    plus.addEventListener("click",function(){ bump(1); });
+    var hold;
+    function holdOn(d){ return function(){ clearInterval(hold);
+      hold=setInterval(function(){ bump(d); },110); }; }
+    function holdOff(){ clearInterval(hold); }
+    minus.addEventListener("pointerdown",holdOn(-1)); plus.addEventListener("pointerdown",holdOn(1));
+    ["pointerup","pointerleave","pointercancel"].forEach(function(ev){
+      minus.addEventListener(ev,holdOff); plus.addEventListener(ev,holdOff); });
+    inp.addEventListener("input",function(){
+      if(badMark(wrap, box, inp, o.label, badBuffer(inp))){
+        // A nullable stepper goes to "not recorded", the same as a cleared box,
+        // because there is no number to hold either way -- what changes is that
+        // the row now SAYS which of the two happened. A fixed stepper keeps the
+        // value it had, and says so, rather than silently reading as unchanged.
+        if(nullable && v!==null){ v=null; box.classList.add("empty"); if(o.onchange) o.onchange(null); }
+        return; }
+      if(nullable && inp.value===""){ v=null; box.classList.add("empty");
+        if(o.onchange) o.onchange(null); return; }
+      var x=parseFloat(inp.value);
+      if(isFinite(x)){ v=clamp(x); box.classList.remove("empty"); if(o.onchange) o.onchange(v); } });
+    // BLUR MUST NOT ERASE THE EVIDENCE. render() writes v back into the box, so
+    // a blur over bad input would replace the reader's characters with the old
+    // number and take the message down with them -- the page quietly deciding
+    // it knew better. The buffer is still bad; leave it, and leave the line up.
+    inp.addEventListener("blur",function(){ if(!badBuffer(inp)) render(); });
+    box.appendChild(minus); box.appendChild(inp); box.appendChild(plus);
+    wrap.appendChild(lab); wrap.appendChild(box);
+    if(o.help) wrap.appendChild(el("p","fek-help",o.help));
+    render();
+    return reg(o, { el:wrap, get:function(){return v;}, set:function(x){set(x,true);},
+             clear:clear, nullable:nullable });
+  }
+
+  /* field: a value typed from an instrument readout. No steppers — see the CSS note. */
+  function field(o){
+    o=o||{};
+    var min=(o.min==null?-Infinity:o.min), max=(o.max==null?Infinity:o.max);
+    var dec=(o.dec==null?3:o.dec), v=(o.value==null?null:o.value);
+    var wrap=el("div","fek-row"), lab=el("label","fek-lab",
+      (o.label||"")+(o.unit?'<span class="u">'+o.unit+'</span>':""));
+    var box=el("div","fek-field"), inp=el("input");
+    inp.type="number"; inp.setAttribute("inputmode","decimal");
+    if(o.step!=null) inp.step=o.step;
+    inp.placeholder = o.placeholder==null ? "—" : o.placeholder;
+    if(o.label) inp.setAttribute("aria-label",o.label);
+    function paint(){ box.classList.toggle("empty", v==null); }
+    function set(x,quiet){
+      if(x==null || x===""){ v=null; inp.value=""; }
+      else { var n=parseFloat(x);
+        v = isFinite(n) ? Math.min(max,Math.max(min,n)) : null;
+        inp.value = (v==null?"":String(v)); }
+      paint(); if(!quiet&&o.onchange) o.onchange(v);
+    }
+    inp.addEventListener("input",function(){
+      if(badMark(wrap, box, inp, o.label, badBuffer(inp))){
+        if(v!==null){ v=null; paint(); if(o.onchange) o.onchange(null); }
+        return; }
+      if(inp.value===""){ v=null; paint(); if(o.onchange) o.onchange(null); return; }
+      var n=parseFloat(inp.value);
+      if(isFinite(n)){ v=Math.min(max,Math.max(min,n)); paint(); if(o.onchange) o.onchange(v); } });
+    inp.addEventListener("blur",function(){
+      if(badBuffer(inp)) return;
+      if(v!=null && isFinite(v)) inp.value = (dec==null?String(v):String(+v.toFixed(dec)));
+      paint(); });
+    box.appendChild(inp);
+    if(o.unitBox!==false && o.unit) box.appendChild(el("div","u",o.unit));
+    wrap.appendChild(lab); wrap.appendChild(box);
+    if(o.help) wrap.appendChild(el("p","fek-help",o.help));
+    set(v,true);
+    return reg(o, { el:wrap, get:function(){return v;}, set:function(x){set(x,true);},
+             clear:function(){ set(null,true); }, nullable:true });
+  }
+
+  function dial(o){
+    o=o||{}; var opts=o.options||[], cur=o.value==null?null:o.value;
+    var wrap=el("div","fek-row"), lab=el("label","fek-lab",o.label||"");
+    var box=el("div","fek-dial"), btns=[];
+    opts.forEach(function(op,i){
+      var b=el("button",null,'<span>'+escv(op.label)+'</span>'+(op.sub?'<small>'+escv(op.sub)+'</small>':""));
+      b.type="button";
+      b.setAttribute("data-r", op.ramp==null ? String(Math.min(5,Math.round(i*5/Math.max(1,opts.length-1)))) : String(op.ramp));
+      b.addEventListener("click",function(){
+        cur = (cur===op.value && o.clearable!==false) ? null : op.value;
+        paint(); buzz(); if(o.onchange) o.onchange(cur);
+      });
+      btns.push(b); box.appendChild(b);
+    });
+    function paint(){ btns.forEach(function(b,i){ b.classList.toggle("on", opts[i].value===cur); }); }
+    paint();
+    wrap.appendChild(lab); wrap.appendChild(box);
+    if(o.help) wrap.appendChild(el("p","fek-help",o.help));
+    return reg(o, { el:wrap, get:function(){return cur;},
+             set:function(x){ cur=x; paint(); } });
+  }
+
+  function chips(o){
+    o=o||{}; var opts=o.options||[], sel={};
+    (o.value||[]).forEach(function(v){ sel[v]=1; });
+    var wrap=el("div","fek-row"), lab=el("label","fek-lab",o.label||"");
+    var box=el("div","fek-chips"), btns=[];
+    opts.forEach(function(op){
+      var b=el("button","fek-chip",escv(op.label)); b.type="button";
+      b.addEventListener("click",function(){
+        if(o.single){ sel={}; sel[op.value]=1; }
+        else if(sel[op.value]) delete sel[op.value]; else sel[op.value]=1;
+        paint(); buzz(); if(o.onchange) o.onchange(Object.keys(sel));
+      });
+      btns.push(b); box.appendChild(b);
+    });
+    function paint(){ btns.forEach(function(b,i){ b.classList.toggle("on",!!sel[opts[i].value]); }); }
+    paint();
+    wrap.appendChild(lab); wrap.appendChild(box);
+    if(o.help) wrap.appendChild(el("p","fek-help",o.help));
+    return reg(o, { el:wrap, get:function(){return Object.keys(sel);},
+             set:function(a){ sel={}; (a||[]).forEach(function(v){sel[v]=1;}); paint(); } });
+  }
+
+  function slider(o){
+    o=o||{};
+    var nullable=!!o.nullable;
+    var v = (nullable && o.value==null) ? null : (o.value==null?(o.min||0):o.value);
+    var wrap=el("div","fek-row"), lab=el("label","fek-lab",o.label||"");
+    var box=el("div","fek-slide"), r=el("input"), bub=el("div","bub");
+    r.type="range"; r.min=o.min==null?0:o.min; r.max=o.max==null?100:o.max;
+    r.step=o.step||1; r.value=v;
+    if(o.label) r.setAttribute("aria-label",o.label);
+    function paint(){
+      if(v==null){ bub.innerHTML='<span style="opacity:.6">not recorded</span>'; return; }
+      bub.innerHTML=(o.fmt?o.fmt(v):v)+(o.unit?'<span>'+o.unit+'</span>':"");
+    }
+    r.addEventListener("input",function(){ v=parseFloat(r.value); paint(); if(o.onchange) o.onchange(v); });
+    if(nullable && v==null) r.value = (o.min==null?0:o.min);
+    paint();
+    box.appendChild(r); box.appendChild(bub);
+    wrap.appendChild(lab); wrap.appendChild(box);
+    if(o.help) wrap.appendChild(el("p","fek-help",o.help));
+    return reg(o, { el:wrap, get:function(){return v;},
+             set:function(x){ v=(nullable&&x==null)?null:x; if(x!=null) r.value=x; paint(); },
+             clear:function(){ if(nullable){ v=null; paint(); } }, nullable:nullable });
+  }
+
+  function picker(o){
+    o=o||{}; var opts=o.options||[], cur=o.value==null?null:o.value, q="";
+    var wrap=el("div","fek-row"), lab=el("label","fek-lab",o.label||"");
+    var box=el("div","fek-pick"), s=el("input","search"), list=el("div","opts");
+    s.type="text"; s.placeholder=o.placeholder||"type to filter…";
+    s.setAttribute("autocomplete","off");
+    if(o.label) s.setAttribute("aria-label",o.label+" filter");
+    function paint(){
+      list.innerHTML="";
+      var qq=q.toLowerCase();
+      var shown=opts.filter(function(op){
+        return !qq || (op.label+" "+(op.sub||"")).toLowerCase().indexOf(qq)>=0; });
+      if(!shown.length){ list.appendChild(el("div","none","No match. Clear the filter to see all "+opts.length+".")); return; }
+      shown.slice(0,200).forEach(function(op){
+        var b=el("button","opt"+(op.value===cur?" on":""),
+          escv(op.label)+(op.sub?'<small>'+escv(op.sub)+'</small>':""));
+        b.type="button";
+        b.addEventListener("click",function(){ cur=op.value; paint(); buzz(); if(o.onchange) o.onchange(cur); });
+        list.appendChild(b);
+      });
+    }
+    s.addEventListener("input",function(){ q=s.value; paint(); });
+    box.appendChild(s); box.appendChild(list);
+    wrap.appendChild(lab); wrap.appendChild(box);
+    if(o.help) wrap.appendChild(el("p","fek-help",o.help));
+    paint();
+    return reg(o, { el:wrap, get:function(){return cur;}, set:function(x){ cur=x; paint(); } });
+  }
+
+  function tiles(list){
+    var box=el("div","fek-tiles");
+    (list||[]).forEach(function(t){
+      box.appendChild(el("div","fek-tile"+(t.tone?" "+t.tone:""),
+        '<div class="v">'+escv(t.v)+'</div><div class="l">'+escv(t.l)+'</div>'));
+    });
+    return box;
+  }
+  function banner(title,body,tone){
+    return el("div","fek-banner"+(tone?" "+tone:""),"<b>"+title+"</b>"+body);
+  }
+
+  /* ==================== PHOTOGRAPHS (v1.5.0, ADR-201) ====================
+     THE RECORD CARRIES THE REFERENCE, NOT THE IMAGE.
+
+     One page in this kit took a photograph and twenty did not, on a kit that
+     emits Darwin Core with `associatedMedia` left empty everywhere. A field
+     record whose voucher is a sentence is a weaker record than one that names
+     the frame.
+
+     The image itself does not go into the record, for three reasons that all
+     point the same way. A CSV cell cannot hold a JPEG. A base64 photograph
+     inside a .eco export turns a 40 kB record into a 4 MB one, and the export
+     is a thing people paste into a message. And a photograph's home is the
+     camera roll or the card, where it already is -- Darwin Core asks
+     `associatedMedia` for an IDENTIFIER of the media, not the media.
+
+     So what the record carries is what lets a person -- or a script -- put the
+     row and the file back together six months later:
+
+         filename | bytes | captured | crc32
+
+     CRC-32 AND NOT SHA-256, deliberately. `crypto.subtle` does not exist on a
+     `file://` page, because a file URL is not a secure context, and this kit
+     is opened off a card in the field as often as it is served over https as
+     an artifact. A digest that is only available in one of those two is worse
+     than a weaker one that is the same in both: the whole point is that the
+     number written on the sheet in the field still matches the number computed
+     back at the desk. This is an INTEGRITY check -- has this file changed, is
+     this the same file -- and it is not, and must not be described as,
+     cryptographic.
+
+     CAPTURED IS THE FILE'S MTIME, NOT EXIF. `File.lastModified` is what a
+     browser will give a page without parsing the JPEG, and for a frame straight
+     off a camera it is the shutter. For a file that has been copied between
+     cards, or round-tripped through a messaging app, it is the copy's time.
+     The field is named `captured` because that is what it usually means, and
+     the page says plainly that a copy carries the copy's time.
+
+     THE IMAGES ARE NEVER UPLOADED and never leave the tab. They are object
+     URLs revoked the moment a photograph is removed, so a session that adds and
+     drops a hundred frames does not hold a hundred blobs. Closing the tab
+     discards them, which is correct: the originals are where they belong. */
+  var CRCT = (function(){
+    var t = new Array(256), c, n, k;
+    for (n = 0; n < 256; n++) {
+      c = n;
+      for (k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+      t[n] = c >>> 0;
+    }
+    return t;
+  })();
+  function crc32(bytes){
+    var c = 0xFFFFFFFF, i;
+    for (i = 0; i < bytes.length; i++) c = CRCT[(c ^ bytes[i]) & 0xFF] ^ (c >>> 8);
+    c = (c ^ 0xFFFFFFFF) >>> 0;
+    /* eight hex digits always: a crc of 0x0000A1B2 written as "a1b2" is a
+       different string from the one the next reader computes, and a checksum
+       you have to remember to pad is a checksum that will be compared wrong. */
+    return ("0000000" + c.toString(16)).slice(-8);
+  }
+  function iso(ms){
+    /* Local minutes, not UTC, because a field sheet is read where it was
+       written. ISO-shaped so it sorts. */
+    if (!ms) return "";
+    var d = new Date(ms), p = function(n){ return (n < 10 ? "0" : "") + n; };
+    return d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate())
+         + " " + p(d.getHours()) + ":" + p(d.getMinutes());
+  }
+  function photos(o){
+    o = o || {};
+    var list = [], max = (o.max == null ? 40 : o.max);
+    var wrap = el("div", "fek-row"), lab = el("label", "fek-lab", o.label || "Photographs");
+    var zone = el("div", "fek-drop");
+    /* THE ZONE NEEDS A NAME OF ITS OWN. A drop listener leaves no mark a
+       selector can find, and the control the page's own snapshot offers under
+       this component's label is the hidden FILE INPUT -- so a task that says
+       "drop these on the photographs" landed on the input and was refused as
+       not a drop zone. The id is the address; a page that mounts this without
+       one can still be driven through the file input, and cannot be driven by
+       a drop. */
+    zone.id = o.dropId || (o.field ? o.field + "Drop" : "");
+    if (!zone.id) zone.removeAttribute("id");
+    var inp = el("input");
+    inp.type = "file"; inp.accept = o.accept || "image/*"; inp.multiple = true;
+    inp.style.display = "none";
+    if (o.label) inp.setAttribute("aria-label", o.label);
+    var btn = el("button", null, "📷 Add photos");
+    btn.type = "button";
+    zone.appendChild(el("p", null, o.prompt ||
+      "<b>Shoot the character, not the specimen.</b> Camera or gallery, or drop files here."));
+    zone.appendChild(inp); zone.appendChild(btn);
+    var grid = el("div", "fek-photos");
+    /* Its own live region, by the rule ADR-199 put on every other message in
+       this kit: an addition that is refused -- a PDF dropped on a photo zone,
+       a frame too many -- is announced rather than silently ignored. */
+    var shot = el("p", "fek-shot");
+    shot.setAttribute("role", "status"); shot.setAttribute("aria-live", "polite");
+
+    /* FRAMES THIS SHEET KNOWS ABOUT AND DOES NOT HOLD (v1.6.0, ADR-206).
+       A page can restore what you typed. It cannot restore a photograph: a
+       page cannot hand a File back to a file input, and this component has
+       always refused to pretend otherwise. But a restored sheet that came back
+       quietly WITHOUT its frames is worse than one that admits it, because the
+       reader believes their morning is back. So the record survives the
+       restore even though the bytes do not, the component says which frames
+       are missing and names them, and it takes them back BY CHECKSUM: drop the
+       same files in again and the label and note you typed -- the expensive
+       part -- come back with them. */
+    var await_ = [];
+    var awaitBox = el("div", "fek-await");
+    awaitBox.style.display = "none";
+
+    /* NAMED FOR WHOEVER READS THE PAGE (v1.8.0, ADR-254). The cards are what
+       the page says it holds -- each frame's name, size, checksum and time --
+       and the grid had no id, so no report reader could see a card: a task
+       could attach a photograph and hold everything it exported and nothing
+       it showed. The zone's id names all three: <id>List the cards, <id>Msg
+       what the last addition said, <id>AwaitList the frames on the record and
+       not on this device. */
+    if (zone.id) {
+      grid.id = zone.id + "List"; shot.id = zone.id + "Msg"; awaitBox.id = zone.id + "AwaitList";
+    }
+
+    function say(t, bad){ shot.textContent = t || ""; shot.classList.toggle("bad", !!bad); }
+    function changed(){
+      if (o.onchange) o.onchange(records());
+      /* A REAL EVENT, BECAUSE A PHOTOGRAPH IS AN EDIT (v1.6.0, ADR-206).
+         Adding a frame fires no input and no change -- the file input is
+         hidden and a drop is neither -- so every autosave in this kit sat
+         still while a reader photographed four stations, and a session that
+         was ONLY photographs was saved by nothing. One bubbling event, so the
+         page does not have to remember to wire it and a page added tomorrow
+         is covered on the day it mounts the component. */
+      try { wrap.dispatchEvent(new CustomEvent("fek-change", { bubbles: true })); }
+      catch (e) {}
+    }
+    function records(){
+      /* The awaited frames are IN the record. A photograph that was taken has
+         an identifier whether or not this browser still holds the bytes, and
+         an export that dropped it would lose the only link between the row and
+         a file sitting on a camera. `have` says which is which. */
+      return list.map(function(p){
+        return { name: p.name, bytes: p.bytes, captured: p.captured, crc: p.crc,
+                 label: p.label, note: p.note, have: true };
+      }).concat(await_.map(function(p){
+        return { name: p.name, bytes: p.bytes, captured: p.captured, crc: p.crc,
+                 label: p.label, note: p.note, have: false };
+      }));
+    }
+    function renderAwait(){
+      if (!await_.length) { awaitBox.style.display = "none"; awaitBox.innerHTML = ""; return; }
+      awaitBox.style.display = "";
+      awaitBox.innerHTML = "<b>" + await_.length + " photograph"
+        + (await_.length === 1 ? " is" : "s are") + " on this record and not on this device.</b> "
+        + "A saved sheet keeps what you typed; it cannot keep an image. Add the same file"
+        + (await_.length === 1 ? "" : "s") + " again and the caption you wrote comes back with "
+        + (await_.length === 1 ? "it" : "them") + " \u2014 matched by checksum, so it has to be "
+        + "the same frame."
+        + "<ul>" + await_.map(function(p){
+            return "<li>" + escv(p.name) + " <span class=\"cap\">" + p.bytes + " bytes \u00b7 crc "
+                 + p.crc + (p.label ? " · " + escv(p.label) : "") + "</span></li>";
+          }).join("") + "</ul>";
+    }
+    function render(){
+      grid.innerHTML = "";
+      list.forEach(function(p, i){
+        var d = el("div", "fek-photo");
+        var im = el("img"); im.src = p.url;
+        im.alt = p.label || ("photograph " + (i + 1) + " — " + p.name);
+        var m = el("div", "m");
+        /* a space before each break (v1.8.0): the lines are one run of
+           text to anything that reads the card rather than looks at it --
+           "IMG_0431.jpg160 bytes" -- the ADR-253 run cell's defect again */
+        m.appendChild(el("code", null,
+          escv(p.name) + " <br>" + p.bytes + " bytes · crc " + p.crc
+          + (p.captured ? " <br>" + escv(p.captured) : "")));
+        var lv = el("input"); lv.type = "text"; lv.value = p.label;
+        lv.placeholder = o.labelPlaceholder || "voucher / specimen №";
+        lv.setAttribute("aria-label", "voucher for " + p.name);
+        var nt = el("textarea"); nt.value = p.note;
+        nt.placeholder = o.notePlaceholder || "What does this show?";
+        nt.setAttribute("aria-label", "note on " + p.name);
+        var rm = el("button", "rm", "Remove"); rm.type = "button";
+        lv.addEventListener("input", function(){ p.label = lv.value; changed(); });
+        nt.addEventListener("input", function(){ p.note = nt.value; changed(); });
+        rm.addEventListener("click", function(){
+          try { URL.revokeObjectURL(p.url); } catch (e) {}
+          list.splice(list.indexOf(p), 1);
+          render(); say("Removed " + p.name); changed(); buzz();
+        });
+        m.appendChild(lv); m.appendChild(nt);
+        /* A PAGE'S OWN ACTIONS ON A FRAME (v1.8.0, ADR-254). The stand sheet
+           kept a pane of its own for one button -- link this frame to the
+           species picked on the tally -- and with it lost every caption on a
+           reload, because only this component keeps a frame's record. An
+           action is {label, run(record)}: run returns a string to refuse with
+           (nothing changes) or {label?, note?, say?} to write back. */
+        (o.actions || []).forEach(function(a){
+          var ab = el("button", "act", escv(a.label)); ab.type = "button";
+          ab.addEventListener("click", function(){
+            var r = a.run({ name: p.name, bytes: p.bytes, captured: p.captured, crc: p.crc,
+                            label: p.label, note: p.note });
+            if (typeof r === "string") { say(r, true); return; }
+            if (!r) return;
+            if (r.label != null) p.label = String(r.label);
+            if (r.note != null) p.note = String(r.note);
+            render(); say(r.say || ""); changed();
+          });
+          m.appendChild(ab);
+        });
+        m.appendChild(rm);
+        d.appendChild(im); d.appendChild(m);
+        grid.appendChild(d);
+      });
+    }
+    function add(files){
+      var fs = Array.prototype.slice.call(files || []);
+      if (!fs.length) return;
+      var notImages = fs.filter(function(f){ return !/^image\//.test(f.type || ""); });
+      fs = fs.filter(function(f){ return /^image\//.test(f.type || ""); });
+      var room = Math.max(0, max - list.length), over = fs.length - room;
+      if (over > 0) fs = fs.slice(0, room);
+      var pending = fs.length, added = 0, back = 0;
+      /* A refusal is SAID, not swallowed: the reader who dropped six files and
+         got four has to be able to find out which two, and why. */
+      function done(){
+        if (pending) return;
+        var parts = [];
+        if (added) parts.push(added + " photograph" + (added === 1 ? "" : "s") + " added");
+        if (back) parts.push(back + " matched by checksum, caption restored");
+        if (notImages.length)
+          parts.push(notImages.length + " not an image: "
+                     + notImages.map(function(f){ return f.name; }).slice(0, 3).join(", "));
+        if (over > 0) parts.push(over + " over the limit of " + max);
+        say(parts.join(" — ") || "Nothing added", !added);
+        if (added) { render(); renderAwait(); changed(); buzz(12); }
+      }
+      if (!pending) { done(); return; }
+      fs.forEach(function(f){
+        var rd = new FileReader();
+        rd.onload = function(){
+          var bytes = new Uint8Array(rd.result);
+          var sum = crc32(bytes), lab = "", note = "", i;
+          /* BY CHECKSUM, NOT BY NAME. A camera roll renames on export and two
+             cards both start at DSC_0001; the checksum is the only thing that
+             says this is the frame the caption was written about. */
+          for (i = 0; i < await_.length; i++) {
+            if (await_[i].crc === sum && await_[i].bytes === bytes.length) {
+              lab = await_[i].label || ""; note = await_[i].note || "";
+              await_.splice(i, 1); back++;
+              break;
+            }
+          }
+          list.push({ name: f.name || ("photo-" + (list.length + 1) + ".jpg"),
+                      bytes: bytes.length, captured: iso(f.lastModified),
+                      crc: sum, label: lab, note: note,
+                      url: URL.createObjectURL(f) });
+          added++; pending--; done();
+        };
+        rd.onerror = function(){ pending--; done(); };
+        rd.readAsArrayBuffer(f);
+      });
+    }
+    btn.addEventListener("click", function(){ inp.click(); });
+    inp.addEventListener("change", function(){ add(inp.files); inp.value = ""; });
+    ["dragenter", "dragover"].forEach(function(ev){
+      zone.addEventListener(ev, function(e){ e.preventDefault(); zone.classList.add("on"); }); });
+    ["dragleave", "dragend"].forEach(function(ev){
+      zone.addEventListener(ev, function(){ zone.classList.remove("on"); }); });
+    /* The harness stamps data-h-drop on anything that registers a drop
+       listener, so this zone is drivable by the door with no page markup. */
+    zone.addEventListener("drop", function(e){
+      e.preventDefault(); zone.classList.remove("on");
+      if (e.dataTransfer && e.dataTransfer.files) add(e.dataTransfer.files);
+    });
+    wrap.appendChild(lab); wrap.appendChild(zone); wrap.appendChild(shot);
+    wrap.appendChild(awaitBox); wrap.appendChild(grid);
+    if (o.help) wrap.appendChild(el("p", "fek-help", o.help));
+    render();
+    return reg(o, {
+      el: wrap, get: records, count: function(){ return list.length; },
+      /* set() is deliberately not a way to put images back: a page cannot
+         hand a File to a file input, and a component that pretended to
+         restore a photograph from a record would be restoring a caption. */
+      set: function(){ return false; },
+      /* ...and THIS is what an autosave gets instead (v1.6.0, ADR-206). The
+         records come back, the bytes do not, and the component says so where
+         the reader will see it rather than coming back quietly one frame
+         short. Frames the sheet already holds are left alone -- a restore that
+         listed a photograph you are looking at would be noise. */
+      restore: function(recs){
+        if (!recs || !recs.length) return 0;
+        var held = {}, i;
+        for (i = 0; i < list.length; i++) held[list[i].crc] = 1;
+        await_ = recs.filter(function(r){
+          return r && r.crc && !held[r.crc];
+        }).map(function(r){
+          return { name: r.name, bytes: r.bytes, captured: r.captured, crc: r.crc,
+                   label: r.label || "", note: r.note || "" };
+        });
+        renderAwait();
+        /* ...AND THE PAGE IS TOLD (v1.8.0, ADR-254). A page draws its sheet
+           from get(), which lists the awaited frames, but a restore fired no
+           onchange -- so a page that restored its photographs after it had
+           drawn its sheet came back with the frames on the card and not in
+           the sheet: the collection sheet and the relevé, whose restores ran
+           in that order, lost the photographs section until the next edit.
+           Not a fek-change: a restore is not an edit to save. */
+        if (await_.length && o.onchange) o.onchange(records());
+        return await_.length;
+      },
+      awaiting: function(){ return await_.slice(); },
+      clear: function(){
+        list.forEach(function(p){ try { URL.revokeObjectURL(p.url); } catch (e) {} });
+        list = []; await_ = []; render(); renderAwait(); say(""); changed();
+      },
+      /* `associatedMedia` the way Darwin Core asks for it: identifiers,
+         concatenated and separated. The separator is " | " because a filename
+         may hold a comma and a record that splits wrong is worse than one that
+         is hard to read. */
+      media: function(){
+        /* Awaited frames are named too. A photograph that was taken has an
+           identifier whether or not this browser still holds it, and a deposit
+           that dropped it would break the only link between the row and a file
+           on a camera. */
+        return list.concat(await_).map(function(p){
+          return p.name + " (crc32 " + p.crc + (p.captured ? ", " + p.captured : "") + ")";
+        }).join(" | ");
+      }
+    });
+  }
+  /* ---- the same rule for a box FEK did not build (v1.4.0, ADR-151) ----
+     The components above now say when a box holds something the browser could
+     not read as a number. Every page that mounts them also carries number
+     boxes of its OWN -- an elevation, an effort value, five camera settings --
+     and those had the same silence for the same reason: `.value` comes back ""
+     and the page reads a blank. One delegated listener rather than a wrapper
+     per box, because the boxes a page builds LATER -- a row added, a pane
+     rendered, a measurement grid opened -- have to be covered too, and a guard
+     that only knew about the boxes present at load would go quiet exactly when
+     the sheet gets long. Capture phase, so the note is up before the page's own
+     handler decides what the box now means. */
+  function boxName(inp){
+    var a=inp.getAttribute("aria-label"); if(a && a.trim()) return a.trim();
+    var l=inp.closest?inp.closest("label"):null;
+    if(l){ var t="",i; for(i=0;i<l.childNodes.length;i++){ var n=l.childNodes[i];
+             if(n.nodeType===3) t+=n.nodeValue; }
+           t=t.replace(/\s+/g," ").trim(); if(t) return t; }
+    if(inp.id){ var lb=document.querySelector('label[for="'+inp.id+'"]');
+                if(lb) return lb.textContent.replace(/\s+/g," ").trim(); }
+    var ph=inp.getAttribute("placeholder");
+    return (ph && ph.trim()) ? ph.trim() : "this box";
+  }
+  function guardBox(inp){
+    var bad = !!(inp.validity && inp.validity.badInput);
+    var note = inp.__fekBadNote;
+    if(bad && !note){
+      note = inp.__fekBadNote = el("p","fek-bad");
+      var after = (inp.closest ? inp.closest("label") : null) || inp;
+      if(after.parentNode) after.parentNode.insertBefore(note, after.nextSibling);
+    }
+    if(note) note.textContent = bad ? (boxName(inp)+" holds something that is not a number") : "";
+    inp.classList.toggle("fek-badbox", bad);
+    if(bad) inp.setAttribute("aria-invalid","true"); else inp.removeAttribute("aria-invalid");
+  }
+  function guard(){
+    document.addEventListener("input",function(ev){
+      var inp=ev.target;
+      if(!inp || inp.tagName!=="INPUT" || inp.type!=="number") return;
+      // a component built here already says it, in its own row
+      if(inp.closest && inp.closest(".fek-step, .fek-field")) return;
+      guardBox(inp);
+    }, true);
+  }
+  if(document.readyState==="loading")
+    document.addEventListener("DOMContentLoaded",guard);
+  else guard();
+
+  function mount(host,parts){
+    var h=typeof host==="string"?document.getElementById(host):host;
+    h.innerHTML=""; parts.forEach(function(p){ h.appendChild(p.el||p); }); return h;
+  }
+  /* Exported because a page building a component LABEL -- which stays HTML by
+     design -- still has to escape the data inside it. A private copy of an
+     escaper in one page was how the last one got lost when the kit was
+     re-emitted over it. */
+  return { version:"1.8.0", esc:escv, setField:setField, fields:fields, values:values, step:step, field:field, dial:dial, chips:chips, slider:slider,
+           picker:picker, photos:photos, crc32:crc32, tiles:tiles, banner:banner, mount:mount, buzz:buzz, guard:guard };
+})();
+/* ---- Keep v1.4.0 : local autosave, and honesty about what that is ---- */
+var KEEP = (function(){
+  /* The handle the last wire() returned, so a reader outside the page's closure
+     can ask the page what it is holding (v1.3.0, ADR-209). */
+  var LIVE = null;
+  function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g,function(c){
+    return c==="&"?"&amp;":c==="<"?"&lt;":c===">"?"&gt;":c==='"'?"&quot;":"&#39;"; }); }
+
+  /* Probe rather than assume. Safari in private mode used to throw on the
+     first write; storage can also be disabled by enterprise policy or by the
+     user, and in a sandboxed frame the accessor itself throws. All three look
+     identical to a page that only wraps setItem in a try. */
+  function usable(){
+    try {
+      var k = "__keep_probe__";
+      window.localStorage.setItem(k, "1");
+      window.localStorage.removeItem(k);
+      return true;
+    } catch(e){ return false; }
+  }
+
+  function when(ts){
+    if(!ts) return "";
+    try {
+      var d = new Date(ts), now = new Date();
+      var same = d.toDateString() === now.toDateString();
+      var hm = ("0"+d.getHours()).slice(-2) + ":" + ("0"+d.getMinutes()).slice(-2);
+      return same ? ("today " + hm) : (d.toISOString().slice(0,10) + " " + hm);
+    } catch(e){ return ""; }
+  }
+
+  function wire(o){
+    o = o || {};
+    var key = o.key, host = typeof o.mount === "string" ? document.getElementById(o.mount) : o.mount;
+    var fmt = o.format == null ? 1 : o.format;
+    var ok = usable(), lastErr = null, savedAt = null, restoredFrom = null, timer = null;
+    var noun = o.noun || "your work";
+
+    function read(){
+      if(!ok) return null;
+      try {
+        var raw = window.localStorage.getItem(key);
+        if(!raw) return null;
+        var p = JSON.parse(raw);
+        /* A format stamp, so a page that changes its state shape does not
+           restore a shape it can no longer read and fail in a way the user
+           reads as data loss. */
+        if(!p || p.format !== fmt) return null;
+        return p;
+      } catch(e){ return null; }
+    }
+
+    function write(){
+      timer = null;
+      if(!ok) return;
+      var body;
+      try { body = o.snapshot(); } catch(e){ lastErr = "could not read the page state"; paint(); return; }
+      if(body == null){
+        try { window.localStorage.removeItem(key); }catch(e){}
+        savedAt = null; lastErr = null; paint(); return;
+      }
+      try {
+        window.localStorage.setItem(key, JSON.stringify({ format:fmt, at:Date.now(), body:body }));
+        savedAt = Date.now(); lastErr = null;
+      } catch(e){
+        /* Do not swallow this. A quota failure that says nothing is worse than
+           no autosave at all, because it teaches the user to trust it. */
+        lastErr = (e && e.name === "QuotaExceededError")
+          ? "this browser's storage is full" : "this browser refused the write";
+      }
+      paint();
+    }
+
+    function touch(){
+      if(!ok) return;
+      if(timer) clearTimeout(timer);
+      timer = setTimeout(write, o.debounce == null ? 500 : o.debounce);
+    }
+
+    function flush(){ if(timer){ clearTimeout(timer); } write(); }
+
+    function forget(){
+      /* Cancel the pending write first. Without this the debounced save from
+         the edit that preceded the click -- or from the click itself, on a
+         page that listens for clicks -- lands a few hundred milliseconds later
+         and puts the copy straight back, which makes the button look like it
+         did nothing. */
+      if(timer){ clearTimeout(timer); timer = null; }
+      try { window.localStorage.removeItem(key); }catch(e){}
+      savedAt = null; restoredFrom = null; lastErr = null; paint();
+      if(o.onforget) o.onforget();
+    }
+
+    function paint(){
+      if(!host) return;
+      /* noprint: this is screen chrome -- a status line about a browser and a
+         button -- and the print audit is right to count anything else that
+         vanishes on paper as content lost. */
+      host.className = "keep noprint" + ((!ok || lastErr) ? " bad" : "");
+      var msg;
+      if(!ok){
+        msg = "<b>This browser is not keeping anything.</b> Storage is unavailable here &mdash; a "
+            + "private window, or site data switched off. Nothing is being saved, so export before "
+            + "you close the tab.";
+      } else if(lastErr){
+        msg = "<b>Autosave failed &mdash; " + esc(lastErr) + ".</b> What is on screen is not saved. "
+            + "Export it now.";
+      } else if(savedAt){
+        msg = "Saved on this device <b>" + esc(when(savedAt)) + "</b>"
+            + (restoredFrom ? " &middot; restored from " + esc(when(restoredFrom)) : "") + ".";
+      } else if(restoredFrom){
+        msg = "Restored " + esc(noun) + " from <b>" + esc(when(restoredFrom)) + "</b> on this device.";
+      } else {
+        msg = "Autosave is on. " + esc(noun.charAt(0).toUpperCase() + noun.slice(1))
+            + " will still be here if you close the tab.";
+      }
+      /* THE BUTTON IS BUILT ONCE (v1.2.0, ADR-207).
+         This wrote the whole strip with innerHTML on every repaint, so the
+         forget button was DESTROYED AND RE-CREATED whenever the autosave
+         changed state -- and the autosave changes state on every save. A
+         control that does not survive a repaint cannot be stamped, addressed
+         or kept in focus across one: audit_focus reported it as "mounted after
+         the last stamp and could not be measured", intermittently, on whichever
+         page happened to save while the sweep was looking. Only the words
+         change now. */
+      if(!host.firstChild){
+        var st = document.createElement("p"); st.className = "st";
+        var btn = document.createElement("button");
+        btn.type = "button"; btn.setAttribute("data-keep-forget", "");
+        btn.textContent = "Forget this device's copy";
+        btn.addEventListener("click", function(){
+          forget();
+          if(o.ontoast) o.ontoast("Saved copy removed from this device");
+        });
+        var note = document.createElement("p"); note.className = "note";
+        note.innerHTML = '<b>This is not a backup.</b> It is one browser on one device, and it goes '
+          + 'when site data is cleared, in a private window, or on any other machine. It exists so a '
+          + 'phone call does not cost you a morning. The exports are the durable copy.';
+        host.appendChild(st); host.appendChild(btn); host.appendChild(note);
+      }
+      host.firstChild.innerHTML = msg;
+    }
+
+    var got = read();
+    if(got){
+      var accepted = false;
+      try { accepted = o.restore(got.body) !== false; } catch(e){ accepted = false; }
+      if(accepted){ restoredFrom = got.at; }
+    }
+    paint();
+    /* A PHOTOGRAPH IS AN EDIT (v1.1.0, ADR-206). FEK.photos fires `fek-change`
+       when frames are added, removed or captioned; nothing else does, because
+       a hidden file input and a drop produce neither `input` nor `change`. A
+       page that had to remember to wire this is a page that would forget. */
+    try {
+      document.addEventListener("fek-change", function(){ touch(); }, true);
+    } catch(e){}
+    /* A tab closing mid-debounce is exactly the case this exists for. */
+    try {
+      window.addEventListener("pagehide", function(){ if(timer) flush(); });
+      document.addEventListener("visibilitychange", function(){
+        if(document.visibilityState === "hidden" && timer) flush(); });
+    } catch(e){}
+
+    var h = { touch:touch, flush:flush, forget:forget, usable:function(){ return ok; },
+             restored:function(){ return restoredFrom; }, savedAt:function(){ return savedAt; },
+             error:function(){ return lastErr; },
+             /* v1.1.0 (ADR-203). The page already describes its own state once,
+                here, for the autosave. The outbox needs the same description to
+                say whether it has left the device -- and a SECOND description
+                would be a second thing to keep in step, so the one that is
+                already exercised by every restore is the one it gets. Read
+                through this handle rather than by the page passing its snapshot
+                twice, because two references can be wired to two functions and
+                only one of them would ever be tested. */
+             snapshot:function(){ return o.snapshot(); } };
+    /* v1.3.0 (ADR-209). The live handle, reachable from outside the page's own
+       closure. A page wires KEEP inside an IIFE and keeps the handle in a local,
+       so the description of its state that the autosave and the outbox both
+       already read was reachable from nowhere else -- and an audit asking "how
+       much did that tap take" had to count rows on the screen instead. Rows on
+       the screen are not records: a plate shown once in a list and once in a
+       results table is one record counted twice, and a rule built on that cries
+       wolf on a row remover while under-reading a delete that cascades.
+       One description, read by everything that needs it (ADR-141). */
+    LIVE = h;
+    return h;
+  }
+
+  /* ---- generic form capture ----
+     Every page in the kit keeps its typed state in elements with ids -- real
+     inputs for text and dates, hidden write-through fields for the FEK
+     widgets. Capturing them by walking the DOM means a page that gains a field
+     does not also have to remember to add it to a list, which is how a
+     hand-maintained list of fields quietly stops covering the newest one. */
+  function formSnapshot(){
+    var out = {}, i, els = document.querySelectorAll("input[id], textarea[id]");
+    for(i=0;i<els.length;i++){
+      var e = els[i];
+      if(e.type === "file" || e.type === "button" || e.type === "submit") continue;
+      out[e.id] = (e.type === "checkbox" || e.type === "radio") ? (e.checked ? "1" : "") : e.value;
+    }
+    /* v1.4.0 (ADR-210). ...AND EVERY FEK CONTROL THAT DECLARES A FIELD BUT HAS
+       NO ELEMENT BEHIND IT. Walking the DOM finds a page's typed state only
+       where the page also remembered to write it into a hidden input; a
+       component that declared `field:"selN"` and nothing else was invisible
+       here, and its value came back as the widget's default over correct data.
+       Only the ones the DOM walk did not already find, so every page that has
+       been keeping its state through hidden inputs keeps writing exactly the
+       blob it wrote yesterday. */
+    try {
+      if (typeof FEK !== "undefined" && FEK && typeof FEK.values === "function") {
+        var fv = FEK.values(), fk;
+        for (fk in fv) if (fv.hasOwnProperty(fk) && !out.hasOwnProperty(fk)
+                           && fv[fk] != null && fv[fk] !== "") out[fk] = fv[fk];
+      }
+    } catch (e) { }
+    return out;
+  }
+  /* Restoring the hidden field is only half the job: the widget above it still
+     shows its construction default, and a correct value under a wrong-looking
+     dial is worse than no restore at all. FEK.setField (v1.3.0) puts the value
+     back through the widget for every component that declared its field. */
+  function formRestore(map){
+    if(!map) return 0;
+    var n = 0, id;
+    for(id in map){
+      if(!map.hasOwnProperty(id)) continue;
+      var e = document.getElementById(id);
+      if(!e){
+        /* v1.4.0: a field with no element behind it is a FEK control that
+           declared one; put the value back through the widget's own set(). */
+        if(typeof FEK !== "undefined" && FEK.setField && FEK.setField(id, map[id])) n++;
+        continue;
+      }
+      if(e.type === "checkbox" || e.type === "radio") e.checked = !!map[id];
+      else e.value = map[id];
+      if(typeof FEK !== "undefined" && FEK.setField){
+        var v = map[id];
+        if(e.type === "number" || /^-?\d+(\.\d+)?$/.test(String(v))) {
+          FEK.setField(id, v === "" ? null : parseFloat(v));
+        } else {
+          FEK.setField(id, v === "" ? null : v);
+        }
+      }
+      n++;
+    }
+    return n;
+  }
+
+  return { version:"1.4.0", wire:wire, usable:usable, live:function(){ return LIVE; },
+           formSnapshot:formSnapshot, formRestore:formRestore };
+})();
+/* ---- Outbox v1.0.0 : what has not left this device ---- */
+var OUT = (function(){
+  function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g,function(c){
+    return c==="&"?"&amp;":c==="<"?"&lt;":c===">"?"&gt;":c==='"'?"&quot;":"&#39;"; }); }
+
+  /* UTF-8 by hand rather than TextEncoder, because the two would be two code
+     paths and only one of them would ever be exercised -- and because what is
+     hashed has to be the same bytes on the phone in the field as on the laptop
+     that checks it. Surrogate pairs are joined: a filename or a note holding an
+     emoji must hash as the character it is, not as two halves. */
+  function utf8(s){
+    var out = [], i, c, c2, u;
+    for (i = 0; i < s.length; i++) {
+      c = s.charCodeAt(i);
+      if (c < 0x80) { out.push(c); continue; }
+      if (c < 0x800) { out.push(0xC0 | (c >> 6), 0x80 | (c & 63)); continue; }
+      if (c >= 0xD800 && c <= 0xDBFF && i + 1 < s.length
+          && (c2 = s.charCodeAt(i + 1)) >= 0xDC00 && c2 <= 0xDFFF) {
+        u = 0x10000 + ((c - 0xD800) << 10) + (c2 - 0xDC00); i++;
+        out.push(0xF0 | (u >> 18), 0x80 | ((u >> 12) & 63),
+                 0x80 | ((u >> 6) & 63), 0x80 | (u & 63));
+        continue;
+      }
+      out.push(0xE0 | (c >> 12), 0x80 | ((c >> 6) & 63), 0x80 | (c & 63));
+    }
+    return out;
+  }
+
+  /* ONE hash for the kit. FEK's, because the photographs already carry CRC-32
+     and a sheet whose two checksums disagreed would be a sheet nobody could
+     reconcile. No fallback: a second implementation here would drift silently,
+     and an outbox that hashed with something nothing else uses would report
+     "unchanged" for the wrong reason. */
+  function hash(o){
+    if (typeof FEK === "undefined" || !FEK || typeof FEK.crc32 !== "function") return null;
+    return FEK.crc32(utf8(JSON.stringify(o)));
+  }
+
+  function usable(){
+    try {
+      var k = "__out_probe__";
+      window.localStorage.setItem(k, "1");
+      window.localStorage.removeItem(k);
+      return true;
+    } catch(e){ return false; }
+  }
+
+  function when(ts){
+    if(!ts) return "";
+    try {
+      var d = new Date(ts), now = new Date();
+      var same = d.toDateString() === now.toDateString();
+      var hm = ("0"+d.getHours()).slice(-2) + ":" + ("0"+d.getMinutes()).slice(-2);
+      return same ? ("today " + hm) : (d.toISOString().slice(0,10) + " " + hm);
+    } catch(e){ return ""; }
+  }
+
+  function kb(n){
+    if(!n) return "0 bytes";
+    return n < 1024 ? (n + " bytes") : ((n/1024).toFixed(n < 10240 ? 1 : 0) + " kB");
+  }
+
+  /* One outbox per page, and the module-level sent() finds it. A page's copy
+     helper is defined long before the outbox is wired, so it cannot close over
+     a handle; guarding the call with `typeof` is exactly how ADR-201 lost an
+     export writer for a season. Instead a send that arrives before wiring is
+     REMEMBERED and reported by wire(), which turns a wiring-order mistake into
+     a red line instead of a silence. */
+  var LIVE = null, EARLY = [];
+
+  function wire(o){
+    o = o || {};
+    var key = o.key, host = typeof o.mount === "string" ? document.getElementById(o.mount) : o.mount;
+    var keep = o.keep, defs = o.exports || [], fmt = o.format == null ? 1 : o.format;
+    var ok = usable(), lastErr = null, sends = {}, timer = null;
+
+    function def(id){ var i; for(i=0;i<defs.length;i++) if(defs[i].id === id) return defs[i]; return null; }
+
+    /* The sheet's state comes from KEEP's snapshot and from nowhere else. Two
+       descriptions of "what is on this page" would be two things to keep in
+       step, and the one the outbox used would be the one nobody tested. */
+    function state(){
+      if(!keep || typeof keep.snapshot !== "function") return undefined;
+      try { return keep.snapshot(); } catch(e){ return undefined; }
+    }
+    function nowCrc(){
+      var st = state();
+      if(st === undefined) return null;
+      if(st === null) return "";
+      return hash(st);
+    }
+
+    function load(){
+      if(!ok) return;
+      try {
+        var raw = window.localStorage.getItem(key);
+        if(!raw) return;
+        var p = JSON.parse(raw);
+        if(!p || p.format !== fmt || !p.sends) return;
+        var id;
+        /* Only ids this sheet still declares. An export that was renamed or
+           removed leaves a stamp that can never go stale and would sit in the
+           ledger claiming a copy of something that no longer exists. */
+        for(id in p.sends) if(p.sends.hasOwnProperty(id) && def(id)) sends[id] = p.sends[id];
+      } catch(e){}
+    }
+    function save(){
+      if(!ok) return;
+      try { window.localStorage.setItem(key, JSON.stringify({format:fmt, sends:sends})); }
+      catch(e){
+        lastErr = (e && e.name === "QuotaExceededError")
+          ? "this browser's storage is full, so the outbox will forget what has gone when the tab closes"
+          : "this browser refused to keep the outbox, so it will forget what has gone when the tab closes";
+      }
+    }
+
+    /* THE SHEET AS IT CAME OUT OF THE BOX IS NOT WORK.
+       Three of these pages fill a date in for you, so "the snapshot is not
+       null" is not the same question as "is there anything here to send", and
+       an outbox that opened saying four exports were overdue on a sheet nobody
+       had touched would be ignored by the second morning. So the baseline is
+       the state at wire time -- UNLESS the autosave just restored something,
+       in which case every export is genuinely outstanding and saying so is the
+       entire point. */
+    var base = null;
+
+    function status(){
+      var crc = nowCrc(), rows = [], i, d, s;
+      for(i=0;i<defs.length;i++){
+        d = defs[i]; s = sends[d.id];
+        rows.push({ id:d.id, label:d.label, records:(d.records !== false),
+                    sent:!!s, at:(s?s.at:0), bytes:(s?s.bytes:0),
+                    stale: !!s && crc !== null && crc !== "" && s.crc !== crc });
+      }
+      var never = [], stale = [], last = 0, lastLabel = "", carry = [];
+      var blank = (crc === "") || (base !== null && crc === base);
+      for(i=0;i<rows.length;i++){
+        if(rows[i].at > last){ last = rows[i].at; lastLabel = rows[i].label; }
+        /* A copy that does not carry the sheet's records is DECLARED -- so that
+           no call site can hand out bytes this ledger has never heard of -- but
+           it is not counted. An outbox that nagged you to re-copy an AI prompt
+           every time you added a stem would be an outbox nobody reads, and an
+           outbox nobody reads is worse than none, because the page still looks
+           like it is keeping track. */
+        if(!rows[i].records) continue;
+        carry.push(rows[i]);
+        if(blank) continue;
+        if(!rows[i].sent) never.push(rows[i]);
+        else if(rows[i].stale) stale.push(rows[i]);
+      }
+      return { crc:crc, empty:blank, unreadable:(crc === null), rows:rows,
+               carry:carry, never:never, stale:stale, pending:never.length + stale.length,
+               last:last, lastLabel:lastLabel, err:lastErr, storing:ok };
+    }
+
+    function sent(id, bytes){
+      var d = def(id);
+      if(!d){
+        lastErr = 'an export this sheet does not declare: "' + String(id) + '". '
+                + 'Something left this device and the outbox cannot tell you what';
+        paint(); return false;
+      }
+      var crc = nowCrc();
+      if(crc === null){
+        lastErr = "the outbox could not read this sheet, so it has NOT marked "
+                + d.label + " as gone";
+        paint(); return false;
+      }
+      sends[id] = { crc:crc, at:Date.now(), bytes:(bytes|0) };
+      lastErr = null;
+      save(); paint();
+      return true;
+    }
+
+    function paint(){
+      if(!host) return;
+      var st = status(), msg, tone = "";
+      if(st.unreadable){
+        tone = " bad";
+        msg = "<b>The outbox cannot read this sheet.</b> It is not tracking what has left, so "
+            + "treat nothing here as sent.";
+      } else if(st.err){
+        tone = " bad";
+        msg = "<b>" + esc(st.err) + ".</b>";
+      } else if(st.empty){
+        msg = "Nothing on this sheet yet. The outbox starts counting when you do.";
+      } else if(st.pending === 0){
+        msg = "<b>Everything here has left this device.</b> Last export "
+            + esc(when(st.last)) + (st.lastLabel ? " \u2014 " + esc(st.lastLabel) : "") + ".";
+      } else {
+        tone = " hot";
+        msg = "<b>" + st.pending + " of " + st.carry.length + " export"
+            + (st.carry.length === 1 ? "" : "s") + " on this sheet " + (st.pending === 1 ? "has" : "have")
+            + " not left this device</b>"
+            + (st.last ? " \u2014 last export " + esc(when(st.last)) + "." : " at all.");
+      }
+      var li = "", i, r;
+      for(i=0;i<st.carry.length;i++){
+        r = st.carry[i];
+        if(!r.sent) li += "<li>" + esc(r.label) + " <span class=\"why\">never</span></li>";
+        else if(r.stale) li += "<li>" + esc(r.label) + " <span class=\"why\">changed since "
+                             + esc(when(r.at)) + "</span></li>";
+      }
+      host.className = "outbox noprint" + tone;
+      host.innerHTML =
+        '<p class="st" role="status" aria-live="polite">' + msg + '</p>'
+        + (li ? '<ul class="pend">' + li + '</ul>' : '')
+        + '<p class="note"><b>This is a ledger, not a transport.</b> A page opened from a card '
+        + 'cannot send anything by itself \u2014 what it can do is tell you exactly what is on '
+        + 'this device and nowhere else, so a few minutes of signal go on the right bytes.'
+        + (st.storing ? "" : " Storage is unavailable here, so this list starts again when the tab closes.")
+        + '</p>';
+    }
+
+    /* Repaint on anything that could have changed the sheet, debounced. No page
+       wiring: a page that gained a control would otherwise have to remember to
+       tell the outbox, and the one it forgot would be the one that went stale
+       quietly. */
+    function touch(){
+      if(timer) clearTimeout(timer);
+      timer = setTimeout(function(){ timer = null; paint(); }, o.debounce == null ? 400 : o.debounce);
+    }
+    try {
+      ["input", "change", "click"].forEach(function(ev){
+        document.addEventListener(ev, touch, true); });
+    } catch(e){}
+
+    load();
+    base = (keep && typeof keep.restored === "function" && keep.restored()) ? null : nowCrc();
+    var h = { sent:sent, status:status, paint:paint, touch:touch,
+              usable:function(){ return ok; }, error:function(){ return lastErr; } };
+    LIVE = h;
+    if(EARLY.length){
+      /* An export that happened before the outbox existed is a wiring-order
+         fault, and it is reported rather than replayed: the stamp it would have
+         taken is the state at a moment that has already gone. */
+      lastErr = "an export left this device before the outbox was wired ("
+              + EARLY.map(function(e){ return String(e[0]); }).join(", ") + ")";
+      EARLY = [];
+    }
+    paint();
+    return h;
+  }
+
+  return { version:"1.0.0", wire:wire, utf8:utf8, hash:hash,
+           sent:function(id, bytes){
+             if(!LIVE){ EARLY.push([id, bytes]); return false; }
+             return LIVE.sent(id, bytes);
+           },
+           status:function(){ return LIVE ? LIVE.status() : null; } };
+})();
+
+</script>
+<script>
+(function(){
+  "use strict";
+  var $=function(id){return document.getElementById(id);};
+  var val=function(id){var e=$(id);return e?String(e.value||"").trim():"";};
+  var num=function(id){var e=$(id);var v=parseFloat(e&&e.value);return isFinite(v)?v:0;};
+  function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,function(c){
+    return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c];});}
+  function buzz(ms){try{if(navigator.vibrate)navigator.vibrate(ms||8);}catch(e){}}
+  var tt; function toast(m){var t=$("toast");t.textContent=m;t.classList.add("on");
+    clearTimeout(tt);tt=setTimeout(function(){t.classList.remove("on");},1700);}
+  function copyText(s,m,id){
+    /* ADR-203/206. execCommand REPORTS FAILURE BY RETURNING FALSE and throws in
+       only some of the ways it can fail, so the return value is what decides
+       whether this copy happened. The mark goes in the SUCCESS path and
+       nowhere else: a ledger that recorded a copy the browser refused would
+       tell a reader their morning is safe when it is on no device but this
+       one. */
+    function ok(){toast(m||"Copied");buzz();OUT.sent(id, s.length);}
+    if(navigator.clipboard&&navigator.clipboard.writeText){
+      navigator.clipboard.writeText(s).then(ok,function(){legacy(s,ok);});} else legacy(s,ok);}
+  function legacy(s,ok){var a=document.createElement("textarea");a.value=s;a.style.position="fixed";
+    a.style.opacity="0";document.body.appendChild(a);a.select();
+    var okc=false; try{okc=document.execCommand("copy");}catch(e){}
+    document.body.removeChild(a);
+    if(okc) ok(); else toast("Copy failed — select the text");}
+  function cell(v){v=String(v==null?"":v);return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;}
+  function mmss(ms){var s=Math.max(0,Math.round(ms/1000));
+    return (Math.floor(s/60)<10?"0":"")+Math.floor(s/60)+":"+((s%60)<10?"0":"")+(s%60);}
+
+  /* ------------------------------------------------------------------ data */
+  var SAMPLE=[
+    ["adlib","ad libitum","whatever you notice"],
+    ["focal","focal animal","one subject, everything"],
+    ["scan","scan","everyone, at instants"],
+    ["behav","behaviour","one act, every time"]
+  ];
+  var RECORD=[
+    ["cont","continuous","true durations"],
+    ["inst","instantaneous","point samples"],
+    ["onezero","one-zero","did it occur?"]
+  ];
+  var SAMPLE_NOTE={
+    adlib:"Biased toward the conspicuous, the close and the bold. Use it to build the ethogram and to generate hypotheses — never to produce a rate or a budget.",
+    focal:"One named subject for a fixed period, recording everything. True durations and true frequencies for that individual, at the cost of the rest of the group.",
+    scan:"At each instant, what is each visible subject doing. Cheap group-wide budgets; brief and rare behaviours are almost never caught.",
+    behav:"Watch the group, record every occurrence of the one or two acts you chose. The right tool for fights, matings and provisioning; silent about everything else."
+  };
+  var RECORD_NOTE={
+    cont:"True duration and frequency — and only honest if you can keep up. A continuous record you fell behind on is worse than a point sample taken properly.",
+    inst:"Proportion of points in a state is an unbiased estimate of proportion of time. It cannot give you frequency, and behaviours shorter than the interval will be missed.",
+    onezero:"Records only whether the behaviour happened at all in each interval. Biased for duration and for frequency both — this page will not convert it into either."
+  };
+  var LK=[[0.81,"almost perfect"],[0.61,"substantial"],[0.41,"moderate"],[0.21,"fair"],[0.01,"slight"],[-99,"poor — at or below chance"]];
+
+  var DEF_ETHO=[
+    {id:"rest",code:"RST",name:"rest",kind:"state",desc:"Inactive and stationary, eyes open or closed, not feeding, moving, grooming or interacting."},
+    {id:"loc",code:"LOC",name:"locomote",kind:"state",desc:"Directed movement of the whole body from one place to another, including walking, running, swimming and flight."},
+    {id:"forage",code:"FOR",name:"forage",kind:"state",desc:"Searching for, handling, or ingesting food, including manipulating a food item without swallowing."},
+    {id:"vig",code:"VIG",name:"vigilant",kind:"state",desc:"Stationary with the head raised above shoulder height and eyes open, not feeding or manipulating anything. Ends when the head drops or the animal moves."},
+    {id:"groom",code:"GRM",name:"groom",kind:"state",desc:"Self-directed cleaning of the body surface — licking, scratching, preening, dust-bathing."},
+    {id:"social",code:"SOC",name:"social",kind:"state",desc:"Non-agonistic contact or coordinated proximity with another individual: allogrooming, huddling, play."},
+    {id:"oos",code:"OOS",name:"out of sight",kind:"state",desc:"Subject not visible to the observer. Recorded, never left as a gap — observed time excludes it."},
+    {id:"agg",code:"AGG",name:"aggress",kind:"event",desc:"A directed threat, lunge, chase, strike or bite toward another individual."},
+    {id:"sub",code:"SUB",name:"submit",kind:"event",desc:"Retreat, crouch, or appeasement posture given in response to another individual's approach or threat."},
+    {id:"voc",code:"VOC",name:"vocalize",kind:"event",desc:"Any call audible to the observer. Note call type in the session notes if it can be distinguished."},
+    {id:"alarm",code:"ALM",name:"alarm",kind:"event",desc:"An alarm call or a whole-body alarm posture given in apparent response to a disturbance."},
+    {id:"disp",code:"DSP",name:"displace",kind:"event",desc:"One individual approaches and another leaves a resource or position, without overt aggression."},
+    {id:"scm",code:"SCM",name:"scent-mark",kind:"event",desc:"Deposition of scent by rubbing, urination or defecation in a manner distinct from elimination."},
+    {id:"cop",code:"COP",name:"copulate",kind:"event",desc:"Mounting with or without intromission."},
+    {id:"prov",code:"PRV",name:"provision",kind:"event",desc:"Food transferred from one individual to another."}
+  ];
+
+  var ETHO=DEF_ETHO.slice(), packName="general vertebrate (built in)";
+  var subjects=[{id:"s1",label:"subject 1"}];
+  var curSubj="s1";
+  var D={sample:"focal", record:"cont"};
+  var running=false, t0=0, elapsed=0, tick=null;
+  var segs=[];    /* {subj,beh,t0,t1}  continuous states */
+  var evts=[];    /* {subj,beh,t}      events */
+  var pts=[];     /* {subj,beh,t,scan} instantaneous points */
+  var ozs=[];     /* {subj,beh,iv}     one-zero interval hits */
+  var open=null;  /* {subj,beh,t0} */
+  var scanN=0, ivN=0, lastScanAt=0;
+  var history=[];
+
+  function byId(id){for(var i=0;i<ETHO.length;i++) if(ETHO[i].id===id) return ETHO[i]; return null;}
+  function states(){return ETHO.filter(function(b){return b.kind==="state";});}
+  function events(){return ETHO.filter(function(b){return b.kind==="event";});}
+  function now(){return running ? (elapsed + (Date.now()-t0)) : elapsed;}
+  function subjLabel(id){for(var i=0;i<subjects.length;i++) if(subjects[i].id===id) return subjects[i].label; return id;}
+
+  /* ------------------------------------------------------------ design UI */
+  function chips(host,list,cur,cb){
+    var box=$(host); box.innerHTML="";
+    list.forEach(function(it){
+      var b=document.createElement("button"); b.type="button";
+      b.className="kopt"+(it[0]===cur?" on":"");
+      b.innerHTML=esc(it[1])+'<small>'+esc(it[2])+'</small>';
+      b.addEventListener("click",function(){ cb(it[0]); buzz(); });
+      box.appendChild(b);
+    });
+  }
+  function renderDesign(){
+    chips("dSample",SAMPLE,D.sample,function(v){D.sample=v;renderDesign();renderRecord();ecoOut();});
+    chips("dRecord",RECORD,D.record,function(v){D.record=v;renderDesign();renderRecord();renderBudget();ecoOut();});
+    $("dSampleNote").textContent=SAMPLE_NOTE[D.sample];
+    $("dRecordNote").textContent=RECORD_NOTE[D.record];
+    coherence();
+  }
+  function coherence(){
+    var box=$("coherence"), msgs=[];
+    if(D.sample==="adlib" && D.record!=="cont")
+      msgs.push("<b>Ad libitum with a fixed recording rule.</b> Ad libitum means you are not sampling on a schedule at all. If you are keeping to intervals, you are doing scan or focal sampling — say so, because ad libitum data cannot be turned into rates whatever the recording rule says.");
+    if(D.sample==="scan" && D.record==="cont")
+      msgs.push("<b>Scan sampling cannot be continuous.</b> A scan is a instantaneous read of the group at one moment. If you are watching continuously you are doing focal sampling on whoever you are looking at — and a continuous record of several animals at once is a record of none of them.");
+    if(D.sample==="behav" && D.record==="inst")
+      msgs.push("<b>Behaviour sampling with point recording defeats the purpose.</b> The reason to use behaviour sampling is to catch every occurrence of a rare act. Sampling it at instants will miss almost all of them.");
+    if(D.record==="onezero")
+      msgs.push("<b>One-zero produces a biased number.</b> It will be recorded and reported here as the proportion of intervals in which the behaviour occurred, and it will not be converted into a time budget or a rate. If your question is about time, use instantaneous; if it is about frequency, use continuous.");
+    if(D.sample==="adlib")
+      msgs.push("<b>Ad libitum is not a source of rates.</b> The Budget tab will label everything it computes from this session as unusable for a rate or a budget.");
+    box.innerHTML = msgs.length ? msgs.map(function(m){return '<div class="incoh">'+m+'</div>';}).join("") : "";
+  }
+
+  function renderSubjEdit(){
+    var box=$("subjEdit"); box.innerHTML="";
+    subjects.forEach(function(s){
+      var b=document.createElement("button"); b.type="button"; b.className="sj";
+      b.textContent=s.label+"  ✕";
+      b.addEventListener("click",function(){
+        if(subjects.length===1){toast("Keep at least one subject");return;}
+        subjects=subjects.filter(function(x){return x!==s;});
+        if(curSubj===s.id) curSubj=subjects[0].id;
+        renderSubjEdit(); renderRecord(); renderBudget(); ecoOut();
+      });
+      box.appendChild(b);
+    });
+  }
+  $("sAdd").addEventListener("click",function(){
+    var v=val("sNew"); if(!v){toast("Type a label first");return;}
+    subjects.push({id:"s"+(subjects.length+1)+"_"+ETHO.length+"_"+subjects.length, label:v});
+    $("sNew").value=""; renderSubjEdit(); renderRecord(); ecoOut(); buzz(12);
+  });
+
+  function renderEthoList(){
+    var box=$("ethoList"); box.innerHTML="";
+    ETHO.forEach(function(b){
+      var d=document.createElement("div"); d.className="row2";
+      d.innerHTML='<div class="g"><b>'+esc(b.name)+' <span class="kind '+b.kind+'">'+b.kind+'</span></b>'+
+        '<span>'+esc(b.code)+' — '+esc(b.desc||"no definition given")+'</span></div>';
+      var x=document.createElement("button"); x.type="button"; x.textContent="✕";
+      x.addEventListener("click",function(){
+        ETHO=ETHO.filter(function(y){return y!==b;});
+        renderEthoList(); renderRecord(); renderBudget(); packStats();
+      });
+      d.appendChild(x); box.appendChild(d);
+    });
+    var nd=ETHO.filter(function(b){return !b.desc||!b.desc.trim();}).length;
+    $("ethoStat").innerHTML = ETHO.length+" behaviours — "+states().length+" states, "+events().length+" events."+
+      (nd? " <b>"+nd+" without a definition.</b> An undefined behaviour cannot be checked for reliability, so κ on it means nothing." : "");
+  }
+  $("eAdd").addEventListener("click",function(){
+    var n=val("eName"); if(!n){toast("Name it first");return;}
+    var code=val("eCode")||n.slice(0,3).toUpperCase();
+    ETHO.push({id:"u"+ETHO.length+"_"+n.toLowerCase().replace(/\W+/g,""),code:code,name:n,
+               kind:val("eKind")||"state",desc:val("eDesc")});
+    $("eName").value=""; $("eCode").value=""; $("eDesc").value="";
+    renderEthoList(); renderRecord(); packStats(); toast("Added "+n); buzz(12);
+  });
+
+  /* ------------------------------------------------------------ recorder */
+  function renderSubjRow(){
+    var box=$("subjRow"); box.innerHTML="";
+    subjects.forEach(function(s){
+      var b=document.createElement("button"); b.type="button";
+      b.className="sj"+(s.id===curSubj?" on":"");
+      b.textContent=s.label;
+      b.addEventListener("click",function(){
+        if(open){ closeOpen(); }
+        curSubj=s.id; renderRecord(); buzz();
+      });
+      box.appendChild(b);
+    });
+  }
+  function stateCount(b){
+    if(D.record==="cont"){ var n=0; segs.forEach(function(s){ if(s.beh===b.id) n++; }); return n; }
+    if(D.record==="inst"){ var n2=0; pts.forEach(function(p){ if(p.beh===b.id) n2++; }); return n2; }
+    var n3=0; ozs.forEach(function(o){ if(o.beh===b.id) n3++; }); return n3;
+  }
+  function renderRecord(){
+    renderSubjRow();
+    var sg=$("stateGrid"); sg.innerHTML="";
+    states().forEach(function(b){
+      var btn=document.createElement("button"); btn.type="button";
+      var on = D.record==="cont" && open && open.beh===b.id && open.subj===curSubj;
+      var oz = D.record==="onezero" && ozs.some(function(o){return o.iv===ivN&&o.beh===b.id&&o.subj===curSubj;});
+      btn.className="bb state"+(on?" on":"")+(oz?" oz":"");
+      btn.innerHTML='<span class="nm">'+esc(b.name)+'</span><span class="cd">'+esc(b.code)+'</span>'+
+        '<span class="ct">'+stateCount(b)+'</span>';
+      btn.addEventListener("click",function(){ hitState(b); });
+      sg.appendChild(btn);
+    });
+    var eg=$("eventGrid"); eg.innerHTML="";
+    events().forEach(function(b){
+      var btn=document.createElement("button"); btn.type="button";
+      var oz = D.record==="onezero" && ozs.some(function(o){return o.iv===ivN&&o.beh===b.id&&o.subj===curSubj;});
+      btn.className="bb event"+(oz?" oz":"");
+      var n = D.record==="onezero" ? ozs.filter(function(o){return o.beh===b.id;}).length
+                                   : evts.filter(function(e){return e.beh===b.id;}).length;
+      btn.innerHTML='<span class="nm">'+esc(b.name)+'</span><span class="cd">'+esc(b.code)+'</span>'+
+        '<span class="ct">'+n+'</span>';
+      btn.addEventListener("click",function(){ hitEvent(b); });
+      eg.appendChild(btn);
+    });
+
+    var hint, mode;
+    if(D.record==="cont"){
+      hint="Tap a state to start it — it runs until you tap another. Tap an event each time it happens.";
+      mode="Counts on state cards are <b>bouts</b>, not time; the Budget tab has the durations.";
+    } else if(D.record==="inst"){
+      hint="At each scan, tap the one state each subject is in. Switch subject between taps.";
+      mode="Counts on state cards are <b>point samples</b>. Events cannot be rated from point sampling — the Budget tab will say so.";
+    } else {
+      hint="Within each interval, tap every behaviour that occurs at least once. The cards clear at the next interval.";
+      mode="Counts are <b>intervals containing the behaviour</b>. Not a duration, not a frequency.";
+    }
+    $("recHint").innerHTML=hint;
+    $("modeNote").innerHTML=mode;
+
+    var sb=$("scanBox");
+    if(D.record==="cont"){ sb.innerHTML=""; }
+    else {
+      sb.innerHTML='<div class="verdict" style="margin-top:12px"><b>'+
+        (D.record==="inst"?("Scan "+scanN):("Interval "+ivN))+'</b> — next in <b id="scanIn">—</b> s. '+
+        (D.record==="inst"?"Tap one state per subject.":"Tap everything that occurs.")+'</div>';
+    }
+    var ns=$("nowState");
+    if(D.record==="cont"){
+      ns.innerHTML = open
+        ? '<b>'+esc(byId(open.beh)?byId(open.beh).name:open.beh)+'</b><span>'+
+          esc(subjLabel(open.subj))+' · '+mmss(now()-open.t0)+'</span>'
+        : '<span>no state running — tap one to start</span>';
+    } else ns.innerHTML='<span>'+esc(subjLabel(curSubj))+'</span>';
+    renderLog();
+  }
+  function closeOpen(){
+    if(!open) return;
+    var t=now();
+    if(t>open.t0) segs.push({subj:open.subj,beh:open.beh,t0:open.t0,t1:t});
+    open=null;
+  }
+  function hitState(b){
+    if(!running){ toast("Press Start first"); return; }
+    if(D.record==="cont"){
+      history.push({op:"state",prev:open?{subj:open.subj,beh:open.beh,t0:open.t0}:null,segLen:segs.length});
+      closeOpen();
+      open={subj:curSubj,beh:b.id,t0:now()};
+    } else if(D.record==="inst"){
+      pts=pts.filter(function(p){return !(p.scan===scanN&&p.subj===curSubj);});
+      pts.push({subj:curSubj,beh:b.id,t:now(),scan:scanN});
+      history.push({op:"pt",scan:scanN,subj:curSubj});
+    } else {
+      var has=ozs.some(function(o){return o.iv===ivN&&o.beh===b.id&&o.subj===curSubj;});
+      if(has) ozs=ozs.filter(function(o){return !(o.iv===ivN&&o.beh===b.id&&o.subj===curSubj);});
+      else { ozs.push({subj:curSubj,beh:b.id,iv:ivN}); history.push({op:"oz",iv:ivN,subj:curSubj,beh:b.id}); }
+    }
+    renderRecord(); renderBudget(); ecoOut(); buzz(12);
+  }
+  function hitEvent(b){
+    if(!running){ toast("Press Start first"); return; }
+    if(D.record==="onezero"){
+      var has=ozs.some(function(o){return o.iv===ivN&&o.beh===b.id&&o.subj===curSubj;});
+      if(has) ozs=ozs.filter(function(o){return !(o.iv===ivN&&o.beh===b.id&&o.subj===curSubj);});
+      else { ozs.push({subj:curSubj,beh:b.id,iv:ivN}); history.push({op:"oz",iv:ivN,subj:curSubj,beh:b.id}); }
+    } else {
+      evts.push({subj:curSubj,beh:b.id,t:now()});
+      history.push({op:"evt"});
+    }
+    renderRecord(); renderBudget(); ecoOut(); buzz(12);
+  }
+  $("rUndo").addEventListener("click",function(){
+    var h=history.pop();
+    if(!h){ toast("Nothing to undo"); return; }
+    if(h.op==="evt") evts.pop();
+    else if(h.op==="pt") pts=pts.filter(function(p){return !(p.scan===h.scan&&p.subj===h.subj);});
+    else if(h.op==="oz") ozs=ozs.filter(function(o){return !(o.iv===h.iv&&o.subj===h.subj&&o.beh===h.beh);});
+    else if(h.op==="state"){ segs.length=h.segLen; open=h.prev; }
+    renderRecord(); renderBudget(); ecoOut(); toast("Undone");
+  });
+  $("rStart").addEventListener("click",function(){
+    if(running) return;
+    running=true; t0=Date.now(); lastScanAt=elapsed;
+    if(D.record!=="cont" && scanN===0){ scanN=1; ivN=1; }
+    tick=setInterval(loop,200); renderRecord(); toast("Session running"); buzz(14);
+  });
+  $("rStop").addEventListener("click",function(){
+    if(!running) return;
+    closeOpen(); elapsed=now(); running=false; clearInterval(tick); tick=null;
+    renderRecord(); renderBudget(); ecoOut(); toast("Stopped at "+mmss(elapsed)); buzz(14);
+  });
+  function loop(){
+    var t=now();
+    $("clock").textContent=mmss(t);
+    var iv=Math.max(1,Math.round(num("dScan")))*1000;
+    if(D.record!=="cont"){
+      var left=Math.max(0,Math.ceil((lastScanAt+iv-t)/1000));
+      var el=$("scanIn"); if(el) el.textContent=left;
+      if(t-lastScanAt>=iv){
+        lastScanAt+=iv;
+        if(D.record==="inst") scanN++; else ivN++;
+        $("clock").classList.add("warn");
+        setTimeout(function(){ $("clock").classList.remove("warn"); },1200);
+        buzz([40,60,40]); renderRecord();
+      }
+    }
+    if(open) { var ns=$("nowState"); if(ns&&ns.querySelector("span"))
+      ns.querySelector("span").textContent=subjLabel(open.subj)+" · "+mmss(t-open.t0); }
+  }
+  function renderLog(){
+    var box=$("logList"), rows=[];
+    segs.slice(-6).reverse().forEach(function(s){
+      rows.push(['state',subjLabel(s.subj),(byId(s.beh)||{}).name||s.beh,mmss(s.t1-s.t0)]); });
+    evts.slice(-6).reverse().forEach(function(e){
+      rows.push(['event',subjLabel(e.subj),(byId(e.beh)||{}).name||e.beh,mmss(e.t)]); });
+    pts.slice(-6).reverse().forEach(function(p){
+      rows.push(['scan '+p.scan,subjLabel(p.subj),(byId(p.beh)||{}).name||p.beh,mmss(p.t)]); });
+    ozs.slice(-6).reverse().forEach(function(o){
+      rows.push(['interval '+o.iv,subjLabel(o.subj),(byId(o.beh)||{}).name||o.beh,'1']); });
+    if(!rows.length){ box.innerHTML='<p class="fine" style="margin:0">Nothing recorded yet.</p>'; return; }
+    box.innerHTML=rows.slice(0,10).map(function(r){
+      return '<div class="row2"><div class="g"><b>'+esc(r[2])+'</b><span>'+esc(r[0])+' · '+esc(r[1])+
+             '</span></div><span class="cov">'+esc(r[3])+'</span></div>';
+    }).join("");
+  }
+
+  /* -------------------------------------------------------------- budget */
+  function observedMs(subj){
+    var tot=0;
+    segs.forEach(function(s){ if((!subj||s.subj===subj) && s.beh!=="oos") tot+=(s.t1-s.t0); });
+    return tot;
+  }
+  function tile(v,l){return '<div class="tile"><div class="v">'+v+'</div><div class="l">'+l+'</div></div>';}
+
+  function renderBudget(){
+    var box=$("budBox");
+    var adlib = D.sample==="adlib";
+    var head='<h3 style="margin-top:0">Time budget</h3>';
+    if(adlib) head+='<div class="incoh"><b>Ad libitum session.</b> Nothing below is a rate or a budget. '+
+      'Whatever you noticed is what got recorded, and what you noticed depends on what was conspicuous. '+
+      'Use these figures to build the ethogram, not to answer a question.</div>';
+
+    if(D.record==="cont"){
+      if(!segs.length && !open){ box.innerHTML=head+'<p class="fine" style="margin:0">Record a state or two.</p>';
+        $("rateBox").innerHTML=""; $("transBox").innerHTML=""; return; }
+      var obs=observedMs(), oos=0;
+      segs.forEach(function(s){ if(s.beh==="oos") oos+=(s.t1-s.t0); });
+      var per={};
+      segs.forEach(function(s){ if(s.beh==="oos") return;
+        if(!per[s.beh]) per[s.beh]={ms:0,n:0}; per[s.beh].ms+=(s.t1-s.t0); per[s.beh].n++; });
+      /* THE TILE SAID ELAPSED AND SHOWED SOMETHING ELSE (ADR-154). It summed
+         the segments -- observed plus out-of-sight -- which is the time that
+         is IN A STATE, not the time the session ran. They differ by however
+         long the clock was running before the first state was tapped and after
+         the last one was closed, which on a real session is the time it takes
+         to find the animal. A session driven against a stepped clock made the
+         gap exact: 06:20 on the clock, 06:00 in states, and the tile called
+         06:00 elapsed. */
+      var ran=now(), gap=ran-(obs+oos);
+      var h=head+'<div class="tiles">'+tile(mmss(ran),"elapsed")+tile(mmss(obs),"observed")+
+        tile(mmss(oos),"out of sight")+tile(segs.length,"bouts")+'</div>';
+      if(gap>=1000) h+='<p class="fine"><b>'+mmss(gap)+' of the session is in no state.</b> The '+
+        'clock was running before the first state was tapped, or after the last one was closed. '+
+        'It is neither observed time nor out-of-sight time, and nothing below is computed on it.</p>';
+      h+='<div class="tw"><table><tr><th>state</th><th class="n">time</th><th class="n">% observed</th>'+
+         '<th class="n">bouts</th><th class="n">mean bout</th></tr>';
+      Object.keys(per).sort(function(a,b){return per[b].ms-per[a].ms;}).forEach(function(k){
+        var p=per[k], pc=obs?p.ms/obs*100:0;
+        h+='<tr><td>'+esc((byId(k)||{}).name||k)+'</td><td class="n">'+mmss(p.ms)+'</td>'+
+           '<td class="n">'+pc.toFixed(1)+'%</td><td class="n">'+p.n+'</td>'+
+           '<td class="n">'+mmss(p.ms/p.n)+'</td></tr>';
+      });
+      h+='</table></div>';
+      /* ADR-240: the second number here is NOT elapsed. It is the time in a
+         state -- observed plus out of sight -- and the session ran longer than
+         that by the in-no-state gap the note above already names. ADR-154
+         fixed the tile and left this sentence saying the old word beside it;
+         the seventh blind trial read both and filed the contradiction. */
+      if(oos>0) h+='<p class="fine">Out-of-sight time is excluded from the denominator: percentages are of '+
+        mmss(obs)+' observed, not the '+mmss(obs+oos)+' in a state (observed plus out of sight)'+
+        (gap>=1000 ? ', and not the '+mmss(ran)+' the session ran' : '')+'.</p>';
+      box.innerHTML=h;
+    } else if(D.record==="inst"){
+      if(!pts.length){ box.innerHTML=head+'<p class="fine" style="margin:0">Take a scan or two.</p>';
+        $("rateBox").innerHTML='<h3 style="margin-top:0">Event rates</h3>'+
+          '<div class="incoh"><b>Point sampling cannot give a rate.</b> An instantaneous sample records what '+
+          'is happening at an instant; a brief event almost never coincides with one. Event taps will be kept '+
+          'in the log, but no rate will be computed from them — use continuous or behaviour sampling for '+
+          'events.</div>';
+        $("transBox").innerHTML=""; return; }
+      var use=pts.filter(function(p){return p.beh!=="oos";});
+      var n=use.length, cnt={};
+      use.forEach(function(p){ cnt[p.beh]=(cnt[p.beh]||0)+1; });
+      var h2=head+'<div class="tiles">'+tile(pts.length,"points taken")+tile(n,"points in sight")+
+        tile(scanN,"scans")+tile(subjects.length,"subjects")+'</div>';
+      h2+='<div class="tw"><table><tr><th>state</th><th class="n">points</th><th class="n">% of time</th><th class="n">± SE</th></tr>';
+      Object.keys(cnt).sort(function(a,b){return cnt[b]-cnt[a];}).forEach(function(k){
+        var p=cnt[k]/n, se=Math.sqrt(p*(1-p)/n)*100;
+        h2+='<tr><td>'+esc((byId(k)||{}).name||k)+'</td><td class="n">'+cnt[k]+'</td>'+
+            '<td class="n">'+(p*100).toFixed(1)+'%</td><td class="n">'+se.toFixed(1)+'</td></tr>';
+      });
+      h2+='</table></div><p class="fine">Proportion of points is an unbiased estimate of proportion of time. '+
+          'SE = √(p(1−p)/n) on n = '+n+' in-sight points'+(pts.length>n?" ("+(pts.length-n)+" out-of-sight points excluded)":"")+'.</p>';
+      if(n<30) h2+='<div class="verdict warn"><b>'+n+' points is thin.</b> The standard errors above are '+
+        'honest arithmetic on a small sample, which is not the same as a reliable budget. More scans, or a shorter interval, before this goes in a report.</div>';
+      box.innerHTML=h2;
+    } else {
+      var iv=ivN||1, hits={};
+      ozs.forEach(function(o){ hits[o.beh]=(hits[o.beh]||0)+1; });
+      var h3=head+'<div class="tiles">'+tile(iv,"intervals")+tile(ozs.length,"interval-hits")+'</div>';
+      h3+='<div class="tw"><table><tr><th>behaviour</th><th class="n">intervals with it</th><th class="n">proportion</th></tr>';
+      Object.keys(hits).sort(function(a,b){return hits[b]-hits[a];}).forEach(function(k){
+        h3+='<tr><td>'+esc((byId(k)||{}).name||k)+'</td><td class="n">'+hits[k]+'</td>'+
+            '<td class="n">'+(hits[k]/iv*100).toFixed(1)+'%</td></tr>';
+      });
+      h3+='</table></div>';
+      h3+='<div class="incoh"><b>These are one-zero scores.</b> The proportion above is the proportion of '+
+          '<em>intervals containing</em> the behaviour. It is not a time budget and not a rate, it overestimates '+
+          'duration and underestimates frequency, and no arithmetic on this page will convert it into either. '+
+          'Report it as what it is.</div>';
+      box.innerHTML=h3;
+      $("rateBox").innerHTML=""; $("transBox").innerHTML=""; return;
+    }
+
+    /* rates */
+    var rb=$("rateBox");
+    if(D.record==="inst"){
+      rb.innerHTML='<h3 style="margin-top:0">Event rates</h3>'+
+        '<div class="incoh"><b>Point sampling cannot give a rate.</b> An instantaneous sample records what is '+
+        'happening at an instant; a brief event almost never coincides with one. Any event taps in this session '+
+        'are recorded in the log but no rate is computed from them — use continuous or behaviour sampling for '+
+        'events.</div>';
+    } else if(!evts.length){
+      rb.innerHTML='<h3 style="margin-top:0">Event rates</h3><p class="fine" style="margin:0">No events recorded.</p>';
+    } else {
+      var mins=observedMs()/60000 || (now()/60000);
+      var ec={}; evts.forEach(function(e){ ec[e.beh]=(ec[e.beh]||0)+1; });
+      var r='<h3 style="margin-top:0">Event rates</h3><div class="tw"><table>'+
+        '<tr><th>event</th><th class="n">n</th><th class="n">per min</th><th class="n">per hour</th></tr>';
+      Object.keys(ec).sort(function(a,b){return ec[b]-ec[a];}).forEach(function(k){
+        var rate=mins?ec[k]/mins:0;
+        r+='<tr><td>'+esc((byId(k)||{}).name||k)+'</td><td class="n">'+ec[k]+'</td>'+
+           '<td class="n">'+rate.toFixed(3)+'</td><td class="n">'+(rate*60).toFixed(1)+'</td></tr>';
+      });
+      r+='</table></div><p class="fine">Rates are per minute of <b>observed</b> time ('+mins.toFixed(1)+
+         ' min), not elapsed.</p>';
+      rb.innerHTML=r;
+    }
+
+    /* transitions */
+    var tb=$("transBox");
+    if(D.record!=="cont" || segs.length<3){ tb.innerHTML=""; }
+    else {
+      var order=[], M={};
+      var bySubj={};
+      segs.forEach(function(s){ if(s.beh==="oos") return; (bySubj[s.subj]=bySubj[s.subj]||[]).push(s); });
+      var total=0;
+      /* A TRANSITION IS ADJACENCY, NOT ORDER (ADR-154). Out-of-sight segments
+         are dropped before the pairs are taken -- rightly, since "out of
+         sight" is not a behaviour -- and dropping them closed the gap, so the
+         state before a disappearance and the state after it were counted as
+         one following the other. Nobody watched that happen. A session with a
+         single 30 s gap in it reported four transitions where three were
+         observed, and the invented one was the row this page would have been
+         read for. */
+      var spliced=0;
+      Object.keys(bySubj).forEach(function(k){
+        var arr=bySubj[k].slice().sort(function(a,b){return a.t0-b.t0;});
+        for(var i=0;i+1<arr.length;i++){
+          if(arr[i].t1!==arr[i+1].t0){ spliced++; continue; }
+          var a=arr[i].beh,b=arr[i+1].beh;
+          if(order.indexOf(a)<0) order.push(a);
+          if(order.indexOf(b)<0) order.push(b);
+          M[a]=M[a]||{}; M[a][b]=(M[a][b]||0)+1; total++;
+        }
+      });
+      if(!total){ tb.innerHTML=""; return; }
+      var t='<h3 style="margin-top:0">Transitions</h3><div class="tw"><table class="mx2"><tr><th>from \\ to</th>';
+      order.forEach(function(o){ t+='<th class="n">'+esc((byId(o)||{}).name||o)+'</th>'; });
+      t+='<th class="n">n</th></tr>';
+      order.forEach(function(a){
+        var row=M[a]||{}, rt=0; order.forEach(function(b){ rt+=(row[b]||0); });
+        t+='<tr><td>'+esc((byId(a)||{}).name||a)+'</td>';
+        order.forEach(function(b){
+          if(a===b){ t+='<td class="n self">—</td>'; return; }
+          var v=row[b]||0, p=rt?v/rt:0;
+          t+='<td class="n '+(v===0?"d0":(p>=0.5?"d2":"d1"))+'">'+(v?(p*100).toFixed(0)+"%":"·")+'</td>';
+        });
+        t+='<td class="n">'+rt+'</td></tr>';
+      });
+      t+='</table></div>';
+      t+='<p class="fine">Each cell is the probability that the row state was followed by the column state. '+
+         'The diagonal is struck out because states are mutually exclusive here — a state cannot follow itself, '+
+         'which is a property of the coding scheme rather than a finding.</p>';
+      var thin=order.filter(function(a){ var row=M[a]||{},rt=0; order.forEach(function(b){rt+=(row[b]||0);}); return rt>0&&rt<5; });
+      if(thin.length) t+='<div class="verdict warn"><b>Thin rows.</b> '+
+        thin.map(function(a){return esc((byId(a)||{}).name||a);}).join(", ")+
+        ' had fewer than five transitions. Those percentages are noise, not structure.</div>';
+      if(spliced) t+='<p class="fine"><b>'+spliced+' pair'+(spliced===1?" is":"s are")+' not counted.</b> '+
+         'The subject went out of sight between them, so what followed what was not observed. '+
+         'Dropping out-of-sight time from a budget is right; closing the gap it leaves and calling '+
+         'the two neighbours a transition is not.</p>';
+      t+='<p class="fine">This is a first-order summary: it assumes what happens next depends only on the '+
+         'current state. That is usually false, and it is the assumption to state in a write-up.</p>';
+      tb.innerHTML=t;
+    }
+
+    /* pseudoreplication check */
+    var used={};
+    segs.forEach(function(s){used[s.subj]=1;}); evts.forEach(function(e){used[e.subj]=1;});
+    pts.forEach(function(p){used[p.subj]=1;}); ozs.forEach(function(o){used[o.subj]=1;});
+    var nsub=Object.keys(used).length;
+    if(nsub===1 && (segs.length+pts.length+evts.length+ozs.length)>3){
+      box.innerHTML += '<div class="verdict warn"><b>Everything here came from one individual.</b> '+
+        'Your sample size for any question about the species is <b>1</b>, however many records you took. '+
+        'Repeated measures on one animal are not independent. Record more subjects, and make the individual '+
+        'the unit of analysis.</div>';
+    }
+  }
+
+  /* --------------------------------------------------------- reliability */
+  function tok(s){ return s.split(/[\s,;]+/).map(function(x){return x.trim();}).filter(Boolean); }
+  /* ADR-209 */
+  $("kClear").addEventListener("click",function(){
+    var a=tok(val("kA")).length, b=tok(val("kB")).length;
+    if((a||b) && !confirm("Clear both sequences? "+a+" code"+(a===1?"":"s")+" from observer A "+
+       "and "+b+" from observer B go, with the agreement matrix, and there is no undo.")) return;
+    $("kA").value=""; $("kB").value="";
+    $("kOut").innerHTML=""; $("kMatrix").innerHTML=""; });
+  /* ADR-210: named, so a restored session can recompute the agreement it was
+     showing when the tab closed. Two observers' sequences came back and the
+     kappa over them did not -- the number a reliability check exists to
+     produce, gone, with both its inputs sitting on the screen. */
+  $("kGo").addEventListener("click", computeKappa);
+  var KAPPA = null;
+  /* ADR-259: THE SHEET HEARS THE KAPPA. computeKappa set the figure the
+     session sheet carries and never rewrote the sheet, so the preview lagged
+     until some other tap rebuilt it -- and a refused recompute (different
+     lengths, the matrix cleared) left the last kappa in the sheet, a figure
+     from sequences no longer on the page. A refusal takes the kappa out of the
+     sheet with it; a result goes in at once. */
+  function computeKappa(){
+    var A=tok(val("kA")), B=tok(val("kB"));
+    if(!A.length||!B.length){ $("kOut").innerHTML='<div class="verdict act">Both observers need a sequence.</div>';
+      KAPPA=null; ecoOut(); return; }
+    if(A.length!==B.length){
+      $("kOut").innerHTML='<div class="verdict act"><b>Different lengths.</b> Observer A has '+A.length+
+        ' codes, observer B has '+B.length+'. κ compares the same samples scored twice — line them up first.</div>';
+      $("kMatrix").innerHTML=""; KAPPA=null; ecoOut(); return;
+    }
+    var cats=[]; A.concat(B).forEach(function(c){ if(cats.indexOf(c)<0) cats.push(c); });
+    cats.sort();
+    var n=A.length, M={}, rowT={}, colT={}, agree=0;
+    cats.forEach(function(a){ M[a]={}; rowT[a]=0; colT[a]=0; cats.forEach(function(b){ M[a][b]=0; }); });
+    for(var i=0;i<n;i++){ M[A[i]][B[i]]++; rowT[A[i]]++; colT[B[i]]++; if(A[i]===B[i]) agree++; }
+    var po=agree/n, pe=0;
+    cats.forEach(function(c){ pe += (rowT[c]/n)*(colT[c]/n); });
+    var k = (pe===1) ? 1 : (po-pe)/(1-pe);
+    var band="poor — at or below chance";
+    for(var j=0;j<LK.length;j++){ if(k>=LK[j][0]){ band=LK[j][1]; break; } }
+    var h='<div class="tiles">'+tile(k.toFixed(3),"Cohen's κ")+tile((po*100).toFixed(1)+"%","raw agreement")+
+      tile((pe*100).toFixed(1)+"%","expected by chance")+tile(n,"samples")+tile(cats.length,"categories")+'</div>';
+    h+='<div class="verdict'+(k<0.41?" warn":"")+'"><b>κ = '+k.toFixed(3)+'</b> — “'+band+'” on the '+
+       'Landis &amp; Koch convention, which is a rule of thumb its own authors described as arbitrary, not a '+
+       'statistical result. Report the number and n = '+n+', not the adjective.</div>';
+    if(pe>0.5) h+='<div class="verdict warn"><b>One category dominates.</b> Expected agreement is '+
+      (pe*100).toFixed(0)+'%, so κ is being pushed down by prevalence rather than by disagreement — the two of '+
+      'you agreed on '+(po*100).toFixed(0)+'% of samples. Read κ beside the raw agreement, not instead of it.</div>';
+    if(n<20) h+='<div class="verdict warn"><b>'+n+' samples is few</b> for a reliability estimate. '+
+      'κ on a short sequence moves a great deal for one changed code.</div>';
+    /* ADR-211: THE NUMBER HAS TO BE ABLE TO LEAVE. Three exports of a scored
+       session -- the interval CSV, this sheet, the time budget -- and the
+       reliability panel was in none of them. A kappa that only exists on the
+       screen has to be recomputed by whoever asks about it, from a sequence
+       that is also not in any export. */
+    KAPPA = { k: k, po: po, pe: pe, n: n, cats: cats.length, band: band };
+    $("kOut").innerHTML=h;
+
+    var m='<h3 style="margin-top:0">Confusion matrix</h3><div class="tw"><table class="mx2"><tr><th>A \\ B</th>';
+    cats.forEach(function(c){ m+='<th class="n">'+esc(c)+'</th>'; });
+    m+='<th class="n">total</th></tr>';
+    cats.forEach(function(a){
+      m+='<tr><td>'+esc(a)+'</td>';
+      cats.forEach(function(b){
+        var v=M[a][b];
+        m+='<td class="n '+(a===b?(v?"d2":"d0"):(v?"d1":"d0"))+'">'+(v||"·")+'</td>';
+      });
+      m+='<td class="n">'+rowT[a]+'</td></tr>';
+    });
+    m+='</table></div>';
+    var worst=null;
+    cats.forEach(function(a){ cats.forEach(function(b){ if(a!==b && M[a][b]>0 && (!worst||M[a][b]>worst.v))
+      worst={a:a,b:b,v:M[a][b]}; }); });
+    if(worst) m+='<p class="fine">The commonest disagreement is <b>'+esc(worst.a)+' → '+esc(worst.b)+'</b> ('+
+      worst.v+'×). That pair of definitions is where to spend the next revision of the ethogram.</p>';
+    $("kMatrix").innerHTML=m;
+    ecoOut();
+    buzz(14);
+  }
+
+  /* ------------------------------------------------------------- exports */
+  function ecoOut(){
+    var L=[];
+    L.push("# ethogram session");
+    L.push("# observer: "+(val("dObs")||"—")+"   date: "+(val("dDate")||"—")+"   site: "+(val("dSite")||"—"));
+    if(val("dSp")) L.push("# species: "+val("dSp"));
+    var sname=SAMPLE.filter(function(s){return s[0]===D.sample;})[0][1];
+    var rname=RECORD.filter(function(r){return r[0]===D.record;})[0][1];
+    L.push("# design: "+sname+" sampling, "+rname+" recording"+
+      (D.record!=="cont"?("   interval "+val("dScan")+" s"):""));
+    L.push("# subjects: "+subjects.map(function(s){return s.label;}).join(", "));
+    if(val("dCond")) L.push("# conditions: "+val("dCond"));
+    /* ADR-269: the budget pane's bouts tile -- every state segment, out of sight
+       included -- carried until now by the "4 categories" of the reliability
+       block. */
+    L.push("# elapsed "+mmss(now())+"   observed "+mmss(observedMs())
+           +(segs.length?("   bouts "+segs.length):""));
+    L.push("");
+    if(D.sample==="adlib") L.push("# AD LIBITUM — not a source of rates or budgets");
+    if(D.record==="onezero") L.push("# ONE-ZERO — proportions below are intervals-containing, not time or frequency");
+    if(D.record==="cont"){
+      var obs=observedMs(), per={};
+      segs.forEach(function(s){ if(s.beh==="oos") return;
+        if(!per[s.beh])per[s.beh]={ms:0,n:0}; per[s.beh].ms+=(s.t1-s.t0); per[s.beh].n++; });
+      Object.keys(per).forEach(function(k){
+        L.push(("  "+((byId(k)||{}).name||k)+"                    ").slice(0,22)+
+          mmss(per[k].ms)+"   "+(obs?(per[k].ms/obs*100).toFixed(1):"0.0")+"%   "+per[k].n+
+          (per[k].n===1?" bout":" bouts"));                       /* ADR-240: "1 bouts" */
+      });
+      /* ADR-240: the sheet said what was observed and never what was excluded,
+         so a reader adding up the rows came out 00:30 short with nothing to
+         say where it went. */
+      var oosMs=0; segs.forEach(function(s){ if(s.beh==="oos") oosMs+=(s.t1-s.t0); });
+      if(oosMs>0) L.push("  out of sight        "+mmss(oosMs)+"   excluded from the denominator");
+      var gapMs=now()-(obs+oosMs);
+      if(gapMs>=1000) L.push("  in no state         "+mmss(gapMs)+"   before the first state or after the last");
+    } else if(D.record==="inst"){
+      var use=pts.filter(function(p){return p.beh!=="oos";}), n=use.length, c={};
+      use.forEach(function(p){ c[p.beh]=(c[p.beh]||0)+1; });
+      Object.keys(c).forEach(function(k){
+        var p=c[k]/n;
+        L.push(("  "+((byId(k)||{}).name||k)+"                    ").slice(0,22)+
+          c[k]+" pts   "+(p*100).toFixed(1)+"% ± "+(Math.sqrt(p*(1-p)/n)*100).toFixed(1));
+      });
+    } else {
+      var hits={}; ozs.forEach(function(o){ hits[o.beh]=(hits[o.beh]||0)+1; });
+      Object.keys(hits).forEach(function(k){
+        L.push(("  "+((byId(k)||{}).name||k)+"                    ").slice(0,22)+
+          hits[k]+"/"+(ivN||1)+" intervals   "+(hits[k]/(ivN||1)*100).toFixed(1)+"%");
+      });
+    }
+    if(evts.length && D.record==="cont"){
+      L.push("");
+      var mins=observedMs()/60000, ec={};
+      evts.forEach(function(e){ ec[e.beh]=(ec[e.beh]||0)+1; });
+      Object.keys(ec).forEach(function(k){
+        L.push(("  "+((byId(k)||{}).name||k)+"                    ").slice(0,22)+
+          ec[k]+"   "+(mins?(ec[k]/mins).toFixed(3):"—")+"/min");
+      });
+    }
+    /* ADR-211: the reliability panel leaves with the session it is about. */
+    if(KAPPA){
+      L.push("");
+      L.push("# reliability \u2014 two observers, the same "+KAPPA.n+" samples, "
+             +KAPPA.cats+" categories");
+      L.push("  Cohen's kappa        "+KAPPA.k.toFixed(3)+"   ("+KAPPA.band+
+             ", Landis & Koch \u2014 a rule of thumb, not a result)");
+      L.push("  raw agreement        "+(KAPPA.po*100).toFixed(1)+"%");
+      L.push("  expected by chance   "+(KAPPA.pe*100).toFixed(1)+"%");
+    }
+    /* ADR-201: the frames go out with the rest of the record. A session that
+       is only photographs is still a session, so this counts toward whether
+       there is anything to print. */
+    var _shots = (typeof PHOTOS === "undefined") ? [] : PHOTOS.get();
+    if(_shots.length){
+      L.push("");
+      L.push("# photographs \u2014 " + _shots.length + " frame" + (_shots.length===1?"":"s"));
+      _shots.forEach(function(ph){
+        L.push("  " + ph.name + "   crc32 " + ph.crc
+               + (ph.captured ? "   " + ph.captured : "")
+               + (ph.label ? "   [" + ph.label + "]" : "")
+               + (ph.note ? "   " + ph.note : ""));
+      });
+    }
+    $("ecoOut").textContent=L.join("\n");
+  }
+  $("ecoCopy").addEventListener("click",function(){ ecoOut(); copyText($("ecoOut").textContent,"Session sheet copied","sheet"); });
+  $("csvCopy").addEventListener("click",function(){
+    var rows=[["record_type","subject","behaviour","code","kind","t_start_s","t_end_s","duration_s","scan_or_interval"].map(cell).join(",")];
+    segs.forEach(function(s){ var b=byId(s.beh)||{};
+      rows.push(["state",subjLabel(s.subj),b.name||s.beh,b.code||"",b.kind||"state",
+        (s.t0/1000).toFixed(1),(s.t1/1000).toFixed(1),((s.t1-s.t0)/1000).toFixed(1),""].map(cell).join(",")); });
+    evts.forEach(function(e){ var b=byId(e.beh)||{};
+      rows.push(["event",subjLabel(e.subj),b.name||e.beh,b.code||"",b.kind||"event",
+        (e.t/1000).toFixed(1),"","",""].map(cell).join(",")); });
+    pts.forEach(function(p){ var b=byId(p.beh)||{};
+      rows.push(["point",subjLabel(p.subj),b.name||p.beh,b.code||"",b.kind||"state",
+        (p.t/1000).toFixed(1),"","",p.scan].map(cell).join(",")); });
+    ozs.forEach(function(o){ var b=byId(o.beh)||{};
+      rows.push(["one_zero",subjLabel(o.subj),b.name||o.beh,b.code||"",b.kind||"",
+        "","","",o.iv].map(cell).join(",")); });
+    if(rows.length===1){ toast("Nothing recorded"); return; }
+    copyText(rows.join("\n"),"Log CSV copied — "+(rows.length-1)+" rows","log");
+  });
+  $("budCopy").addEventListener("click",function(){
+    var rows=[["behaviour","kind","measure","value","denominator"].map(cell).join(",")];
+    if(D.record==="cont"){
+      var obs=observedMs(), per={};
+      segs.forEach(function(s){ if(s.beh==="oos") return;
+        if(!per[s.beh])per[s.beh]={ms:0,n:0}; per[s.beh].ms+=(s.t1-s.t0); per[s.beh].n++; });
+      Object.keys(per).forEach(function(k){ var b=byId(k)||{};
+        rows.push([b.name||k,"state","pct_observed_time",(obs?(per[k].ms/obs*100).toFixed(2):"0"),
+          (obs/1000).toFixed(1)+" s observed"].map(cell).join(",")); });
+      /* ADR-240: THE BUDGET CSV CARRIED THE STATES AND NOTHING ELSE. The
+         out-of-sight time that was taken OUT of the denominator was in no row,
+         so the denominator could not be checked from the file; and the event
+         rates the page shows beside the budget were in no export at all (the
+         log CSV has the taps, not the rates). The seventh blind trial filed
+         both. A budget file is the whole budget: what was excluded and why,
+         and what the events came to per observed minute. */
+      var oosS=0; segs.forEach(function(s){ if(s.beh==="oos") oosS+=(s.t1-s.t0); });
+      if(oosS>0) rows.push(["out of sight","state","seconds_excluded",(oosS/1000).toFixed(1),
+        ((obs+oosS)/1000).toFixed(1)+" s in a state"].map(cell).join(","));
+      if(evts.length){
+        var mins=obs/60000, ec={};
+        evts.forEach(function(e){ ec[e.beh]=(ec[e.beh]||0)+1; });
+        Object.keys(ec).sort(function(a,b){return ec[b]-ec[a];}).forEach(function(k){ var b=byId(k)||{};
+          rows.push([b.name||k,"event","per_observed_min",(mins?(ec[k]/mins).toFixed(3):"0"),
+            /* ADR-255: a count says its noun right -- "1 events" was held as
+               correct by the task and by verify_etho's port, which copied it. */
+            ec[k]+" event"+(ec[k]===1?"":"s")+" / "+mins.toFixed(1)+" min observed"].map(cell).join(",")); });
+      }
+    } else if(D.record==="inst"){
+      var use=pts.filter(function(p){return p.beh!=="oos";}), n=use.length, c={};
+      use.forEach(function(p){ c[p.beh]=(c[p.beh]||0)+1; });
+      Object.keys(c).forEach(function(k){ var b=byId(k)||{};
+        rows.push([b.name||k,"state","pct_of_points",(c[k]/n*100).toFixed(2),n+" points"].map(cell).join(",")); });
+      /* ADR-240: the points that were dropped are a row too. */
+      if(pts.length>n) rows.push(["out of sight","state","points_excluded",String(pts.length-n),
+        pts.length+" points taken"].map(cell).join(","));
+    } else {
+      var hits={}; ozs.forEach(function(o){ hits[o.beh]=(hits[o.beh]||0)+1; });
+      Object.keys(hits).forEach(function(k){ var b=byId(k)||{};
+        rows.push([b.name||k,b.kind||"","pct_intervals_containing",
+          (hits[k]/(ivN||1)*100).toFixed(2),(ivN||1)+" intervals"].map(cell).join(",")); });
+    }
+    if(rows.length===1){ toast("Nothing to summarise"); return; }
+    copyText(rows.join("\n"),"Budget CSV copied","budget");
+  });
+
+  /* ------------------------------------------------------------- pack I/O */
+  var PF=["id","code","name","kind","desc"];
+  function packStats(){
+    /* ADR-255: counted words, the ADR-240 rule -- a loaded ethogram with one
+       event read "1 events". */
+    var ns=states().length, ne=events().length;
+    $("packStat").textContent=ETHO.length+" behaviour"+(ETHO.length===1?"":"s")+" loaded — "+packName+"  ·  "+
+      ns+" state"+(ns===1?"":"s")+", "+ne+" event"+(ne===1?"":"s");
+  }
+  $("packExport").addEventListener("click",function(){
+    copyText(JSON.stringify({name:packName,version:1,behaviours:ETHO},null,1),"Ethogram copied as JSON","pack"); });
+  $("packPrompt").addEventListener("click",function(){
+    copyText([
+"Draft an ethogram for behavioural sampling.",
+"",
+"SPECIES / SYSTEM: <name the taxon, the setting, and what you are studying>",
+"",
+"Return ONLY a JSON object, no prose around it:",
+'{ "name": "<species or study name>", "version": 1, "behaviours": [ ... ] }',
+"",
+"Each entry in behaviours[] must have exactly these fields:",
+'  id    string, 3-16 lowercase letters/digits/underscore, unique in the file',
+'  code  string, 2-4 characters, uppercase, unique — what goes on the tally sheet',
+'  name  string, the short label, lowercase',
+'  kind  "state" or "event"',
+'        state = has meaningful DURATION and the animal is either in it or not',
+'                (resting, foraging, vigilant). States must be MUTUALLY EXCLUSIVE',
+'                and together should cover essentially all of the observed time.',
+'        event = a point occurrence you COUNT (a bite, a call, a chase). Duration',
+'                is either negligible or not the quantity of interest.',
+'  desc  string, the operational definition: what the observer must SEE to score it,',
+'        and what ends it. One or two sentences.',
+"",
+"RULES FOR THE DEFINITIONS — these are what make the ethogram usable:",
+"1. Describe OBSERVABLE POSTURE AND MOVEMENT, never motivation or emotion.",
+'   "head raised above shoulder height, not feeding" — not "alert" or "nervous".',
+"2. Every definition must say where the behaviour ENDS, not only where it starts.",
+"3. Two observers reading the definition cold must score the same animal the same",
+"   way. If a definition needs the observer to already know the species, rewrite it.",
+"4. The states must be mutually exclusive. If two states can be true at once, either",
+"   merge them or split the dimension into two separate state sets and say so.",
+"5. INCLUDE an out-of-sight state. Time budgets are computed over observed time, and",
+"   a missing out-of-sight category silently corrupts every percentage.",
+"6. Do not invent behaviours the taxon is not known to perform. If unsure whether a",
+"   behaviour occurs, leave it out and list it separately as a question.",
+"",
+"12-25 behaviours is the useful range for a field ethogram.",
+"",
+"Then, outside the JSON, list any behaviour you were unsure about and why, and name",
+"the pairs of definitions you think are most likely to be confused by two observers."
+    ].join("\n"),"AI prompt copied — paste it into any assistant","prompt");
+  });
+  $("packFile").addEventListener("change",function(ev){
+    var f=ev.target.files&&ev.target.files[0]; if(!f) return;
+    var rd=new FileReader();
+    rd.onload=function(){
+      var errs=[], data;
+      try{ data=JSON.parse(rd.result); }
+      catch(e){ toast("Not valid JSON"); alert("That file is not valid JSON:\n\n"+e.message); ev.target.value=""; return; }
+      var list=data&&data.behaviours;
+      if(!list||typeof list.length!=="number"||!list.length){
+        /* ADR-255: said where the door and a screen reader hear it, as the other
+           two refusals on this loader already were (ADR-199). */
+        toast("No behaviours in that file \u2014 nothing loaded");
+        alert("The file has no behaviours array. Export the built-in ethogram to see the shape."); ev.target.value=""; return; }
+      var ids={}, codes={}, nStates=0, hasOOS=false;
+      for(var i=0;i<list.length;i++){
+        var b=list[i], w="behaviour "+(i+1)+" ("+((b&&b.name)||"unnamed")+"): ";
+        if(!b||typeof b!=="object"){ errs.push(w+"not an object"); continue; }
+        PF.forEach(function(k){ if(typeof b[k]!=="string"||!b[k].trim()) errs.push(w+"missing or non-string field '"+k+"'"); });
+        if(typeof b.id==="string"){
+          if(!/^[a-z0-9_]{2,16}$/.test(b.id)) errs.push(w+"id '"+b.id+"' must be 2-16 lowercase letters, digits or _");
+          else if(ids[b.id]) errs.push(w+"duplicate id '"+b.id+"'"); else ids[b.id]=1; }
+        if(typeof b.code==="string"){
+          if(!/^[A-Z0-9]{1,5}$/.test(b.code)) errs.push(w+"code '"+b.code+"' must be 1-5 uppercase letters or digits");
+          else if(codes[b.code]) errs.push(w+"duplicate code '"+b.code+"'"); else codes[b.code]=1; }
+        if(b.kind!=="state"&&b.kind!=="event") errs.push(w+"kind must be exactly 'state' or 'event'");
+        if(b.kind==="state"){ nStates++; if(/out.?of.?sight|not visible|obscured/i.test(b.name+" "+b.desc)) hasOOS=true; }
+        if(typeof b.desc==="string"&&b.desc.trim().length<15)
+          errs.push(w+"definition is too short to be operational — say what the observer sees and what ends it");
+        if(typeof b.desc==="string"&&/\b(happy|sad|angry|nervous|curious|bored|wants?|likes?|enjoys?)\b/i.test(b.desc))
+          errs.push(w+"definition describes motivation or emotion rather than observable posture and movement");
+      }
+      if(nStates===0) errs.push("the ethogram has no states at all — a set of events alone cannot give a time budget");
+      if(nStates>0&&!hasOOS) errs.push("no out-of-sight state. Time budgets are computed over observed time; without this category every percentage is silently wrong. Add one.");
+      if(errs.length){
+        toast("Ethogram rejected — "+errs.length+" problem"+(errs.length===1?"":"s"));
+        alert("Ethogram rejected. Nothing was loaded.\n\n"+errs.slice(0,25).join("\n")+
+          (errs.length>25?"\n\n… and "+(errs.length-25)+" more.":""));
+        ev.target.value=""; return;
+      }
+      /* ADR-255: A NEW ETHOGRAM ENDS THE SESSION, AND SAYS SO BEFORE IT DOES.
+         This cleared the log without a word: six bouts, three events and a
+         clock read against the old codes, gone on a file pick, with nothing on
+         the screen that said a file pick could do that -- the ADR-209 rule
+         (a remove that takes records with it asks first) on the one remove
+         nobody had driven. And it took only the records: the clock kept its
+         06:20 and the scan counters kept counting, so the budget went on
+         describing a session whose every record was gone. Clearing is right --
+         a code means what its ethogram says, and a log kept against one cannot
+         be carried to another -- so it is asked, it is counted, and it is
+         whole: the records, the clock and the scan and interval counters go
+         together. Nothing recorded and nothing on the clock means nothing to
+         ask about. */
+      var lose=[], nb=segs.length+(open?1:0), clk=now();
+      if(nb) lose.push(nb+" bout"+(nb===1?"":"s"));
+      if(evts.length) lose.push(evts.length+" event"+(evts.length===1?"":"s"));
+      if(pts.length) lose.push(pts.length+" scan point"+(pts.length===1?"":"s"));
+      if(ozs.length) lose.push(ozs.length+" interval score"+(ozs.length===1?"":"s"));
+      var cleared=!!(lose.length||clk>0);
+      if(cleared){
+        var what=(lose.length?lose.join(", "):"no records")
+          +(clk>0?(lose.length?" and ":", ")+mmss(clk)+" on the clock":"");
+        if(!confirm("Load \u201c"+(data.name||f.name)+"\u201d? It replaces the ethogram, and this session goes with it: "
+            +what+". A code means what its ethogram says, so a log kept against one cannot be carried to another."
+            +" Copy the log first if you want it.")){
+          toast("Nothing loaded \u2014 the session is kept"); ev.target.value=""; return; }
+      }
+      ETHO=list.map(function(b){ return {id:b.id,code:b.code,name:b.name,kind:b.kind,desc:b.desc}; });
+      packName=(data.name||f.name);
+      segs=[];evts=[];pts=[];ozs=[];open=null;history=[];
+      if(tick){ clearInterval(tick); tick=null; }
+      running=false; t0=0; elapsed=0; scanN=0; ivN=0; lastScanAt=0;
+      var _clk=$("clock"); if(_clk) _clk.textContent=mmss(0);
+      renderEthoList(); renderRecord(); renderBudget(); packStats(); ecoOut();
+      toast("Loaded "+ETHO.length+" behaviour"+(ETHO.length===1?"":"s")+(cleared?" \u2014 the session was cleared":"")); buzz(14); ev.target.value="";
+    };
+    rd.readAsText(f);
+  });
+
+  /* ------------------------------------------------------------ tabs/boot */
+  function showPane(id){
+    document.querySelectorAll(".tab").forEach(function(t){ t.classList.toggle("on",t.dataset.pane===id); });
+    document.querySelectorAll(".pane").forEach(function(p){ p.classList.toggle("on",p.id===id); });
+    window.scrollTo(0,0);
+  }
+  document.querySelectorAll(".tab").forEach(function(tb){
+    tb.addEventListener("click",function(){ showPane(tb.dataset.pane); buzz(); }); });
+  ["dObs","dDate","dSite","dSp","dCond","dScan","dLen"].forEach(function(id){
+    var e=$(id); if(e) e.addEventListener("input",ecoOut); });
+
+  /* ---- Field Entry Kit controls (FEK v1) ----
+     These two write through to the hidden fields the rest of the page reads.
+     Both have real defaults rather than a blank state, because a session with
+     no interval and no length is not a design a scan sample can run at all. */
+  function push(id,v){
+    var e=$(id); if(!e) return;
+    e.value=(v==null?"":String(v));
+    e.dispatchEvent(new Event("input",{bubbles:true}));
+    e.dispatchEvent(new Event("change",{bubbles:true}));
+  }
+  var DSCAN=FEK.step({ field:"dScan", label:"scan / interval", unit:"s", value:30, min:1, max:600, step:5, dec:0,
+    onchange:function(v){ push("dScan",v); if(typeof renderDesign==="function") renderDesign(); },
+    help:"How often the timer prompts you. A shorter interval samples the behaviour more finely but gives you less time to read the animal before the next prompt." });
+  var DLEN=FEK.step({ field:"dLen", label:"session length", unit:"min", value:10, min:1, max:480, step:5, dec:0,
+    onchange:function(v){ push("dLen",v); },
+    help:"One session is one sample. Several short sessions across the day beat one long one, because behaviour is not stationary across a day." });
+  FEK.mount("timeEntry",[DSCAN,DLEN]);
+
+  var EKIND=FEK.dial({ field:"eKind", label:"kind", clearable:false, value:"state",
+    options:[{value:"state",label:"state",sub:"has a duration",ramp:2},
+             {value:"event",label:"event",sub:"counted, not timed",ramp:4}],
+    onchange:function(v){ push("eKind",v); },
+    help:"A state is scored as time (grooming, resting); an event is scored as a count (a head-flick, a call). Point sampling can estimate the proportion of time in a state, but it cannot give you a rate of events &mdash; the Method tab says why." });
+  FEK.mount("kindEntry",[EKIND]);
+  /* ADR-201: every record carries its photographs. */
+  var PHOTOS = FEK.photos({ dropId:"etPhotos", label:"Photographs",
+    prompt:"<b>The posture the definition describes.</b> Camera or gallery, or drop files here.",
+    labelPlaceholder:"which behaviour / subject?",
+    notePlaceholder:"What does this frame show? The posture, and what ends it.",
+    onchange:function(){ ecoOut(); } });
+  FEK.mount("photoEntry",[PHOTOS]);
+
+
+  try{ $("dDate").value=new Date().toISOString().slice(0,10); }catch(e){}
+
+  renderDesign(); renderSubjEdit(); renderEthoList(); renderRecord(); renderBudget(); packStats(); ecoOut();
+  /* ---- ADR-206: this sheet takes photographs and kept nothing ----
+     Four sheets in this kit mounted FEK.photos and had no autosave at all. A
+     reader could photograph four stations, score an hour of behaviour, take a
+     phone call, and lose the lot.
+
+     THE FRAMES CANNOT COME BACK, AND THE SHEET SAYS SO. A page cannot hand a
+     File back to a file input, so what survives a restore is the RECORD of each
+     photograph -- name, bytes, capture time, checksum, and the caption the
+     reader wrote. FEK.photos.restore() lists them as missing and takes them
+     back BY CHECKSUM when the same files are dropped in again, so the caption
+     survives even though the bytes did not. A restore that came back quietly
+     one frame short would leave the reader believing their morning is whole,
+     which is the more expensive of the two failures. */
+  var KEPT = KEEP.wire({
+    key: "csrbtEthogram",
+    format: 1,
+    mount: "keepBox",
+    noun: "this session",
+    ontoast: toast,
+    snapshot: function(){
+      /* THE CLOCK IS PART OF THE SESSION (ADR-259). The snapshot kept every
+         record and not the clock they were read against, so a reload brought
+         back 05:30 observed beside a clock that read 00:00 -- the "in no
+         state" note gone, the sheet's elapsed line zero -- and a scan or
+         one-zero session came back with no scans and one interval, every
+         proportion divided by 1. Nor did it keep the DESIGN: a scan or
+         one-zero session came back as a focal continuous one, its points and
+         intervals on a page that no longer counted them. The clock comes back
+         stopped where it was saved, with its scan and interval counts and the
+         sampling and recording rules it was kept under; Start resumes it. */
+      var st = { segs:segs, evts:evts, pts:pts, ozs:ozs, history:history,
+                 subjects:subjects, curSubj:curSubj, ETHO:ETHO, packName:packName,
+                 photos:PHOTOS.get(),
+                 clock:{ elapsed:now(), scans:scanN, intervals:ivN },
+                 design:{ sample:D.sample, record:D.record } };
+      var any = segs.length || evts.length || pts.length || ozs.length
+                || (PHOTOS.get() || []).length || subjects.length > 1;
+      var f = KEEP.formSnapshot(), k;
+      if(!any) for(k in f) if(f.hasOwnProperty(k) && String(f[k]).trim() !== "") { any = true; break; }
+      return any ? { fields: f, state: st } : null;
+    },
+    restore: function(b){
+      if(!b || !b.state) return false;
+      KEEP.formRestore(b.fields);
+      var st = b.state;
+      segs.length=0; (st.segs||[]).forEach(function(x){ segs.push(x); });
+      evts.length=0; (st.evts||[]).forEach(function(x){ evts.push(x); });
+      pts.length=0;  (st.pts||[]).forEach(function(x){ pts.push(x); });
+      ozs.length=0;  (st.ozs||[]).forEach(function(x){ ozs.push(x); });
+      history.length=0; (st.history||[]).forEach(function(x){ history.push(x); });
+      if(st.subjects && st.subjects.length){ subjects.length=0;
+        st.subjects.forEach(function(x){ subjects.push(x); }); }
+      if(st.curSubj) curSubj = st.curSubj;
+      if(st.ETHO && st.ETHO.length) ETHO = st.ETHO;
+      if(st.packName) packName = st.packName;
+      if(st.design){
+        if(SAMPLE.some(function(r){ return r[0]===st.design.sample; })) D.sample=st.design.sample;
+        if(RECORD.some(function(r){ return r[0]===st.design.record; })) D.record=st.design.record;
+      }
+      if(st.clock){
+        if(tick){ clearInterval(tick); tick=null; }
+        running=false; t0=0;
+        elapsed=Math.max(0, +st.clock.elapsed || 0);
+        scanN=Math.max(0, st.clock.scans|0); ivN=Math.max(0, st.clock.intervals|0);
+        lastScanAt=elapsed;
+      }
+      var _clk=$("clock"); if(_clk) _clk.textContent=mmss(elapsed);
+      PHOTOS.restore(st.photos);
+      renderDesign(); renderSubjEdit(); renderEthoList(); renderRecord();
+      renderLog(); renderBudget(); packStats(); ecoOut();
+      if(val("kA") && val("kB")) { try { computeKappa(); } catch(e){} }   /* ADR-210 */
+      return true;
+    }
+  });
+  var SENT = OUT.wire({
+    key: "csrbtEthogramOut",
+    format: 1,
+    mount: "sendBox",
+    keep: KEPT,
+    exports: [
+      { id:"sheet", label:"the session sheet" },
+      { id:"log", label:"the event log CSV" },
+      { id:"budget", label:"the time-budget CSV" },
+      { id:"pack", label:"the ethogram pack", records:false },
+      { id:"prompt", label:"the AI prompt", records:false },
+    ]
+  });
+  /* Every entry touches the autosave; the outbox repaints itself. */
+  ["input", "change", "click"].forEach(function(ev){
+    document.addEventListener(ev, function(){ KEPT.touch(); }, true); });
+
+})();
+</script>
+</body>
+</html>

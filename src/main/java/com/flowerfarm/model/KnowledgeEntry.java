@@ -37,7 +37,9 @@ import java.util.Set;
 @Table(name = "knowledge_entries", indexes = {
         @Index(name = "idx_knowledge_observed", columnList = "observed_on"),
         @Index(name = "idx_knowledge_follow_up", columnList = "follow_up_date"),
-        @Index(name = "idx_knowledge_crop", columnList = "crop_name")
+        @Index(name = "idx_knowledge_crop", columnList = "crop_name"),
+        @Index(name = "idx_knowledge_field_science_export",
+                columnList = "field_science_export_id")
 })
 public class KnowledgeEntry {
 
@@ -105,6 +107,9 @@ public class KnowledgeEntry {
 
     @Column(name = "customer_id")
     private Long customerId;
+
+    @Column(name = "field_science_export_id")
+    private Long fieldScienceExportId;
 
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
@@ -190,6 +195,7 @@ public class KnowledgeEntry {
     public Long getInventoryItemId() { return inventoryItemId; }
     public Long getOrderId() { return orderId; }
     public Long getCustomerId() { return customerId; }
+    public Long getFieldScienceExportId() { return fieldScienceExportId; }
     public Instant getCreatedAt() { return createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }
 
@@ -285,6 +291,12 @@ public class KnowledgeEntry {
         this.customerId = optionalId(customerId, "Customer id");
     }
 
+    @JsonProperty("fieldScienceExportId")
+    public void setFieldScienceExportId(Long fieldScienceExportId) {
+        this.fieldScienceExportId = optionalId(fieldScienceExportId,
+                "Field science export id");
+    }
+
     public void copyBusinessFieldsFrom(KnowledgeEntry source) {
         if (source == null) {
             throw new IllegalArgumentException("Knowledge entry is required.");
@@ -307,6 +319,7 @@ public class KnowledgeEntry {
         setInventoryItemId(source.getInventoryItemId());
         setOrderId(source.getOrderId());
         setCustomerId(source.getCustomerId());
+        setFieldScienceExportId(source.getFieldScienceExportId());
     }
 
     public void initializeTimestamps(Instant now) {

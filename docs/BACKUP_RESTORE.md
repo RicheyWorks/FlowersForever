@@ -23,6 +23,23 @@ powershell -File scripts/restore-data.ps1 -Archive 'C:\path\FlowersForever-YYYYM
 
 The backup script creates a ZIP plus a SHA-256 sidecar. Restore refuses a missing or mismatched checksum, refuses a database still in use, validates that the archive contains the H2 store, and retains existing data beside the restored directory. The database includes its Flyway migration history, while content-addressed production-task photos live in the `attachments` folder inside the same data directory; one backup therefore retains both photo metadata and verified bytes. Keep at least one daily and one weekly copy on a different device. Test a restore quarterly on a non-production Windows account, including opening one restored attachment.
 
+Saved **Farm setup** choices and specialty notebooks, including Aquatic cohorts, Tree blocks, Hive checks, Mushroom batches, Cranberry beds, and Pumpkin patches, are in the H2 database and return with this data-directory backup. The AI farm-data canonical record snapshots currently omit Farm setup and the specialty notebooks, so use the database backup to recover those records.
+
+**Field science → Save an export…** stores a reviewed UTF-8 text copy in H2,
+along with its selected CSRBT instrument, source URL and pinned commit, title,
+optional filename and note, byte length, and SHA-256 of the saved text. Those
+archive entries, and any separately confirmed **Record a finding** Knowledge
+Log notes, return with the H2 backup. Saving an export does not move or attach
+the original `.eco`, `.txt`, or `.csv` file. The backup script does not collect
+browser-local drafts or files saved elsewhere, such as Downloads; retain those
+separately if you need the original. A browser draft alone is not backed up.
+Select an archived entry and choose **Save selected text…** to write a separate
+UTF-8 file of the reviewed saved body. This read-only action is available to
+VIEWER and preserves the stored BOM, line endings, and trailing spaces; it does
+not recover the original browser file or include archive metadata. The app
+asks before replacing an existing destination. Back up that new file
+separately when it is saved outside the data directory.
+
 For a portable deployment, pass the same explicit directory to both scripts with `-DataDir`, or set `FLOWERFARM_DATA_DIR`. Connector mirrors, exports, logs, and the database are included. Credentials supplied through environment variables or an external properties file are not included and must be recovered from the password manager.
 
 ## Automatic backups before updates

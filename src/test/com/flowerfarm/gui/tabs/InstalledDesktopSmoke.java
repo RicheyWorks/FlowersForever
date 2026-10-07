@@ -62,7 +62,7 @@ class InstalledDesktopSmoke {
 
             assertThat(desktop.applicationButtonSelectors()).containsExactlyInAnyOrder(
                     "Clear service filters", "Build selected-service brief",
-                    "Copy brief", "Start CRM order brief");
+                    "Copy brief", "Clear brief", "Start CRM order brief");
             assertThat(desktop.editableTextSelectors()).containsExactlyInAnyOrder(
                     "Event service search", "Event or family name", "Event date",
                     "Event venue or locations", "Estimated guest count",

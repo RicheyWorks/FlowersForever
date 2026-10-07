@@ -1027,12 +1027,18 @@ class UserJourneyHarnessTest {
                 .awaitText("Saving lesson…");
         assertThat(saveStarted.await(2, TimeUnit.SECONDS)).isTrue();
         assertThat(user.isButtonEnabled("Saving lesson…")).isFalse();
+        assertThat(tab.hasPendingSave()).isTrue();
+        assertThat(tab.applicationExitWarning()).contains("in progress");
         verify(knowledge).create(any(KnowledgeEntry.class));
         releaseSave.countDown();
 
         user.awaitText("Farm lesson not saved · draft kept")
-                .click("Retry lesson")
+                .awaitButtonEnabled("Retry lesson", true);
+        assertThat(tab.applicationExitWarning()).contains("draft kept");
+        user.click("Retry lesson")
                 .awaitTableRows("knowledge.table", 1);
+        assertThat(tab.hasPendingSave()).isFalse();
+        assertThat(tab.applicationExitWarning()).isNull();
 
         ArgumentCaptor<KnowledgeEntry> saves = ArgumentCaptor.forClass(KnowledgeEntry.class);
         verify(knowledge, times(2)).create(saves.capture());
@@ -2064,7 +2070,7 @@ class UserJourneyHarnessTest {
                 anyLong(), any(OrderService.OrderReviewSnapshot.class));
 
         user.click("Confirm order")
-                .awaitText("Order #42 confirmed once · ready to pack");
+                .awaitText("Order #42 confirmed once · review packing");
         verify(orders).confirmReviewed(
                 anyLong(), any(OrderService.OrderReviewSnapshot.class));
         assertThat(dialogs.transcript())
@@ -3531,9 +3537,10 @@ class UserJourneyHarnessTest {
 
         HarnessSnapshot initial = plugin.observe();
         List<List<String>> routes = (List<List<String>>) initial.metadata().get("routes");
-        assertThat(initial.metadata()).containsEntry("routeCount", 36);
-        assertThat(routes).hasSize(36).doesNotHaveDuplicates()
+        assertThat(initial.metadata()).containsEntry("routeCount", 37);
+        assertThat(routes).hasSize(37).doesNotHaveDuplicates()
                 .contains(List.of("Dashboard", "Inventory charts"))
+                .contains(List.of("Field science"))
                 .contains(List.of("Season Planner", "Plan insights"))
                 .contains(List.of("Season Planner", "Availability outlook"))
                 .contains(List.of("Harvest Log", "Production totals"))

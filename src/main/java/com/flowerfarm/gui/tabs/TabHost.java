@@ -1,5 +1,6 @@
 package com.flowerfarm.gui.tabs;
 
+import com.flowerfarm.model.FieldScienceExportSummary;
 import com.flowerfarm.model.PnwPlantProfile;
 
 import java.util.List;
@@ -116,6 +117,23 @@ public interface TabHost {
         setStatus("Opened Season Planner for “" + plant.commonName()
                 + "”; confirm farm dates, bed space, and expected stems before saving.");
         return false;
+    }
+
+    /** Open an editable farm finding with the selected field instrument attributed. */
+    default void showFieldScienceFinding(String instrumentTitle, String sourceUrl) {
+        selectTab("Knowledge Log");
+        setStatus("Opened Knowledge Log for a finding from " + instrumentTitle
+                + ". Add your observation before saving.");
+    }
+
+    /** Prepare a finding linked to one exact, already saved field science export. */
+    default void showFieldScienceFindingFromExport(FieldScienceExportSummary export) {
+        setStatus("A linked field science finding cannot be opened in this workspace.");
+    }
+
+    /** Open one saved field science export by archive ID, including for viewers. */
+    default void showFieldScienceExport(long exportId) {
+        setStatus("This workspace cannot open a linked field science export.");
     }
 
     /**

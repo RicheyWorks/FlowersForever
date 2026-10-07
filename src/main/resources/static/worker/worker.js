@@ -23,16 +23,19 @@ const elements = {
   refreshWork: document.querySelector("#refresh-work"),
   taskList: document.querySelector("#task-list"),
   taskMessage: document.querySelector("#task-message"),
+  taskActionStatus: document.querySelector("#task-action-status"),
   taskCount: document.querySelector("#task-count"),
   taskTemplate: document.querySelector("#task-template"),
   orderList: document.querySelector("#order-list"),
   orderMessage: document.querySelector("#order-message"),
+  orderActionStatus: document.querySelector("#order-action-status"),
   orderCount: document.querySelector("#order-count"),
   orderTemplate: document.querySelector("#order-template"),
   inventorySearchForm: document.querySelector("#inventory-search-form"),
   inventorySearch: document.querySelector("#inventory-search"),
   inventoryList: document.querySelector("#inventory-list"),
   inventoryMessage: document.querySelector("#inventory-message"),
+  inventoryActionStatus: document.querySelector("#inventory-action-status"),
   inventoryCount: document.querySelector("#inventory-count"),
   inventoryTemplate: document.querySelector("#inventory-template"),
   harvestForm: document.querySelector("#harvest-form"),
@@ -300,9 +303,9 @@ function renderQueue() {
   const waiting = count === 0
     ? "No field entries are waiting to sync."
     : `${count} ${count === 1 ? "entry is" : "entries are"} waiting on this device.`;
-  elements.syncDetail.textContent = state.syncError
-    ? `${waiting} Last sync issue: ${state.syncError}`
-    : waiting;
+  elements.syncDetail.textContent = state.flushing
+    ? count === 0 ? "Finishing sync…" : `Syncing ${count} ${count === 1 ? "entry" : "entries"} on this device…`
+    : state.syncError ? `${waiting} Last sync issue: ${state.syncError}` : waiting;
   elements.pendingList.replaceChildren();
   queue.forEach(item => {
     const row = document.createElement("div");
@@ -324,6 +327,9 @@ function renderQueue() {
     elements.pendingList.append(row);
   });
   elements.retrySync.disabled = count === 0 || state.flushing || !state.queueReadable;
+  elements.retrySync.textContent = state.flushing ? "Syncing…" : "Retry now";
+  elements.retrySync.setAttribute("aria-busy", String(state.flushing));
+  elements.retrySync.setAttribute("data-syncing", String(state.flushing));
 }
 
 function updateConnection() {
@@ -416,7 +422,17 @@ async function send(item) {
   }
 }
 
-async function submit(item, messageElement) {
+function showActionResult(action, messageElement, focus = false) {
+  if (!action) return;
+  action.status.hidden = false;
+  action.status.className = "inline-message action-status"
+    + (messageElement.className.includes("error") ? " error"
+      : messageElement.className.includes("success") ? " success" : " pending");
+  action.status.textContent = `${action.subject}: ${messageElement.textContent}`;
+  if (focus) action.status.focus();
+}
+
+async function submit(item, messageElement, action = null) {
   const queued = enqueue(item);
   if (!queued) {
     if (item.kind === "attachment") await deleteAttachmentFile(item.id).catch(() => {});
@@ -424,10 +440,12 @@ async function submit(item, messageElement) {
     messageElement.textContent = item.kind === "attachment"
       ? "The photo could not be stored in the pending queue. Restore browser storage or remove the photo before completing the task."
       : "This entry could not be stored safely for retry. Keep the form open and restore browser storage before saving.";
+    showActionResult(action, messageElement);
     return "rejected";
   }
   messageElement.className = "form-message";
   messageElement.textContent = "Saving…";
+  showActionResult(action, messageElement);
   try {
     const response = await send(item);
     state.syncError = "";
@@ -454,6 +472,7 @@ async function submit(item, messageElement) {
     } else {
       await loadToday();
     }
+    showActionResult(action, messageElement, true);
     return "saved";
   } catch (error) {
     if (item.kind === "attachment" && error.preserveQueued && queued) {
@@ -461,6 +480,7 @@ async function submit(item, messageElement) {
       renderQueue();
       messageElement.className = "form-message error";
       messageElement.textContent = `${error.message} The queue entry remains for explicit discard.`;
+      showActionResult(action, messageElement);
       return "conflict";
     }
     if (item.kind === "inventory-count"
@@ -470,6 +490,7 @@ async function submit(item, messageElement) {
       messageElement.className = "form-message error";
       messageElement.textContent = `${error.message} Your entered count is still saved on this device.`;
       await loadInventory();
+      showActionResult(action, messageElement, true);
       return "conflict";
     }
     if (item.kind === "order-handoff"
@@ -479,12 +500,14 @@ async function submit(item, messageElement) {
       messageElement.className = "form-message error";
       messageElement.textContent = `${error.message} The pending handoff remains on this device for review or discard.`;
       await loadOrders();
+      showActionResult(action, messageElement, true);
       return "conflict";
     }
     if (!error.retryable && navigator.onLine) {
       if (queued) removeQueued(item.id);
       messageElement.className = "form-message error";
       messageElement.textContent = error.message;
+      showActionResult(action, messageElement);
       return "rejected";
     }
     if (queued) {
@@ -492,10 +515,13 @@ async function submit(item, messageElement) {
       messageElement.textContent = "Saved on this device and waiting to sync. It is safe to retry.";
       if (item.kind === "inventory-count") await loadInventory();
       if (item.kind === "order-handoff") await loadOrders();
+      showActionResult(action, messageElement,
+        item.kind === "inventory-count" || item.kind === "order-handoff");
       return "queued";
     }
     messageElement.className = "form-message error";
     messageElement.textContent = "Could not save or store this entry. Keep the form open and restore the connection or browser storage.";
+    showActionResult(action, messageElement);
     return "rejected";
   }
 }
@@ -503,9 +529,9 @@ async function submit(item, messageElement) {
 async function flushQueue() {
   if (state.flushing || !navigator.onLine) return;
   state.flushing = true;
+  state.syncError = "";
   renderQueue();
   try {
-    state.syncError = "";
     for (const item of loadQueue()) {
       try {
         await send(item);
@@ -592,7 +618,9 @@ function displayTask(task, today) {
         fieldObservation: String(data.get("fieldObservation") || "")
       }
     };
-    const outcome = await submit(item, message);
+    const outcome = await submit(item, message, {
+      status: elements.taskActionStatus, subject: `Task · ${task.cropName}`
+    });
     if (outcome === "rejected") submitButton.disabled = false;
   });
 
@@ -685,7 +713,10 @@ function displayOrder(order, throughDate) {
     };
     submitButton.disabled = true;
     discardButton.disabled = true;
-    const outcome = await submit(queueItem, message);
+    const outcome = await submit(queueItem, message, {
+      status: elements.orderActionStatus,
+      subject: `Order #${order.id} · ${order.customerName}`
+    });
     if (outcome === "rejected" || outcome === "queued" || outcome === "conflict") {
       submitButton.disabled = false;
       discardButton.disabled = false;
@@ -795,7 +826,9 @@ function displayInventoryItem(item) {
     };
     submitButton.disabled = true;
     discardButton.disabled = true;
-    const outcome = await submit(queueItem, message);
+    const outcome = await submit(queueItem, message, {
+      status: elements.inventoryActionStatus, subject: `Stock · ${item.name}`
+    });
     if (outcome === "rejected") {
       submitButton.disabled = false;
       discardButton.disabled = false;

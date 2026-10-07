@@ -1,0 +1,1642 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Grower's Soil Recipes — Super Soil, TLO, Coot's</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<!-- Webfonts load without blocking first paint: a stylesheet request that
+     hangs (one bar of signal) otherwise holds the page blank indefinitely,
+     which breaks the offline constraint in ADR-031. See tools/audit_offline.py. -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Nunito+Sans:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" media="print" data-webfont>
+<noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Nunito+Sans:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap"></noscript>
+<script>(function(){var l=document.querySelector('link[data-webfont]');if(!l)return;
+  var on=function(){l.media="all";};
+  if(l.sheet){on();}else{l.addEventListener("load",on);l.addEventListener("error",function(){});}
+})();</script>
+<style>
+  :root {
+    color-scheme: light;
+    --page:#F5F1E6; --surface:#FFFDF7; --surface-2:#F3EEE0; --ink:#23281F; --ink-2:#4B5344;
+    --muted:#6B6B5E; --border:#E3DCC9; --s1:#2C784C; --s1-deep:#236240; --s2:#A94F26; --s3:#2B6C8F;
+    --soft:#E9F0E7; --warn-bg:#F6EAD8; --danger:#B23A32; --danger-bg:#F6E7E5; --gold:#8A6408;
+    --shadow:0 1px 2px rgba(35,40,31,.06),0 10px 28px rgba(35,40,31,.08);
+    --head:"Fraunces",Georgia,serif;
+    --body:"Nunito Sans",system-ui,-apple-system,sans-serif;
+    --mono:"JetBrains Mono",ui-monospace,Menlo,monospace;
+  }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { margin:0; background:var(--page); color:var(--ink); font:16px/1.5 var(--body);
+    -webkit-font-smoothing:antialiased; overscroll-behavior-y:contain; }
+  .app { max-width:960px; margin:0 auto; padding:14px 16px calc(104px + env(safe-area-inset-bottom)); }
+  .top { display:flex; align-items:baseline; justify-content:space-between; gap:10px; padding:6px 2px 12px; flex-wrap:wrap; }
+  .brand { font-family:var(--head); font-weight:700; font-size:22px; letter-spacing:-0.01em; }
+  .brand span { color:var(--s1); }
+  .top a { font-family:var(--mono); font-size:11.5px; color:var(--muted); text-decoration:none;
+    display:inline-flex; align-items:center; min-height:44px; padding:0 6px; margin:-10px -6px; touch-action:manipulation; }
+  .top a:hover { color:var(--s1); }
+
+  .tabbar { position:fixed; left:0; right:0; bottom:0; z-index:20;
+    background:color-mix(in srgb, var(--surface) 94%, transparent); backdrop-filter:blur(10px);
+    border-top:1px solid var(--border); padding:8px max(8px, env(safe-area-inset-left)) calc(8px + env(safe-area-inset-bottom)); }
+  .tabbar .row { max-width:960px; margin:0 auto; display:grid; grid-template-columns:repeat(6,1fr); gap:4px; }
+  .tab { display:flex; flex-direction:column; align-items:center; gap:2px; border:0; background:none;
+    font:700 10.5px var(--body); color:var(--muted); padding:7px 1px; border-radius:12px; cursor:pointer;
+    min-height:54px; touch-action:manipulation; transition:background .15s ease, color .15s ease; }
+  .tab .ico { font-size:20px; line-height:1; }
+  .tab.on { color:var(--s1); background:var(--soft); }
+  .tab:active { transform:scale(.96); }
+  .pane { display:none; animation:fade .18s ease; }
+  .pane.on { display:block; }
+  @keyframes fade { from{opacity:0;transform:translateY(4px);} to{opacity:1;transform:none;} }
+  @media (prefers-reduced-motion: reduce){ .pane{animation:none;} }
+
+  h2 { font-family:var(--head); font-weight:600; font-size:20px; margin:6px 0 2px; }
+  h3 { font-family:var(--head); font-weight:600; font-size:16.5px; margin:16px 0 4px; }
+  .hint { color:var(--muted); font-size:14px; margin:0 0 12px; }
+  .card { background:var(--surface); border:1px solid var(--border); border-radius:16px;
+    padding:16px; box-shadow:var(--shadow); margin-bottom:14px; }
+  .fine { font-size:12.5px; color:var(--muted); margin-top:10px; line-height:1.55; }
+
+  input[type=text], input[type=number], input[type=date], select, textarea {
+    background:var(--surface); color:var(--ink); border:1.5px solid var(--border); border-radius:12px;
+    padding:11px 14px; font:16px var(--body); min-height:48px; max-width:100%; }
+  textarea { min-height:78px; line-height:1.5; width:100%; }
+  input:focus, select:focus, textarea:focus { outline:none; border-color:var(--s1); box-shadow:0 0 0 3px rgba(44,120,76,.18); }
+  input[type=number] { width:110px; }
+  label.f { display:flex; flex-direction:column; gap:5px; font-size:13px; font-weight:700; color:var(--ink-2); min-width:0; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; }
+  .grid label.f input, .grid label.f select { width:100%; }
+
+  .btn { border:0; border-radius:12px; padding:12px 18px; font:800 15px var(--body); cursor:pointer;
+    min-height:48px; touch-action:manipulation; transition:transform .1s ease, background .15s ease; }
+  .btn:active { transform:scale(.97); }
+  .btn-go { background:var(--s1); color:#fff; } .btn-go:hover { background:var(--s1-deep); }
+  .btn-soft { background:var(--soft); color:var(--s1); }
+  .btn-ghost { background:none; border:1.5px solid var(--border); color:var(--ink-2); }
+  .btn-ghost:hover { border-color:var(--s1); color:var(--s1); }
+  .btn-row { display:flex; gap:8px; flex-wrap:wrap; margin-top:12px; align-items:end; }
+
+  .kopts { display:flex; flex-wrap:wrap; gap:8px; }
+  .kopt { border:1.5px solid var(--border); background:var(--surface); border-radius:14px; padding:10px 14px;
+    font:700 14px var(--body); color:var(--ink-2); cursor:pointer; min-height:46px; touch-action:manipulation;
+    display:inline-flex; flex-direction:column; align-items:flex-start; gap:1px; }
+  .kopt small { font-weight:400; font-size:11px; color:var(--muted); font-family:var(--mono); }
+  .kopt.on { border-color:var(--s1); background:var(--soft); color:var(--s1); }
+
+  .covscale { display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; }
+  .cv { border:1.5px solid var(--border); background:var(--surface); border-radius:11px; min-width:52px;
+    padding:8px 6px; font:800 15px var(--body); color:var(--ink-2); cursor:pointer; min-height:52px;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1px; touch-action:manipulation; }
+  .cv small { font:400 9.5px var(--mono); color:var(--muted); }
+  .cv.on { border-color:var(--s1); background:var(--soft); color:var(--s1); }
+  .cv.on small { color:var(--s1-deep); }
+
+  .tiles { display:flex; flex-wrap:wrap; gap:8px; margin:12px 0 2px; }
+  .tile { background:var(--surface-2); border:1px solid var(--border); border-radius:12px; padding:9px 14px; min-width:96px; }
+  .tile .v { font-family:var(--head); font-weight:700; font-size:21px; font-variant-numeric:tabular-nums; }
+  .tile .l { font-size:11px; color:var(--muted); }
+  .verdict { border-radius:12px; padding:13px 16px; margin:12px 0 2px; font-size:15.5px; line-height:1.55;
+    border-left:4px solid var(--s1); background:var(--soft); color:var(--ink-2); }
+  .verdict b { color:var(--ink); }
+  .verdict.warn { border-left-color:var(--s2); background:var(--warn-bg); }
+  .verdict.act { border-left-color:var(--danger); background:var(--danger-bg); }
+
+  .tw { overflow-x:auto; -webkit-overflow-scrolling:touch; margin:10px 0; }
+  table { border-collapse:collapse; width:100%; font-size:14px; }
+  th,td { border:1px solid var(--border); padding:6px 9px; text-align:left; vertical-align:top; white-space:nowrap; }
+  th { background:var(--soft); font-family:var(--head); font-weight:600; font-size:13px; }
+  td.n, th.n { text-align:right; font-variant-numeric:tabular-nums; font-family:var(--mono); font-size:13px; }
+  td i { font-style:italic; color:var(--ink-2); }
+
+  .rowlist { display:grid; grid-template-columns:minmax(0,1fr); gap:8px; margin-top:10px; }
+  /* minmax(0,1fr), not the implicit auto track: an auto track is at least its
+     widest row's min-content, and a row whose badge, count and remove button
+     do not shrink pushed a phone's page 4px sideways once a host was recorded
+     (the harness's page walk found it, ADR-128). */
+  .row2 { display:flex; align-items:center; gap:10px; background:var(--surface); border:1px solid var(--border);
+    border-radius:12px; padding:10px 13px; font-size:15px; }
+  .row2.inv { border-left:3px solid var(--danger); }
+  .row2 .g { flex:1 1 220px; min-width:0; }
+  /* A row wraps rather than squeezes: below 220px for the name, the badge,
+     the count and the remove button take the next line together (ADR-128). */
+  .row2 { flex-wrap:wrap; }
+  .row2 .g b { font-family:var(--head); font-size:15.5px; }
+  .row2 .g b i { font-style:italic; font-weight:400; color:var(--ink-2); font-size:14px; }
+  .row2 .g span { display:block; color:var(--muted); font-size:12.5px; font-family:var(--mono); margin-top:1px;
+    overflow:hidden; text-overflow:ellipsis; }
+  .row2 .cov { font-family:var(--head); font-weight:700; font-size:17px; color:var(--s1); min-width:46px; text-align:right; }
+  .row2 button { border:0; background:none; color:var(--muted); font-size:15px; padding:9px 11px; cursor:pointer; min-height:44px; min-width:44px; }
+  .row2 button:hover { color:var(--danger); }
+
+  .bars { display:grid; gap:6px; margin-top:10px; }
+  .bar { display:grid; grid-template-columns:132px 1fr 54px; gap:8px; align-items:center; font-size:13.5px; }
+  .bar .nm { font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .bar .tr { display:block; background:var(--surface-2); border:1px solid var(--border); border-radius:8px; height:20px; overflow:hidden; }
+  .bar .fl { display:block; height:100%; background:var(--s1); border-radius:7px 0 0 7px; transition:width .4s ease; }
+  .bar .fl.inv { background:var(--s2); }
+  .bar .pc { text-align:right; font-variant-numeric:tabular-nums; color:var(--ink-2); font-family:var(--mono); font-size:12.5px; }
+
+  .label { background:#fff; border:1px solid var(--ink); border-radius:2px; padding:14px 16px; margin-top:10px;
+    font:12.5px/1.5 var(--body); color:#000; max-width:440px; }
+  .label .inst { font-family:var(--head); font-weight:700; font-size:12px; letter-spacing:.06em;
+    text-transform:uppercase; text-align:center; border-bottom:1px solid #000; padding-bottom:5px; margin-bottom:7px; }
+  .label .sci { font-style:italic; font-weight:700; font-size:14px; }
+  .label .row { margin:3px 0; }
+  .label .k { font-weight:700; }
+  .label .coll { margin-top:8px; padding-top:6px; border-top:1px solid #999; display:flex; justify-content:space-between; }
+
+  pre.export { background:#23281F; color:#E8E4D5; border-radius:12px; padding:14px 16px; overflow-x:auto;
+    font:12.5px/1.65 var(--mono); max-height:340px; }
+  code { font-family:var(--mono); font-size:.82em; background:var(--surface-2); border:1px solid var(--border); border-radius:5px; padding:1px 5px; }
+
+  .toast { position:fixed; left:50%; bottom:84px; transform:translateX(-50%) translateY(90px); z-index:30;
+    background:var(--ink); color:#F5F1E6; border-radius:999px; padding:10px 22px; font:700 14px var(--body);
+    transition:transform .25s ease; pointer-events:none; max-width:88vw; text-align:center; }
+  .toast.on { transform:translateX(-50%) translateY(0); }
+
+  @media print {
+    .tabbar, .btn, .kopts, .covscale, .top a, .noprint { display:none !important; }
+    body { background:#fff; } .pane { display:block !important; }
+    .app { padding-bottom:0; } .card { break-inside:avoid; } table { font-size:10pt; }
+    pre.export { background:#fff; color:#000; border:1px solid #ccc; max-height:none; }
+    .label { break-inside:avoid; page-break-inside:avoid; }
+  }
+
+
+  /* ---- fungal additions ---- */
+  .sw { display:flex; flex-wrap:wrap; gap:7px; margin-top:6px; }
+  .swc { border:1.5px solid var(--border); background:var(--surface); border-radius:12px; padding:7px 11px 8px;
+    font:700 12.5px var(--body); color:var(--ink-2); cursor:pointer; min-height:56px; touch-action:manipulation;
+    display:flex; flex-direction:column; align-items:center; gap:5px; min-width:74px; }
+  .swc .chip { width:44px; height:18px; border-radius:5px; border:1px solid rgba(35,40,31,.28); display:block; }
+  .swc.on { border-color:var(--s1); background:var(--soft); color:var(--s1); }
+
+  .chk { display:flex; flex-wrap:wrap; gap:7px; margin-top:6px; }
+  .ck { border:1.5px solid var(--border); background:var(--surface); border-radius:999px; padding:9px 14px;
+    font:700 13.5px var(--body); color:var(--ink-2); cursor:pointer; min-height:44px; touch-action:manipulation; }
+  .ck.on { border-color:var(--s1); background:var(--soft); color:var(--s1); }
+  .ck.on::before { content:"\2713 "; }
+
+  .rg { display:grid; gap:9px; margin-top:8px; }
+  .rgi { border:1px solid var(--border); background:var(--surface); border-radius:13px; padding:11px 13px; }
+  .rgi .hd { display:flex; align-items:center; justify-content:space-between; gap:9px; flex-wrap:wrap; }
+  .rgi .nm { font-family:var(--head); font-weight:700; font-size:15px; }
+  .rgi .nm em { font-style:normal; font-family:var(--mono); font-size:11.5px; color:var(--muted); margin-left:6px; }
+  .rgi .wh { font-size:12.5px; color:var(--muted); line-height:1.5; margin-top:5px; }
+  .rgi input[type=text] { width:100%; margin-top:8px; min-height:44px; }
+  .rgi.haz { border-left:3px solid var(--s2); }
+
+  .guild { display:inline-block; font:700 10.5px var(--mono); letter-spacing:.05em; text-transform:uppercase;
+    border-radius:999px; padding:3px 9px; border:1px solid var(--border); background:var(--surface-2); color:var(--ink-2); }
+  .guild.ecm { border-color:var(--s1); color:var(--s1); background:var(--soft); }
+  .guild.woodsap, .guild.littersap { border-color:var(--s3); color:var(--s3); background:#E6EEF3; }
+  .guild.par { border-color:var(--danger); color:var(--danger); background:var(--danger-bg); }
+  .guild.lich { border-color:var(--gold); color:#7a5c07; background:#F5EFD9; }
+  .guild.myco { border-color:var(--s2); color:var(--s2); background:var(--warn-bg); }
+  .guild.mixed { border-style:dashed; }
+
+  .mx td.h0 { color:var(--muted); }
+  .mx td.h1 { background:#EDF4EA; font-weight:700; }
+  .mx td.h2 { background:var(--s1); color:#fff; font-weight:700; }
+
+  .never { border:2px solid var(--danger); background:var(--danger-bg); border-radius:14px; padding:15px 17px;
+    margin:14px 0; font-size:15px; line-height:1.6; color:var(--ink); }
+  .never b { font-family:var(--head); display:block; font-size:16px; margin-bottom:5px; color:var(--danger); }
+
+  .drylog { display:grid; grid-template-columns:repeat(auto-fit,minmax(128px,1fr)); gap:9px; margin-top:8px; }
+
+
+  /* ---- bench additions ---- */
+  .stat { display:grid; grid-template-columns:repeat(auto-fit,minmax(132px,1fr)); gap:9px; margin:12px 0 2px; }
+  .st { background:var(--surface-2); border:1px solid var(--border); border-radius:12px; padding:10px 13px; }
+  .st .v { font-family:var(--head); font-weight:700; font-size:22px; font-variant-numeric:tabular-nums; line-height:1.1; }
+  .st .l { font-size:11px; color:var(--muted); margin-top:2px; line-height:1.35; }
+  .st.hi .v { color:var(--s1); } .st.bad .v { color:var(--danger); } .st.warnv .v { color:var(--s2); }
+  .eq { font-family:var(--mono); font-size:12.5px; background:var(--surface-2); border:1px solid var(--border);
+    border-radius:9px; padding:9px 12px; margin:9px 0; color:var(--ink-2); overflow-x:auto; }
+  .scat { display:block; width:100%; height:auto; background:var(--surface); border:1px solid var(--border);
+    border-radius:12px; margin-top:10px; }
+  .warnbox { border:2px solid var(--s2); background:var(--warn-bg); border-radius:14px; padding:14px 17px;
+    margin:14px 0; font-size:15px; line-height:1.6; }
+  .warnbox b { font-family:var(--head); display:block; font-size:16px; margin-bottom:4px; color:var(--s2); }
+  .refuse { border:2px solid var(--danger); background:var(--danger-bg); border-radius:14px; padding:15px 18px;
+    margin:14px 0; font-size:15px; line-height:1.6; }
+  .refuse b { font-family:var(--head); display:block; font-size:16px; margin-bottom:4px; color:var(--danger); }
+  td.ok { color:var(--s1); font-weight:700; } td.no { color:var(--danger); font-weight:700; }
+
+  /* ---- recipe sheet ---- */
+  .rec { border:1px solid var(--border); background:var(--surface); border-radius:16px;
+    padding:16px; box-shadow:var(--shadow); margin-bottom:14px; }
+  .rec > h3 { margin-top:0; }
+  .who { font:600 12px var(--mono); color:var(--muted); margin:2px 0 10px; }
+  .who a { color:var(--s1); }
+  .ing { width:100%; border-collapse:collapse; font-size:14px; }
+  .ing th, .ing td { border-bottom:1px solid var(--border); padding:7px 9px; text-align:left;
+    vertical-align:top; white-space:normal; }
+  .ing th { background:var(--soft); font-family:var(--head); font-weight:600; font-size:13px;
+    white-space:nowrap; }
+  .ing td.q { font-family:var(--mono); font-variant-numeric:tabular-nums; white-space:nowrap;
+    text-align:right; font-size:13.5px; }
+  .ing tr.base td { background:var(--surface-2); font-weight:700; }
+  .ing td small { display:block; color:var(--muted); font-size:11.5px; font-family:var(--body);
+    margin-top:2px; line-height:1.45; }
+  .pill { display:inline-block; font:700 10.5px var(--mono); letter-spacing:.05em;
+    text-transform:uppercase; border-radius:999px; padding:3px 9px; border:1px solid var(--border);
+    background:var(--surface-2); color:var(--ink-2); margin-left:6px; vertical-align:2px; }
+  .pill.hot { border-color:var(--danger); color:var(--danger); background:var(--danger-bg); }
+  .pill.mild { border-color:var(--s1); color:var(--s1); background:var(--soft); }
+  .layer { display:grid; gap:0; margin:12px 0 4px; border:2px solid var(--border);
+    border-radius:12px; overflow:hidden; }
+  .layer div { padding:11px 14px; font-size:14px; line-height:1.5; }
+  .layer .top { background:var(--soft); }
+  .layer .bot { background:var(--warn-bg); border-top:2px solid var(--border); }
+  .layer b { font-family:var(--head); }
+
+
+  /* ============ Field Entry Kit v1.8.0 ============
+     Large-target, high-contrast entry controls. Sizing is driven by --tap
+     rather than per-component numbers so one token retunes the whole kit for
+     gloves, cold hands or a wall-mounted tablet. */
+  :root {
+    --tap: 60px;            /* primary control height  */
+    --tap-sm: 48px;         /* secondary control height */
+    --fek-r: 16px;
+    /* These three moved for WCAG AA and the move was made in the pages, by
+       hand, and never came back here -- because the CSS half of fek_emit was
+       dead code and nobody could tell. Source and pages agreed only by
+       ramp-1 moved here too: at its old teal, white label text on a selected
+       button measured 3.94:1 and the .92-white sub-line 3.59:1, both under AA.
+       No page had caught it because none defaulted to a ramp-1 option until the
+       deployment log did. Every ramp is now checked against both, in
+       verify_contrast_slice.
+       The pre-fix ramp values are named in verify_contrast_slice,
+       which greps for them literally across every page -- so they are not
+       repeated here, because a comment naming them is itself a page carrying
+       them, and the suite is right not to care why. */
+    --ramp-0:#2B6C8F; --ramp-1:#2F7373; --ramp-2:#2C784C;
+    --ramp-3:#8A6408; --ramp-4:#A94F26; --ramp-5:#B23A32;
+    --fek-line:#C7C0AC;
+    /* v1.8.0 (ADR-254): the edge of a box you write in. --fek-line is a
+       decorative line (a drop zone's dash, a card's rule) and reads 1.79:1;
+       a control's edge carries the WCAG 1.4.11 floor of 3:1, and this is the
+       colour every page's own rule already gives its inputs. */
+    --fek-edge:#8E8160;
+  }
+  .fek-lab { display:block; font:800 15px var(--body); color:var(--ink-2);
+    letter-spacing:.01em; margin:0 0 6px; }
+  .fek-lab .u { font:600 12.5px var(--mono); color:var(--muted); margin-left:6px; }
+  .fek-help { font-size:13.5px; color:var(--muted); line-height:1.5; margin:6px 0 0; }
+  .fek-row { margin:0 0 20px; }
+
+  /* --- stepper: the workhorse numeric entry --- */
+  .fek-step { display:flex; align-items:stretch; gap:0; border:2px solid var(--border);
+    border-radius:var(--fek-r); overflow:hidden; background:var(--surface); max-width:340px; }
+  .fek-step button { border:0; background:var(--surface-2); color:var(--ink);
+    font:800 30px var(--body); line-height:1; width:calc(var(--tap) + 8px); min-height:var(--tap);
+    cursor:pointer; touch-action:manipulation; transition:background .12s; }
+  .fek-step button:hover { background:var(--soft); color:var(--s1); }
+  .fek-step button:active { background:var(--s1); color:#fff; }
+  .fek-step .val { flex:1; min-width:0; text-align:center; border:0; background:none;
+    font:800 30px var(--head); color:var(--ink); font-variant-numeric:tabular-nums;
+    -moz-appearance:textfield; padding:0 4px; }
+  .fek-step .val::-webkit-outer-spin-button,
+  .fek-step .val::-webkit-inner-spin-button { -webkit-appearance:none; margin:0; }
+  .fek-step .val:focus { outline:none; background:var(--soft); }
+
+  /* --- segmented ordinal dial with a colour ramp --- */
+  .fek-dial { display:flex; flex-wrap:wrap; gap:8px; }
+  .fek-dial button { flex:1 1 auto; min-width:72px; min-height:var(--tap);
+    border:2px solid var(--border); border-radius:var(--fek-r); background:var(--surface);
+    font:800 17px var(--body); color:var(--ink-2); cursor:pointer; touch-action:manipulation;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px;
+    padding:6px 8px; transition:transform .08s, border-color .12s, background .12s; }
+  .fek-dial button small { font:600 11px var(--mono); color:var(--muted); letter-spacing:.02em; }
+  .fek-dial button:active { transform:scale(.96); }
+  .fek-dial button.on { color:#fff; border-color:transparent; }
+  .fek-dial button.on small { color:rgba(255,255,255,.92); }
+  .fek-dial button.on[data-r="0"]{background:var(--ramp-0);}
+  .fek-dial button.on[data-r="1"]{background:var(--ramp-1);}
+  .fek-dial button.on[data-r="2"]{background:var(--ramp-2);}
+  .fek-dial button.on[data-r="3"]{background:var(--ramp-3);}
+  .fek-dial button.on[data-r="4"]{background:var(--ramp-4);}
+  .fek-dial button.on[data-r="5"]{background:var(--ramp-5);}
+
+  /* --- field: a typed value from an instrument readout ---
+     A stepper is the wrong control for a number you READ off a machine to three
+     decimals: you would tap two thousand times to reach 1.842. This is a plain
+     numeric entry sized like the rest of the kit, with the unit shown and the
+     decimal keypad requested, and nothing that pretends the value is scrollable. */
+  .fek-field { display:flex; align-items:stretch; gap:0; border:2px solid var(--border);
+    border-radius:var(--fek-r); overflow:hidden; background:var(--surface); max-width:340px; }
+  .fek-field input { flex:1; min-width:0; border:0; background:none; text-align:right;
+    font:800 26px var(--head); color:var(--ink); font-variant-numeric:tabular-nums;
+    -moz-appearance:textfield; padding:0 12px; min-height:var(--tap); }
+  .fek-field input::-webkit-outer-spin-button,
+  .fek-field input::-webkit-inner-spin-button { -webkit-appearance:none; margin:0; }
+  .fek-field input:focus { outline:none; background:var(--soft); }
+  .fek-field input::placeholder { color:var(--muted); font-weight:600; font-size:20px; }
+  .fek-field .u { display:flex; align-items:center; padding:0 14px; background:var(--surface-2);
+    font:700 13px var(--mono); color:var(--muted); border-left:2px solid var(--border); white-space:nowrap; }
+  .fek-field.empty { border-style:dashed; }
+
+  /* --- a box the browser could not parse (v1.4.0, ADR-151) ---
+     Not the same state as empty, and it must not look like it. An empty box is
+     "not recorded yet"; this one holds the reader's own characters and hands
+     the page back the empty string, so without a state of its own the two are
+     one thing on screen as well as in the value. */
+  .fek-step.bad, .fek-field.bad { border-color:var(--ramp-5); border-style:solid; }
+  .fek-bad { font:700 13.5px var(--body); color:var(--ramp-5); margin:6px 0 0; }
+  input[type="number"].fek-badbox { border-color:var(--ramp-5) !important; }
+
+  /* --- big toggle chips --- */
+  .fek-chips { display:flex; flex-wrap:wrap; gap:9px; }
+  .fek-chip { min-height:var(--tap-sm); border:2px solid var(--border); border-radius:999px;
+    background:var(--surface); font:800 15.5px var(--body); color:var(--ink-2);
+    padding:0 20px; cursor:pointer; touch-action:manipulation; display:inline-flex;
+    align-items:center; gap:8px; transition:transform .08s, border-color .12s, background .12s; }
+  .fek-chip:active { transform:scale(.96); }
+  .fek-chip.on { border-color:var(--s1); background:var(--soft); color:var(--s1-deep); }
+  .fek-chip.on::before { content:"\2713"; font-size:17px; }
+
+  /* --- slider with a live bubble --- */
+  .fek-slide { display:flex; align-items:center; gap:14px; }
+  .fek-slide input[type=range] { flex:1; min-width:0; height:var(--tap-sm); -webkit-appearance:none;
+    background:transparent; cursor:pointer; touch-action:manipulation; }
+  .fek-slide input[type=range]::-webkit-slider-runnable-track { height:14px; border-radius:8px;
+    background:linear-gradient(90deg,var(--ramp-0),var(--ramp-2),var(--ramp-3),var(--ramp-5)); }
+  .fek-slide input[type=range]::-moz-range-track { height:14px; border-radius:8px;
+    background:linear-gradient(90deg,var(--ramp-0),var(--ramp-2),var(--ramp-3),var(--ramp-5)); }
+  .fek-slide input[type=range]::-webkit-slider-thumb { -webkit-appearance:none; width:34px; height:34px;
+    border-radius:50%; background:#fff; border:3px solid var(--ink); margin-top:-10px;
+    box-shadow:0 2px 6px rgba(35,40,31,.3); }
+  .fek-slide input[type=range]::-moz-range-thumb { width:34px; height:34px; border-radius:50%;
+    background:#fff; border:3px solid var(--ink); box-shadow:0 2px 6px rgba(35,40,31,.3); }
+  .fek-slide .bub { font:800 26px var(--head); font-variant-numeric:tabular-nums; color:var(--ink);
+    min-width:86px; text-align:right; }
+  .fek-slide .bub span { font:600 13px var(--mono); color:var(--muted); margin-left:3px; }
+
+  /* --- big picker: replaces <select> for long lists --- */
+  .fek-pick { border:2px solid var(--border); border-radius:var(--fek-r); background:var(--surface);
+    overflow:hidden; }
+  .fek-pick .search { width:100%; border:0; border-bottom:2px solid var(--border);
+    font:700 17px var(--body); padding:0 16px; min-height:var(--tap); background:var(--surface-2); }
+  .fek-pick .search:focus { outline:none; background:var(--soft); }
+  .fek-pick .opts { max-height:264px; overflow-y:auto; -webkit-overflow-scrolling:touch; }
+  .fek-pick .opt { display:block; width:100%; text-align:left; border:0; border-bottom:1px solid var(--border);
+    background:none; font:700 16.5px var(--body); color:var(--ink); min-height:var(--tap-sm);
+    padding:10px 16px; cursor:pointer; touch-action:manipulation; }
+  .fek-pick .opt small { display:block; font:400 12.5px var(--mono); color:var(--muted); margin-top:2px; }
+  .fek-pick .opt:hover { background:var(--soft); }
+  .fek-pick .opt.on { background:var(--s1); color:#fff; }
+  .fek-pick .opt.on small { color:rgba(255,255,255,.92); }
+  .fek-pick .none { padding:16px; color:var(--muted); font-size:14px; }
+
+  /* --- readout tiles, sized to be read at arm's length --- */
+  .fek-tiles { display:grid; grid-template-columns:repeat(auto-fit,minmax(148px,1fr)); gap:11px; margin:14px 0 2px; }
+  .fek-tile { border:2px solid var(--border); border-radius:var(--fek-r); padding:13px 15px; background:var(--surface); }
+  .fek-tile .v { font:800 30px var(--head); font-variant-numeric:tabular-nums; line-height:1.05; color:var(--ink); }
+  .fek-tile .l { font:700 12px var(--body); color:var(--muted); margin-top:4px; letter-spacing:.02em; }
+  .fek-tile.good { border-color:var(--ramp-2); } .fek-tile.good .v { color:var(--ramp-2); }
+  .fek-tile.warn { border-color:var(--ramp-3); } .fek-tile.warn .v { color:#8a6508; }
+  .fek-tile.bad  { border-color:var(--ramp-5); } .fek-tile.bad  .v { color:var(--ramp-5); }
+  .fek-tile.cold { border-color:var(--ramp-0); } .fek-tile.cold .v { color:var(--ramp-0); }
+
+  /* --- banner: the verdict, big --- */
+  .fek-banner { border-radius:var(--fek-r); padding:16px 19px; margin:14px 0; font-size:16px;
+    line-height:1.55; border-left:7px solid var(--ramp-2); background:var(--soft); color:var(--ink-2); }
+  .fek-banner b { font-family:var(--head); color:var(--ink); font-size:17.5px; display:block; margin-bottom:4px; }
+  .fek-banner.warn { border-left-color:var(--ramp-3); background:var(--warn-bg); }
+  .fek-banner.bad  { border-left-color:var(--ramp-5); background:var(--danger-bg); }
+  .fek-banner.cold { border-left-color:var(--ramp-0); background:#E6EEF3; }
+
+  /* --- photographs: the record carries the reference, not the image ---
+     (v1.5.0, ADR-201). Sized for a gloved thumb like the rest of the kit, and
+     the thumbnail is large enough to tell two bark shots apart at arm's
+     length, which is the only reason it is on screen at all. */
+  .fek-drop { border:2.5px dashed var(--fek-line); border-radius:var(--fek-r);
+    background:var(--surface); padding:18px 16px; text-align:center;
+    transition:border-color .12s, background .12s; }
+  .fek-drop.on { border-color:var(--ramp-2); background:var(--soft); border-style:solid; }
+  .fek-drop p { margin:0 0 10px; font-size:15px; color:var(--ink-2); }
+  .fek-drop button { min-height:var(--tap); border:0; border-radius:var(--fek-r);
+    background:var(--ramp-2); color:#fff; font:800 16px var(--body); padding:0 22px;
+    cursor:pointer; touch-action:manipulation; }
+  .fek-drop button:active { transform:scale(.97); }
+  .fek-photos { display:grid; grid-template-columns:repeat(auto-fill,minmax(210px,1fr));
+    gap:12px; margin-top:14px; }
+  .fek-photo { border:2px solid var(--border); border-radius:var(--fek-r);
+    background:var(--surface); overflow:hidden; }
+  .fek-photo img { display:block; width:100%; height:150px; object-fit:cover; background:var(--surface-2); }
+  .fek-photo .m { padding:10px 12px 12px; }
+  .fek-photo .m code { display:block; font:500 11.5px var(--mono); color:var(--muted);
+    word-break:break-all; line-height:1.45; }
+  .fek-photo .m input, .fek-photo .m textarea { width:100%; margin-top:8px; border:1.5px solid var(--fek-edge);
+    border-radius:10px; padding:9px 10px; font:15px var(--body); background:var(--surface);
+    color:var(--ink); min-height:44px; }
+  .fek-photo .m textarea { min-height:62px; resize:vertical; }
+  .fek-photo .rm, .fek-photo .act { margin-top:8px; min-height:44px; width:100%; border:1.5px solid var(--fek-line);
+    border-radius:10px; background:none; color:var(--ink-2); font:700 14px var(--body); cursor:pointer; }
+  .fek-photo .rm:hover { border-color:var(--ramp-5); color:var(--ramp-5); }
+  .fek-photo .act:hover { border-color:var(--ramp-2); color:var(--ramp-2); }
+  .fek-await { margin:8px 0 0; padding:9px 11px; border:1.5px dashed var(--accent, #7A6A3A);
+    border-radius:10px; background:var(--surface-2, #F3EEE0); }
+  .fek-await b { color:var(--accent, #7A6A3A); }
+  .fek-await ul { margin:6px 0 0; padding:0 0 0 18px; font-family:var(--mono, monospace);
+    font-size:11.5px; color:var(--ink-2, #4B5344); line-height:1.6; }
+  .fek-await .cap { color:var(--muted, #6B6B5E); }
+  .fek-shot { font:700 13.5px var(--body); color:var(--ink-2); margin:10px 0 0; min-height:1.2em; }
+  .fek-shot.bad { color:var(--ramp-5); }
+  @media print { .fek-drop, .fek-photo .rm, .fek-photo .act { display:none !important; }
+                 .fek-photo img { height:auto; } }
+
+  @media (max-width:420px){ :root { --tap:56px; --tap-sm:46px; } .fek-step .val { font-size:26px; } }
+  @media print { .fek-step button, .fek-pick .search { display:none; } }
+
+  .rail { margin:26px 0 4px; }
+  .rail .rl { font-family:var(--mono); font-size:11px; letter-spacing:.14em; text-transform:uppercase; color:var(--muted); margin:0 2px 8px; }
+  .rail .chips { display:flex; flex-wrap:wrap; gap:8px; }
+  .rail a { display:inline-flex; align-items:center; gap:7px; text-decoration:none; font:700 13.5px var(--body);
+    color:var(--ink-2); background:var(--surface); border:1px solid var(--border); border-radius:999px;
+    padding:9px 15px; min-height:44px; box-shadow:var(--shadow); touch-action:manipulation; }
+  .rail a:hover { border-color:var(--s1); color:var(--s1); }
+  .rail a[aria-current="page"] { background:var(--soft); border-color:var(--s1); color:var(--s1); }
+  .rail a.ref { font-weight:600; color:var(--muted); background:none; box-shadow:none; }
+  @media print { .rail { display:none !important; } }
+
+  /* WCAG 1.4.11 non-text contrast: the visible edge of a control you are meant
+     to write in is the only thing telling you where to write, so it carries the
+     3:1 floor. Decorative card borders are not controls and stay quiet. */
+  input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]),
+  select, textarea { border-color: #8E8160; }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="top">
+    <div class="brand">🧱 Grower's <span>Soil Recipes</span></div>
+    <a href="ecology.html">part of the science kit →</a>
+  </div>
+
+  <h2>Four published recipes, transcribed and scalable</h2>
+  <p class="hint">Super Soil, TLO, Coot's and the BuildASoil mix &mdash; each with its author, its
+    source, its cook time and its own failure mode. Pick a batch size and the quantities scale.</p>
+
+  <div class="refuse"><b>These are grower conventions, not agronomy.</b>
+    Every recipe here was published by a named grower on a forum or in a book, and every one is
+    widely used and widely reported to work. None of them rests on a soil test, a control or a
+    replicated trial, and the quantities differ between printings of the same recipe. They are
+    reproduced exactly as published, with the source linked, so you can go and read the argument
+    rather than take a number on trust. This page will not tell you which is best, because nothing
+    it has access to could answer that.</div>
+
+  <div class="card">
+    <div id="recPick"></div>
+    <div id="recScale"></div>
+    <p class="fine" id="scaleNote" style="margin-top:2px"></p>
+  </div>
+
+  <div id="recOut"></div>
+
+  <h2>What each amendment actually does</h2>
+  <div class="card">
+    <p class="fine" style="margin-top:0">The column that matters is <b>release speed</b>. It is why a
+      mix is left to cook, why blood meal burns a seedling and rock phosphate never does, and why a
+      run that goes hungry in week seven was usually built without anything slow in it.</p>
+    <div class="tw"><table class="ing" id="amendTable"></table></div>
+    <p class="fine"><b>The NPK figures are typical published ranges for the material, not
+      measurements of your bag.</b> Every one varies with source &mdash; published C:N for
+      &ldquo;leaves&rdquo; alone spans 40 to 90 &mdash; and a bag's own label beats this table every
+      time. Use the column to reason about direction, never as an input to a calculation.</p>
+  </div>
+
+  <h2>Reading a recipe before you build it</h2>
+  <div class="card">
+    <h3 style="margin-top:0">Hot mixes and mild mixes are two different designs</h3>
+    <p class="fine" style="margin-top:0">Subcool's and the Rev's are <b>hot</b>: concentrated
+      amendment, banded or layered so the roots meet it on a schedule, and enough nitrogen in one
+      place to kill a seedling planted into it. Coot's and the BuildASoil mix are <b>mild</b>:
+      everything is dilute and even, the container is meant to be re-used, and feeding happens by
+      top-dressing later. Neither design is wrong. Mixing the two &mdash; a hot band under a mild
+      mix, or a mild mix fed as though it were hot &mdash; is where most of the trouble comes from.</p>
+
+    <h3>Cooking is not a ritual</h3>
+    <p class="fine" style="margin-top:0">The wait exists because the fast amendments have to be
+      converted by soil organisms before roots can use them, and because that conversion produces
+      ammonia and heat. Thirty days for Subcool's, fifteen for the Rev's, four to six weeks for
+      Coot's: those numbers come from the recipes themselves. Keep the pile damp, not wet. A mix that
+      smells of ammonia is not finished.</p>
+
+    <h3>Calcium is the amendment people double up on without noticing</h3>
+    <p class="fine" style="margin-top:0">Dolomite lime, agricultural lime, oyster shell flour and
+      gypsum all supply calcium, and three of the four also raise pH. Several of these recipes carry
+      two or three of them at once. Gypsum is the one that does not move pH. If you are working from
+      hard water, read the lime line of your recipe before you follow it.</p>
+
+    <h3>Where this page stops</h3>
+    <p class="fine" style="margin-top:0">It does not compute a C:N ratio, a nutrient total or a
+      predicted yield from these recipes. The published quantities are volumes and weights of
+      materials whose analyses vary by a factor of two, so any total computed from them would carry
+      an error bar wider than the answer. The
+      <a href="soil-bench.html">Soil Bench</a> will compute a C:N on dry mass if you have real
+      figures for your own ingredients, which is the only way that number means anything.</p>
+
+    <div class="warnbox"><b>Grow what is legal where you are.</b>
+      Cannabis law varies by country, state and municipality, and it changes. Nothing on this page is
+      advice about whether you may grow anything. Some amendments here &mdash; neem and karanja above
+      all &mdash; are regulated as pesticides in many jurisdictions regardless of what you grow.</div>
+  </div>
+
+  <h2>Take it home</h2>
+  <div class="card">
+    <pre class="export" id="recExport"># pick a recipe above — the shopping list appears here</pre>
+    <div class="btn-row">
+      <button class="btn btn-go" id="recCopy" type="button">Copy the list</button>
+      <button class="btn btn-ghost" onclick="window.print()" type="button">Print / save PDF</button>
+    </div>
+    <p class="fine">Sources are carried in the export, because a recipe without its provenance is how
+      the quantities drift between printings in the first place.</p>
+  </div>
+<div class="rail">
+  <p class="rl">Record it — in the field</p>
+  <div class="chips">
+    <a href="field-notebook.html"><span>📓</span>Field Notebook</a>
+    <a href="ethogram.html"><span>🐾</span>Ethogram</a>
+    <a href="selection-log.html"><span>📏</span>Selection Log</a>
+    <a href="stand-sheet.html"><span>🌲</span>Stand Sheet</a>
+    <a href="releve.html"><span>🌾</span>Relevé</a>
+    <a href="collection-sheet.html"><span>🍄</span>Collection Sheet</a>
+    <a href="farm-scout.html"><span>🧑‍🌾</span>Farm Scout</a>
+    <a href="pheno-tracker.html"><span>🌱</span>Pheno Tracker</a>
+    <a href="deployment-log.html"><span>🎙️</span>Deployment Log</a>
+  </div>
+  <p class="rl" style="margin-top:16px">At the bench</p>
+  <div class="chips">
+    <a href="cp-bench.html"><span>🫙</span>CP Bench</a>
+    <a href="soil-bench.html"><span>🪱</span>Soil Bench</a>
+    <a href="breeding-bench.html"><span>🥕</span>Breeding Bench</a>
+    <a href="cell-bench.html"><span>🔬</span>Cell Bench</a>
+    <a href="micro-bench.html"><span>🧫</span>Micro Bench</a>
+    <a href="soil-recipes.html" aria-current="page"><span>🧱</span>Soil Recipes</a>
+    <a href="greenhouse.html"><span>🌡️</span>Greenhouse</a>
+  </div>
+  <p class="rl" style="margin-top:16px">Analyse it</p>
+  <div class="chips">
+    <a href="survey-design.html"><span>🧭</span>Survey Design</a>
+    <a href="ordination.html"><span>📉</span>Ordination</a>
+    <a href="food-web.html"><span>🕸️</span>Food Web Builder</a>
+    <a href="field-season.html"><span>🎯</span>Field Season</a>
+  </div>
+  <p class="rl" style="margin-top:16px">Print it</p>
+  <div class="chips">
+    <a href="plant-characters.html"><span>🌱</span>Plant Characters</a>
+    <a href="fungal-characters.html"><span>🔬</span>Fungal Characters</a>
+    <a href="cp-characters.html"><span>🪤</span>CP Characters</a>
+  </div>
+  <div class="chips" style="margin-top:16px">
+    <a class="ref" href="ecology.html">← kit hub</a>
+    <a class="ref" href="ecology-field-card.html">field card</a>
+    <a class="ref" href="ecology-glossary.html">glossary</a>
+  </div>
+</div>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+/* ---- Field Entry Kit v1.8.0 : constructors return {el, get, set} ---- */
+var FEK = (function(){
+  function el(t,c,h){ var e=document.createElement(t); if(c) e.className=c;
+    if(h!=null) e.innerHTML=h; return e; }
+  /* Where the line falls, and why it falls there.
+     A component's OWN label is written by whoever built the page and often
+     carries deliberate markup -- "Pod parent <span class="u">seed bearer</span>".
+     That stays HTML. The label on an OPTION, a chip or a tile is data: a
+     species you typed, a cross you recorded, a source you named. v1.1 passed
+     those straight into innerHTML, so a plant named with a < became markup.
+     Escaped here rather than at each call site, because a component whose
+     safety depends on every caller remembering is a component that will bite
+     somebody. Verified against the whole kit first: no option, chip or tile
+     label anywhere passes markup on purpose. */
+  /* No object literal here on purpose: the map form needs an escaped double
+     quote as a key, and this file is a Python string emitting JavaScript, so
+     that quote has to survive two layers of escaping. It did not, and every
+     consumer got a syntax error that took FEK down with it. A chain of
+     comparisons has nothing to escape. */
+  function escv(s){ return String(s==null?"":s).replace(/[&<>"']/g,function(c){
+    return c==="&"?"&amp;":c==="<"?"&lt;":c===">"?"&gt;":c==='"'?"&quot;":"&#39;"; }); }
+  function buzz(m){ try{ if(navigator.vibrate) navigator.vibrate(m||8);}catch(e){} }
+
+  /* ---- a rejected keystroke buffer is not an empty one (v1.4.0, ADR-151) ----
+     `<input type=number>` has a value the page reads and a raw buffer the page
+     cannot see, and when the browser cannot parse the buffer the value it
+     hands over is the EMPTY STRING -- the same string a box nobody touched
+     hands over. Both numeric components here treated that as "not recorded":
+     the stepper and the field each reported null, the row went dashed-empty,
+     and the reader's characters sat in a box the sheet had decided was blank.
+     `validity.badInput` is the only thing that separates them, because it is
+     about the buffer rather than the value. Fixed once, here, rather than in
+     the seven pages that mount these components -- which is what this file is
+     for. */
+  function badBuffer(inp){ return !!(inp && inp.validity && inp.validity.badInput); }
+  function badMark(wrap, box, inp, label, on){
+    var line = wrap.__fekBad;
+    if(on && !line){ line = wrap.__fekBad = el("p","fek-bad"); wrap.appendChild(line); }
+    if(line) line.textContent = on
+      ? ((label||"this box") + " holds something that is not a number")
+      : "";
+    if(box) box.classList.toggle("bad", !!on);
+    if(on) inp.setAttribute("aria-invalid","true"); else inp.removeAttribute("aria-invalid");
+    return on;
+  }
+
+  /* ---- field registry (v1.4.0) ----
+     A component writes through to a hidden field via the page's own onchange.
+     That is fine going out and useless coming back: nothing could put a
+     restored value INTO the widget, so an autosaved session showed default
+     dials over correct data -- a lie on screen, which is worse than no
+     autosave. A component that declares `field:"sElev"` is registered here,
+     and FEK.setField puts a value back through the widget's own set(). Purely
+     additive: a component with no `field` behaves exactly as before. */
+  var REG = {};
+  function reg(o, h){ if(o && o.field) REG[o.field] = h; return h; }
+  function setField(id, v){
+    var h = REG[id];
+    if(!h) return false;
+    try { h.set(v); } catch(e){ return false; }
+    return true;
+  }
+  function fields(){ var out=[]; for(var k in REG) if(REG.hasOwnProperty(k)) out.push(k); return out; }
+  /* v1.7.0 (ADR-210). What every registered widget is holding, read through its
+     own get(). The registry existed so a restored value could go back IN; there
+     was no way to get one OUT except through a hidden input the page had to
+     remember to write to -- so a control that declared a field but had no
+     element behind it was invisible to the autosave, and a control that
+     declared nothing was invisible twice over. A page's typed numbers came back
+     as defaults over correct data, which is the lie ADR-160 introduced the
+     registry to stop. */
+  function values(){
+    var out = {}, k;
+    for (k in REG) if (REG.hasOwnProperty(k)) {
+      try { out[k] = REG[k].get(); } catch (e) { }
+    }
+    return out;
+  }
+
+  function step(o){
+    o=o||{}; var min=(o.min==null?-Infinity:o.min), max=(o.max==null?Infinity:o.max);
+    var stepv=o.step||1, dec=o.dec==null?(String(stepv).split(".")[1]||"").length:o.dec;
+    var v=o.value==null?0:o.value;
+    var wrap=el("div","fek-row"), lab=el("label","fek-lab",
+      (o.label||"")+(o.unit?'<span class="u">'+o.unit+'</span>':""));
+    var box=el("div","fek-step");
+    var minus=el("button",null,"&minus;"), inp=el("input"), plus=el("button",null,"+");
+    minus.type="button"; plus.type="button"; inp.type="number"; inp.className="val";
+    inp.setAttribute("inputmode","decimal");
+    if(o.label) inp.setAttribute("aria-label",o.label);
+    /* nullable: the control can hold "not recorded", which is not the same as
+       zero. Aspect 0 is north; a duff depth of 0 cm is an observation. An empty
+       nullable stepper reports null and the first bump starts from o.start. */
+    var nullable = !!o.nullable;
+    if(nullable && o.value==null) v=null;
+    function clamp(x){ return Math.min(max,Math.max(min,x)); }
+    function render(){
+      if(v==null){ inp.value=""; wrap.classList.add("is-empty"); box.classList.add("empty"); return; }
+      wrap.classList.remove("is-empty"); box.classList.remove("empty");
+      inp.value=(dec?v.toFixed(dec):String(v));
+    }
+    function set(x,quiet){
+      if(nullable && (x==null || x==="" || (typeof x==="number" && !isFinite(x)))) v=null;
+      else v=clamp(isFinite(x)?x:0);
+      render(); if(!quiet&&o.onchange) o.onchange(v);
+    }
+    function bump(d){
+      if(v==null) set(clamp(o.start==null?0:o.start));
+      else set(+(v+d*stepv).toFixed(6));
+      buzz();
+    }
+    function clear(){ if(nullable) set(null); }
+    minus.addEventListener("click",function(){ bump(-1); });
+    plus.addEventListener("click",function(){ bump(1); });
+    var hold;
+    function holdOn(d){ return function(){ clearInterval(hold);
+      hold=setInterval(function(){ bump(d); },110); }; }
+    function holdOff(){ clearInterval(hold); }
+    minus.addEventListener("pointerdown",holdOn(-1)); plus.addEventListener("pointerdown",holdOn(1));
+    ["pointerup","pointerleave","pointercancel"].forEach(function(ev){
+      minus.addEventListener(ev,holdOff); plus.addEventListener(ev,holdOff); });
+    inp.addEventListener("input",function(){
+      if(badMark(wrap, box, inp, o.label, badBuffer(inp))){
+        // A nullable stepper goes to "not recorded", the same as a cleared box,
+        // because there is no number to hold either way -- what changes is that
+        // the row now SAYS which of the two happened. A fixed stepper keeps the
+        // value it had, and says so, rather than silently reading as unchanged.
+        if(nullable && v!==null){ v=null; box.classList.add("empty"); if(o.onchange) o.onchange(null); }
+        return; }
+      if(nullable && inp.value===""){ v=null; box.classList.add("empty");
+        if(o.onchange) o.onchange(null); return; }
+      var x=parseFloat(inp.value);
+      if(isFinite(x)){ v=clamp(x); box.classList.remove("empty"); if(o.onchange) o.onchange(v); } });
+    // BLUR MUST NOT ERASE THE EVIDENCE. render() writes v back into the box, so
+    // a blur over bad input would replace the reader's characters with the old
+    // number and take the message down with them -- the page quietly deciding
+    // it knew better. The buffer is still bad; leave it, and leave the line up.
+    inp.addEventListener("blur",function(){ if(!badBuffer(inp)) render(); });
+    box.appendChild(minus); box.appendChild(inp); box.appendChild(plus);
+    wrap.appendChild(lab); wrap.appendChild(box);
+    if(o.help) wrap.appendChild(el("p","fek-help",o.help));
+    render();
+    return reg(o, { el:wrap, get:function(){return v;}, set:function(x){set(x,true);},
+             clear:clear, nullable:nullable });
+  }
+
+  /* field: a value typed from an instrument readout. No steppers — see the CSS note. */
+  function field(o){
+    o=o||{};
+    var min=(o.min==null?-Infinity:o.min), max=(o.max==null?Infinity:o.max);
+    var dec=(o.dec==null?3:o.dec), v=(o.value==null?null:o.value);
+    var wrap=el("div","fek-row"), lab=el("label","fek-lab",
+      (o.label||"")+(o.unit?'<span class="u">'+o.unit+'</span>':""));
+    var box=el("div","fek-field"), inp=el("input");
+    inp.type="number"; inp.setAttribute("inputmode","decimal");
+    if(o.step!=null) inp.step=o.step;
+    inp.placeholder = o.placeholder==null ? "—" : o.placeholder;
+    if(o.label) inp.setAttribute("aria-label",o.label);
+    function paint(){ box.classList.toggle("empty", v==null); }
+    function set(x,quiet){
+      if(x==null || x===""){ v=null; inp.value=""; }
+      else { var n=parseFloat(x);
+        v = isFinite(n) ? Math.min(max,Math.max(min,n)) : null;
+        inp.value = (v==null?"":String(v)); }
+      paint(); if(!quiet&&o.onchange) o.onchange(v);
+    }
+    inp.addEventListener("input",function(){
+      if(badMark(wrap, box, inp, o.label, badBuffer(inp))){
+        if(v!==null){ v=null; paint(); if(o.onchange) o.onchange(null); }
+        return; }
+      if(inp.value===""){ v=null; paint(); if(o.onchange) o.onchange(null); return; }
+      var n=parseFloat(inp.value);
+      if(isFinite(n)){ v=Math.min(max,Math.max(min,n)); paint(); if(o.onchange) o.onchange(v); } });
+    inp.addEventListener("blur",function(){
+      if(badBuffer(inp)) return;
+      if(v!=null && isFinite(v)) inp.value = (dec==null?String(v):String(+v.toFixed(dec)));
+      paint(); });
+    box.appendChild(inp);
+    if(o.unitBox!==false && o.unit) box.appendChild(el("div","u",o.unit));
+    wrap.appendChild(lab); wrap.appendChild(box);
+    if(o.help) wrap.appendChild(el("p","fek-help",o.help));
+    set(v,true);
+    return reg(o, { el:wrap, get:function(){return v;}, set:function(x){set(x,true);},
+             clear:function(){ set(null,true); }, nullable:true });
+  }
+
+  function dial(o){
+    o=o||{}; var opts=o.options||[], cur=o.value==null?null:o.value;
+    var wrap=el("div","fek-row"), lab=el("label","fek-lab",o.label||"");
+    var box=el("div","fek-dial"), btns=[];
+    opts.forEach(function(op,i){
+      var b=el("button",null,'<span>'+escv(op.label)+'</span>'+(op.sub?'<small>'+escv(op.sub)+'</small>':""));
+      b.type="button";
+      b.setAttribute("data-r", op.ramp==null ? String(Math.min(5,Math.round(i*5/Math.max(1,opts.length-1)))) : String(op.ramp));
+      b.addEventListener("click",function(){
+        cur = (cur===op.value && o.clearable!==false) ? null : op.value;
+        paint(); buzz(); if(o.onchange) o.onchange(cur);
+      });
+      btns.push(b); box.appendChild(b);
+    });
+    function paint(){ btns.forEach(function(b,i){ b.classList.toggle("on", opts[i].value===cur); }); }
+    paint();
+    wrap.appendChild(lab); wrap.appendChild(box);
+    if(o.help) wrap.appendChild(el("p","fek-help",o.help));
+    return reg(o, { el:wrap, get:function(){return cur;},
+             set:function(x){ cur=x; paint(); } });
+  }
+
+  function chips(o){
+    o=o||{}; var opts=o.options||[], sel={};
+    (o.value||[]).forEach(function(v){ sel[v]=1; });
+    var wrap=el("div","fek-row"), lab=el("label","fek-lab",o.label||"");
+    var box=el("div","fek-chips"), btns=[];
+    opts.forEach(function(op){
+      var b=el("button","fek-chip",escv(op.label)); b.type="button";
+      b.addEventListener("click",function(){
+        if(o.single){ sel={}; sel[op.value]=1; }
+        else if(sel[op.value]) delete sel[op.value]; else sel[op.value]=1;
+        paint(); buzz(); if(o.onchange) o.onchange(Object.keys(sel));
+      });
+      btns.push(b); box.appendChild(b);
+    });
+    function paint(){ btns.forEach(function(b,i){ b.classList.toggle("on",!!sel[opts[i].value]); }); }
+    paint();
+    wrap.appendChild(lab); wrap.appendChild(box);
+    if(o.help) wrap.appendChild(el("p","fek-help",o.help));
+    return reg(o, { el:wrap, get:function(){return Object.keys(sel);},
+             set:function(a){ sel={}; (a||[]).forEach(function(v){sel[v]=1;}); paint(); } });
+  }
+
+  function slider(o){
+    o=o||{};
+    var nullable=!!o.nullable;
+    var v = (nullable && o.value==null) ? null : (o.value==null?(o.min||0):o.value);
+    var wrap=el("div","fek-row"), lab=el("label","fek-lab",o.label||"");
+    var box=el("div","fek-slide"), r=el("input"), bub=el("div","bub");
+    r.type="range"; r.min=o.min==null?0:o.min; r.max=o.max==null?100:o.max;
+    r.step=o.step||1; r.value=v;
+    if(o.label) r.setAttribute("aria-label",o.label);
+    function paint(){
+      if(v==null){ bub.innerHTML='<span style="opacity:.6">not recorded</span>'; return; }
+      bub.innerHTML=(o.fmt?o.fmt(v):v)+(o.unit?'<span>'+o.unit+'</span>':"");
+    }
+    r.addEventListener("input",function(){ v=parseFloat(r.value); paint(); if(o.onchange) o.onchange(v); });
+    if(nullable && v==null) r.value = (o.min==null?0:o.min);
+    paint();
+    box.appendChild(r); box.appendChild(bub);
+    wrap.appendChild(lab); wrap.appendChild(box);
+    if(o.help) wrap.appendChild(el("p","fek-help",o.help));
+    return reg(o, { el:wrap, get:function(){return v;},
+             set:function(x){ v=(nullable&&x==null)?null:x; if(x!=null) r.value=x; paint(); },
+             clear:function(){ if(nullable){ v=null; paint(); } }, nullable:nullable });
+  }
+
+  function picker(o){
+    o=o||{}; var opts=o.options||[], cur=o.value==null?null:o.value, q="";
+    var wrap=el("div","fek-row"), lab=el("label","fek-lab",o.label||"");
+    var box=el("div","fek-pick"), s=el("input","search"), list=el("div","opts");
+    s.type="text"; s.placeholder=o.placeholder||"type to filter…";
+    s.setAttribute("autocomplete","off");
+    if(o.label) s.setAttribute("aria-label",o.label+" filter");
+    function paint(){
+      list.innerHTML="";
+      var qq=q.toLowerCase();
+      var shown=opts.filter(function(op){
+        return !qq || (op.label+" "+(op.sub||"")).toLowerCase().indexOf(qq)>=0; });
+      if(!shown.length){ list.appendChild(el("div","none","No match. Clear the filter to see all "+opts.length+".")); return; }
+      shown.slice(0,200).forEach(function(op){
+        var b=el("button","opt"+(op.value===cur?" on":""),
+          escv(op.label)+(op.sub?'<small>'+escv(op.sub)+'</small>':""));
+        b.type="button";
+        b.addEventListener("click",function(){ cur=op.value; paint(); buzz(); if(o.onchange) o.onchange(cur); });
+        list.appendChild(b);
+      });
+    }
+    s.addEventListener("input",function(){ q=s.value; paint(); });
+    box.appendChild(s); box.appendChild(list);
+    wrap.appendChild(lab); wrap.appendChild(box);
+    if(o.help) wrap.appendChild(el("p","fek-help",o.help));
+    paint();
+    return reg(o, { el:wrap, get:function(){return cur;}, set:function(x){ cur=x; paint(); } });
+  }
+
+  function tiles(list){
+    var box=el("div","fek-tiles");
+    (list||[]).forEach(function(t){
+      box.appendChild(el("div","fek-tile"+(t.tone?" "+t.tone:""),
+        '<div class="v">'+escv(t.v)+'</div><div class="l">'+escv(t.l)+'</div>'));
+    });
+    return box;
+  }
+  function banner(title,body,tone){
+    return el("div","fek-banner"+(tone?" "+tone:""),"<b>"+title+"</b>"+body);
+  }
+
+  /* ==================== PHOTOGRAPHS (v1.5.0, ADR-201) ====================
+     THE RECORD CARRIES THE REFERENCE, NOT THE IMAGE.
+
+     One page in this kit took a photograph and twenty did not, on a kit that
+     emits Darwin Core with `associatedMedia` left empty everywhere. A field
+     record whose voucher is a sentence is a weaker record than one that names
+     the frame.
+
+     The image itself does not go into the record, for three reasons that all
+     point the same way. A CSV cell cannot hold a JPEG. A base64 photograph
+     inside a .eco export turns a 40 kB record into a 4 MB one, and the export
+     is a thing people paste into a message. And a photograph's home is the
+     camera roll or the card, where it already is -- Darwin Core asks
+     `associatedMedia` for an IDENTIFIER of the media, not the media.
+
+     So what the record carries is what lets a person -- or a script -- put the
+     row and the file back together six months later:
+
+         filename | bytes | captured | crc32
+
+     CRC-32 AND NOT SHA-256, deliberately. `crypto.subtle` does not exist on a
+     `file://` page, because a file URL is not a secure context, and this kit
+     is opened off a card in the field as often as it is served over https as
+     an artifact. A digest that is only available in one of those two is worse
+     than a weaker one that is the same in both: the whole point is that the
+     number written on the sheet in the field still matches the number computed
+     back at the desk. This is an INTEGRITY check -- has this file changed, is
+     this the same file -- and it is not, and must not be described as,
+     cryptographic.
+
+     CAPTURED IS THE FILE'S MTIME, NOT EXIF. `File.lastModified` is what a
+     browser will give a page without parsing the JPEG, and for a frame straight
+     off a camera it is the shutter. For a file that has been copied between
+     cards, or round-tripped through a messaging app, it is the copy's time.
+     The field is named `captured` because that is what it usually means, and
+     the page says plainly that a copy carries the copy's time.
+
+     THE IMAGES ARE NEVER UPLOADED and never leave the tab. They are object
+     URLs revoked the moment a photograph is removed, so a session that adds and
+     drops a hundred frames does not hold a hundred blobs. Closing the tab
+     discards them, which is correct: the originals are where they belong. */
+  var CRCT = (function(){
+    var t = new Array(256), c, n, k;
+    for (n = 0; n < 256; n++) {
+      c = n;
+      for (k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+      t[n] = c >>> 0;
+    }
+    return t;
+  })();
+  function crc32(bytes){
+    var c = 0xFFFFFFFF, i;
+    for (i = 0; i < bytes.length; i++) c = CRCT[(c ^ bytes[i]) & 0xFF] ^ (c >>> 8);
+    c = (c ^ 0xFFFFFFFF) >>> 0;
+    /* eight hex digits always: a crc of 0x0000A1B2 written as "a1b2" is a
+       different string from the one the next reader computes, and a checksum
+       you have to remember to pad is a checksum that will be compared wrong. */
+    return ("0000000" + c.toString(16)).slice(-8);
+  }
+  function iso(ms){
+    /* Local minutes, not UTC, because a field sheet is read where it was
+       written. ISO-shaped so it sorts. */
+    if (!ms) return "";
+    var d = new Date(ms), p = function(n){ return (n < 10 ? "0" : "") + n; };
+    return d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate())
+         + " " + p(d.getHours()) + ":" + p(d.getMinutes());
+  }
+  function photos(o){
+    o = o || {};
+    var list = [], max = (o.max == null ? 40 : o.max);
+    var wrap = el("div", "fek-row"), lab = el("label", "fek-lab", o.label || "Photographs");
+    var zone = el("div", "fek-drop");
+    /* THE ZONE NEEDS A NAME OF ITS OWN. A drop listener leaves no mark a
+       selector can find, and the control the page's own snapshot offers under
+       this component's label is the hidden FILE INPUT -- so a task that says
+       "drop these on the photographs" landed on the input and was refused as
+       not a drop zone. The id is the address; a page that mounts this without
+       one can still be driven through the file input, and cannot be driven by
+       a drop. */
+    zone.id = o.dropId || (o.field ? o.field + "Drop" : "");
+    if (!zone.id) zone.removeAttribute("id");
+    var inp = el("input");
+    inp.type = "file"; inp.accept = o.accept || "image/*"; inp.multiple = true;
+    inp.style.display = "none";
+    if (o.label) inp.setAttribute("aria-label", o.label);
+    var btn = el("button", null, "📷 Add photos");
+    btn.type = "button";
+    zone.appendChild(el("p", null, o.prompt ||
+      "<b>Shoot the character, not the specimen.</b> Camera or gallery, or drop files here."));
+    zone.appendChild(inp); zone.appendChild(btn);
+    var grid = el("div", "fek-photos");
+    /* Its own live region, by the rule ADR-199 put on every other message in
+       this kit: an addition that is refused -- a PDF dropped on a photo zone,
+       a frame too many -- is announced rather than silently ignored. */
+    var shot = el("p", "fek-shot");
+    shot.setAttribute("role", "status"); shot.setAttribute("aria-live", "polite");
+
+    /* FRAMES THIS SHEET KNOWS ABOUT AND DOES NOT HOLD (v1.6.0, ADR-206).
+       A page can restore what you typed. It cannot restore a photograph: a
+       page cannot hand a File back to a file input, and this component has
+       always refused to pretend otherwise. But a restored sheet that came back
+       quietly WITHOUT its frames is worse than one that admits it, because the
+       reader believes their morning is back. So the record survives the
+       restore even though the bytes do not, the component says which frames
+       are missing and names them, and it takes them back BY CHECKSUM: drop the
+       same files in again and the label and note you typed -- the expensive
+       part -- come back with them. */
+    var await_ = [];
+    var awaitBox = el("div", "fek-await");
+    awaitBox.style.display = "none";
+
+    /* NAMED FOR WHOEVER READS THE PAGE (v1.8.0, ADR-254). The cards are what
+       the page says it holds -- each frame's name, size, checksum and time --
+       and the grid had no id, so no report reader could see a card: a task
+       could attach a photograph and hold everything it exported and nothing
+       it showed. The zone's id names all three: <id>List the cards, <id>Msg
+       what the last addition said, <id>AwaitList the frames on the record and
+       not on this device. */
+    if (zone.id) {
+      grid.id = zone.id + "List"; shot.id = zone.id + "Msg"; awaitBox.id = zone.id + "AwaitList";
+    }
+
+    function say(t, bad){ shot.textContent = t || ""; shot.classList.toggle("bad", !!bad); }
+    function changed(){
+      if (o.onchange) o.onchange(records());
+      /* A REAL EVENT, BECAUSE A PHOTOGRAPH IS AN EDIT (v1.6.0, ADR-206).
+         Adding a frame fires no input and no change -- the file input is
+         hidden and a drop is neither -- so every autosave in this kit sat
+         still while a reader photographed four stations, and a session that
+         was ONLY photographs was saved by nothing. One bubbling event, so the
+         page does not have to remember to wire it and a page added tomorrow
+         is covered on the day it mounts the component. */
+      try { wrap.dispatchEvent(new CustomEvent("fek-change", { bubbles: true })); }
+      catch (e) {}
+    }
+    function records(){
+      /* The awaited frames are IN the record. A photograph that was taken has
+         an identifier whether or not this browser still holds the bytes, and
+         an export that dropped it would lose the only link between the row and
+         a file sitting on a camera. `have` says which is which. */
+      return list.map(function(p){
+        return { name: p.name, bytes: p.bytes, captured: p.captured, crc: p.crc,
+                 label: p.label, note: p.note, have: true };
+      }).concat(await_.map(function(p){
+        return { name: p.name, bytes: p.bytes, captured: p.captured, crc: p.crc,
+                 label: p.label, note: p.note, have: false };
+      }));
+    }
+    function renderAwait(){
+      if (!await_.length) { awaitBox.style.display = "none"; awaitBox.innerHTML = ""; return; }
+      awaitBox.style.display = "";
+      awaitBox.innerHTML = "<b>" + await_.length + " photograph"
+        + (await_.length === 1 ? " is" : "s are") + " on this record and not on this device.</b> "
+        + "A saved sheet keeps what you typed; it cannot keep an image. Add the same file"
+        + (await_.length === 1 ? "" : "s") + " again and the caption you wrote comes back with "
+        + (await_.length === 1 ? "it" : "them") + " \u2014 matched by checksum, so it has to be "
+        + "the same frame."
+        + "<ul>" + await_.map(function(p){
+            return "<li>" + escv(p.name) + " <span class=\"cap\">" + p.bytes + " bytes \u00b7 crc "
+                 + p.crc + (p.label ? " · " + escv(p.label) : "") + "</span></li>";
+          }).join("") + "</ul>";
+    }
+    function render(){
+      grid.innerHTML = "";
+      list.forEach(function(p, i){
+        var d = el("div", "fek-photo");
+        var im = el("img"); im.src = p.url;
+        im.alt = p.label || ("photograph " + (i + 1) + " — " + p.name);
+        var m = el("div", "m");
+        /* a space before each break (v1.8.0): the lines are one run of
+           text to anything that reads the card rather than looks at it --
+           "IMG_0431.jpg160 bytes" -- the ADR-253 run cell's defect again */
+        m.appendChild(el("code", null,
+          escv(p.name) + " <br>" + p.bytes + " bytes · crc " + p.crc
+          + (p.captured ? " <br>" + escv(p.captured) : "")));
+        var lv = el("input"); lv.type = "text"; lv.value = p.label;
+        lv.placeholder = o.labelPlaceholder || "voucher / specimen №";
+        lv.setAttribute("aria-label", "voucher for " + p.name);
+        var nt = el("textarea"); nt.value = p.note;
+        nt.placeholder = o.notePlaceholder || "What does this show?";
+        nt.setAttribute("aria-label", "note on " + p.name);
+        var rm = el("button", "rm", "Remove"); rm.type = "button";
+        lv.addEventListener("input", function(){ p.label = lv.value; changed(); });
+        nt.addEventListener("input", function(){ p.note = nt.value; changed(); });
+        rm.addEventListener("click", function(){
+          try { URL.revokeObjectURL(p.url); } catch (e) {}
+          list.splice(list.indexOf(p), 1);
+          render(); say("Removed " + p.name); changed(); buzz();
+        });
+        m.appendChild(lv); m.appendChild(nt);
+        /* A PAGE'S OWN ACTIONS ON A FRAME (v1.8.0, ADR-254). The stand sheet
+           kept a pane of its own for one button -- link this frame to the
+           species picked on the tally -- and with it lost every caption on a
+           reload, because only this component keeps a frame's record. An
+           action is {label, run(record)}: run returns a string to refuse with
+           (nothing changes) or {label?, note?, say?} to write back. */
+        (o.actions || []).forEach(function(a){
+          var ab = el("button", "act", escv(a.label)); ab.type = "button";
+          ab.addEventListener("click", function(){
+            var r = a.run({ name: p.name, bytes: p.bytes, captured: p.captured, crc: p.crc,
+                            label: p.label, note: p.note });
+            if (typeof r === "string") { say(r, true); return; }
+            if (!r) return;
+            if (r.label != null) p.label = String(r.label);
+            if (r.note != null) p.note = String(r.note);
+            render(); say(r.say || ""); changed();
+          });
+          m.appendChild(ab);
+        });
+        m.appendChild(rm);
+        d.appendChild(im); d.appendChild(m);
+        grid.appendChild(d);
+      });
+    }
+    function add(files){
+      var fs = Array.prototype.slice.call(files || []);
+      if (!fs.length) return;
+      var notImages = fs.filter(function(f){ return !/^image\//.test(f.type || ""); });
+      fs = fs.filter(function(f){ return /^image\//.test(f.type || ""); });
+      var room = Math.max(0, max - list.length), over = fs.length - room;
+      if (over > 0) fs = fs.slice(0, room);
+      var pending = fs.length, added = 0, back = 0;
+      /* A refusal is SAID, not swallowed: the reader who dropped six files and
+         got four has to be able to find out which two, and why. */
+      function done(){
+        if (pending) return;
+        var parts = [];
+        if (added) parts.push(added + " photograph" + (added === 1 ? "" : "s") + " added");
+        if (back) parts.push(back + " matched by checksum, caption restored");
+        if (notImages.length)
+          parts.push(notImages.length + " not an image: "
+                     + notImages.map(function(f){ return f.name; }).slice(0, 3).join(", "));
+        if (over > 0) parts.push(over + " over the limit of " + max);
+        say(parts.join(" — ") || "Nothing added", !added);
+        if (added) { render(); renderAwait(); changed(); buzz(12); }
+      }
+      if (!pending) { done(); return; }
+      fs.forEach(function(f){
+        var rd = new FileReader();
+        rd.onload = function(){
+          var bytes = new Uint8Array(rd.result);
+          var sum = crc32(bytes), lab = "", note = "", i;
+          /* BY CHECKSUM, NOT BY NAME. A camera roll renames on export and two
+             cards both start at DSC_0001; the checksum is the only thing that
+             says this is the frame the caption was written about. */
+          for (i = 0; i < await_.length; i++) {
+            if (await_[i].crc === sum && await_[i].bytes === bytes.length) {
+              lab = await_[i].label || ""; note = await_[i].note || "";
+              await_.splice(i, 1); back++;
+              break;
+            }
+          }
+          list.push({ name: f.name || ("photo-" + (list.length + 1) + ".jpg"),
+                      bytes: bytes.length, captured: iso(f.lastModified),
+                      crc: sum, label: lab, note: note,
+                      url: URL.createObjectURL(f) });
+          added++; pending--; done();
+        };
+        rd.onerror = function(){ pending--; done(); };
+        rd.readAsArrayBuffer(f);
+      });
+    }
+    btn.addEventListener("click", function(){ inp.click(); });
+    inp.addEventListener("change", function(){ add(inp.files); inp.value = ""; });
+    ["dragenter", "dragover"].forEach(function(ev){
+      zone.addEventListener(ev, function(e){ e.preventDefault(); zone.classList.add("on"); }); });
+    ["dragleave", "dragend"].forEach(function(ev){
+      zone.addEventListener(ev, function(){ zone.classList.remove("on"); }); });
+    /* The harness stamps data-h-drop on anything that registers a drop
+       listener, so this zone is drivable by the door with no page markup. */
+    zone.addEventListener("drop", function(e){
+      e.preventDefault(); zone.classList.remove("on");
+      if (e.dataTransfer && e.dataTransfer.files) add(e.dataTransfer.files);
+    });
+    wrap.appendChild(lab); wrap.appendChild(zone); wrap.appendChild(shot);
+    wrap.appendChild(awaitBox); wrap.appendChild(grid);
+    if (o.help) wrap.appendChild(el("p", "fek-help", o.help));
+    render();
+    return reg(o, {
+      el: wrap, get: records, count: function(){ return list.length; },
+      /* set() is deliberately not a way to put images back: a page cannot
+         hand a File to a file input, and a component that pretended to
+         restore a photograph from a record would be restoring a caption. */
+      set: function(){ return false; },
+      /* ...and THIS is what an autosave gets instead (v1.6.0, ADR-206). The
+         records come back, the bytes do not, and the component says so where
+         the reader will see it rather than coming back quietly one frame
+         short. Frames the sheet already holds are left alone -- a restore that
+         listed a photograph you are looking at would be noise. */
+      restore: function(recs){
+        if (!recs || !recs.length) return 0;
+        var held = {}, i;
+        for (i = 0; i < list.length; i++) held[list[i].crc] = 1;
+        await_ = recs.filter(function(r){
+          return r && r.crc && !held[r.crc];
+        }).map(function(r){
+          return { name: r.name, bytes: r.bytes, captured: r.captured, crc: r.crc,
+                   label: r.label || "", note: r.note || "" };
+        });
+        renderAwait();
+        /* ...AND THE PAGE IS TOLD (v1.8.0, ADR-254). A page draws its sheet
+           from get(), which lists the awaited frames, but a restore fired no
+           onchange -- so a page that restored its photographs after it had
+           drawn its sheet came back with the frames on the card and not in
+           the sheet: the collection sheet and the relevé, whose restores ran
+           in that order, lost the photographs section until the next edit.
+           Not a fek-change: a restore is not an edit to save. */
+        if (await_.length && o.onchange) o.onchange(records());
+        return await_.length;
+      },
+      awaiting: function(){ return await_.slice(); },
+      clear: function(){
+        list.forEach(function(p){ try { URL.revokeObjectURL(p.url); } catch (e) {} });
+        list = []; await_ = []; render(); renderAwait(); say(""); changed();
+      },
+      /* `associatedMedia` the way Darwin Core asks for it: identifiers,
+         concatenated and separated. The separator is " | " because a filename
+         may hold a comma and a record that splits wrong is worse than one that
+         is hard to read. */
+      media: function(){
+        /* Awaited frames are named too. A photograph that was taken has an
+           identifier whether or not this browser still holds it, and a deposit
+           that dropped it would break the only link between the row and a file
+           on a camera. */
+        return list.concat(await_).map(function(p){
+          return p.name + " (crc32 " + p.crc + (p.captured ? ", " + p.captured : "") + ")";
+        }).join(" | ");
+      }
+    });
+  }
+  /* ---- the same rule for a box FEK did not build (v1.4.0, ADR-151) ----
+     The components above now say when a box holds something the browser could
+     not read as a number. Every page that mounts them also carries number
+     boxes of its OWN -- an elevation, an effort value, five camera settings --
+     and those had the same silence for the same reason: `.value` comes back ""
+     and the page reads a blank. One delegated listener rather than a wrapper
+     per box, because the boxes a page builds LATER -- a row added, a pane
+     rendered, a measurement grid opened -- have to be covered too, and a guard
+     that only knew about the boxes present at load would go quiet exactly when
+     the sheet gets long. Capture phase, so the note is up before the page's own
+     handler decides what the box now means. */
+  function boxName(inp){
+    var a=inp.getAttribute("aria-label"); if(a && a.trim()) return a.trim();
+    var l=inp.closest?inp.closest("label"):null;
+    if(l){ var t="",i; for(i=0;i<l.childNodes.length;i++){ var n=l.childNodes[i];
+             if(n.nodeType===3) t+=n.nodeValue; }
+           t=t.replace(/\s+/g," ").trim(); if(t) return t; }
+    if(inp.id){ var lb=document.querySelector('label[for="'+inp.id+'"]');
+                if(lb) return lb.textContent.replace(/\s+/g," ").trim(); }
+    var ph=inp.getAttribute("placeholder");
+    return (ph && ph.trim()) ? ph.trim() : "this box";
+  }
+  function guardBox(inp){
+    var bad = !!(inp.validity && inp.validity.badInput);
+    var note = inp.__fekBadNote;
+    if(bad && !note){
+      note = inp.__fekBadNote = el("p","fek-bad");
+      var after = (inp.closest ? inp.closest("label") : null) || inp;
+      if(after.parentNode) after.parentNode.insertBefore(note, after.nextSibling);
+    }
+    if(note) note.textContent = bad ? (boxName(inp)+" holds something that is not a number") : "";
+    inp.classList.toggle("fek-badbox", bad);
+    if(bad) inp.setAttribute("aria-invalid","true"); else inp.removeAttribute("aria-invalid");
+  }
+  function guard(){
+    document.addEventListener("input",function(ev){
+      var inp=ev.target;
+      if(!inp || inp.tagName!=="INPUT" || inp.type!=="number") return;
+      // a component built here already says it, in its own row
+      if(inp.closest && inp.closest(".fek-step, .fek-field")) return;
+      guardBox(inp);
+    }, true);
+  }
+  if(document.readyState==="loading")
+    document.addEventListener("DOMContentLoaded",guard);
+  else guard();
+
+  function mount(host,parts){
+    var h=typeof host==="string"?document.getElementById(host):host;
+    h.innerHTML=""; parts.forEach(function(p){ h.appendChild(p.el||p); }); return h;
+  }
+  /* Exported because a page building a component LABEL -- which stays HTML by
+     design -- still has to escape the data inside it. A private copy of an
+     escaper in one page was how the last one got lost when the kit was
+     re-emitted over it. */
+  return { version:"1.8.0", esc:escv, setField:setField, fields:fields, values:values, step:step, field:field, dial:dial, chips:chips, slider:slider,
+           picker:picker, photos:photos, crc32:crc32, tiles:tiles, banner:banner, mount:mount, buzz:buzz, guard:guard };
+})();
+</script>
+<script>
+/* ---------------------------------------------------------------------------
+   Four grower soil recipes, transcribed from their published sources.
+
+   PROVENANCE MATTERS MORE THAN USUAL HERE. None of these is an agronomic
+   standard. They are recipes published by named growers on forums and in
+   books, they are widely copied, and they work for the people using them --
+   but the quantities carry no soil test, no replication and no control. Every
+   one is reproduced with its author and a link, and none of the numbers were
+   adjusted, rounded or "improved" in transcription. Where a source gives a
+   range ("25 to 50 lbs"), the range is kept.
+
+   The scaler multiplies. It does not convert between recipes, because the
+   recipes do not share a denominator: Subcool's is stated per 8 bags of
+   potting soil, Coot's and BuildASoil's per cubic foot, the Rev's per
+   8-gallon batch. Normalising them all to one unit would mean inventing a bag
+   volume nobody stated. See the note under the scaler.
+--------------------------------------------------------------------------- */
+var RECIPES = [
+{
+  id:"subcool", name:"Subcool's Super Soil", icon:"🧱",
+  who:"SubCool / TGA Genetics. Published in High Times and reproduced across the grow forums.",
+  url:"https://hightimes.com/news/subcools-super-soil-step-by-step/",
+  urlLabel:"High Times — Subcool's Super Soil, step by step",
+  strength:"hot",
+  batch:"one full batch — 8 bags of base soil, roughly 12 cu ft / 90 US gal once mixed",
+  batchNote:"The source says “8 large bags” without naming a bag size. At the usual 1.5 cu ft that is about 12 cu ft; at 2 cu ft it is 16. The volume is an estimate, the ingredient weights are not.",
+  base:[
+    ["8 bags", "high-quality organic potting soil with coco fibre and mycorrhizae", 8, "bags"]
+  ],
+  items:[
+    ["25–50 lb", "organic worm castings", 25, "lb", "The source gives a range. Buy pure castings — it warns specifically against “soil conditioner with worm casting” blends.", 50],
+    ["5 lb", "steamed bone meal", 5, "lb", "P and Ca, slow. Steamed rather than raw."],
+    ["5 lb", "Bloom bat guano", 5, "lb", "The high-P guano, not the high-N one."],
+    ["5 lb", "blood meal", 5, "lb", "The hottest thing in the mix and the usual cause of a burn."],
+    ["3 lb", "rock phosphate", 3, "lb", "Very slow P. Years, not weeks."],
+    ["¾ cup", "Epsom salts", 0.75, "cup", "Mg and S."],
+    ["½–1 cup", "sweet lime (dolomite)", 0.5, "cup", "Ca, Mg and pH buffer. High Times gives ½ cup; other printings give up to 1.", 1],
+    ["½ cup", "azomite", 0.5, "cup", "Trace elements."],
+    ["2 tbsp", "powdered humic acid", 2, "tbsp", ""]
+  ],
+  cook:"Mix hard for about 15 minutes, breaking every clod. Fill large bins, add about 3 gallons of water per bin to wake the mycorrhizae, and leave it 30 days.",
+  layer:{top:"<b>Top half to three-quarters — plain base soil.</b> The plant lives here for the first weeks and its roots reach down as it grows.",
+         bot:"<b>Bottom quarter to half — Super Soil concentrate</b>, blended with base soil. Heavy feeders can go up to ¾."},
+  warn:"Do not put seeds or clones straight into the concentrate. It is a concentrate, not a potting mix, and it will burn them. Transplant fully rooted, established clones into the plain soil above it."
+},
+{
+  id:"rev", name:"The Rev's TLO mix", icon:"📕",
+  who:"The Rev, True Living Organics. Recipe as circulated by growers working from the book.",
+  url:"https://buildasoil.com/blogs/news/9885098-why-tlo-dissecting-the-rev-mix-line-by-line",
+  urlLabel:"BuildASoil — dissecting the Rev mix line by line",
+  strength:"hot",
+  batch:"one 8-gallon batch (about 1 cu ft)",
+  batchNote:"The base is stated as four 2-gallon parts, so the batch size is unambiguous — unusually for this genre.",
+  base:[
+    ["2 gal", "quality organic soil mix", 2, "gal"],
+    ["2 gal", "coir, thoroughly rinsed", 2, "gal"],
+    ["2 gal", "perlite, small nugget", 2, "gal"],
+    ["2 gal", "earthworm castings and/or fresh compost", 2, "gal"]
+  ],
+  items:[
+    ["1½ cup", "Organicare Grow or Bloom “Pure”", 1.5, "cup", "A blended product: fish meal, crab meal, sulfate of potash, alfalfa, composted poultry litter, seaweed. Any comparable dry organic base will stand in."],
+    ["½ cup", "greensand", 0.5, "cup", "K and trace minerals, released over years."],
+    ["¾ cup", "ground oyster shell", 0.75, "cup", "Ca, slow."],
+    ["½ cup", "dolomite lime, powdered", 0.5, "cup", ""],
+    ["1 cup", "prilled fast-acting dolomite lime", 1, "cup", ""],
+    ["¼ cup", "blood meal", 0.25, "cup", ""],
+    ["¼ cup", "feather meal", 0.25, "cup", "Slow N — months."],
+    ["1 cup", "bone meal, un-steamed granular", 1, "cup", ""],
+    ["½ cup", "bulb food", 0.5, "cup", "A garden-centre P-heavy blend; analysis varies by brand."],
+    ["¼ cup", "soft rock phosphate, powdered", 0.25, "cup", ""],
+    ["½ cup", "gypsum, powdered", 0.5, "cup", "Ca and S without moving pH."],
+    ["½ cup", "kelp meal", 0.5, "cup", "Trace minerals and growth regulators."],
+    ["4 cups", "composted steer manure", 4, "cup", ""],
+    ["½ cup", "azomite, granular", 0.5, "cup", ""],
+    ["1 cup", "humic acid ore, granular", 1, "cup", ""],
+    ["1 cup", "alfalfa meal", 1, "cup", "Carries triacontanol."],
+    ["1 heaping cup", "organic rice", 1, "cup", "Uncooked. It is food for the soil life, not for the plant."]
+  ],
+  cook:"Moisten with chlorine-free water and turn it every few days for about 15 days before use.",
+  layer:{top:"<b>Most of the container — the mix above.</b>",
+         bot:"<b>Spikes and layers.</b> The method puts concentrated amendment in bands the roots reach later, rather than mixing everything evenly. The book is the source for the placement; the recipe above is the mix itself."},
+  warn:"Two dolomite products and oyster shell in one 8-gallon batch is a lot of calcium carbonate. If your water is already hard, this mix is a common cause of a locked-out, high-pH root zone."
+},
+{
+  id:"coot", name:"Clackamas Coot's mix", icon:"🌿",
+  who:"Clackamas Coot. The reference recipe for the no-till / living-soil side of the hobby.",
+  url:"https://growingorganic.com/soil-guide/coots-soil-mix/",
+  urlLabel:"Growing Organic — Coot's soil mix",
+  strength:"mild",
+  batch:"per cubic foot of finished mix",
+  batchNote:"Stated per cubic foot, so this one scales cleanly. A 15-gallon batch is about 2 cu ft — 5 gallons each of peat, compost and aeration.",
+  base:[
+    ["⅓", "sphagnum peat moss", 1, "part"],
+    ["⅓", "compost or worm castings", 1, "part"],
+    ["⅓", "aeration — pumice, lava rock or rice hulls", 1, "part"]
+  ],
+  items:[
+    ["1 cup", "kelp meal", 1, "cup", ""],
+    ["½ cup", "neem seed meal", 0.5, "cup", ""],
+    ["½ cup", "karanja meal", 0.5, "cup", ""],
+    ["½–1 cup", "flax seed meal", 0.5, "cup", "", 1],
+    ["1 cup", "fine agricultural lime", 1, "cup", ""],
+    ["½ cup", "gypsum", 0.5, "cup", ""],
+    ["3–4 cups", "rock dust", 3, "cup", "Commonly basalt or glacial rock dust, sometimes blended in equal parts with gypsum and oyster shell flour.", 4]
+  ],
+  cook:"Four to six weeks, kept damp. Some growers then top-dress a quarter cup of freshly ground malted barley a week from week three.",
+  layer:{top:"<b>No layering.</b> The whole container is one mix; the point of the approach is that the container is re-used and improved rather than rebuilt.",
+         bot:"<b>Feeding is by top-dress and mulch</b>, not by a hot band at the bottom."},
+  warn:"The recipe leans entirely on the compost. The sources are unanimous that poor compost sinks the whole mix, and that is the ingredient hardest to judge by eye."
+},
+{
+  id:"bas", name:"BuildASoil living soil", icon:"🪴",
+  who:"BuildASoil. A commercial simplification of the Coot lineage, published as a recipe.",
+  url:"https://buildasoil.com/blogs/news/living-soil-ingredients-and-recipe",
+  urlLabel:"BuildASoil — living soil ingredients and recipe",
+  strength:"mild",
+  batch:"per cubic foot of finished mix",
+  batchNote:"",
+  base:[
+    ["⅓", "sphagnum peat moss", 1, "part"],
+    ["⅓", "compost", 1, "part"],
+    ["⅓", "aeration — rice hulls and pumice", 1, "part"]
+  ],
+  items:[
+    ["½ cup", "kelp meal", 0.5, "cup", ""],
+    ["½ cup", "neem cake", 0.5, "cup", ""],
+    ["½ cup", "crustacean meal", 0.5, "cup", "Chitin. The claimed reason for it is that it feeds chitin-digesting organisms."],
+    ["2 cups", "basalt rock dust", 2, "cup", ""],
+    ["1 cup", "oyster shell flour", 1, "cup", ""],
+    ["1 cup", "gypsum", 1, "cup", ""],
+    ["5% by volume", "biochar, pre-charged", 5, "pct", "Uncharged biochar adsorbs nutrients out of a new mix before it releases any."]
+  ],
+  cook:"The source gives no cook time. Growers working this recipe generally give it two to four weeks damp.",
+  layer:{top:"<b>No layering</b> — same approach as Coot's.",
+         bot:"<b>Top-dress and mulch</b> between runs."},
+  warn:"Three calcium sources at once — oyster shell, gypsum and whatever the compost carries. Gypsum does not move pH; oyster shell does."
+}
+];
+
+/* Amendment reference. NPK figures are TYPICAL PUBLISHED RANGES for the
+   material, not measurements of any particular bag: every one of these varies
+   with source, and a bag's own label beats this table every time. Release
+   speed is the practically useful column and the reason a mix "cooks". */
+var AMEND = [
+  ["blood meal",            "12-0-0",            "moderate, 1–4 months", "The usual cause of a burn in a hot mix."],
+  ["feather meal",          "7-12-0",            "slow, 4+ months",           "N that arrives late in the run."],
+  ["fish meal",             "4-2-2 to 9-7-0",    "moderate, 1–4 months", ""],
+  ["alfalfa meal",          "2-1-2",             "moderate, 1–4 months", "Carries triacontanol."],
+  ["cottonseed meal",       "6-0.4-1.5",         "moderate, 1–4 months", "Acidifying."],
+  ["bat guano, high-N",     "10-3-1",            "moderate, 1–4 months", ""],
+  ["bat guano, high-P",     "3-10-1",            "moderate, 1–4 months", "The “bloom” guano in Subcool's mix."],
+  ["bone meal",             "1-11-0 to 3-15-0",  "slow, 6–12 months",    "P and Ca."],
+  ["soft/colloidal rock phosphate", "0-2-0",     "slow, ~2 years",            "Low soluble P; a long-term reserve."],
+  ["rock phosphate",        "0-3-0",             "slow, 3–5 years",      ""],
+  ["kelp meal",             "1-0.5-2.5",         "moderate",                  "Trace minerals; the reason it is in nearly every recipe."],
+  ["greensand",             "0-0-1",             "very slow, ~10 years",      "A mineral reserve, not a fertiliser."],
+  ["granite meal",          "1-0-4",             "slow",                      ""],
+  ["worm castings",         "0.5-0.5-0.3",       "moderate",                  "Biology and structure more than NPK."],
+  ["compost",               "0.5-0.5-0.5 to 4-4-4", "moderate",               "The widest range on this table by far."],
+  ["gypsum",                "0-0-0",             "moderate",                  "Pure CaSO₄·2H₂O is 40.1 ÷ 172.2 = 23% Ca and 32.1 ÷ 172.2 = 19% S by mass; agricultural gypsum runs a little under that, about 22% Ca and 17% S. Does not move pH."],
+  ["dolomite lime",         "0-0-0",             "slow",                      "Ca and Mg; raises pH. Two sources of it in one mix is a common mistake."],
+  ["oyster shell flour",    "0-0-0",             "slow",                      "Ca; raises pH."],
+  ["azomite / rock dust",   "trace",             "very slow",                 "Trace elements. Claims made for rock dust run well ahead of the evidence."],
+  ["neem / karanja meal",   "~6-1-2",            "moderate",                  "Also used for pest pressure; that use is regulated in many places."],
+  ["crustacean meal",       "~5-3-0",            "moderate",                  "Chitin plus calcium."]
+];
+</script>
+<script>
+(function(){
+  "use strict";
+  var $=function(i){return document.getElementById(i);};
+  var esc=FEK.esc;
+  var tt; function toast(m){ var t=$("toast"); t.textContent=m; t.classList.add("on");
+    clearTimeout(tt); tt=setTimeout(function(){ t.classList.remove("on"); },1700); }
+
+  var cur=RECIPES[0], mult=1;
+
+  /* Quantities are scaled and then written in a form a person can measure.
+     0.375 cup is not a measurement anybody can make; 6 tbsp is. */
+  function fmtCup(c){
+    if(c<=0) return "0";
+    var tbsp=c*16;
+    if(tbsp < 1) return fmtTbsp(tbsp);
+    if(c < 1)    return round1(tbsp)+" tbsp";
+    return round1(c)+" cup"+(c>=2?"s":"");
+  }
+  /* A quarter of "2 tbsp" is half a tablespoon, which no measuring spoon has.
+     Below one tablespoon the answer belongs in teaspoons. */
+  function fmtTbsp(t){
+    if(t < 1) return round1(t*3)+" tsp";
+    return round1(t)+" tbsp";
+  }
+  function round1(x){ return (Math.round(x*10)/10).toString(); }
+  /* At 1x the page must read EXACTLY as the source printed it. Converting
+     "3/4 cup" into "12 tbsp" is arithmetically fine and editorially wrong: a
+     reader comparing this page against the original would find a number that
+     is not in it, and the whole point of transcribing a recipe is that it
+     matches. Conversion is for scaled values only, where the published wording
+     no longer applies anyway. */
+  /* A published RANGE has to stay a range after scaling. Showing only the low
+     end of "25-50 lb" as "6.3 lb" silently halves the recipe and reads like a
+     precise figure the source never gave. Both ends scale, or neither does. */
+  function scaleQty(n, unit, published, hi){
+    if(mult===1 && published) return published;
+    if(hi != null){
+      var a=scaleOne(n, unit), b=scaleOne(hi, unit);
+      /* "cup" and "cups" are the same unit; comparing the raw strings printed
+         "1 cup–2 cups". Singular/plural is stripped before the comparison. */
+      var ua=a.replace(/^[\d.]+\s*/,"").replace(/s$/,""),
+          ub=b.replace(/^[\d.]+\s*/,"").replace(/s$/,"");
+      /* "6.3 lb–12.5 lb" is noise; drop the first unit only when both agree.
+         When scaling pushes the two ends into different units (3 tsp–1.5 tbsp)
+         both have to be shown or the reader is misled. */
+      return ua===ub ? a.replace(/\s*[a-z]+s?$/i,"")+"–"+b : a+"–"+b;
+    }
+    return scaleOne(n, unit);
+  }
+  function scaleOne(n, unit){
+    var v=n*mult;
+    if(unit==="cup")  return fmtCup(v);
+    if(unit==="tbsp") return fmtTbsp(v);
+    if(unit==="lb")   return round1(v)+" lb";
+    if(unit==="gal")  return round1(v)+" gal";
+    if(unit==="bags") return round1(v)+" bag"+(v>=2?"s":"");
+    if(unit==="part") return "1 part";
+    if(unit==="pct")  return v.toFixed(0)+"% by volume";
+    return round1(v)+" "+unit;
+  }
+
+  function pickUI(){
+    var pk=FEK.dial({label:"Recipe", clearable:false, value:cur.id,
+      options:RECIPES.map(function(r){
+        return {value:r.id, label:r.icon+" "+r.name,
+                sub:(r.strength==="hot"?"hot / layered":"mild / even"),
+                ramp:(r.strength==="hot"?4:2)}; }),
+      help:"Four published recipes. Each opens with its author and a link to the source it was transcribed from.",
+      onchange:function(v){ if(v==null) return;
+        cur=RECIPES.filter(function(r){return r.id===v;})[0]; render(); }});
+    FEK.mount("recPick",[pk]);
+  }
+  function scaleUI(){
+    var s=FEK.dial({label:"Batch", clearable:false, value:1,
+      options:[{value:0.25,label:"¼",sub:"quarter",ramp:0},
+               {value:0.5, label:"½",sub:"half",   ramp:1},
+               {value:1,   label:"1×",sub:"as published",ramp:2},
+               {value:2,   label:"2×",sub:"double",ramp:3},
+               {value:4,   label:"4×",sub:"quadruple",ramp:4}],
+      help:"Multiplies every quantity. It does not convert between recipes — see the note below.",
+      onchange:function(v){ if(v==null) return; mult=v; render(); }});
+    FEK.mount("recScale",[s]);
+  }
+
+  function rows(list, cls){
+    return list.map(function(it){
+      var qty = it.length>=4 ? scaleQty(it[2], it[3], it[0], it[5]) : it[0];
+      var note = (it.length>4 && it[4]) ? '<small>'+esc(it[4])+'</small>' : "";
+      return '<tr'+(cls?' class="'+cls+'"':"")+'><td class="q">'+esc(qty)+'</td>'+
+             '<td>'+esc(it[1])+note+'</td></tr>';
+    }).join("");
+  }
+
+  function render(){
+    var r=cur;
+    var pill = r.strength==="hot"
+      ? '<span class="pill hot">hot &middot; layered</span>'
+      : '<span class="pill mild">mild &middot; even</span>';
+    var h='<div class="rec">'
+      +'<h3>'+esc(r.icon+" "+r.name)+pill+'</h3>'
+      /* The source link is set as a DOM property below rather than concatenated
+         into the href here. These URLs are page constants so nothing could be
+         injected through them, but an href built by string concatenation is the
+         shape that carries the risk, and the kit's own link checker cannot tell
+         a JS template apart from markup -- it read "'+esc(r.url)+'" as a
+         relative path and reported a dead link. Both problems go away at once. */
+      +'<p class="who">'+esc(r.who)+' &middot; <a id="recSrc"></a></p>'
+      +'<div class="tw"><table class="ing">'
+      +'<tr><th>amount</th><th>ingredient</th></tr>'
+      + rows(r.base,"base") + rows(r.items)
+      +'</table></div>'
+      +'<p class="fine"><b>Batch:</b> '+esc(r.batch)
+      + (mult!==1 ? ' &mdash; shown at <b>'+ (mult<1 ? (mult===0.25?"¼":"½") : mult+"×") +'</b>' : "")
+      + (r.batchNote ? ' '+esc(r.batchNote) : "") + '</p>'
+      /* The cook time is transcribed from the source shown above, but the
+         claims finder cannot see a citation that far up the card -- and
+         widening the finder to make its count fall is the error ADR-041 is
+         about. Saying what the number IS costs one clause and is true: these
+         are grower conventions, not measured optima. */
+      +'<p class="fine"><b>Cook</b> &mdash; the source\u2019s own instruction, a grower '
+      +'convention rather than a measured optimum: '+esc(r.cook)+'</p>'
+      +'<div class="layer"><div class="top">'+r.layer.top+'</div>'
+      +'<div class="bot">'+r.layer.bot+'</div></div>';
+    if(r.warn) h+='<div class="warnbox"><b>The way this one goes wrong</b>'+esc(r.warn)+'</div>';
+    h+='</div>';
+    $("recOut").innerHTML=h;
+    var src=$("recSrc");
+    if(src){ src.href=r.url; src.textContent=r.urlLabel; }
+    $("scaleNote").innerHTML='The multiplier scales <em>one recipe</em>. It does not translate '
+      +'between them: Subcool’s is stated per 8 bags of potting soil, the Rev’s per '
+      +'8-gallon batch, Coot’s and BuildASoil’s per cubic foot. Putting all four on one '
+      +'denominator would mean inventing a bag volume none of the sources gave.';
+    exportOut();
+  }
+
+  function exportOut(){
+    var r=cur, L=[];
+    L.push("# "+r.name+(mult!==1?("  ("+mult+"× batch)"):""));
+    L.push("# "+r.who);
+    L.push("# source: "+r.url);
+    L.push("# batch: "+r.batch);
+    L.push("");
+    L.push("## base");
+    r.base.forEach(function(it){ L.push("  "+scaleQty(it[2],it[3],it[0],it[5])+"  "+it[1]); });
+    L.push("");
+    L.push("## amendments");
+    r.items.forEach(function(it){ L.push("  "+scaleQty(it[2],it[3],it[0],it[5])+"  "+it[1]); });
+    L.push("");
+    L.push("## cook");
+    L.push("  "+r.cook);
+    if(r.warn){ L.push(""); L.push("## watch out"); L.push("  "+r.warn); }
+    L.push("");
+    L.push("# Transcribed from the source above without adjustment. A grower recipe,");
+    L.push("# not an agronomic standard: no soil test, no control, no replication.");
+    $("recExport").textContent=L.join("\n");
+  }
+
+  function amendTable(){
+    var h='<tr><th>amendment</th><th>typical N-P-K</th><th>release</th><th>note</th></tr>';
+    h+=AMEND.map(function(a){
+      return '<tr><td><b>'+esc(a[0])+'</b></td><td class="q">'+esc(a[1])+'</td>'
+        +'<td>'+esc(a[2])+'</td><td>'+esc(a[3])+'</td></tr>';
+    }).join("");
+    $("amendTable").innerHTML=h;
+  }
+
+  $("recCopy").addEventListener("click",function(){
+    var s=$("recExport").textContent;
+    function ok(){ toast("Copied — with its source"); FEK.buzz(); }
+    function fb(){ var a=document.createElement("textarea"); a.value=s; a.style.position="fixed";
+      a.style.opacity="0"; document.body.appendChild(a); a.select();
+      try{ document.execCommand("copy"); ok(); }catch(e){ toast("Select and copy manually"); }
+      document.body.removeChild(a); }
+    try{ if(navigator.clipboard&&navigator.clipboard.writeText)
+      navigator.clipboard.writeText(s).then(ok,fb); else fb(); }catch(e){ fb(); }
+  });
+
+  pickUI(); scaleUI(); amendTable(); render();
+})();
+</script>
+</body>
+</html>

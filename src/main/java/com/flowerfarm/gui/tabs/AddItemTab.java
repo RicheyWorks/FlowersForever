@@ -5,11 +5,11 @@ import com.flowerfarm.gui.FarmDialogs;
 import com.flowerfarm.gui.GuiPermissions;
 import com.flowerfarm.gui.presenter.InventoryItemPresenter;
 import com.flowerfarm.gui.view.InventoryItemFormView;
+import com.flowerfarm.model.FarmWorkspace;
 import com.flowerfarm.model.Item;
 import com.flowerfarm.service.InventoryService;
 
-import javax.swing.Box;
-import javax.swing.BoxLayout;
+import javax.swing.BorderFactory;
 import javax.swing.JButton;
 import javax.swing.JComponent;
 import javax.swing.JComboBox;
@@ -17,10 +17,17 @@ import javax.swing.JCheckBox;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
+import javax.swing.JScrollPane;
+import javax.swing.Scrollable;
+import javax.swing.JTextField;
 import java.awt.BorderLayout;
 import java.awt.Component;
+import java.awt.Container;
 import java.awt.Dimension;
+import java.awt.GridBagConstraints;
+import java.awt.GridBagLayout;
 import java.awt.GridLayout;
+import java.awt.Rectangle;
 import java.util.List;
 import java.util.Locale;
 
@@ -47,6 +54,10 @@ public class AddItemTab implements FlowerFarmTab {
     private JLabel openingValueLabel;
     private boolean canWrite = true;
     private boolean savingItem;
+    private InventoryItemPresenter.ItemDraft initialDraft;
+    private FarmWorkspace workspace = FarmWorkspace.ROSE_AND_EVENTS;
+    private java.util.Set<FarmWorkspace> enabledWorkspaces =
+            java.util.Set.of(FarmWorkspace.ROSE_AND_EVENTS);
     private String duplicateProductName;
     private String missingQueueProduct;
 
@@ -59,6 +70,28 @@ public class AddItemTab implements FlowerFarmTab {
         this.presenter = new InventoryItemPresenter(inventoryService);
         this.host = host;
         this.dialogs = java.util.Objects.requireNonNull(dialogs, "dialogs");
+    }
+
+    /** Choose the inventory entry presentation before building its Swing form. */
+    public void setWorkspace(FarmWorkspace workspace) {
+        if (panel != null) {
+            throw new IllegalStateException("Set the farm workspace before opening Add Item.");
+        }
+        this.workspace = java.util.Objects.requireNonNull(workspace, "workspace");
+        this.enabledWorkspaces = java.util.Set.of(workspace);
+    }
+
+    /** Include starters for every selected farm type in a combined operation. */
+    public void setEnabledWorkspaces(java.util.Set<FarmWorkspace> enabledWorkspaces) {
+        if (panel != null) {
+            throw new IllegalStateException("Choose farm types before opening Add Item.");
+        }
+        java.util.Objects.requireNonNull(enabledWorkspaces, "enabledWorkspaces");
+        if (!enabledWorkspaces.contains(workspace)) {
+            throw new IllegalArgumentException("Selected types must include the primary farm.");
+        }
+        this.enabledWorkspaces = java.util.Collections.unmodifiableSet(
+                new java.util.LinkedHashSet<>(enabledWorkspaces));
     }
 
     @Override
@@ -96,6 +129,21 @@ public class AddItemTab implements FlowerFarmTab {
                 canWrite ? FarmUi.Tone.SUCCESS : FarmUi.Tone.WARNING);
     }
 
+    /** Protects a partially entered item and a save that has not finished. */
+    public String applicationExitWarning() {
+        if (savingItem) {
+            return "Add Item has an inventory save in progress.";
+        }
+        if (formView != null && !formView.draft().equals(initialDraft)) {
+            return "Add Item has an unsaved inventory item draft.";
+        }
+        return null;
+    }
+
+    public boolean hasPendingSave() {
+        return savingItem;
+    }
+
     private void buildForm() {
         panel = FarmUi.page();
         accessBadge = FarmUi.statusBadge(
@@ -106,22 +154,19 @@ public class AddItemTab implements FlowerFarmTab {
                 accessBadge), BorderLayout.NORTH);
 
         formView = new InventoryItemFormView();
-        presetBox = new JComboBox<>(new String[]{
-                "Cut flower / stem",
-                "Dahlia stem",
-                "Nootka rose stem",
-                "Peony stem",
-                "Sunflower stem",
-                "Market bouquet",
-                "Wedding flower bucket",
-                "Flower subscription",
-                "Farm supply",
-                "Tool or equipment"
-        });
+        configureWorkspaceForm();
+        presetBox = new JComboBox<>(starterOptions());
         presetBox.setName("inventory.itemPreset");
-        presetBox.getAccessibleContext().setAccessibleName("Flower product starter library");
+        presetBox.getAccessibleContext().setAccessibleName(
+                workspace == FarmWorkspace.NURSERY_FARM
+                        ? "Nursery product starter library"
+                        : isGeneralWorkspace() ? "Farm item starter library"
+                                : "Flower product starter library");
         presetBox.getAccessibleContext().setAccessibleDescription(
-                "Choose a common flower product or general farm item setup.");
+                workspace == FarmWorkspace.NURSERY_FARM
+                        ? "Choose a live plant product or general farm item setup."
+                        : isGeneralWorkspace() ? "Choose a general farm item setup."
+                                : "Choose a common flower product or general farm item setup.");
         applyPresetBtn = FarmUi.secondaryButton("Use starter");
         applyPresetBtn.addActionListener(event -> {
             String preset = String.valueOf(presetBox.getSelectedItem());
@@ -135,6 +180,7 @@ public class AddItemTab implements FlowerFarmTab {
         resetBtn = FarmUi.secondaryButton("Reset form");
         resetBtn.addActionListener(event -> {
             formView.reset();
+            applyWorkspaceDefaults();
             clearDuplicateHandoff();
             FarmUi.updateStatusBadge(feedbackBadge, "Ready for a new item", FarmUi.Tone.NEUTRAL);
         });
@@ -163,7 +209,7 @@ public class AddItemTab implements FlowerFarmTab {
                 "Keep shared inventory setup after saving");
         keepSetupBox.getAccessibleContext().setAccessibleDescription(
                 "Keeps category, selling unit, price, and cost. Clears name, variety, quantity, and notes.");
-        feedbackBadge = FarmUi.statusBadge("Ready for a new item", FarmUi.Tone.NEUTRAL);
+        feedbackBadge = FarmUi.wrappingStatusBadge("Ready for a new item", FarmUi.Tone.NEUTRAL);
         feedbackBadge.getAccessibleContext().setAccessibleName("Add inventory item status");
         formView.setValidationCorrectionListener(() -> {
             clearDuplicateHandoff();
@@ -183,10 +229,9 @@ public class AddItemTab implements FlowerFarmTab {
                 "Gross margin before labor and overhead");
         openingValueLabel.getAccessibleContext().setAccessibleDescription(
                 "Opening quantity multiplied by selling price");
-        JPanel economics = new JPanel(new GridLayout(3, 1, 0, FarmUi.CONTROL_GAP));
+        JPanel economics = new JPanel(new GridLayout(3, 1, FarmUi.CONTROL_GAP, FarmUi.CONTROL_GAP));
         economics.setName("inventory.economicsPreview");
         economics.setOpaque(false);
-        economics.setPreferredSize(new Dimension(225, 0));
         economics.add(FarmUi.metricCard(
                 "Gross profit / unit", unitProfitLabel, null, FarmUi.Tone.SUCCESS));
         economics.add(FarmUi.metricCard(
@@ -194,42 +239,272 @@ public class AddItemTab implements FlowerFarmTab {
         economics.add(FarmUi.metricCard(
                 "Opening sell value", openingValueLabel, null, FarmUi.Tone.NEUTRAL));
 
-        JPanel actions = new JPanel();
+        JPanel actions = new JPanel(new BorderLayout(0, FarmUi.CONTROL_GAP));
+        actions.setName("inventory.itemActions");
         actions.setOpaque(false);
-        actions.setLayout(new BoxLayout(actions, BoxLayout.Y_AXIS));
-        JPanel repeatMode = FarmUi.toolbar(
-                keepSetupBox,
-                FarmUi.formHint("Adding a few similar products? Keep their shared setup."));
-        repeatMode.setAlignmentX(Component.LEFT_ALIGNMENT);
-        actions.add(repeatMode);
-        actions.add(Box.createVerticalStrut(FarmUi.CONTROL_GAP));
-        JPanel actionRow = FarmUi.toolbar(
-                addBtn, resetBtn, openExistingBtn, returnToStockQueueBtn, feedbackBadge);
-        actionRow.setAlignmentX(Component.LEFT_ALIGNMENT);
-        actions.add(actionRow);
+        JPanel repeatMode = new JPanel(new BorderLayout(0, 4));
+        repeatMode.setOpaque(false);
+        repeatMode.add(FarmUi.toolbar(keepSetupBox), BorderLayout.NORTH);
+        repeatMode.add(FarmUi.wrappingHint(
+                "Adding a few similar products? Keep their shared setup."), BorderLayout.CENTER);
+        actions.add(repeatMode, BorderLayout.NORTH);
+        JPanel actionRows = new JPanel(new BorderLayout(0, FarmUi.CONTROL_GAP));
+        actionRows.setOpaque(false);
+        actionRows.add(FarmUi.toolbar(addBtn, resetBtn), BorderLayout.NORTH);
+        actionRows.add(FarmUi.toolbar(openExistingBtn, returnToStockQueueBtn), BorderLayout.SOUTH);
+        actions.add(actionRows, BorderLayout.CENTER);
+        JPanel feedbackRow = new JPanel(new BorderLayout());
+        feedbackRow.setName("inventory.itemFeedback");
+        feedbackRow.setOpaque(false);
+        feedbackRow.add(feedbackBadge, BorderLayout.CENTER);
+        actions.add(feedbackRow, BorderLayout.SOUTH);
 
         JPanel content = new JPanel(new BorderLayout(0, FarmUi.SECTION_GAP));
         content.setOpaque(false);
-        JPanel itemWorkspace = new JPanel(new BorderLayout(
-                FarmUi.SECTION_GAP, FarmUi.CONTROL_GAP));
+        JPanel itemWorkspace = new JPanel(new BorderLayout(0, FarmUi.CONTROL_GAP));
         itemWorkspace.setOpaque(false);
-        itemWorkspace.add(FarmUi.toolbar(
-                new JLabel("Product starter"), presetBox, applyPresetBtn,
-                FarmUi.formHint(
-                        "A head start; your entered prices stay intact.")),
+        JPanel starter = new JPanel(new BorderLayout(0, 4));
+        starter.setName("inventory.itemStarter");
+        starter.setOpaque(false);
+        starter.add(FarmUi.toolbar(new JLabel("Product starter"), presetBox, applyPresetBtn),
                 BorderLayout.NORTH);
-        itemWorkspace.add(formView, BorderLayout.CENTER);
-        itemWorkspace.add(economics, BorderLayout.EAST);
+        starter.add(FarmUi.wrappingHint("A head start; your entered prices stay intact."),
+                BorderLayout.CENTER);
+        itemWorkspace.add(starter, BorderLayout.NORTH);
+        itemWorkspace.add(new ItemDetails(formView, economics), BorderLayout.CENTER);
         content.add(FarmUi.section(
                 "1 · Product & stock",
-                "Choose a starter, or make it your own. Fields marked * are required.",
+                isGeneralWorkspace()
+                        ? "Enter your own product or supply. Fields marked * are required."
+                        : "Choose a starter, or make it your own. Fields marked * are required.",
                 itemWorkspace), BorderLayout.CENTER);
         content.add(FarmUi.section(
                 "2 · Save to your inventory",
                 "Zero price or stock is fine while planning. Press Enter from Quantity to save.",
                 actions), BorderLayout.SOUTH);
-        panel.add(content, BorderLayout.CENTER);
+        JPanel body = new ItemBody(content);
+        JScrollPane scroll = new JScrollPane(body,
+                JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED, JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+        scroll.setName("inventory.itemScroll");
+        scroll.setBorder(BorderFactory.createEmptyBorder());
+        scroll.getVerticalScrollBar().setUnitIncrement(24);
+        panel.add(scroll, BorderLayout.CENTER);
+        FarmUi.revealFocusedControls(body);
         updateEconomicsPreview();
+        initialDraft = formView.draft();
+    }
+
+    private String[] starterOptions() {
+        if (enabledWorkspaces.size() > 1) {
+            java.util.LinkedHashSet<String> starters = new java.util.LinkedHashSet<>();
+            for (FarmWorkspace selected : enabledWorkspaces) {
+                java.util.Collections.addAll(starters, starterOptionsFor(selected));
+            }
+            return starters.toArray(String[]::new);
+        }
+        return starterOptionsFor(workspace);
+    }
+
+    private static String[] starterOptionsFor(FarmWorkspace workspace) {
+        if (workspace == FarmWorkspace.NURSERY_FARM) {
+            return new String[]{"Potted plant", "Seedling tray", "Bare-root plant",
+                    "Farm supply", "Tool or equipment"};
+        }
+        if (isGeneralWorkspace(workspace)) {
+            return new String[]{"Farm supply", "Tool or equipment"};
+        }
+        if (workspace == FarmWorkspace.WILDFLOWER_FARM) {
+            return new String[]{"Cut flower / stem", "Market bouquet",
+                    "Farm supply", "Tool or equipment"};
+        }
+        return new String[]{
+                "Cut flower / stem", "Dahlia stem", "Nootka rose stem", "Peony stem",
+                "Sunflower stem", "Market bouquet", "Wedding flower bucket",
+                "Flower subscription", "Farm supply", "Tool or equipment"
+        };
+    }
+
+    private boolean isGeneralWorkspace() {
+        return isGeneralWorkspace(workspace);
+    }
+
+    private static boolean isGeneralWorkspace(FarmWorkspace workspace) {
+        return workspace == FarmWorkspace.CANNABIS_FARM
+                || workspace == FarmWorkspace.POTATO_FARM
+                || workspace == FarmWorkspace.APPLE_ORCHARD
+                || workspace == FarmWorkspace.BERRY_FARM
+                || workspace == FarmWorkspace.NURSERY_FARM
+                || workspace == FarmWorkspace.LIVESTOCK_FARM
+                || workspace == FarmWorkspace.POULTRY_FARM
+                || workspace == FarmWorkspace.DAIRY_FARM
+                || workspace == FarmWorkspace.VINEYARD_FARM
+                || workspace == FarmWorkspace.HAY_FARM
+                || workspace == FarmWorkspace.HOPS_FARM
+                || workspace == FarmWorkspace.GRAIN_FARM
+                || workspace == FarmWorkspace.SEED_FARM
+                || workspace == FarmWorkspace.NUT_ORCHARD
+                || workspace == FarmWorkspace.VEGETABLE_FARM
+                || workspace == FarmWorkspace.AQUACULTURE_FARM
+                || workspace == FarmWorkspace.CHRISTMAS_TREE_FARM
+                || workspace == FarmWorkspace.APIARY_FARM
+                || workspace == FarmWorkspace.MUSHROOM_FARM
+                || workspace == FarmWorkspace.CRANBERRY_FARM
+                || workspace == FarmWorkspace.PUMPKIN_PATCH
+                || workspace == FarmWorkspace.CUSTOM_FARM;
+    }
+
+    private void configureWorkspaceForm() {
+        if (!enabledWorkspaces.contains(FarmWorkspace.ROSE_AND_EVENTS)
+                && !enabledWorkspaces.contains(FarmWorkspace.FLOWER_SHOP)
+                && (workspace == FarmWorkspace.WILDFLOWER_FARM || isGeneralWorkspace())) {
+            hideRoseVariety();
+        }
+        if (isGeneralWorkspace()) {
+            applyWorkspaceDefaults();
+            JTextField name = textField(formView, "Item name");
+            JTextField notes = textField(formView, "Item notes");
+            if (name != null) {
+                FarmUi.entryControl(name, "e.g. Product or farm supply",
+                        "Use the name your crew and customers recognize.");
+            }
+            if (notes != null) {
+                FarmUi.entryControl(notes, "e.g. Storage area · batch note",
+                        "Optional storage, source, or packing notes.");
+            }
+        }
+    }
+
+    private void applyWorkspaceDefaults() {
+        if (!isGeneralWorkspace() || formView == null) {
+            return;
+        }
+        InventoryItemPresenter.ItemDraft draft = formView.draft();
+        formView.setDraft(new InventoryItemPresenter.ItemDraft(
+                draft.name(), "Other", "", draft.price(), "Per Unit",
+                draft.cost(), draft.quantity(), draft.notes()));
+    }
+
+    private void hideRoseVariety() {
+        JPanel notesField = null;
+        for (Component component : formView.getComponents()) {
+            if (!(component instanceof JPanel field)) {
+                continue;
+            }
+            for (Component fieldPart : field.getComponents()) {
+                if (fieldPart instanceof JLabel label) {
+                    if (label.getText().startsWith("Rose variety")) {
+                        field.setVisible(false);
+                    } else if (label.getText().startsWith("Notes")) {
+                        notesField = field;
+                    }
+                }
+            }
+        }
+        if (notesField != null && formView.getLayout() instanceof GridBagLayout layout) {
+            GridBagConstraints constraints = layout.getConstraints(notesField);
+            constraints.gridwidth = 2;
+            layout.setConstraints(notesField, constraints);
+        }
+    }
+
+    private static JTextField textField(Container parent, String accessibleName) {
+        for (Component child : parent.getComponents()) {
+            if (child instanceof JTextField field
+                    && accessibleName.equals(field.getAccessibleContext().getAccessibleName())) {
+                return field;
+            }
+            if (child instanceof Container nested) {
+                JTextField found = textField(nested, accessibleName);
+                if (found != null) {
+                    return found;
+                }
+            }
+        }
+        return null;
+    }
+
+    /** Keep paired fields readable, moving the preview beneath them on a compact page. */
+    private static final class ItemDetails extends JPanel {
+        private static final long serialVersionUID = 1L;
+        private static final int SIDE_WIDTH = 225;
+        private static final int STACK_WIDTH = 900;
+        private final JComponent form;
+        private final JPanel economics;
+
+        private ItemDetails(JComponent form, JPanel economics) {
+            super(null);
+            this.form = form;
+            this.economics = economics;
+            setName("inventory.itemDetails");
+            setOpaque(false);
+            add(form);
+            add(economics);
+        }
+
+        private boolean stacked() { return getWidth() > 0 && getWidth() < STACK_WIDTH; }
+
+        private int cardHeight() {
+            int height = 0;
+            for (Component card : economics.getComponents()) {
+                height = Math.max(height, card.getPreferredSize().height);
+            }
+            return height;
+        }
+
+        @Override public Dimension getPreferredSize() {
+            Dimension preferred = form.getPreferredSize();
+            int previewHeight = cardHeight();
+            int height = stacked() ? preferred.height + FarmUi.SECTION_GAP + previewHeight
+                    : Math.max(preferred.height, previewHeight * 3 + FarmUi.CONTROL_GAP * 2);
+            return new Dimension(preferred.width + FarmUi.SECTION_GAP + SIDE_WIDTH, height);
+        }
+
+        @Override public void doLayout() {
+            GridLayout cards = (GridLayout) economics.getLayout();
+            if (stacked()) {
+                cards.setRows(1);
+                cards.setColumns(3);
+                int previewHeight = cardHeight();
+                int formHeight = Math.max(0, getHeight() - FarmUi.SECTION_GAP - previewHeight);
+                form.setBounds(0, 0, getWidth(), formHeight);
+                economics.setBounds(0, formHeight + FarmUi.SECTION_GAP, getWidth(), previewHeight);
+            } else {
+                cards.setRows(3);
+                cards.setColumns(1);
+                int formWidth = Math.max(0, getWidth() - FarmUi.SECTION_GAP - SIDE_WIDTH);
+                form.setBounds(0, 0, formWidth, getHeight());
+                economics.setBounds(formWidth + FarmUi.SECTION_GAP, 0, SIDE_WIDTH, getHeight());
+            }
+        }
+
+        @Override public void setBounds(int x, int y, int width, int height) {
+            boolean wasStacked = stacked();
+            super.setBounds(x, y, width, height);
+            if (wasStacked != stacked()) revalidate();
+        }
+    }
+
+    private static final class ItemBody extends JPanel implements Scrollable {
+        private static final long serialVersionUID = 1L;
+
+        private ItemBody(JComponent content) {
+            super(new BorderLayout());
+            setName("inventory.itemBody");
+            setOpaque(false);
+            add(content, BorderLayout.NORTH);
+        }
+
+        @Override public Dimension getPreferredScrollableViewportSize() { return getPreferredSize(); }
+        @Override public int getScrollableUnitIncrement(Rectangle visible, int orientation, int direction) {
+            return 24;
+        }
+        @Override public int getScrollableBlockIncrement(Rectangle visible, int orientation, int direction) {
+            return Math.max(24, visible.height - 24);
+        }
+        @Override public boolean getScrollableTracksViewportWidth() { return true; }
+        @Override public boolean getScrollableTracksViewportHeight() {
+            return getParent() != null && getParent().getHeight() >= getPreferredSize().height;
+        }
     }
 
     private JLabel economicsValue(String name, String text) {
@@ -367,6 +642,7 @@ public class AddItemTab implements FlowerFarmTab {
             formView.resetForSimilarItem();
         } else {
             formView.reset();
+            applyWorkspaceDefaults();
         }
         String message = "Added “" + saved.getName() + "”"
                 + (keepSetup ? " · setup kept" : "");

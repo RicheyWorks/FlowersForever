@@ -20,6 +20,9 @@ import javax.swing.table.DefaultTableModel;
 import java.awt.*;
 import java.awt.event.InputEvent;
 import java.awt.event.KeyEvent;
+import java.awt.datatransfer.DataFlavor;
+import java.awt.datatransfer.StringSelection;
+import java.awt.datatransfer.Transferable;
 import java.io.File;
 import java.nio.file.Files;
 import java.time.LocalDate;
@@ -43,6 +46,7 @@ public class CrmTab implements FlowerFarmTab {
     private final TabHost host;
     private final FarmDialogs dialogs;
     private final FarmFileChooser files;
+    private String defaultUnit = "stems";
 
     private JPanel panel;
     private DefaultTableModel customerModel;
@@ -79,6 +83,9 @@ public class CrmTab implements FlowerFarmTab {
     private String newOrderDateBaseline = "";
     private String newOrderHandoffBaseline = "Pickup";
     private JComboBox<CrmPresenter.InventoryChoice> orderInventoryProduct;
+    private DefaultListModel<CrmPresenter.InventoryChoice> inventoryDragModel;
+    private JList<CrmPresenter.InventoryChoice> inventoryDragList;
+    private JButton useDraggedInventoryBtn;
     private JLabel orderLinePreviewLabel;
     private JLabel selectedOrderLabel;
     private JTextArea selectedOrderCustomerContext;
@@ -292,6 +299,18 @@ public class CrmTab implements FlowerFarmTab {
         this.host = host;
         this.dialogs = Objects.requireNonNull(dialogs, "dialogs");
         this.files = Objects.requireNonNull(files, "files");
+    }
+
+    /** Configure the initial order-product unit before the tab UI is built. */
+    public void setDefaultUnit(String unit) {
+        if (panel != null) {
+            throw new IllegalStateException("Set the default order unit before building the tab.");
+        }
+        String clean = Objects.requireNonNull(unit, "unit").trim();
+        if (clean.isEmpty() || clean.length() > 64) {
+            throw new IllegalArgumentException("Default order unit must have 1 to 64 characters.");
+        }
+        defaultUnit = clean;
     }
 
     @Override public String getTabTitle() { return "Customers & Orders"; }
@@ -629,6 +648,7 @@ public class CrmTab implements FlowerFarmTab {
     private void finishCrmRefresh() {
         refreshingCrm = false;
         refreshCrmBtn.setEnabled(true);
+        updateInventoryDragButton();
         updateCustomerFormMode();
         updateOrderActions();
         if (pendingExistingOrderProductId != null && !crmRefreshQueued) {
@@ -896,6 +916,10 @@ public class CrmTab implements FlowerFarmTab {
                 removeOrderLineBtn, selectedOrderDate, saveOrderDateBtn,
                 selectedOrderHandoffType, saveOrderHandoffBtn,
                 selectedOrderNotes, saveOrderNotesBtn);
+        if (inventoryDragList != null) {
+            inventoryDragList.setEnabled(orderWriteEnabled);
+            updateInventoryDragButton();
+        }
         setOrderToolChoices(canWrite);
         FarmUi.updateStatusBadge(accessLabel,
                 canWrite ? "Editing enabled" : "View only — statements and exports remain available",
@@ -922,7 +946,9 @@ public class CrmTab implements FlowerFarmTab {
         refreshCrmBtn.addActionListener(event -> startCrmRefresh());
         panel.add(FarmUi.pageHeader(
                 "Customers and orders",
-                "Manage market and florist relationships from inquiry through fulfillment.",
+                "stems".equalsIgnoreCase(defaultUnit)
+                        ? "Manage market and florist relationships from inquiry through fulfillment."
+                        : "Manage buyers and orders from inquiry through fulfillment.",
                 FarmUi.toolbar(accessLabel, refreshCrmBtn)), BorderLayout.NORTH);
         JPanel statusMessages = new JPanel(new BorderLayout(0, FarmUi.CONTROL_GAP));
         statusMessages.setName("crm.statusMessages");
@@ -1339,7 +1365,7 @@ public class CrmTab implements FlowerFarmTab {
         orderProduct.getAccessibleContext().setAccessibleName("Order product name");
         orderQty = new JTextField("1");
         orderQty.getAccessibleContext().setAccessibleName("Order quantity");
-        orderUnit = new JTextField("stems");
+        orderUnit = new JTextField(defaultUnit);
         orderUnit.getAccessibleContext().setAccessibleName("Order unit");
         orderPrice = new JTextField();
         orderPrice.getAccessibleContext().setAccessibleName("Order unit price");
@@ -1370,6 +1396,99 @@ public class CrmTab implements FlowerFarmTab {
                 "Choose an inventory product for this order line");
         orderInventoryProduct.addActionListener(event -> applyInventoryChoice());
 
+        inventoryDragModel = new DefaultListModel<>();
+        inventoryDragList = new JList<>(inventoryDragModel);
+        inventoryDragList.setName("crm.inventoryDragList");
+        inventoryDragList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+        inventoryDragList.setVisibleRowCount(3);
+        inventoryDragList.setToolTipText("Drag a stock item to the drop area, or select it and use the button.");
+        inventoryDragList.getAccessibleContext().setAccessibleName(
+                "Inventory products to drag into an order draft");
+        inventoryDragList.getAccessibleContext().setAccessibleDescription(
+                inventoryDragList.getToolTipText());
+        inventoryDragList.setTransferHandler(new TransferHandler() {
+            @Override protected Transferable createTransferable(JComponent source) {
+                CrmPresenter.InventoryChoice choice = inventoryDragList.getSelectedValue();
+                return choice == null ? null : new StringSelection(choice.name());
+            }
+
+            @Override public int getSourceActions(JComponent source) {
+                return COPY;
+            }
+        });
+        if (!GraphicsEnvironment.isHeadless()) {
+            inventoryDragList.setDragEnabled(true);
+        }
+        useDraggedInventoryBtn = FarmUi.secondaryButton("Use selected product");
+        useDraggedInventoryBtn.setName("crm.useInventoryProduct");
+        useDraggedInventoryBtn.setEnabled(false);
+        useDraggedInventoryBtn.setToolTipText(
+                "Fill the order draft from the selected stock item. Review quantity and save separately.");
+        useDraggedInventoryBtn.addActionListener(event -> {
+            CrmPresenter.InventoryChoice selected = inventoryDragList.getSelectedValue();
+            if (selected != null) {
+                useInventoryChoiceFromShelf(selected.name());
+            }
+        });
+        inventoryDragList.addListSelectionListener(event -> {
+            if (!event.getValueIsAdjusting()) {
+                updateInventoryDragButton();
+            }
+        });
+        JPanel inventoryDropTarget = new JPanel(new BorderLayout());
+        inventoryDropTarget.setName("crm.inventoryDropTarget");
+        inventoryDropTarget.setOpaque(false);
+        JLabel dropInstruction = new JLabel("↓ Drop inventory product here to fill this draft",
+                SwingConstants.CENTER);
+        dropInstruction.setForeground(FarmUi.accentColor());
+        dropInstruction.setName("crm.inventoryDropInstruction");
+        inventoryDropTarget.add(dropInstruction, BorderLayout.CENTER);
+        inventoryDropTarget.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createDashedBorder(FarmUi.accentColor(), 1.5f, 4f),
+                BorderFactory.createEmptyBorder(9, 10, 9, 10)));
+        inventoryDropTarget.getAccessibleContext().setAccessibleName(
+                "Drop inventory product into order draft");
+        inventoryDropTarget.getAccessibleContext().setAccessibleDescription(
+                "Drop fills product, unit, and price only; review quantity and save the order separately.");
+        TransferHandler inventoryDropHandler = new TransferHandler() {
+            @Override public boolean canImport(TransferSupport support) {
+                return support.isDataFlavorSupported(DataFlavor.stringFlavor)
+                        && canFillProductFromInventory();
+            }
+
+            @Override public boolean importData(TransferSupport support) {
+                if (!canImport(support)) {
+                    return false;
+                }
+                try {
+                    String name = (String) support.getTransferable()
+                            .getTransferData(DataFlavor.stringFlavor);
+                    return useInventoryChoiceFromShelf(name);
+                } catch (Exception exception) {
+                    status("Inventory product could not be read from the drop. Choose it from the list.");
+                    return false;
+                }
+            }
+        };
+        inventoryDropTarget.setTransferHandler(inventoryDropHandler);
+        dropInstruction.setTransferHandler(inventoryDropHandler);
+        JPanel inventoryShelf = new JPanel(new BorderLayout(6, 6));
+        inventoryShelf.setName("crm.inventoryDragShelf");
+        inventoryShelf.setOpaque(false);
+        inventoryShelf.add(new JLabel("Stock items · drag or select"), BorderLayout.NORTH);
+        inventoryShelf.add(new JScrollPane(inventoryDragList), BorderLayout.CENTER);
+        inventoryShelf.add(useDraggedInventoryBtn, BorderLayout.EAST);
+        JPanel productEntryBody = new JPanel();
+        productEntryBody.setOpaque(false);
+        productEntryBody.setLayout(new BoxLayout(productEntryBody, BoxLayout.Y_AXIS));
+        if (presenter.inventoryGuidanceAvailable()) {
+            productEntryBody.add(inventoryShelf);
+            productEntryBody.add(Box.createVerticalStrut(6));
+            productEntryBody.add(inventoryDropTarget);
+            productEntryBody.add(Box.createVerticalStrut(8));
+        }
+        productEntryBody.add(productForm);
+
         addFormField(identityForm, "Customer*", orderCustomer, 'U');
         addFormField(identityForm, "Order date*", orderDate, 'D');
         addFormField(identityForm, "Handoff*", orderHandoffType, 'H');
@@ -1382,12 +1501,12 @@ public class CrmTab implements FlowerFarmTab {
         addFormField(productForm, "Unit price $", orderPrice, '\0');
         JPanel identitySection = FarmUi.section(
                 "1 · Order basics",
-                "New orders start as Draft. Review the saved products, customer, date, and instructions before confirmation.",
+                "New orders start as Draft. Review details before confirmation.",
                 identityForm);
         JPanel productSection = FarmUi.section(
                 "2 · Product and quantity",
                 "Choose an inventory product when possible, then confirm quantity, unit, and selling price.",
-                productForm);
+                productEntryBody);
         JPanel newOrderCustomerContextPanel = new JPanel(new BorderLayout(6, 6));
         newOrderCustomerContextPanel.setOpaque(false);
         newOrderCustomerContextPanel.add(newOrderCustomerContext, BorderLayout.CENTER);
@@ -2027,7 +2146,7 @@ public class CrmTab implements FlowerFarmTab {
                 orderProduct.getText(), orderQty.getText(),
                 orderUnit.getText(), orderPrice.getText(), lineId,
                 lineId == null ? null : editingOrderLineReview, reviewedOrder);
-        if (!draft.hasWork()) {
+        if (!draft.hasWork(defaultUnit)) {
             clearStoredProductDraft(activeProductEntryOrderId);
             return false;
         }
@@ -2059,7 +2178,7 @@ public class CrmTab implements FlowerFarmTab {
             return null;
         }
         ProductEntryDraft draft = orderProductDrafts.get(orderId);
-        if (draft == null || !draft.hasWork() || draft.editingLineId() != null
+        if (draft == null || !draft.hasWork(defaultUnit) || draft.editingLineId() != null
                 || draft.reviewedOrder() == null) {
             return null;
         }
@@ -2146,7 +2265,7 @@ public class CrmTab implements FlowerFarmTab {
     }
 
     private void applyProductEntryDraft(ProductEntryDraft draft) {
-        ProductEntryDraft value = draft == null ? ProductEntryDraft.empty() : draft;
+        ProductEntryDraft value = draft == null ? ProductEntryDraft.empty(defaultUnit) : draft;
         editingOrderId = value.editingLineId() == null ? null : activeProductEntryOrderId;
         editingOrderLineId = value.editingLineId();
         editingOrderLineReview = value.reviewedLine();
@@ -3660,9 +3779,12 @@ public class CrmTab implements FlowerFarmTab {
 
     static boolean isOrderCompletionReady(
             CustomerOrder order, List<CrmPresenter.InventoryChoice> inventory) {
-        if (order == null || !"CONFIRMED".equalsIgnoreCase(order.getStatus())
-                || "UNSPECIFIED".equals(CustomerOrder.normalizeHandoffType(
-                        order.getHandoffType()))) {
+        if (order == null || !"CONFIRMED".equalsIgnoreCase(order.getStatus())) {
+            return false;
+        }
+        String handoff = CustomerOrder.normalizeHandoffType(order.getHandoffType());
+        if ("UNSPECIFIED".equals(handoff)
+                || ("DELIVERY".equals(handoff) && !hasDeliveryContext(order))) {
             return false;
         }
         OrderStockAssessment assessment = assessOrderStock(order, inventory);
@@ -3875,7 +3997,8 @@ public class CrmTab implements FlowerFarmTab {
                                         + "product with Inventory's required unit, then save it "
                                         + "before completion."
                         : reservationLimited
-                                ? ". Earlier dated ready orders reserve the available stock. "
+                                ? ". Earlier dated confirmed orders are counted first in this "
+                                        + "review. "
                                         + "Complete those orders first, or open Inventory to "
                                         + "replenish "
                                         + String.join(", ", selectedOrderStockProducts)
@@ -4014,12 +4137,12 @@ public class CrmTab implements FlowerFarmTab {
         }
         rememberCurrentProductDraft();
         ProductEntryDraft recovered = orderProductDrafts.get(sourceOrderId);
-        if (recovered == null || !recovered.hasWork()) {
+        if (recovered == null || !recovered.hasWork(defaultUnit)) {
             updateOrderActions();
             status("Order #" + sourceOrderId + " has no unfinished product to move.");
             return;
         }
-        if (newOrderProductDraft != null && newOrderProductDraft.hasWork()) {
+        if (newOrderProductDraft != null && newOrderProductDraft.hasWork(defaultUnit)) {
             if (pausedNewOrderProductDraft != null) {
                 status("The product could not move from read-only order #" + sourceOrderId
                         + " because two separate new-order product drafts are already preserved. "
@@ -4030,7 +4153,7 @@ public class CrmTab implements FlowerFarmTab {
         }
         newOrderProductDraft = recovered;
         orderProductDrafts.remove(sourceOrderId);
-        applyProductEntryDraft(ProductEntryDraft.empty());
+        applyProductEntryDraft(ProductEntryDraft.empty(defaultUnit));
         orderTable.clearSelection();
         updateOrderActions();
         FarmUi.revealAndFocus(orderProduct);
@@ -4044,7 +4167,7 @@ public class CrmTab implements FlowerFarmTab {
     private void moveUnavailableProductToNewOrder() {
         Long missingOrderId = unavailableProductDraftOrderId;
         ProductEntryDraft recovered = orderProductDrafts.remove(missingOrderId);
-        if (recovered == null || !recovered.hasWork()) {
+        if (recovered == null || !recovered.hasWork(defaultUnit)) {
             unavailableProductDraftOrderId = null;
             activeProductEntryOrderId = null;
             applyProductEntryDraft(newOrderProductDraft);
@@ -4053,7 +4176,7 @@ public class CrmTab implements FlowerFarmTab {
                     + " is unavailable and had no unfinished product to recover.");
             return;
         }
-        if (newOrderProductDraft != null && newOrderProductDraft.hasWork()) {
+        if (newOrderProductDraft != null && newOrderProductDraft.hasWork(defaultUnit)) {
             if (pausedNewOrderProductDraft != null) {
                 status("The missing-order product could not move because two separate new-order "
                         + "product drafts are already preserved. Clear or save one before retrying.");
@@ -4077,6 +4200,18 @@ public class CrmTab implements FlowerFarmTab {
     private void replaceInventoryChoices(List<CrmPresenter.InventoryChoice> choices,
                                          String currentProduct) {
         inventoryChoiceSnapshot = List.copyOf(choices);
+        String selectedShelfProduct = inventoryDragList.getSelectedValue() == null
+                ? null : inventoryDragList.getSelectedValue().name();
+        inventoryDragModel.clear();
+        choices.forEach(inventoryDragModel::addElement);
+        if (selectedShelfProduct != null) {
+            for (int index = 0; index < inventoryDragModel.size(); index++) {
+                if (inventoryDragModel.get(index).name().equalsIgnoreCase(selectedShelfProduct)) {
+                    inventoryDragList.setSelectedIndex(index);
+                    break;
+                }
+            }
+        }
         refreshingInventoryChoices = true;
         orderInventoryProduct.removeAllItems();
         orderInventoryProduct.addItem(null);
@@ -4136,6 +4271,46 @@ public class CrmTab implements FlowerFarmTab {
         orderQty.requestFocusInWindow();
     }
 
+    private boolean canFillProductFromInventory() {
+        return canWrite && !refreshingCrm && !creatingOrder && !addingOrderLine
+                && !runningOrderMutation && !fulfillingOrder
+                && unavailableProductDraftOrderId == null
+                && editingOrderLineId == null
+                && orderInventoryProduct != null && orderInventoryProduct.isEnabled()
+                && orderProduct != null && orderProduct.isEnabled();
+    }
+
+    private void updateInventoryDragButton() {
+        if (inventoryDragList != null && useDraggedInventoryBtn != null) {
+            useDraggedInventoryBtn.setEnabled(inventoryDragList.getSelectedValue() != null
+                    && canFillProductFromInventory());
+        }
+    }
+
+    /** A drop fills only the editable line draft; it never adds or saves an order line. */
+    private boolean useInventoryChoiceFromShelf(String rawName) {
+        if (!canFillProductFromInventory()) {
+            status("Inventory drop is unavailable while this order entry cannot be edited.");
+            return false;
+        }
+        String name = rawName == null ? "" : rawName.trim();
+        CrmPresenter.InventoryChoice current = inventoryChoiceSnapshot.stream()
+                .filter(choice -> choice.name().equalsIgnoreCase(name))
+                .findFirst().orElse(null);
+        if (current == null) {
+            status("That product is no longer in the current inventory list. Refresh and choose a stock item.");
+            return false;
+        }
+        if (hasPendingProductEntry()) {
+            status("This order already has an unfinished product draft. Save or clear it before choosing another stock item.");
+            return false;
+        }
+        orderInventoryProduct.setSelectedItem(current);
+        status("Filled the draft with " + current.name()
+                + ". Review quantity, unit, and price, then save the product.");
+        return true;
+    }
+
     private void updateOrderLinePreview() {
         if (orderProduct == null || orderQty == null || orderUnit == null
                 || orderPrice == null || orderLinePreviewLabel == null) {
@@ -4162,8 +4337,9 @@ public class CrmTab implements FlowerFarmTab {
                     .anyMatch(order -> orderId.equals(order.getId())
                             && "CONFIRMED".equalsIgnoreCase(order.getStatus()));
             String reservation = confirmedReservation + " inventory unit"
-                    + (confirmedReservation == 1 ? "" : "s") + " reserved for "
-                    + (selectedConfirmed ? "earlier " : "") + "confirmed orders";
+                    + (confirmedReservation == 1 ? "" : "s") + " counted toward "
+                    + (selectedConfirmed ? "earlier " : "")
+                    + "confirmed orders in this preview";
             preview = new CrmPresenter.LinePreview(
                     preview.valid(), preview.inventoryMatched(), preview.enoughStock(),
                     preview.duplicateSavedLines(), preview.lineTotal(), preview.invalidField(),
@@ -4488,7 +4664,7 @@ public class CrmTab implements FlowerFarmTab {
         updateOrderActions();
         FarmUi.revealAndFocus(orderNotes);
         status("Event-service brief prepared in new-order instructions. Add the customer, date, "
-                + "handoff, and physical flower products before creating the draft order.");
+                + "handoff, and physical products before creating the draft order.");
         return true;
     }
 
@@ -4791,8 +4967,12 @@ public class CrmTab implements FlowerFarmTab {
         }
         if (orderStatusLabel != null) {
             FarmUi.updateStatusBadge(orderStatusLabel, String.format(
-                    "Showing %d · $%,.2f total · %d ready",
-                    view.rows().size(), view.total(), view.pipelineCount()), FarmUi.Tone.SUCCESS);
+                    "Showing %d · $%,.2f total · %d confirmed",
+                    view.rows().size(), view.total(), view.pipelineCount()), FarmUi.Tone.NEUTRAL);
+            String guidance = "Confirmed orders enter packing review. Check the current "
+                    + "handoff, products, delivery context, and stock before completion.";
+            orderStatusLabel.setToolTipText(guidance);
+            orderStatusLabel.getAccessibleContext().setAccessibleDescription(guidance);
         }
         if (orderCardLayout != null && orderState != null) {
             updateOrderEmptyState();
@@ -4815,8 +4995,10 @@ public class CrmTab implements FlowerFarmTab {
             text = readinessView.readyCount() + " ready to complete · "
                     + readinessView.attentionCount() + " need attention";
             guidance = "Ready orders are confirmed, have a Pickup, Delivery, or Market handoff, "
-                    + "contain saved products with valid quantities and matching units, and fit "
-                    + "the current inventory snapshot in earliest-date order. "
+                    + "contain saved products with valid quantities and matching units, have "
+                    + "delivery contact or instructions when needed, and fit the current "
+                    + "inventory snapshot in earliest-date order. Market Day checks the whole "
+                    + "selected packing list. "
                     + readinessView.attentionCount()
                     + " confirmed order(s) were excluded; choose Needs attention to review them.";
             tone = readinessView.readyCount() > 0 ? FarmUi.Tone.SUCCESS : FarmUi.Tone.WARNING;
@@ -4824,8 +5006,8 @@ public class CrmTab implements FlowerFarmTab {
             text = readinessView.attentionCount() + " need attention · "
                     + readinessView.readyCount() + " ready";
             guidance = "These confirmed orders cannot complete from the current snapshot. Review "
-                    + "handoff, saved products, quantities, units, and stock reserved for earlier "
-                    + "dated orders. "
+                    + "handoff, delivery context, saved products, quantities, units, and stock "
+                    + "counted toward earlier dated orders in this review. "
                     + readinessView.readyCount() + " completion-ready order(s) are hidden.";
             tone = readinessView.attentionCount() > 0
                     ? FarmUi.Tone.WARNING : FarmUi.Tone.SUCCESS;
@@ -5663,14 +5845,14 @@ public class CrmTab implements FlowerFarmTab {
         ProductEntryDraft transferred = new ProductEntryDraft(
                 line.product(), line.quantity(), line.unit(), line.unitPrice(),
                 null, null, match.reviewedOrder());
-        if (!transferred.hasWork()) {
+        if (!transferred.hasWork(defaultUnit)) {
             status("The existing order was not opened because there is no product entry to move.");
             return;
         }
         orderProductDrafts.put(orderId, transferred);
         newOrderProductDraft = null;
         activeProductEntryOrderId = null;
-        applyProductEntryDraft(ProductEntryDraft.empty());
+        applyProductEntryDraft(ProductEntryDraft.empty(defaultUnit));
         pendingExistingOrderProductId = orderId;
         pendingExistingOrderProductName = transferred.product().trim();
         pendingOrderSelectionId = orderId;
@@ -6677,7 +6859,7 @@ public class CrmTab implements FlowerFarmTab {
                 || !orderProduct.getText().trim().isEmpty()
                 || !orderPrice.getText().trim().isEmpty()
                 || !"1".equals(orderQty.getText().trim())
-                || !"stems".equalsIgnoreCase(orderUnit.getText().trim());
+                || !defaultUnit.equalsIgnoreCase(orderUnit.getText().trim());
     }
 
     /** Returns an actionable close warning only when meaningful CRM work could be lost. */
@@ -6687,9 +6869,10 @@ public class CrmTab implements FlowerFarmTab {
         }
         rememberCurrentProductDraft();
         int productDrafts = orderProductDrafts.size()
-                + (newOrderProductDraft != null && newOrderProductDraft.hasWork() ? 1 : 0)
+                + (newOrderProductDraft != null
+                        && newOrderProductDraft.hasWork(defaultUnit) ? 1 : 0)
                 + (pausedNewOrderProductDraft != null
-                        && pausedNewOrderProductDraft.hasWork() ? 1 : 0);
+                        && pausedNewOrderProductDraft.hasWork(defaultUnit) ? 1 : 0);
         Set<Long> correctedOrders = new LinkedHashSet<>();
         correctedOrders.addAll(selectedOrderDateDrafts.keySet());
         correctedOrders.addAll(selectedOrderHandoffDrafts.keySet());
@@ -8122,12 +8305,13 @@ public class CrmTab implements FlowerFarmTab {
         FarmUi.Tone tone;
         if (refreshSucceeded && targetRestored) {
             message = "Order #" + presentation.orderId()
-                    + " confirmed once · ready to pack";
+                    + " confirmed once · review packing";
             recovery = presentation.description() + " was confirmed once. Inventory was not "
                     + "changed, and the refreshed Confirmed order remains selected. Do not "
-                    + "confirm it again; continue with packing or complete it only at handoff.";
-            hostStatus = presentation.description() + " is confirmed once and ready to pack. "
-                    + "Inventory was not changed, and the refreshed Confirmed order is selected.";
+                    + "confirm it again; review packing checks and complete only at handoff.";
+            hostStatus = presentation.description() + " is confirmed once. Review packing "
+                    + "checks before completion. Inventory was not changed, and the refreshed "
+                    + "Confirmed order is selected.";
             tone = FarmUi.Tone.SUCCESS;
         } else if (refreshSucceeded) {
             message = "Order #" + presentation.orderId()
@@ -8496,7 +8680,7 @@ public class CrmTab implements FlowerFarmTab {
         }
         orderProduct.setText("");
         orderQty.setText("1");
-        orderUnit.setText("stems");
+        orderUnit.setText(defaultUnit);
         orderPrice.setText("");
         orderProduct.requestFocusInWindow();
     }
@@ -8690,8 +8874,8 @@ public class CrmTab implements FlowerFarmTab {
             unitPrice = unitPrice == null ? "" : unitPrice;
         }
 
-        static ProductEntryDraft empty() {
-            return new ProductEntryDraft("", "1", "stems", "", null, null, null);
+        static ProductEntryDraft empty(String defaultUnit) {
+            return new ProductEntryDraft("", "1", defaultUnit, "", null, null, null);
         }
 
         ProductEntryDraft withReviewedOrder(OrderService.OrderReviewSnapshot value) {
@@ -8699,12 +8883,12 @@ public class CrmTab implements FlowerFarmTab {
                     product, quantity, unit, unitPrice, editingLineId, reviewedLine, value);
         }
 
-        boolean hasWork() {
+        boolean hasWork(String defaultUnit) {
             return editingLineId != null
                     || !product.trim().isEmpty()
                     || !unitPrice.trim().isEmpty()
                     || !"1".equals(quantity.trim())
-                    || !"stems".equalsIgnoreCase(unit.trim());
+                    || !defaultUnit.equalsIgnoreCase(unit.trim());
         }
     }
 
@@ -8769,7 +8953,7 @@ public class CrmTab implements FlowerFarmTab {
 
         String successStatus(long orderId) {
             return switch (this) {
-                case CONFIRM -> "Order #" + orderId + " confirmed · ready to pack";
+                case CONFIRM -> "Order #" + orderId + " confirmed · review packing";
                 case CANCEL -> "Order #" + orderId + " cancelled";
                 case SAVE_NOTES -> "Order #" + orderId + " instructions saved";
                 case SAVE_DATE -> "Order #" + orderId + " date saved · Market Day refreshed";
@@ -8784,7 +8968,7 @@ public class CrmTab implements FlowerFarmTab {
             String target = description == null || description.isBlank()
                     ? "The selected order" : description;
             return switch (this) {
-                case CONFIRM -> target + " is confirmed and ready for packing.";
+                case CONFIRM -> target + " is confirmed and eligible for packing review.";
                 case CANCEL -> target + " was cancelled.";
                 case SAVE_NOTES -> "Instructions were saved for " + target
                         + ". Invoices, packing lists, Market Day, and farm summaries were "

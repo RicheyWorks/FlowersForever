@@ -129,6 +129,13 @@ public final class FarmUi {
     /** Customer-owned farm identity with quiet FlowersForever attribution. */
     public static JPanel brandHeader(String farmName, String farmTagline,
                                      String location, String dateText) {
+        return brandHeader(farmName, farmTagline, location, dateText, "");
+    }
+
+    /** Farm identity with the selected daily workspace visible on every screen. */
+    public static JPanel brandHeader(String farmName, String farmTagline,
+                                     String location, String dateText,
+                                     String workspaceLabel) {
         JPanel header = new FloralWashPanel(new BorderLayout(16, 0), true);
         header.setName("farm.brandHeader");
         header.setBorder(BorderFactory.createCompoundBorder(
@@ -141,7 +148,7 @@ public final class FarmUi {
         identity.setOpaque(false);
         identity.setLayout(new BoxLayout(identity, BoxLayout.Y_AXIS));
         String safeFarmName = farmName == null || farmName.isBlank()
-                ? "YOUR FLOWER FARM" : farmName.trim().toUpperCase(java.util.Locale.ROOT);
+                ? "YOUR FARM" : farmName.trim().toUpperCase(java.util.Locale.ROOT);
         JLabel name = new JLabel(safeFarmName);
         name.setFont(name.getFont().deriveFont(Font.BOLD, 18f));
         name.setForeground(accentColor());
@@ -160,20 +167,34 @@ public final class FarmUi {
         JLabel locationBadge = statusBadge(location, Tone.NEUTRAL);
         JLabel date = new JLabel(dateText);
         date.setFont(date.getFont().deriveFont(Font.BOLD, 13f));
-        JPanel context = toolbar(locationBadge, date);
+        JLabel workspaceBadge = workspaceLabel == null || workspaceLabel.isBlank()
+                ? null : statusBadge(workspaceLabel, Tone.INFO);
+        if (workspaceBadge != null) {
+            workspaceBadge.setName("farm.workspaceBadge");
+            workspaceBadge.getAccessibleContext().setAccessibleName(
+                    workspaceLabel + " active workspace");
+        }
+        JPanel context = toolbar(workspaceBadge, locationBadge, date);
         header.add(context, BorderLayout.EAST);
         header.getAccessibleContext().setAccessibleName(
-                safeFarmName + " · FlowersForever application header");
+                safeFarmName + " · " + (workspaceBadge == null ? ""
+                        : workspaceLabel + " · ") + "FlowersForever application header");
         return header;
     }
 
     /** Compact semantic mark for the left-side farm workflow navigation. */
     public static Icon navigationIcon(String title) {
         String code = switch (title) {
+            case "Workspace" -> "WS";
             case "Dashboard" -> "TD";
             case "Inventory" -> "ST";
             case "Add Item" -> "+";
             case "Harvest Log" -> "HV";
+            case "Cultivation" -> "CU";
+            case "Field plans" -> "FD";
+            case "Orchard blocks" -> "OB";
+            case "Berry blocks" -> "BB";
+            case "Growing batches" -> "GB";
             case "Season Planner" -> "SP";
             case "Customers & Orders" -> "CO";
             case "Market Day" -> "MK";
@@ -186,15 +207,20 @@ public final class FarmUi {
             case "Rose Visualizer" -> "RO";
             case "Pricing Info" -> "$";
             case "Reference & Planning" -> "RF";
+            case "Event Services" -> "EV";
+            case "Production Studio" -> "DS";
             case "Irrigation & Care" -> "IR";
             default -> "FF";
         };
         Tone tone = switch (title) {
             case "Harvest Log", "Rose Varieties", "Rose Visualizer" -> Tone.DANGER;
             case "Market Day", "Pricing Info" -> Tone.WARNING;
-            case "Reference & Planning", "Knowledge Log", "PNW Plant Guide" -> Tone.INFO;
+            case "Reference & Planning", "Knowledge Log", "PNW Plant Guide",
+                    "Event Services", "Production Studio" -> Tone.INFO;
             case "Customers & Orders", "Irrigation & Care" -> Tone.INFO;
-            case "Dashboard", "Inventory", "Add Item", "Season Planner" -> Tone.SUCCESS;
+            case "Workspace", "Dashboard", "Inventory", "Add Item",
+                    "Field plans", "Orchard blocks", "Berry blocks", "Growing batches",
+                    "Season Planner" -> Tone.SUCCESS;
             default -> Tone.NEUTRAL;
         };
         return new NavigationIcon(code, toneBackgroundColor(tone), toneForegroundColor(tone));
@@ -576,7 +602,7 @@ public final class FarmUi {
         return scroll;
     }
 
-    /** Bound modal form content to its owner and display while reserving room for dialog buttons. */
+    /** Bound modal content to its owner and display, with room for icons, title bars, and buttons. */
     public static JScrollPane dialogScroll(Component owner, JComponent content, Dimension preferredViewport) {
         Dimension available = new Dimension(1024, 768);
         Window window = owner == null ? null : SwingUtilities.getWindowAncestor(owner);
@@ -600,7 +626,7 @@ public final class FarmUi {
                 JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED, JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
         scroll.setName("farm.dialogScroll");
         scroll.setPreferredSize(new Dimension(
-                Math.min(preferredViewport.width, Math.max(120, available.width - 80)),
+                Math.min(preferredViewport.width, Math.max(120, available.width - 120)),
                 Math.min(preferredViewport.height, Math.max(100, available.height - 140))));
         scroll.setBorder(BorderFactory.createEmptyBorder());
         scroll.getVerticalScrollBar().setUnitIncrement(24);

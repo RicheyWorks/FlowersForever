@@ -1,0 +1,2590 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Micro Bench — plate counts, dilutions, growth rate &amp; zones</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<!-- Webfonts load without blocking first paint: a stylesheet request that
+     hangs (one bar of signal) otherwise holds the page blank indefinitely,
+     which breaks the offline constraint in ADR-031. See tools/audit_offline.py. -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Nunito+Sans:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" media="print" data-webfont>
+<noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Nunito+Sans:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap"></noscript>
+<script>(function(){var l=document.querySelector('link[data-webfont]');if(!l)return;
+  var on=function(){l.media="all";};
+  if(l.sheet){on();}else{l.addEventListener("load",on);l.addEventListener("error",function(){});}
+})();</script>
+<style>
+  :root {
+    color-scheme: light;
+    --page:#F5F1E6; --surface:#FFFDF7; --surface-2:#F3EEE0; --ink:#23281F; --ink-2:#4B5344;
+    --muted:#6B6B5E; --border:#E3DCC9; --s1:#2C784C; --s1-deep:#236240; --s2:#A94F26; --s3:#2B6C8F;
+    --soft:#E9F0E7; --warn-bg:#F6EAD8; --danger:#B23A32; --danger-bg:#F6E7E5; --gold:#8A6408;
+    --shadow:0 1px 2px rgba(35,40,31,.06),0 10px 28px rgba(35,40,31,.08);
+    --head:"Fraunces",Georgia,serif;
+    --body:"Nunito Sans",system-ui,-apple-system,sans-serif;
+    --mono:"JetBrains Mono",ui-monospace,Menlo,monospace;
+  }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { margin:0; background:var(--page); color:var(--ink); font:16px/1.5 var(--body);
+    -webkit-font-smoothing:antialiased; overscroll-behavior-y:contain; }
+  .app { max-width:960px; margin:0 auto; padding:14px 16px calc(104px + env(safe-area-inset-bottom)); }
+  .top { display:flex; align-items:baseline; justify-content:space-between; gap:10px; padding:6px 2px 12px; flex-wrap:wrap; }
+  .brand { font-family:var(--head); font-weight:700; font-size:22px; letter-spacing:-0.01em; }
+  .brand span { color:var(--s1); }
+  .top a { font-family:var(--mono); font-size:11.5px; color:var(--muted); text-decoration:none;
+    display:inline-flex; align-items:center; min-height:44px; padding:0 6px; margin:-10px -6px; touch-action:manipulation; }
+  .top a:hover { color:var(--s1); }
+
+  .tabbar { position:fixed; left:0; right:0; bottom:0; z-index:20;
+    background:color-mix(in srgb, var(--surface) 94%, transparent); backdrop-filter:blur(10px);
+    border-top:1px solid var(--border); padding:8px max(8px, env(safe-area-inset-left)) calc(8px + env(safe-area-inset-bottom)); }
+  .tabbar .row { max-width:960px; margin:0 auto; display:grid; grid-template-columns:repeat(6,1fr); gap:4px; }
+  .tab { display:flex; flex-direction:column; align-items:center; gap:2px; border:0; background:none;
+    font:700 10.5px var(--body); color:var(--muted); padding:7px 1px; border-radius:12px; cursor:pointer;
+    min-height:54px; touch-action:manipulation; transition:background .15s ease, color .15s ease; }
+  .tab .ico { font-size:20px; line-height:1; }
+  .tab.on { color:var(--s1); background:var(--soft); }
+  .tab:active { transform:scale(.96); }
+  .pane { display:none; animation:fade .18s ease; }
+  .pane.on { display:block; }
+  @keyframes fade { from{opacity:0;transform:translateY(4px);} to{opacity:1;transform:none;} }
+  @media (prefers-reduced-motion: reduce){ .pane{animation:none;} }
+
+  h2 { font-family:var(--head); font-weight:600; font-size:20px; margin:6px 0 2px; }
+  h3 { font-family:var(--head); font-weight:600; font-size:16.5px; margin:16px 0 4px; }
+  .hint { color:var(--muted); font-size:14px; margin:0 0 12px; }
+  .card { background:var(--surface); border:1px solid var(--border); border-radius:16px;
+    padding:16px; box-shadow:var(--shadow); margin-bottom:14px; }
+  .fine { font-size:12.5px; color:var(--muted); margin-top:10px; line-height:1.55; }
+  /* A source, set apart from the sentence it backs (ADR-053). */
+  .who { font-family:var(--mono); font-size:11px; color:var(--ink); font-weight:500; }
+
+  input[type=text], input[type=number], input[type=date], select, textarea {
+    background:var(--surface); color:var(--ink); border:1.5px solid var(--border); border-radius:12px;
+    padding:11px 14px; font:16px var(--body); min-height:48px; max-width:100%; }
+  textarea { min-height:78px; line-height:1.5; width:100%; }
+  input:focus, select:focus, textarea:focus { outline:none; border-color:var(--s1); box-shadow:0 0 0 3px rgba(44,120,76,.18); }
+  input[type=number] { width:110px; }
+  label.f { display:flex; flex-direction:column; gap:5px; font-size:13px; font-weight:700; color:var(--ink-2); min-width:0; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; }
+  .grid label.f input, .grid label.f select { width:100%; }
+
+  .btn { border:0; border-radius:12px; padding:12px 18px; font:800 15px var(--body); cursor:pointer;
+    min-height:48px; touch-action:manipulation; transition:transform .1s ease, background .15s ease; }
+  .btn:active { transform:scale(.97); }
+  .btn-go { background:var(--s1); color:#fff; } .btn-go:hover { background:var(--s1-deep); }
+  .btn-soft { background:var(--soft); color:var(--s1); }
+  .btn-ghost { background:none; border:1.5px solid var(--border); color:var(--ink-2); }
+  .btn-ghost:hover { border-color:var(--s1); color:var(--s1); }
+  .btn-row { display:flex; gap:8px; flex-wrap:wrap; margin-top:12px; align-items:end; }
+
+  .kopts { display:flex; flex-wrap:wrap; gap:8px; }
+  .kopt { border:1.5px solid var(--border); background:var(--surface); border-radius:14px; padding:10px 14px;
+    font:700 14px var(--body); color:var(--ink-2); cursor:pointer; min-height:46px; touch-action:manipulation;
+    display:inline-flex; flex-direction:column; align-items:flex-start; gap:1px; }
+  .kopt small { font-weight:400; font-size:11px; color:var(--muted); font-family:var(--mono); }
+  .kopt.on { border-color:var(--s1); background:var(--soft); color:var(--s1); }
+
+  .covscale { display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; }
+  .cv { border:1.5px solid var(--border); background:var(--surface); border-radius:11px; min-width:52px;
+    padding:8px 6px; font:800 15px var(--body); color:var(--ink-2); cursor:pointer; min-height:52px;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1px; touch-action:manipulation; }
+  .cv small { font:400 9.5px var(--mono); color:var(--muted); }
+  .cv.on { border-color:var(--s1); background:var(--soft); color:var(--s1); }
+  .cv.on small { color:var(--s1-deep); }
+
+  .tiles { display:flex; flex-wrap:wrap; gap:8px; margin:12px 0 2px; }
+  .tile { background:var(--surface-2); border:1px solid var(--border); border-radius:12px; padding:9px 14px; min-width:96px; }
+  .tile .v { font-family:var(--head); font-weight:700; font-size:21px; font-variant-numeric:tabular-nums; }
+  .tile .l { font-size:11px; color:var(--muted); }
+  .verdict { border-radius:12px; padding:13px 16px; margin:12px 0 2px; font-size:15.5px; line-height:1.55;
+    border-left:4px solid var(--s1); background:var(--soft); color:var(--ink-2); }
+  .verdict b { color:var(--ink); }
+  .verdict.warn { border-left-color:var(--s2); background:var(--warn-bg); }
+  .verdict.act { border-left-color:var(--danger); background:var(--danger-bg); }
+
+  .tw { overflow-x:auto; -webkit-overflow-scrolling:touch; margin:10px 0; }
+  table { border-collapse:collapse; width:100%; font-size:14px; }
+  th,td { border:1px solid var(--border); padding:6px 9px; text-align:left; vertical-align:top; white-space:nowrap; }
+  th { background:var(--soft); font-family:var(--head); font-weight:600; font-size:13px; }
+  td.n, th.n { text-align:right; font-variant-numeric:tabular-nums; font-family:var(--mono); font-size:13px; }
+  td i { font-style:italic; color:var(--ink-2); }
+
+  .rowlist { display:grid; grid-template-columns:minmax(0,1fr); gap:8px; margin-top:10px; }
+  /* minmax(0,1fr), not the implicit auto track: an auto track is at least its
+     widest row's min-content, and a row whose badge, count and remove button
+     do not shrink pushed a phone's page 4px sideways once a host was recorded
+     (the harness's page walk found it, ADR-128). */
+  .row2 { display:flex; align-items:center; gap:10px; background:var(--surface); border:1px solid var(--border);
+    border-radius:12px; padding:10px 13px; font-size:15px; }
+  .row2.inv { border-left:3px solid var(--danger); }
+  .row2 .g { flex:1 1 220px; min-width:0; }
+  /* A row wraps rather than squeezes: below 220px for the name, the badge,
+     the count and the remove button take the next line together (ADR-128). */
+  .row2 { flex-wrap:wrap; }
+  .row2 .g b { font-family:var(--head); font-size:15.5px; }
+  .row2 .g b i { font-style:italic; font-weight:400; color:var(--ink-2); font-size:14px; }
+  .row2 .g span { display:block; color:var(--muted); font-size:12.5px; font-family:var(--mono); margin-top:1px;
+    overflow:hidden; text-overflow:ellipsis; }
+  .row2 .cov { font-family:var(--head); font-weight:700; font-size:17px; color:var(--s1); min-width:46px; text-align:right; }
+  .row2 button { border:0; background:none; color:var(--muted); font-size:15px; padding:9px 11px; cursor:pointer; min-height:44px; min-width:44px; }
+  .row2 button:hover { color:var(--danger); }
+
+  .bars { display:grid; gap:6px; margin-top:10px; }
+  .bar { display:grid; grid-template-columns:132px 1fr 54px; gap:8px; align-items:center; font-size:13.5px; }
+  .bar .nm { font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .bar .tr { display:block; background:var(--surface-2); border:1px solid var(--border); border-radius:8px; height:20px; overflow:hidden; }
+  .bar .fl { display:block; height:100%; background:var(--s1); border-radius:7px 0 0 7px; transition:width .4s ease; }
+  .bar .fl.inv { background:var(--s2); }
+  .bar .pc { text-align:right; font-variant-numeric:tabular-nums; color:var(--ink-2); font-family:var(--mono); font-size:12.5px; }
+
+  .label { background:#fff; border:1px solid var(--ink); border-radius:2px; padding:14px 16px; margin-top:10px;
+    font:12.5px/1.5 var(--body); color:#000; max-width:440px; }
+  .label .inst { font-family:var(--head); font-weight:700; font-size:12px; letter-spacing:.06em;
+    text-transform:uppercase; text-align:center; border-bottom:1px solid #000; padding-bottom:5px; margin-bottom:7px; }
+  .label .sci { font-style:italic; font-weight:700; font-size:14px; }
+  .label .row { margin:3px 0; }
+  .label .k { font-weight:700; }
+  .label .coll { margin-top:8px; padding-top:6px; border-top:1px solid #999; display:flex; justify-content:space-between; }
+
+  pre.export { background:#23281F; color:#E8E4D5; border-radius:12px; padding:14px 16px; overflow-x:auto;
+    font:12.5px/1.65 var(--mono); max-height:340px; }
+  code { font-family:var(--mono); font-size:.82em; background:var(--surface-2); border:1px solid var(--border); border-radius:5px; padding:1px 5px; }
+
+  .toast { position:fixed; left:50%; bottom:84px; transform:translateX(-50%) translateY(90px); z-index:30;
+    background:var(--ink); color:#F5F1E6; border-radius:999px; padding:10px 22px; font:700 14px var(--body);
+    transition:transform .25s ease; pointer-events:none; max-width:88vw; text-align:center; }
+  .toast.on { transform:translateX(-50%) translateY(0); }
+
+  @media print {
+    .tabbar, .btn, .kopts, .covscale, .top a, .noprint { display:none !important; }
+    body { background:#fff; } .pane { display:block !important; }
+    .app { padding-bottom:0; } .card { break-inside:avoid; } table { font-size:10pt; }
+    pre.export { background:#fff; color:#000; border:1px solid #ccc; max-height:none; }
+    .label { break-inside:avoid; page-break-inside:avoid; }
+  }
+
+
+  /* ---- fungal additions ---- */
+  .sw { display:flex; flex-wrap:wrap; gap:7px; margin-top:6px; }
+  .swc { border:1.5px solid var(--border); background:var(--surface); border-radius:12px; padding:7px 11px 8px;
+    font:700 12.5px var(--body); color:var(--ink-2); cursor:pointer; min-height:56px; touch-action:manipulation;
+    display:flex; flex-direction:column; align-items:center; gap:5px; min-width:74px; }
+  .swc .chip { width:44px; height:18px; border-radius:5px; border:1px solid rgba(35,40,31,.28); display:block; }
+  .swc.on { border-color:var(--s1); background:var(--soft); color:var(--s1); }
+
+  .chk { display:flex; flex-wrap:wrap; gap:7px; margin-top:6px; }
+  .ck { border:1.5px solid var(--border); background:var(--surface); border-radius:999px; padding:9px 14px;
+    font:700 13.5px var(--body); color:var(--ink-2); cursor:pointer; min-height:44px; touch-action:manipulation; }
+  .ck.on { border-color:var(--s1); background:var(--soft); color:var(--s1); }
+  .ck.on::before { content:"\2713 "; }
+
+  .rg { display:grid; gap:9px; margin-top:8px; }
+  .rgi { border:1px solid var(--border); background:var(--surface); border-radius:13px; padding:11px 13px; }
+  .rgi .hd { display:flex; align-items:center; justify-content:space-between; gap:9px; flex-wrap:wrap; }
+  .rgi .nm { font-family:var(--head); font-weight:700; font-size:15px; }
+  .rgi .nm em { font-style:normal; font-family:var(--mono); font-size:11.5px; color:var(--muted); margin-left:6px; }
+  .rgi .wh { font-size:12.5px; color:var(--muted); line-height:1.5; margin-top:5px; }
+  .rgi input[type=text] { width:100%; margin-top:8px; min-height:44px; }
+  .rgi.haz { border-left:3px solid var(--s2); }
+
+  .guild { display:inline-block; font:700 10.5px var(--mono); letter-spacing:.05em; text-transform:uppercase;
+    border-radius:999px; padding:3px 9px; border:1px solid var(--border); background:var(--surface-2); color:var(--ink-2); }
+  .guild.ecm { border-color:var(--s1); color:var(--s1); background:var(--soft); }
+  .guild.woodsap, .guild.littersap { border-color:var(--s3); color:var(--s3); background:#E6EEF3; }
+  .guild.par { border-color:var(--danger); color:var(--danger); background:var(--danger-bg); }
+  .guild.lich { border-color:var(--gold); color:#7a5c07; background:#F5EFD9; }
+  .guild.myco { border-color:var(--s2); color:var(--s2); background:var(--warn-bg); }
+  .guild.mixed { border-style:dashed; }
+
+  .mx td.h0 { color:var(--muted); }
+  .mx td.h1 { background:#EDF4EA; font-weight:700; }
+  .mx td.h2 { background:var(--s1); color:#fff; font-weight:700; }
+
+  .never { border:2px solid var(--danger); background:var(--danger-bg); border-radius:14px; padding:15px 17px;
+    margin:14px 0; font-size:15px; line-height:1.6; color:var(--ink); }
+  .never b { font-family:var(--head); display:block; font-size:16px; margin-bottom:5px; color:var(--danger); }
+
+  .drylog { display:grid; grid-template-columns:repeat(auto-fit,minmax(128px,1fr)); gap:9px; margin-top:8px; }
+
+
+  /* ---- bench additions ---- */
+  .stat { display:grid; grid-template-columns:repeat(auto-fit,minmax(132px,1fr)); gap:9px; margin:12px 0 2px; }
+  .st { background:var(--surface-2); border:1px solid var(--border); border-radius:12px; padding:10px 13px; }
+  .st .v { font-family:var(--head); font-weight:700; font-size:22px; font-variant-numeric:tabular-nums; line-height:1.1; }
+  .st .l { font-size:11px; color:var(--muted); margin-top:2px; line-height:1.35; }
+  .st.hi .v { color:var(--s1); } .st.bad .v { color:var(--danger); } .st.warnv .v { color:var(--s2); }
+  .eq { font-family:var(--mono); font-size:12.5px; background:var(--surface-2); border:1px solid var(--border);
+    border-radius:9px; padding:9px 12px; margin:9px 0; color:var(--ink-2); overflow-x:auto; }
+  .scat { display:block; width:100%; height:auto; background:var(--surface); border:1px solid var(--border);
+    border-radius:12px; margin-top:10px; }
+  .warnbox { border:2px solid var(--s2); background:var(--warn-bg); border-radius:14px; padding:14px 17px;
+    margin:14px 0; font-size:15px; line-height:1.6; }
+  .warnbox b { font-family:var(--head); display:block; font-size:16px; margin-bottom:4px; color:var(--s2); }
+  .refuse { border:2px solid var(--danger); background:var(--danger-bg); border-radius:14px; padding:15px 18px;
+    margin:14px 0; font-size:15px; line-height:1.6; }
+  .refuse b { font-family:var(--head); display:block; font-size:16px; margin-bottom:4px; color:var(--danger); }
+  td.ok { color:var(--s1); font-weight:700; } td.no { color:var(--danger); font-weight:700; }
+
+  .rail { margin:26px 0 4px; }
+  .rail .rl { font-family:var(--mono); font-size:11px; letter-spacing:.14em; text-transform:uppercase; color:var(--muted); margin:0 2px 8px; }
+  .rail .chips { display:flex; flex-wrap:wrap; gap:8px; }
+  .rail a { display:inline-flex; align-items:center; gap:7px; text-decoration:none; font:700 13.5px var(--body);
+    color:var(--ink-2); background:var(--surface); border:1px solid var(--border); border-radius:999px;
+    padding:9px 15px; min-height:44px; box-shadow:var(--shadow); touch-action:manipulation; }
+  .rail a:hover { border-color:var(--s1); color:var(--s1); }
+  .rail a[aria-current="page"] { background:var(--soft); border-color:var(--s1); color:var(--s1); }
+  .rail a.ref { font-weight:600; color:var(--muted); background:none; box-shadow:none; }
+  @media print { .rail { display:none !important; } }
+
+  /* ============ Field Entry Kit v1.8.0 ============
+     Large-target, high-contrast entry controls. Sizing is driven by --tap
+     rather than per-component numbers so one token retunes the whole kit for
+     gloves, cold hands or a wall-mounted tablet. */
+  :root {
+    --tap: 60px;            /* primary control height  */
+    --tap-sm: 48px;         /* secondary control height */
+    --fek-r: 16px;
+    /* These three moved for WCAG AA and the move was made in the pages, by
+       hand, and never came back here -- because the CSS half of fek_emit was
+       dead code and nobody could tell. Source and pages agreed only by
+       ramp-1 moved here too: at its old teal, white label text on a selected
+       button measured 3.94:1 and the .92-white sub-line 3.59:1, both under AA.
+       No page had caught it because none defaulted to a ramp-1 option until the
+       deployment log did. Every ramp is now checked against both, in
+       verify_contrast_slice.
+       The pre-fix ramp values are named in verify_contrast_slice,
+       which greps for them literally across every page -- so they are not
+       repeated here, because a comment naming them is itself a page carrying
+       them, and the suite is right not to care why. */
+    --ramp-0:#2B6C8F; --ramp-1:#2F7373; --ramp-2:#2C784C;
+    --ramp-3:#8A6408; --ramp-4:#A94F26; --ramp-5:#B23A32;
+    --fek-line:#C7C0AC;
+    /* v1.8.0 (ADR-254): the edge of a box you write in. --fek-line is a
+       decorative line (a drop zone's dash, a card's rule) and reads 1.79:1;
+       a control's edge carries the WCAG 1.4.11 floor of 3:1, and this is the
+       colour every page's own rule already gives its inputs. */
+    --fek-edge:#8E8160;
+  }
+  .fek-lab { display:block; font:800 15px var(--body); color:var(--ink-2);
+    letter-spacing:.01em; margin:0 0 6px; }
+  .fek-lab .u { font:600 12.5px var(--mono); color:var(--muted); margin-left:6px; }
+  .fek-help { font-size:13.5px; color:var(--muted); line-height:1.5; margin:6px 0 0; }
+  .fek-row { margin:0 0 20px; }
+
+  /* --- stepper: the workhorse numeric entry --- */
+  .fek-step { display:flex; align-items:stretch; gap:0; border:2px solid var(--border);
+    border-radius:var(--fek-r); overflow:hidden; background:var(--surface); max-width:340px; }
+  .fek-step button { border:0; background:var(--surface-2); color:var(--ink);
+    font:800 30px var(--body); line-height:1; width:calc(var(--tap) + 8px); min-height:var(--tap);
+    cursor:pointer; touch-action:manipulation; transition:background .12s; }
+  .fek-step button:hover { background:var(--soft); color:var(--s1); }
+  .fek-step button:active { background:var(--s1); color:#fff; }
+  .fek-step .val { flex:1; min-width:0; text-align:center; border:0; background:none;
+    font:800 30px var(--head); color:var(--ink); font-variant-numeric:tabular-nums;
+    -moz-appearance:textfield; padding:0 4px; }
+  .fek-step .val::-webkit-outer-spin-button,
+  .fek-step .val::-webkit-inner-spin-button { -webkit-appearance:none; margin:0; }
+  .fek-step .val:focus { outline:none; background:var(--soft); }
+
+  /* --- segmented ordinal dial with a colour ramp --- */
+  .fek-dial { display:flex; flex-wrap:wrap; gap:8px; }
+  .fek-dial button { flex:1 1 auto; min-width:72px; min-height:var(--tap);
+    border:2px solid var(--border); border-radius:var(--fek-r); background:var(--surface);
+    font:800 17px var(--body); color:var(--ink-2); cursor:pointer; touch-action:manipulation;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px;
+    padding:6px 8px; transition:transform .08s, border-color .12s, background .12s; }
+  .fek-dial button small { font:600 11px var(--mono); color:var(--muted); letter-spacing:.02em; }
+  .fek-dial button:active { transform:scale(.96); }
+  .fek-dial button.on { color:#fff; border-color:transparent; }
+  .fek-dial button.on small { color:rgba(255,255,255,.92); }
+  .fek-dial button.on[data-r="0"]{background:var(--ramp-0);}
+  .fek-dial button.on[data-r="1"]{background:var(--ramp-1);}
+  .fek-dial button.on[data-r="2"]{background:var(--ramp-2);}
+  .fek-dial button.on[data-r="3"]{background:var(--ramp-3);}
+  .fek-dial button.on[data-r="4"]{background:var(--ramp-4);}
+  .fek-dial button.on[data-r="5"]{background:var(--ramp-5);}
+
+  /* --- field: a typed value from an instrument readout ---
+     A stepper is the wrong control for a number you READ off a machine to three
+     decimals: you would tap two thousand times to reach 1.842. This is a plain
+     numeric entry sized like the rest of the kit, with the unit shown and the
+     decimal keypad requested, and nothing that pretends the value is scrollable. */
+  .fek-field { display:flex; align-items:stretch; gap:0; border:2px solid var(--border);
+    border-radius:var(--fek-r); overflow:hidden; background:var(--surface); max-width:340px; }
+  .fek-field input { flex:1; min-width:0; border:0; background:none; text-align:right;
+    font:800 26px var(--head); color:var(--ink); font-variant-numeric:tabular-nums;
+    -moz-appearance:textfield; padding:0 12px; min-height:var(--tap); }
+  .fek-field input::-webkit-outer-spin-button,
+  .fek-field input::-webkit-inner-spin-button { -webkit-appearance:none; margin:0; }
+  .fek-field input:focus { outline:none; background:var(--soft); }
+  .fek-field input::placeholder { color:var(--muted); font-weight:600; font-size:20px; }
+  .fek-field .u { display:flex; align-items:center; padding:0 14px; background:var(--surface-2);
+    font:700 13px var(--mono); color:var(--muted); border-left:2px solid var(--border); white-space:nowrap; }
+  .fek-field.empty { border-style:dashed; }
+
+  /* --- a box the browser could not parse (v1.4.0, ADR-151) ---
+     Not the same state as empty, and it must not look like it. An empty box is
+     "not recorded yet"; this one holds the reader's own characters and hands
+     the page back the empty string, so without a state of its own the two are
+     one thing on screen as well as in the value. */
+  .fek-step.bad, .fek-field.bad { border-color:var(--ramp-5); border-style:solid; }
+  .fek-bad { font:700 13.5px var(--body); color:var(--ramp-5); margin:6px 0 0; }
+  input[type="number"].fek-badbox { border-color:var(--ramp-5) !important; }
+
+  /* --- big toggle chips --- */
+  .fek-chips { display:flex; flex-wrap:wrap; gap:9px; }
+  .fek-chip { min-height:var(--tap-sm); border:2px solid var(--border); border-radius:999px;
+    background:var(--surface); font:800 15.5px var(--body); color:var(--ink-2);
+    padding:0 20px; cursor:pointer; touch-action:manipulation; display:inline-flex;
+    align-items:center; gap:8px; transition:transform .08s, border-color .12s, background .12s; }
+  .fek-chip:active { transform:scale(.96); }
+  .fek-chip.on { border-color:var(--s1); background:var(--soft); color:var(--s1-deep); }
+  .fek-chip.on::before { content:"\2713"; font-size:17px; }
+
+  /* --- slider with a live bubble --- */
+  .fek-slide { display:flex; align-items:center; gap:14px; }
+  .fek-slide input[type=range] { flex:1; min-width:0; height:var(--tap-sm); -webkit-appearance:none;
+    background:transparent; cursor:pointer; touch-action:manipulation; }
+  .fek-slide input[type=range]::-webkit-slider-runnable-track { height:14px; border-radius:8px;
+    background:linear-gradient(90deg,var(--ramp-0),var(--ramp-2),var(--ramp-3),var(--ramp-5)); }
+  .fek-slide input[type=range]::-moz-range-track { height:14px; border-radius:8px;
+    background:linear-gradient(90deg,var(--ramp-0),var(--ramp-2),var(--ramp-3),var(--ramp-5)); }
+  .fek-slide input[type=range]::-webkit-slider-thumb { -webkit-appearance:none; width:34px; height:34px;
+    border-radius:50%; background:#fff; border:3px solid var(--ink); margin-top:-10px;
+    box-shadow:0 2px 6px rgba(35,40,31,.3); }
+  .fek-slide input[type=range]::-moz-range-thumb { width:34px; height:34px; border-radius:50%;
+    background:#fff; border:3px solid var(--ink); box-shadow:0 2px 6px rgba(35,40,31,.3); }
+  .fek-slide .bub { font:800 26px var(--head); font-variant-numeric:tabular-nums; color:var(--ink);
+    min-width:86px; text-align:right; }
+  .fek-slide .bub span { font:600 13px var(--mono); color:var(--muted); margin-left:3px; }
+
+  /* --- big picker: replaces <select> for long lists --- */
+  .fek-pick { border:2px solid var(--border); border-radius:var(--fek-r); background:var(--surface);
+    overflow:hidden; }
+  .fek-pick .search { width:100%; border:0; border-bottom:2px solid var(--border);
+    font:700 17px var(--body); padding:0 16px; min-height:var(--tap); background:var(--surface-2); }
+  .fek-pick .search:focus { outline:none; background:var(--soft); }
+  .fek-pick .opts { max-height:264px; overflow-y:auto; -webkit-overflow-scrolling:touch; }
+  .fek-pick .opt { display:block; width:100%; text-align:left; border:0; border-bottom:1px solid var(--border);
+    background:none; font:700 16.5px var(--body); color:var(--ink); min-height:var(--tap-sm);
+    padding:10px 16px; cursor:pointer; touch-action:manipulation; }
+  .fek-pick .opt small { display:block; font:400 12.5px var(--mono); color:var(--muted); margin-top:2px; }
+  .fek-pick .opt:hover { background:var(--soft); }
+  .fek-pick .opt.on { background:var(--s1); color:#fff; }
+  .fek-pick .opt.on small { color:rgba(255,255,255,.92); }
+  .fek-pick .none { padding:16px; color:var(--muted); font-size:14px; }
+
+  /* --- readout tiles, sized to be read at arm's length --- */
+  .fek-tiles { display:grid; grid-template-columns:repeat(auto-fit,minmax(148px,1fr)); gap:11px; margin:14px 0 2px; }
+  .fek-tile { border:2px solid var(--border); border-radius:var(--fek-r); padding:13px 15px; background:var(--surface); }
+  .fek-tile .v { font:800 30px var(--head); font-variant-numeric:tabular-nums; line-height:1.05; color:var(--ink); }
+  .fek-tile .l { font:700 12px var(--body); color:var(--muted); margin-top:4px; letter-spacing:.02em; }
+  .fek-tile.good { border-color:var(--ramp-2); } .fek-tile.good .v { color:var(--ramp-2); }
+  .fek-tile.warn { border-color:var(--ramp-3); } .fek-tile.warn .v { color:#8a6508; }
+  .fek-tile.bad  { border-color:var(--ramp-5); } .fek-tile.bad  .v { color:var(--ramp-5); }
+  .fek-tile.cold { border-color:var(--ramp-0); } .fek-tile.cold .v { color:var(--ramp-0); }
+
+  /* --- banner: the verdict, big --- */
+  .fek-banner { border-radius:var(--fek-r); padding:16px 19px; margin:14px 0; font-size:16px;
+    line-height:1.55; border-left:7px solid var(--ramp-2); background:var(--soft); color:var(--ink-2); }
+  .fek-banner b { font-family:var(--head); color:var(--ink); font-size:17.5px; display:block; margin-bottom:4px; }
+  .fek-banner.warn { border-left-color:var(--ramp-3); background:var(--warn-bg); }
+  .fek-banner.bad  { border-left-color:var(--ramp-5); background:var(--danger-bg); }
+  .fek-banner.cold { border-left-color:var(--ramp-0); background:#E6EEF3; }
+
+  /* --- photographs: the record carries the reference, not the image ---
+     (v1.5.0, ADR-201). Sized for a gloved thumb like the rest of the kit, and
+     the thumbnail is large enough to tell two bark shots apart at arm's
+     length, which is the only reason it is on screen at all. */
+  .fek-drop { border:2.5px dashed var(--fek-line); border-radius:var(--fek-r);
+    background:var(--surface); padding:18px 16px; text-align:center;
+    transition:border-color .12s, background .12s; }
+  .fek-drop.on { border-color:var(--ramp-2); background:var(--soft); border-style:solid; }
+  .fek-drop p { margin:0 0 10px; font-size:15px; color:var(--ink-2); }
+  .fek-drop button { min-height:var(--tap); border:0; border-radius:var(--fek-r);
+    background:var(--ramp-2); color:#fff; font:800 16px var(--body); padding:0 22px;
+    cursor:pointer; touch-action:manipulation; }
+  .fek-drop button:active { transform:scale(.97); }
+  .fek-photos { display:grid; grid-template-columns:repeat(auto-fill,minmax(210px,1fr));
+    gap:12px; margin-top:14px; }
+  .fek-photo { border:2px solid var(--border); border-radius:var(--fek-r);
+    background:var(--surface); overflow:hidden; }
+  .fek-photo img { display:block; width:100%; height:150px; object-fit:cover; background:var(--surface-2); }
+  .fek-photo .m { padding:10px 12px 12px; }
+  .fek-photo .m code { display:block; font:500 11.5px var(--mono); color:var(--muted);
+    word-break:break-all; line-height:1.45; }
+  .fek-photo .m input, .fek-photo .m textarea { width:100%; margin-top:8px; border:1.5px solid var(--fek-edge);
+    border-radius:10px; padding:9px 10px; font:15px var(--body); background:var(--surface);
+    color:var(--ink); min-height:44px; }
+  .fek-photo .m textarea { min-height:62px; resize:vertical; }
+  .fek-photo .rm, .fek-photo .act { margin-top:8px; min-height:44px; width:100%; border:1.5px solid var(--fek-line);
+    border-radius:10px; background:none; color:var(--ink-2); font:700 14px var(--body); cursor:pointer; }
+  .fek-photo .rm:hover { border-color:var(--ramp-5); color:var(--ramp-5); }
+  .fek-photo .act:hover { border-color:var(--ramp-2); color:var(--ramp-2); }
+  .fek-await { margin:8px 0 0; padding:9px 11px; border:1.5px dashed var(--accent, #7A6A3A);
+    border-radius:10px; background:var(--surface-2, #F3EEE0); }
+  .fek-await b { color:var(--accent, #7A6A3A); }
+  .fek-await ul { margin:6px 0 0; padding:0 0 0 18px; font-family:var(--mono, monospace);
+    font-size:11.5px; color:var(--ink-2, #4B5344); line-height:1.6; }
+  .fek-await .cap { color:var(--muted, #6B6B5E); }
+  .fek-shot { font:700 13.5px var(--body); color:var(--ink-2); margin:10px 0 0; min-height:1.2em; }
+  .fek-shot.bad { color:var(--ramp-5); }
+  @media print { .fek-drop, .fek-photo .rm, .fek-photo .act { display:none !important; }
+                 .fek-photo img { height:auto; } }
+
+  @media (max-width:420px){ :root { --tap:56px; --tap-sm:46px; } .fek-step .val { font-size:26px; } }
+  @media print { .fek-step button, .fek-pick .search { display:none; } }
+  /* ============ Keep (local autosave) v1.4.0 ============ */
+  .keep { display:flex; flex-wrap:wrap; align-items:center; gap:10px;
+    background:var(--surface-2, #F3EEE0); border:1px solid var(--border, #E3DCC9);
+    border-radius:12px; padding:10px 13px; margin:12px 0 2px; }
+  .keep .st { font-family:var(--mono, monospace); font-size:11.5px; color:var(--muted, #6B6B5E);
+    line-height:1.5; flex:1 1 220px; min-width:0; }
+  .keep .st b { color:var(--ink, #23281F); }
+  .keep.bad { border-color:var(--danger, #B23A32); background:var(--danger-bg, #F6E7E5); }
+  .keep.bad .st b { color:var(--danger, #B23A32); }
+  .keep button { border:1.5px solid var(--border, #E3DCC9); background:none; border-radius:10px;
+    padding:0 14px; min-height:var(--tap, 44px); font:700 13px var(--body, sans-serif);
+    color:var(--ink-2, #4B5344); cursor:pointer; touch-action:manipulation; }
+  .keep button:hover { border-color:var(--danger, #B23A32); color:var(--danger, #B23A32); }
+  .keep .note { flex:1 1 100%; font-size:12px; color:var(--muted, #6B6B5E); line-height:1.5; }
+  @media print { .keep { display:none !important; } }
+  /* ============ Outbox (what has not left this device) v1.0.0 ============ */
+  .outbox { background:var(--surface-2, #F3EEE0); border:1px solid var(--border, #E3DCC9);
+    border-radius:12px; padding:10px 13px; margin:4px 0 2px; }
+  .outbox .st { font-family:var(--mono, monospace); font-size:11.5px; color:var(--muted, #6B6B5E);
+    line-height:1.5; margin:0; }
+  .outbox .st b { color:var(--ink, #23281F); }
+  .outbox ul.pend { margin:7px 0 0; padding:0 0 0 18px; font-family:var(--mono, monospace);
+    font-size:11.5px; color:var(--ink-2, #4B5344); line-height:1.6; }
+  .outbox ul.pend li::marker { color:var(--muted, #6B6B5E); }
+  .outbox ul.pend .why { color:var(--muted, #6B6B5E); }
+  .outbox .note { margin:7px 0 0; font-size:12px; color:var(--muted, #6B6B5E); line-height:1.5; }
+  .outbox.hot { border-color:var(--accent, #7A6A3A); }
+  .outbox.hot .st b { color:var(--accent, #7A6A3A); }
+  .outbox.bad { border-color:var(--danger, #B23A32); background:var(--danger-bg, #F6E7E5); }
+  .outbox.bad .st b { color:var(--danger, #B23A32); }
+  @media print { .outbox { display:none !important; } }
+
+
+  /* WCAG 1.4.11 non-text contrast: the visible edge of a control you are meant
+     to write in is the only thing telling you where to write, so it carries the
+     3:1 floor. Decorative card borders are not controls and stay quiet. */
+  input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]),
+  select, textarea { border-color: #8E8160; }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="top">
+    <div class="brand">🧫 Micro <span>Bench</span></div>
+    <a href="ecology.html">part of the science kit →</a>
+  </div>
+
+  <!-- ============ PLATES ============ -->
+  <section class="pane on" id="p-pl">
+    <h2>Plate counts</h2>
+    <p class="hint">Enter every plate you counted, including the ones that were unusable. Which plates you
+      discarded, and why, is part of the result.</p>
+
+    <div class="card">
+      <div id="plEntry"></div>
+      <div class="btn-row">
+        <label class="f">plate label<input type="text" id="plL" style="width:150px" placeholder="TSA-A" autocomplete="off"></label>
+        <button class="btn btn-soft" id="plAdd" type="button">Add plate</button>
+      </div>
+      <input type="hidden" id="plN"><input type="hidden" id="plV" value="0.1"><input type="hidden" id="plC">
+      <div class="rowlist" id="plList"></div>
+    </div>
+    <div class="card" id="plOut"></div>
+    <div class="card" id="plNote"></div>
+  </section>
+
+  <!-- ============ DILUTION ============ -->
+  <section class="pane" id="p-dil">
+    <h2>Dilution planner</h2>
+    <p class="hint">Work out which dilution will land in the countable window <em>before</em> you pour, not
+      after you have wasted a set of plates.</p>
+    <div class="card">
+      <div id="dilEntry"></div>
+      <input type="hidden" id="dEst"><input type="hidden" id="dVol" value="0.1">
+      <input type="hidden" id="dTr" value="1"><input type="hidden" id="dBl" value="9">
+      <div id="dilOut"></div>
+    </div>
+  </section>
+
+  <!-- ============ GROWTH ============ -->
+  <section class="pane" id="p-gr">
+    <h2>Growth curve</h2>
+    <p class="hint">Enter time and OD, then mark the points you judge to be in exponential phase. The fit
+      uses only those.</p>
+    <div class="card">
+      <div id="grEntry"></div>
+      <input type="hidden" id="grT"><input type="hidden" id="grO">
+      <div class="btn-row">
+        <button class="btn btn-soft" id="grAdd" type="button">Add reading</button>
+        <button class="btn btn-ghost" id="grClear" type="button">Clear</button>
+        <button class="btn btn-ghost" id="grDemo" type="button">Worked example</button>
+      </div>
+      <div class="rowlist" id="grList"></div>
+    </div>
+    <div class="card" id="grOut"></div>
+  </section>
+
+  <!-- ============ ZONES ============ -->
+  <section class="pane" id="p-zn">
+    <h2>Disc diffusion</h2>
+    <p class="hint">Measure the zone. Interpretation needs a breakpoint table, and this page will not invent
+      one &mdash; see below.</p>
+    <div class="card">
+      <div class="grid">
+        <label class="f">organism<input type="text" id="zOrg" placeholder="E. coli ATCC 25922" autocomplete="off"></label>
+        <label class="f">medium<input type="text" id="zMed" value="Mueller-Hinton" autocomplete="off"></label>
+      </div>
+      <div class="btn-row">
+        <label class="f">antimicrobial<input type="text" id="zDrug" style="width:150px" autocomplete="off"></label>
+        <label class="f">disc content<input type="text" id="zCont" style="width:110px" placeholder="30 µg" autocomplete="off"></label>
+      </div>
+      <div id="zEntry"></div>
+      <input type="hidden" id="zMm">
+      <div class="btn-row">
+        <button class="btn btn-soft" id="zAdd" type="button">Add zone</button>
+      </div>
+      <h3>Breakpoints — from your current table</h3>
+      <div id="bpEntry"></div>
+      <input type="hidden" id="zS"><input type="hidden" id="zR">
+      <label class="f" style="margin-bottom:14px">source &amp; year<input type="text" id="zSrc" placeholder="CLSI M100, 2026" autocomplete="off"></label>
+      <div class="rowlist" id="zList"></div>
+      <div id="zOut"></div>
+    </div>
+    <div class="card" id="zRefuse"></div>
+  </section>
+
+  <!-- ============ METHOD ============ -->
+  <!-- ============ TAKE IT HOME ============ -->
+  <section class="pane" id="p-out">
+    <h2>Take it home</h2>
+    <p class="hint">Every plate, point and zone this bench holds, as a sheet you can paste into a
+      notebook &mdash; and each log as CSV. A plate count that lives only on a screen is a plate count
+      you will re-do.</p>
+    <div class="card">
+<div id="keepBox"></div>
+<div id="sendBox"></div>
+      <pre class="export" id="ecoOut"># record a plate, a point or a zone &mdash; the bench sheet appears here</pre>
+      <div class="btn-row">
+        <button class="btn btn-go" id="ecoCopy" type="button">Copy bench sheet</button>
+        <button class="btn btn-soft" id="plCopy" type="button">Copy plate CSV</button>
+        <button class="btn btn-soft" id="grCopy" type="button">Copy growth CSV</button>
+        <button class="btn btn-soft" id="znCopy" type="button">Copy zone CSV</button>
+        <button class="btn btn-ghost" onclick="window.print()" type="button">Print / save PDF</button>
+      </div>
+      <p class="fine">Every plate is carried, <b>including the ones outside the countable window</b>, and
+        marked TFTC or TNTC. A plate count reported without the plates that were rejected is a count
+        nobody can audit, and a series where every plate was out of range is a result in itself.
+        Zone diameters carry their breakpoint source, because <b>an S/I/R call without the table it came
+        from is an opinion</b>.</p>
+    </div>
+  </section>
+
+  <section class="pane" id="p-met">
+    <h2>Method</h2>
+
+    <div class="card">
+      <h3 style="margin-top:0">What the entry layer records &mdash; and what it does not</h3>
+      <p>The controls are the shared <b>Field Entry Kit</b>, and this page splits its numbers the same way
+        Cell Bench does.</p>
+      <p><b>A stepper for a number you set; a field for a number you read.</b> The dilution exponent, the
+        plated volume, the transfer and diluent volumes are <em>settings</em> &mdash; you choose them, so
+        they get steppers you can hold to run. The colony count, the OD&#8326;&#8320;&#8320;, the zone
+        diameter and the breakpoints you copy out of a table are <em>readings</em> &mdash; they get plain
+        typed entries at full precision, with the decimal keypad and nothing rounded on the way in. An
+        OD of 0.482 is three taps, not four hundred and eighty-two.</p>
+      <p><b>Blank still means blank.</b> The dilution exponent starts unrecorded rather than at 10&#8304;,
+        because an undiluted plate is a real choice and an unfilled field is not. Tap once and it starts at
+        10&#8315;&#8309;, which is a plausible working dilution rather than a meaningless zero.</p>
+      <p><b>The breakpoint fields are typed for the same reason the page ships no breakpoints.</b> They are
+        transcribed from the edition in front of you, and the edition is recorded beside them. A control
+        that let you scroll to a number would invite you to guess at one.</p>
+    </div>
+
+    <div class="card">
+      <h3 style="margin-top:0">What a colony count actually counts</h3>
+      <div class="eq">CFU/mL = colonies ÷ (volume plated × dilution)</div>
+      <p class="fine">The unit is a <b>colony-forming unit</b>, and the name is the caveat. A CFU is whatever
+        gave rise to one colony. A chain of eight streptococci, a clump of staphylococci, a hypha &mdash; each
+        is one CFU. Plate counts therefore <b>underestimate cell number</b> by an amount that depends on how
+        clumpy the organism is, which is why vortexing and the diluent matter and why CFU/mL should never be
+        reported as "cells per mL".</p>
+      <p class="fine">The second and larger caveat: a plate count only sees what grows <b>on that medium, at
+        that temperature, in that atmosphere, in that time</b>. For an environmental sample the culturable
+        fraction is routinely a small percentage of the cells present — the great plate count anomaly, known
+        since the 1930s and confirmed by every sequencing survey since. A plate count of a soil or water
+        sample is a count of the organisms your conditions happened to suit. Say so.</p>
+    </div>
+
+    <div class="card">
+      <h3 style="margin-top:0">The conventional 30&ndash;300 window</h3>
+      <p class="fine" style="margin-top:0">Only plates with roughly <b>30 to 300</b> colonies are counted &mdash;
+        the pour-plate window of <span class="who">APHA Standard Methods 9215</span>, and a convention rather
+        than a constant: see <i>whose window is it</i> below. Both ends are real:</p>
+      <ul style="font-size:13px;color:var(--muted);line-height:1.6;margin:0 0 10px;padding-left:20px">
+        <li><b>Below 30</b> the Poisson error is large. Counting is a Poisson process, so the coefficient of
+          variation is 1&nbsp;&divide;&nbsp;&radic;N: thirty colonies gives 1&nbsp;&divide;&nbsp;&radic;30
+          &asymp; 18%, ten gives 1&nbsp;&divide;&nbsp;&radic;10 &asymp; 32%. The plate is not wrong, it is
+          imprecise, and averaging several such plates is better than quoting one.</li>
+        <li><b>Above 300</b> colonies merge, crowd, and compete for nutrients, so you undercount by a growing
+          and unknowable amount. This is a <b>bias</b>, not noise, and more plates will not fix it.</li>
+      </ul>
+      <p class="fine">Plates outside the window are recorded as <b>TFTC</b> (too few to count) and <b>TNTC</b>
+        (too numerous to count) and excluded from the mean. This page shows them, marks them, and leaves them
+        out of the arithmetic rather than silently dropping them — a run where every plate was TNTC is a
+        result about your dilution series, and it should be visible.</p>
+      <p class="fine"><b>Whose window is it?</b> There is no single countable range, and it is worth
+        knowing that before someone tells you your plate was out of spec. FDA BAM and USP&nbsp;&lt;1227&gt;
+        both specify <b>25&ndash;250</b> for bacteria; USP drops to <b>8&ndash;80</b> for fungi; ASTM gives
+        <b>20&ndash;200</b> for spread plates and <b>30&ndash;300</b> for pour plates, which is also
+        <b>APHA Standard Methods&nbsp;9215</b> for water (its membrane-filter window is <b>20&ndash;200</b>);
+        Breed and Dotterrer,
+        who measured it in 1916, found 50&ndash;200 gave the most repeatable answers. This page uses
+        <b>30&ndash;300</b>, which is the general-purpose teaching convention, and it applies that one
+        window to both plating methods on this bench even though ASTM would narrow it for the spread
+        plate. That is a simplification, and it is a deliberate one rather than an oversight. If you are
+        working to a named standard, use its window and not ours &mdash; the reasoning above about Poisson
+        error below the floor and crowding bias above the ceiling holds whichever numbers you pick.</p>
+      <p class="fine">Where two adjacent dilutions are both countable, the convention is to use both and
+        average the computed CFU/mL. If they disagree by more than about a factor of two, something is wrong
+        with the series rather than with the organism, and the page says so.</p>
+    </div>
+
+    <div class="card">
+      <h3 style="margin-top:0">Growth rate from OD</h3>
+      <div class="eq">ln(OD) = ln(OD₀) + µt &nbsp;&nbsp;→&nbsp;&nbsp; µ = slope &nbsp;·&nbsp; t_d = ln2 / µ</div>
+      <p class="fine">Fitting a straight line to <b>ln(OD)</b> across the exponential phase gives the specific
+        growth rate µ in h⁻¹, and the doubling time follows. Two things to be honest about.</p>
+      <p class="fine"><b>OD is turbidity, not cells.</b> It measures light scattering, and the relationship
+        between scattering and cell number depends on cell size and shape — both of which change with growth
+        phase and medium. An OD-to-CFU conversion is specific to one strain on one instrument in one medium,
+        and it must be calibrated by you before it means anything. This page deliberately offers no such
+        conversion.</p>
+      <p class="fine"><b>OD saturates.</b> Above roughly OD 0.4&ndash;0.6 on a typical spectrophotometer,
+        multiple scattering makes the reading fall below linearity, so late points flatten for optical reasons
+        that have nothing to do with the culture. Including them drags µ down. Dilute before reading, or
+        exclude those points and say you did — which is why the phase selection here is manual rather than
+        automatic. Choosing the window is a scientific judgement and the page will not make it for you.</p>
+    </div>
+
+    <div class="card">
+      <h3 style="margin-top:0">Disc diffusion</h3>
+      <p class="fine" style="margin-top:0">Zone diameter is a measurement. <b>Susceptible / intermediate /
+        resistant is an interpretation</b>, and it comes from a breakpoint table that is specific to the
+        organism, the antimicrobial, the disc content, the medium and the method — and that is
+        <b>revised annually</b> by CLSI and EUCAST.</p>
+      <div class="refuse"><b>This page ships no breakpoints, and that is deliberate.</b>
+        A hard-coded table would be wrong within a year and dangerously wrong within a few, and software that
+        prints "susceptible" from a stale number is worse than software that prints nothing. Enter the
+        breakpoints from the table you are actually working to, and record which edition it was — the page
+        stores that alongside the result and puts it in the export. With no breakpoints entered you get the
+        measurement and nothing else, which is the honest output.</div>
+      <p class="fine">The method matters as much as the table: Mueller-Hinton at a controlled depth, a
+        0.5 McFarland inoculum within 15 minutes of preparation, discs applied within 15 minutes of
+        inoculation, 16&ndash;18 h at 35&nbsp;°C in air. Change any of those and the zone changes. A QC strain
+        run alongside is what tells you the method was in control on the day; a result from a run whose QC was
+        out of range is not a result.</p>
+    </div>
+
+    <div class="card">
+      <h3 style="margin-top:0">Controls</h3>
+      <p class="fine" style="margin-top:0">Every count needs an uninoculated control plate from the same
+        batch of medium, incubated alongside. It costs one plate and it is the only thing that distinguishes
+        "my sample contained these organisms" from "my medium did". If the negative control grows, the run is
+        void — not adjusted, void.</p>
+    </div>
+  </section>
+
+  <div class="rail">
+    <p class="rl">Record it — in the field</p>
+    <div class="chips">
+      <a href="field-notebook.html"><span>📓</span>Field Notebook</a>
+      <a href="ethogram.html"><span>🐾</span>Ethogram</a>
+      <a href="selection-log.html"><span>📏</span>Selection Log</a>
+      <a href="stand-sheet.html"><span>🌲</span>Stand Sheet</a>
+      <a href="releve.html"><span>🌾</span>Relevé</a>
+      <a href="collection-sheet.html"><span>🍄</span>Collection Sheet</a>
+      <a href="farm-scout.html"><span>🧑‍🌾</span>Farm Scout</a>
+      <a href="pheno-tracker.html"><span>🌱</span>Pheno Tracker</a>
+      <a href="deployment-log.html"><span>🎙️</span>Deployment Log</a>
+    </div>
+    <p class="rl" style="margin-top:16px">At the bench</p>
+    <div class="chips">
+      <a href="cp-bench.html"><span>🫙</span>CP Bench</a>
+      <a href="soil-bench.html"><span>🪱</span>Soil Bench</a>
+      <a href="breeding-bench.html"><span>🥕</span>Breeding Bench</a>
+      <a href="cell-bench.html"><span>🔬</span>Cell Bench</a>
+      <a href="micro-bench.html" aria-current="page"><span>🧫</span>Micro Bench</a>
+      <a href="soil-recipes.html"><span>🧱</span>Soil Recipes</a>
+      <a href="greenhouse.html"><span>🌡️</span>Greenhouse</a>
+    </div>
+    <p class="rl" style="margin-top:16px">Analyse it</p>
+    <div class="chips">
+      <a href="survey-design.html"><span>🧭</span>Survey Design</a>
+      <a href="ordination.html"><span>📉</span>Ordination</a>
+      <a href="food-web.html"><span>🕸️</span>Food Web Builder</a>
+      <a href="field-season.html"><span>🎯</span>Field Season</a>
+    </div>
+    <p class="rl" style="margin-top:16px">Print it</p>
+    <div class="chips">
+      <a href="plant-characters.html"><span>🌱</span>Plant Characters</a>
+      <a href="fungal-characters.html"><span>🔬</span>Fungal Characters</a>
+      <a href="cp-characters.html"><span>🪤</span>CP Characters</a>
+    </div>
+    <div class="chips" style="margin-top:16px">
+      <a class="ref" href="ecology.html">← kit hub</a>
+      <a class="ref" href="ecology-field-card.html">field card</a>
+      <a class="ref" href="ecology-glossary.html">glossary</a>
+    </div>
+  </div>
+  </div>
+  </div>
+</div>
+
+<div class="tabbar"><div class="row">
+  <button class="tab on" data-pane="p-pl" type="button"><span class="ico">🧫</span>Plates</button>
+  <button class="tab" data-pane="p-dil" type="button"><span class="ico">💧</span>Dilution</button>
+  <button class="tab" data-pane="p-gr" type="button"><span class="ico">📈</span>Growth</button>
+  <button class="tab" data-pane="p-zn" type="button"><span class="ico">⭕</span>Zones</button>
+  <button class="tab" data-pane="p-out" type="button"><span class="ico">📤</span>Export</button>
+  <button class="tab" data-pane="p-met" type="button"><span class="ico">📖</span>Method</button>
+</div></div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<script>
+
+/* ---- Field Entry Kit v1.8.0 : constructors return {el, get, set} ---- */
+var FEK = (function(){
+  function el(t,c,h){ var e=document.createElement(t); if(c) e.className=c;
+    if(h!=null) e.innerHTML=h; return e; }
+  /* Where the line falls, and why it falls there.
+     A component's OWN label is written by whoever built the page and often
+     carries deliberate markup -- "Pod parent <span class="u">seed bearer</span>".
+     That stays HTML. The label on an OPTION, a chip or a tile is data: a
+     species you typed, a cross you recorded, a source you named. v1.1 passed
+     those straight into innerHTML, so a plant named with a < became markup.
+     Escaped here rather than at each call site, because a component whose
+     safety depends on every caller remembering is a component that will bite
+     somebody. Verified against the whole kit first: no option, chip or tile
+     label anywhere passes markup on purpose. */
+  /* No object literal here on purpose: the map form needs an escaped double
+     quote as a key, and this file is a Python string emitting JavaScript, so
+     that quote has to survive two layers of escaping. It did not, and every
+     consumer got a syntax error that took FEK down with it. A chain of
+     comparisons has nothing to escape. */
+  function escv(s){ return String(s==null?"":s).replace(/[&<>"']/g,function(c){
+    return c==="&"?"&amp;":c==="<"?"&lt;":c===">"?"&gt;":c==='"'?"&quot;":"&#39;"; }); }
+  function buzz(m){ try{ if(navigator.vibrate) navigator.vibrate(m||8);}catch(e){} }
+
+  /* ---- a rejected keystroke buffer is not an empty one (v1.4.0, ADR-151) ----
+     `<input type=number>` has a value the page reads and a raw buffer the page
+     cannot see, and when the browser cannot parse the buffer the value it
+     hands over is the EMPTY STRING -- the same string a box nobody touched
+     hands over. Both numeric components here treated that as "not recorded":
+     the stepper and the field each reported null, the row went dashed-empty,
+     and the reader's characters sat in a box the sheet had decided was blank.
+     `validity.badInput` is the only thing that separates them, because it is
+     about the buffer rather than the value. Fixed once, here, rather than in
+     the seven pages that mount these components -- which is what this file is
+     for. */
+  function badBuffer(inp){ return !!(inp && inp.validity && inp.validity.badInput); }
+  function badMark(wrap, box, inp, label, on){
+    var line = wrap.__fekBad;
+    if(on && !line){ line = wrap.__fekBad = el("p","fek-bad"); wrap.appendChild(line); }
+    if(line) line.textContent = on
+      ? ((label||"this box") + " holds something that is not a number")
+      : "";
+    if(box) box.classList.toggle("bad", !!on);
+    if(on) inp.setAttribute("aria-invalid","true"); else inp.removeAttribute("aria-invalid");
+    return on;
+  }
+
+  /* ---- field registry (v1.4.0) ----
+     A component writes through to a hidden field via the page's own onchange.
+     That is fine going out and useless coming back: nothing could put a
+     restored value INTO the widget, so an autosaved session showed default
+     dials over correct data -- a lie on screen, which is worse than no
+     autosave. A component that declares `field:"sElev"` is registered here,
+     and FEK.setField puts a value back through the widget's own set(). Purely
+     additive: a component with no `field` behaves exactly as before. */
+  var REG = {};
+  function reg(o, h){ if(o && o.field) REG[o.field] = h; return h; }
+  function setField(id, v){
+    var h = REG[id];
+    if(!h) return false;
+    try { h.set(v); } catch(e){ return false; }
+    return true;
+  }
+  function fields(){ var out=[]; for(var k in REG) if(REG.hasOwnProperty(k)) out.push(k); return out; }
+  /* v1.7.0 (ADR-210). What every registered widget is holding, read through its
+     own get(). The registry existed so a restored value could go back IN; there
+     was no way to get one OUT except through a hidden input the page had to
+     remember to write to -- so a control that declared a field but had no
+     element behind it was invisible to the autosave, and a control that
+     declared nothing was invisible twice over. A page's typed numbers came back
+     as defaults over correct data, which is the lie ADR-160 introduced the
+     registry to stop. */
+  function values(){
+    var out = {}, k;
+    for (k in REG) if (REG.hasOwnProperty(k)) {
+      try { out[k] = REG[k].get(); } catch (e) { }
+    }
+    return out;
+  }
+
+  function step(o){
+    o=o||{}; var min=(o.min==null?-Infinity:o.min), max=(o.max==null?Infinity:o.max);
+    var stepv=o.step||1, dec=o.dec==null?(String(stepv).split(".")[1]||"").length:o.dec;
+    var v=o.value==null?0:o.value;
+    var wrap=el("div","fek-row"), lab=el("label","fek-lab",
+      (o.label||"")+(o.unit?'<span class="u">'+o.unit+'</span>':""));
+    var box=el("div","fek-step");
+    var minus=el("button",null,"&minus;"), inp=el("input"), plus=el("button",null,"+");
+    minus.type="button"; plus.type="button"; inp.type="number"; inp.className="val";
+    inp.setAttribute("inputmode","decimal");
+    if(o.label) inp.setAttribute("aria-label",o.label);
+    /* nullable: the control can hold "not recorded", which is not the same as
+       zero. Aspect 0 is north; a duff depth of 0 cm is an observation. An empty
+       nullable stepper reports null and the first bump starts from o.start. */
+    var nullable = !!o.nullable;
+    if(nullable && o.value==null) v=null;
+    function clamp(x){ return Math.min(max,Math.max(min,x)); }
+    function render(){
+      if(v==null){ inp.value=""; wrap.classList.add("is-empty"); box.classList.add("empty"); return; }
+      wrap.classList.remove("is-empty"); box.classList.remove("empty");
+      inp.value=(dec?v.toFixed(dec):String(v));
+    }
+    function set(x,quiet){
+      if(nullable && (x==null || x==="" || (typeof x==="number" && !isFinite(x)))) v=null;
+      else v=clamp(isFinite(x)?x:0);
+      render(); if(!quiet&&o.onchange) o.onchange(v);
+    }
+    function bump(d){
+      if(v==null) set(clamp(o.start==null?0:o.start));
+      else set(+(v+d*stepv).toFixed(6));
+      buzz();
+    }
+    function clear(){ if(nullable) set(null); }
+    minus.addEventListener("click",function(){ bump(-1); });
+    plus.addEventListener("click",function(){ bump(1); });
+    var hold;
+    function holdOn(d){ return function(){ clearInterval(hold);
+      hold=setInterval(function(){ bump(d); },110); }; }
+    function holdOff(){ clearInterval(hold); }
+    minus.addEventListener("pointerdown",holdOn(-1)); plus.addEventListener("pointerdown",holdOn(1));
+    ["pointerup","pointerleave","pointercancel"].forEach(function(ev){
+      minus.addEventListener(ev,holdOff); plus.addEventListener(ev,holdOff); });
+    inp.addEventListener("input",function(){
+      if(badMark(wrap, box, inp, o.label, badBuffer(inp))){
+        // A nullable stepper goes to "not recorded", the same as a cleared box,
+        // because there is no number to hold either way -- what changes is that
+        // the row now SAYS which of the two happened. A fixed stepper keeps the
+        // value it had, and says so, rather than silently reading as unchanged.
+        if(nullable && v!==null){ v=null; box.classList.add("empty"); if(o.onchange) o.onchange(null); }
+        return; }
+      if(nullable && inp.value===""){ v=null; box.classList.add("empty");
+        if(o.onchange) o.onchange(null); return; }
+      var x=parseFloat(inp.value);
+      if(isFinite(x)){ v=clamp(x); box.classList.remove("empty"); if(o.onchange) o.onchange(v); } });
+    // BLUR MUST NOT ERASE THE EVIDENCE. render() writes v back into the box, so
+    // a blur over bad input would replace the reader's characters with the old
+    // number and take the message down with them -- the page quietly deciding
+    // it knew better. The buffer is still bad; leave it, and leave the line up.
+    inp.addEventListener("blur",function(){ if(!badBuffer(inp)) render(); });
+    box.appendChild(minus); box.appendChild(inp); box.appendChild(plus);
+    wrap.appendChild(lab); wrap.appendChild(box);
+    if(o.help) wrap.appendChild(el("p","fek-help",o.help));
+    render();
+    return reg(o, { el:wrap, get:function(){return v;}, set:function(x){set(x,true);},
+             clear:clear, nullable:nullable });
+  }
+
+  /* field: a value typed from an instrument readout. No steppers — see the CSS note. */
+  function field(o){
+    o=o||{};
+    var min=(o.min==null?-Infinity:o.min), max=(o.max==null?Infinity:o.max);
+    var dec=(o.dec==null?3:o.dec), v=(o.value==null?null:o.value);
+    var wrap=el("div","fek-row"), lab=el("label","fek-lab",
+      (o.label||"")+(o.unit?'<span class="u">'+o.unit+'</span>':""));
+    var box=el("div","fek-field"), inp=el("input");
+    inp.type="number"; inp.setAttribute("inputmode","decimal");
+    if(o.step!=null) inp.step=o.step;
+    inp.placeholder = o.placeholder==null ? "—" : o.placeholder;
+    if(o.label) inp.setAttribute("aria-label",o.label);
+    function paint(){ box.classList.toggle("empty", v==null); }
+    function set(x,quiet){
+      if(x==null || x===""){ v=null; inp.value=""; }
+      else { var n=parseFloat(x);
+        v = isFinite(n) ? Math.min(max,Math.max(min,n)) : null;
+        inp.value = (v==null?"":String(v)); }
+      paint(); if(!quiet&&o.onchange) o.onchange(v);
+    }
+    inp.addEventListener("input",function(){
+      if(badMark(wrap, box, inp, o.label, badBuffer(inp))){
+        if(v!==null){ v=null; paint(); if(o.onchange) o.onchange(null); }
+        return; }
+      if(inp.value===""){ v=null; paint(); if(o.onchange) o.onchange(null); return; }
+      var n=parseFloat(inp.value);
+      if(isFinite(n)){ v=Math.min(max,Math.max(min,n)); paint(); if(o.onchange) o.onchange(v); } });
+    inp.addEventListener("blur",function(){
+      if(badBuffer(inp)) return;
+      if(v!=null && isFinite(v)) inp.value = (dec==null?String(v):String(+v.toFixed(dec)));
+      paint(); });
+    box.appendChild(inp);
+    if(o.unitBox!==false && o.unit) box.appendChild(el("div","u",o.unit));
+    wrap.appendChild(lab); wrap.appendChild(box);
+    if(o.help) wrap.appendChild(el("p","fek-help",o.help));
+    set(v,true);
+    return reg(o, { el:wrap, get:function(){return v;}, set:function(x){set(x,true);},
+             clear:function(){ set(null,true); }, nullable:true });
+  }
+
+  function dial(o){
+    o=o||{}; var opts=o.options||[], cur=o.value==null?null:o.value;
+    var wrap=el("div","fek-row"), lab=el("label","fek-lab",o.label||"");
+    var box=el("div","fek-dial"), btns=[];
+    opts.forEach(function(op,i){
+      var b=el("button",null,'<span>'+escv(op.label)+'</span>'+(op.sub?'<small>'+escv(op.sub)+'</small>':""));
+      b.type="button";
+      b.setAttribute("data-r", op.ramp==null ? String(Math.min(5,Math.round(i*5/Math.max(1,opts.length-1)))) : String(op.ramp));
+      b.addEventListener("click",function(){
+        cur = (cur===op.value && o.clearable!==false) ? null : op.value;
+        paint(); buzz(); if(o.onchange) o.onchange(cur);
+      });
+      btns.push(b); box.appendChild(b);
+    });
+    function paint(){ btns.forEach(function(b,i){ b.classList.toggle("on", opts[i].value===cur); }); }
+    paint();
+    wrap.appendChild(lab); wrap.appendChild(box);
+    if(o.help) wrap.appendChild(el("p","fek-help",o.help));
+    return reg(o, { el:wrap, get:function(){return cur;},
+             set:function(x){ cur=x; paint(); } });
+  }
+
+  function chips(o){
+    o=o||{}; var opts=o.options||[], sel={};
+    (o.value||[]).forEach(function(v){ sel[v]=1; });
+    var wrap=el("div","fek-row"), lab=el("label","fek-lab",o.label||"");
+    var box=el("div","fek-chips"), btns=[];
+    opts.forEach(function(op){
+      var b=el("button","fek-chip",escv(op.label)); b.type="button";
+      b.addEventListener("click",function(){
+        if(o.single){ sel={}; sel[op.value]=1; }
+        else if(sel[op.value]) delete sel[op.value]; else sel[op.value]=1;
+        paint(); buzz(); if(o.onchange) o.onchange(Object.keys(sel));
+      });
+      btns.push(b); box.appendChild(b);
+    });
+    function paint(){ btns.forEach(function(b,i){ b.classList.toggle("on",!!sel[opts[i].value]); }); }
+    paint();
+    wrap.appendChild(lab); wrap.appendChild(box);
+    if(o.help) wrap.appendChild(el("p","fek-help",o.help));
+    return reg(o, { el:wrap, get:function(){return Object.keys(sel);},
+             set:function(a){ sel={}; (a||[]).forEach(function(v){sel[v]=1;}); paint(); } });
+  }
+
+  function slider(o){
+    o=o||{};
+    var nullable=!!o.nullable;
+    var v = (nullable && o.value==null) ? null : (o.value==null?(o.min||0):o.value);
+    var wrap=el("div","fek-row"), lab=el("label","fek-lab",o.label||"");
+    var box=el("div","fek-slide"), r=el("input"), bub=el("div","bub");
+    r.type="range"; r.min=o.min==null?0:o.min; r.max=o.max==null?100:o.max;
+    r.step=o.step||1; r.value=v;
+    if(o.label) r.setAttribute("aria-label",o.label);
+    function paint(){
+      if(v==null){ bub.innerHTML='<span style="opacity:.6">not recorded</span>'; return; }
+      bub.innerHTML=(o.fmt?o.fmt(v):v)+(o.unit?'<span>'+o.unit+'</span>':"");
+    }
+    r.addEventListener("input",function(){ v=parseFloat(r.value); paint(); if(o.onchange) o.onchange(v); });
+    if(nullable && v==null) r.value = (o.min==null?0:o.min);
+    paint();
+    box.appendChild(r); box.appendChild(bub);
+    wrap.appendChild(lab); wrap.appendChild(box);
+    if(o.help) wrap.appendChild(el("p","fek-help",o.help));
+    return reg(o, { el:wrap, get:function(){return v;},
+             set:function(x){ v=(nullable&&x==null)?null:x; if(x!=null) r.value=x; paint(); },
+             clear:function(){ if(nullable){ v=null; paint(); } }, nullable:nullable });
+  }
+
+  function picker(o){
+    o=o||{}; var opts=o.options||[], cur=o.value==null?null:o.value, q="";
+    var wrap=el("div","fek-row"), lab=el("label","fek-lab",o.label||"");
+    var box=el("div","fek-pick"), s=el("input","search"), list=el("div","opts");
+    s.type="text"; s.placeholder=o.placeholder||"type to filter…";
+    s.setAttribute("autocomplete","off");
+    if(o.label) s.setAttribute("aria-label",o.label+" filter");
+    function paint(){
+      list.innerHTML="";
+      var qq=q.toLowerCase();
+      var shown=opts.filter(function(op){
+        return !qq || (op.label+" "+(op.sub||"")).toLowerCase().indexOf(qq)>=0; });
+      if(!shown.length){ list.appendChild(el("div","none","No match. Clear the filter to see all "+opts.length+".")); return; }
+      shown.slice(0,200).forEach(function(op){
+        var b=el("button","opt"+(op.value===cur?" on":""),
+          escv(op.label)+(op.sub?'<small>'+escv(op.sub)+'</small>':""));
+        b.type="button";
+        b.addEventListener("click",function(){ cur=op.value; paint(); buzz(); if(o.onchange) o.onchange(cur); });
+        list.appendChild(b);
+      });
+    }
+    s.addEventListener("input",function(){ q=s.value; paint(); });
+    box.appendChild(s); box.appendChild(list);
+    wrap.appendChild(lab); wrap.appendChild(box);
+    if(o.help) wrap.appendChild(el("p","fek-help",o.help));
+    paint();
+    return reg(o, { el:wrap, get:function(){return cur;}, set:function(x){ cur=x; paint(); } });
+  }
+
+  function tiles(list){
+    var box=el("div","fek-tiles");
+    (list||[]).forEach(function(t){
+      box.appendChild(el("div","fek-tile"+(t.tone?" "+t.tone:""),
+        '<div class="v">'+escv(t.v)+'</div><div class="l">'+escv(t.l)+'</div>'));
+    });
+    return box;
+  }
+  function banner(title,body,tone){
+    return el("div","fek-banner"+(tone?" "+tone:""),"<b>"+title+"</b>"+body);
+  }
+
+  /* ==================== PHOTOGRAPHS (v1.5.0, ADR-201) ====================
+     THE RECORD CARRIES THE REFERENCE, NOT THE IMAGE.
+
+     One page in this kit took a photograph and twenty did not, on a kit that
+     emits Darwin Core with `associatedMedia` left empty everywhere. A field
+     record whose voucher is a sentence is a weaker record than one that names
+     the frame.
+
+     The image itself does not go into the record, for three reasons that all
+     point the same way. A CSV cell cannot hold a JPEG. A base64 photograph
+     inside a .eco export turns a 40 kB record into a 4 MB one, and the export
+     is a thing people paste into a message. And a photograph's home is the
+     camera roll or the card, where it already is -- Darwin Core asks
+     `associatedMedia` for an IDENTIFIER of the media, not the media.
+
+     So what the record carries is what lets a person -- or a script -- put the
+     row and the file back together six months later:
+
+         filename | bytes | captured | crc32
+
+     CRC-32 AND NOT SHA-256, deliberately. `crypto.subtle` does not exist on a
+     `file://` page, because a file URL is not a secure context, and this kit
+     is opened off a card in the field as often as it is served over https as
+     an artifact. A digest that is only available in one of those two is worse
+     than a weaker one that is the same in both: the whole point is that the
+     number written on the sheet in the field still matches the number computed
+     back at the desk. This is an INTEGRITY check -- has this file changed, is
+     this the same file -- and it is not, and must not be described as,
+     cryptographic.
+
+     CAPTURED IS THE FILE'S MTIME, NOT EXIF. `File.lastModified` is what a
+     browser will give a page without parsing the JPEG, and for a frame straight
+     off a camera it is the shutter. For a file that has been copied between
+     cards, or round-tripped through a messaging app, it is the copy's time.
+     The field is named `captured` because that is what it usually means, and
+     the page says plainly that a copy carries the copy's time.
+
+     THE IMAGES ARE NEVER UPLOADED and never leave the tab. They are object
+     URLs revoked the moment a photograph is removed, so a session that adds and
+     drops a hundred frames does not hold a hundred blobs. Closing the tab
+     discards them, which is correct: the originals are where they belong. */
+  var CRCT = (function(){
+    var t = new Array(256), c, n, k;
+    for (n = 0; n < 256; n++) {
+      c = n;
+      for (k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+      t[n] = c >>> 0;
+    }
+    return t;
+  })();
+  function crc32(bytes){
+    var c = 0xFFFFFFFF, i;
+    for (i = 0; i < bytes.length; i++) c = CRCT[(c ^ bytes[i]) & 0xFF] ^ (c >>> 8);
+    c = (c ^ 0xFFFFFFFF) >>> 0;
+    /* eight hex digits always: a crc of 0x0000A1B2 written as "a1b2" is a
+       different string from the one the next reader computes, and a checksum
+       you have to remember to pad is a checksum that will be compared wrong. */
+    return ("0000000" + c.toString(16)).slice(-8);
+  }
+  function iso(ms){
+    /* Local minutes, not UTC, because a field sheet is read where it was
+       written. ISO-shaped so it sorts. */
+    if (!ms) return "";
+    var d = new Date(ms), p = function(n){ return (n < 10 ? "0" : "") + n; };
+    return d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate())
+         + " " + p(d.getHours()) + ":" + p(d.getMinutes());
+  }
+  function photos(o){
+    o = o || {};
+    var list = [], max = (o.max == null ? 40 : o.max);
+    var wrap = el("div", "fek-row"), lab = el("label", "fek-lab", o.label || "Photographs");
+    var zone = el("div", "fek-drop");
+    /* THE ZONE NEEDS A NAME OF ITS OWN. A drop listener leaves no mark a
+       selector can find, and the control the page's own snapshot offers under
+       this component's label is the hidden FILE INPUT -- so a task that says
+       "drop these on the photographs" landed on the input and was refused as
+       not a drop zone. The id is the address; a page that mounts this without
+       one can still be driven through the file input, and cannot be driven by
+       a drop. */
+    zone.id = o.dropId || (o.field ? o.field + "Drop" : "");
+    if (!zone.id) zone.removeAttribute("id");
+    var inp = el("input");
+    inp.type = "file"; inp.accept = o.accept || "image/*"; inp.multiple = true;
+    inp.style.display = "none";
+    if (o.label) inp.setAttribute("aria-label", o.label);
+    var btn = el("button", null, "📷 Add photos");
+    btn.type = "button";
+    zone.appendChild(el("p", null, o.prompt ||
+      "<b>Shoot the character, not the specimen.</b> Camera or gallery, or drop files here."));
+    zone.appendChild(inp); zone.appendChild(btn);
+    var grid = el("div", "fek-photos");
+    /* Its own live region, by the rule ADR-199 put on every other message in
+       this kit: an addition that is refused -- a PDF dropped on a photo zone,
+       a frame too many -- is announced rather than silently ignored. */
+    var shot = el("p", "fek-shot");
+    shot.setAttribute("role", "status"); shot.setAttribute("aria-live", "polite");
+
+    /* FRAMES THIS SHEET KNOWS ABOUT AND DOES NOT HOLD (v1.6.0, ADR-206).
+       A page can restore what you typed. It cannot restore a photograph: a
+       page cannot hand a File back to a file input, and this component has
+       always refused to pretend otherwise. But a restored sheet that came back
+       quietly WITHOUT its frames is worse than one that admits it, because the
+       reader believes their morning is back. So the record survives the
+       restore even though the bytes do not, the component says which frames
+       are missing and names them, and it takes them back BY CHECKSUM: drop the
+       same files in again and the label and note you typed -- the expensive
+       part -- come back with them. */
+    var await_ = [];
+    var awaitBox = el("div", "fek-await");
+    awaitBox.style.display = "none";
+
+    /* NAMED FOR WHOEVER READS THE PAGE (v1.8.0, ADR-254). The cards are what
+       the page says it holds -- each frame's name, size, checksum and time --
+       and the grid had no id, so no report reader could see a card: a task
+       could attach a photograph and hold everything it exported and nothing
+       it showed. The zone's id names all three: <id>List the cards, <id>Msg
+       what the last addition said, <id>AwaitList the frames on the record and
+       not on this device. */
+    if (zone.id) {
+      grid.id = zone.id + "List"; shot.id = zone.id + "Msg"; awaitBox.id = zone.id + "AwaitList";
+    }
+
+    function say(t, bad){ shot.textContent = t || ""; shot.classList.toggle("bad", !!bad); }
+    function changed(){
+      if (o.onchange) o.onchange(records());
+      /* A REAL EVENT, BECAUSE A PHOTOGRAPH IS AN EDIT (v1.6.0, ADR-206).
+         Adding a frame fires no input and no change -- the file input is
+         hidden and a drop is neither -- so every autosave in this kit sat
+         still while a reader photographed four stations, and a session that
+         was ONLY photographs was saved by nothing. One bubbling event, so the
+         page does not have to remember to wire it and a page added tomorrow
+         is covered on the day it mounts the component. */
+      try { wrap.dispatchEvent(new CustomEvent("fek-change", { bubbles: true })); }
+      catch (e) {}
+    }
+    function records(){
+      /* The awaited frames are IN the record. A photograph that was taken has
+         an identifier whether or not this browser still holds the bytes, and
+         an export that dropped it would lose the only link between the row and
+         a file sitting on a camera. `have` says which is which. */
+      return list.map(function(p){
+        return { name: p.name, bytes: p.bytes, captured: p.captured, crc: p.crc,
+                 label: p.label, note: p.note, have: true };
+      }).concat(await_.map(function(p){
+        return { name: p.name, bytes: p.bytes, captured: p.captured, crc: p.crc,
+                 label: p.label, note: p.note, have: false };
+      }));
+    }
+    function renderAwait(){
+      if (!await_.length) { awaitBox.style.display = "none"; awaitBox.innerHTML = ""; return; }
+      awaitBox.style.display = "";
+      awaitBox.innerHTML = "<b>" + await_.length + " photograph"
+        + (await_.length === 1 ? " is" : "s are") + " on this record and not on this device.</b> "
+        + "A saved sheet keeps what you typed; it cannot keep an image. Add the same file"
+        + (await_.length === 1 ? "" : "s") + " again and the caption you wrote comes back with "
+        + (await_.length === 1 ? "it" : "them") + " \u2014 matched by checksum, so it has to be "
+        + "the same frame."
+        + "<ul>" + await_.map(function(p){
+            return "<li>" + escv(p.name) + " <span class=\"cap\">" + p.bytes + " bytes \u00b7 crc "
+                 + p.crc + (p.label ? " · " + escv(p.label) : "") + "</span></li>";
+          }).join("") + "</ul>";
+    }
+    function render(){
+      grid.innerHTML = "";
+      list.forEach(function(p, i){
+        var d = el("div", "fek-photo");
+        var im = el("img"); im.src = p.url;
+        im.alt = p.label || ("photograph " + (i + 1) + " — " + p.name);
+        var m = el("div", "m");
+        /* a space before each break (v1.8.0): the lines are one run of
+           text to anything that reads the card rather than looks at it --
+           "IMG_0431.jpg160 bytes" -- the ADR-253 run cell's defect again */
+        m.appendChild(el("code", null,
+          escv(p.name) + " <br>" + p.bytes + " bytes · crc " + p.crc
+          + (p.captured ? " <br>" + escv(p.captured) : "")));
+        var lv = el("input"); lv.type = "text"; lv.value = p.label;
+        lv.placeholder = o.labelPlaceholder || "voucher / specimen №";
+        lv.setAttribute("aria-label", "voucher for " + p.name);
+        var nt = el("textarea"); nt.value = p.note;
+        nt.placeholder = o.notePlaceholder || "What does this show?";
+        nt.setAttribute("aria-label", "note on " + p.name);
+        var rm = el("button", "rm", "Remove"); rm.type = "button";
+        lv.addEventListener("input", function(){ p.label = lv.value; changed(); });
+        nt.addEventListener("input", function(){ p.note = nt.value; changed(); });
+        rm.addEventListener("click", function(){
+          try { URL.revokeObjectURL(p.url); } catch (e) {}
+          list.splice(list.indexOf(p), 1);
+          render(); say("Removed " + p.name); changed(); buzz();
+        });
+        m.appendChild(lv); m.appendChild(nt);
+        /* A PAGE'S OWN ACTIONS ON A FRAME (v1.8.0, ADR-254). The stand sheet
+           kept a pane of its own for one button -- link this frame to the
+           species picked on the tally -- and with it lost every caption on a
+           reload, because only this component keeps a frame's record. An
+           action is {label, run(record)}: run returns a string to refuse with
+           (nothing changes) or {label?, note?, say?} to write back. */
+        (o.actions || []).forEach(function(a){
+          var ab = el("button", "act", escv(a.label)); ab.type = "button";
+          ab.addEventListener("click", function(){
+            var r = a.run({ name: p.name, bytes: p.bytes, captured: p.captured, crc: p.crc,
+                            label: p.label, note: p.note });
+            if (typeof r === "string") { say(r, true); return; }
+            if (!r) return;
+            if (r.label != null) p.label = String(r.label);
+            if (r.note != null) p.note = String(r.note);
+            render(); say(r.say || ""); changed();
+          });
+          m.appendChild(ab);
+        });
+        m.appendChild(rm);
+        d.appendChild(im); d.appendChild(m);
+        grid.appendChild(d);
+      });
+    }
+    function add(files){
+      var fs = Array.prototype.slice.call(files || []);
+      if (!fs.length) return;
+      var notImages = fs.filter(function(f){ return !/^image\//.test(f.type || ""); });
+      fs = fs.filter(function(f){ return /^image\//.test(f.type || ""); });
+      var room = Math.max(0, max - list.length), over = fs.length - room;
+      if (over > 0) fs = fs.slice(0, room);
+      var pending = fs.length, added = 0, back = 0;
+      /* A refusal is SAID, not swallowed: the reader who dropped six files and
+         got four has to be able to find out which two, and why. */
+      function done(){
+        if (pending) return;
+        var parts = [];
+        if (added) parts.push(added + " photograph" + (added === 1 ? "" : "s") + " added");
+        if (back) parts.push(back + " matched by checksum, caption restored");
+        if (notImages.length)
+          parts.push(notImages.length + " not an image: "
+                     + notImages.map(function(f){ return f.name; }).slice(0, 3).join(", "));
+        if (over > 0) parts.push(over + " over the limit of " + max);
+        say(parts.join(" — ") || "Nothing added", !added);
+        if (added) { render(); renderAwait(); changed(); buzz(12); }
+      }
+      if (!pending) { done(); return; }
+      fs.forEach(function(f){
+        var rd = new FileReader();
+        rd.onload = function(){
+          var bytes = new Uint8Array(rd.result);
+          var sum = crc32(bytes), lab = "", note = "", i;
+          /* BY CHECKSUM, NOT BY NAME. A camera roll renames on export and two
+             cards both start at DSC_0001; the checksum is the only thing that
+             says this is the frame the caption was written about. */
+          for (i = 0; i < await_.length; i++) {
+            if (await_[i].crc === sum && await_[i].bytes === bytes.length) {
+              lab = await_[i].label || ""; note = await_[i].note || "";
+              await_.splice(i, 1); back++;
+              break;
+            }
+          }
+          list.push({ name: f.name || ("photo-" + (list.length + 1) + ".jpg"),
+                      bytes: bytes.length, captured: iso(f.lastModified),
+                      crc: sum, label: lab, note: note,
+                      url: URL.createObjectURL(f) });
+          added++; pending--; done();
+        };
+        rd.onerror = function(){ pending--; done(); };
+        rd.readAsArrayBuffer(f);
+      });
+    }
+    btn.addEventListener("click", function(){ inp.click(); });
+    inp.addEventListener("change", function(){ add(inp.files); inp.value = ""; });
+    ["dragenter", "dragover"].forEach(function(ev){
+      zone.addEventListener(ev, function(e){ e.preventDefault(); zone.classList.add("on"); }); });
+    ["dragleave", "dragend"].forEach(function(ev){
+      zone.addEventListener(ev, function(){ zone.classList.remove("on"); }); });
+    /* The harness stamps data-h-drop on anything that registers a drop
+       listener, so this zone is drivable by the door with no page markup. */
+    zone.addEventListener("drop", function(e){
+      e.preventDefault(); zone.classList.remove("on");
+      if (e.dataTransfer && e.dataTransfer.files) add(e.dataTransfer.files);
+    });
+    wrap.appendChild(lab); wrap.appendChild(zone); wrap.appendChild(shot);
+    wrap.appendChild(awaitBox); wrap.appendChild(grid);
+    if (o.help) wrap.appendChild(el("p", "fek-help", o.help));
+    render();
+    return reg(o, {
+      el: wrap, get: records, count: function(){ return list.length; },
+      /* set() is deliberately not a way to put images back: a page cannot
+         hand a File to a file input, and a component that pretended to
+         restore a photograph from a record would be restoring a caption. */
+      set: function(){ return false; },
+      /* ...and THIS is what an autosave gets instead (v1.6.0, ADR-206). The
+         records come back, the bytes do not, and the component says so where
+         the reader will see it rather than coming back quietly one frame
+         short. Frames the sheet already holds are left alone -- a restore that
+         listed a photograph you are looking at would be noise. */
+      restore: function(recs){
+        if (!recs || !recs.length) return 0;
+        var held = {}, i;
+        for (i = 0; i < list.length; i++) held[list[i].crc] = 1;
+        await_ = recs.filter(function(r){
+          return r && r.crc && !held[r.crc];
+        }).map(function(r){
+          return { name: r.name, bytes: r.bytes, captured: r.captured, crc: r.crc,
+                   label: r.label || "", note: r.note || "" };
+        });
+        renderAwait();
+        /* ...AND THE PAGE IS TOLD (v1.8.0, ADR-254). A page draws its sheet
+           from get(), which lists the awaited frames, but a restore fired no
+           onchange -- so a page that restored its photographs after it had
+           drawn its sheet came back with the frames on the card and not in
+           the sheet: the collection sheet and the relevé, whose restores ran
+           in that order, lost the photographs section until the next edit.
+           Not a fek-change: a restore is not an edit to save. */
+        if (await_.length && o.onchange) o.onchange(records());
+        return await_.length;
+      },
+      awaiting: function(){ return await_.slice(); },
+      clear: function(){
+        list.forEach(function(p){ try { URL.revokeObjectURL(p.url); } catch (e) {} });
+        list = []; await_ = []; render(); renderAwait(); say(""); changed();
+      },
+      /* `associatedMedia` the way Darwin Core asks for it: identifiers,
+         concatenated and separated. The separator is " | " because a filename
+         may hold a comma and a record that splits wrong is worse than one that
+         is hard to read. */
+      media: function(){
+        /* Awaited frames are named too. A photograph that was taken has an
+           identifier whether or not this browser still holds it, and a deposit
+           that dropped it would break the only link between the row and a file
+           on a camera. */
+        return list.concat(await_).map(function(p){
+          return p.name + " (crc32 " + p.crc + (p.captured ? ", " + p.captured : "") + ")";
+        }).join(" | ");
+      }
+    });
+  }
+  /* ---- the same rule for a box FEK did not build (v1.4.0, ADR-151) ----
+     The components above now say when a box holds something the browser could
+     not read as a number. Every page that mounts them also carries number
+     boxes of its OWN -- an elevation, an effort value, five camera settings --
+     and those had the same silence for the same reason: `.value` comes back ""
+     and the page reads a blank. One delegated listener rather than a wrapper
+     per box, because the boxes a page builds LATER -- a row added, a pane
+     rendered, a measurement grid opened -- have to be covered too, and a guard
+     that only knew about the boxes present at load would go quiet exactly when
+     the sheet gets long. Capture phase, so the note is up before the page's own
+     handler decides what the box now means. */
+  function boxName(inp){
+    var a=inp.getAttribute("aria-label"); if(a && a.trim()) return a.trim();
+    var l=inp.closest?inp.closest("label"):null;
+    if(l){ var t="",i; for(i=0;i<l.childNodes.length;i++){ var n=l.childNodes[i];
+             if(n.nodeType===3) t+=n.nodeValue; }
+           t=t.replace(/\s+/g," ").trim(); if(t) return t; }
+    if(inp.id){ var lb=document.querySelector('label[for="'+inp.id+'"]');
+                if(lb) return lb.textContent.replace(/\s+/g," ").trim(); }
+    var ph=inp.getAttribute("placeholder");
+    return (ph && ph.trim()) ? ph.trim() : "this box";
+  }
+  function guardBox(inp){
+    var bad = !!(inp.validity && inp.validity.badInput);
+    var note = inp.__fekBadNote;
+    if(bad && !note){
+      note = inp.__fekBadNote = el("p","fek-bad");
+      var after = (inp.closest ? inp.closest("label") : null) || inp;
+      if(after.parentNode) after.parentNode.insertBefore(note, after.nextSibling);
+    }
+    if(note) note.textContent = bad ? (boxName(inp)+" holds something that is not a number") : "";
+    inp.classList.toggle("fek-badbox", bad);
+    if(bad) inp.setAttribute("aria-invalid","true"); else inp.removeAttribute("aria-invalid");
+  }
+  function guard(){
+    document.addEventListener("input",function(ev){
+      var inp=ev.target;
+      if(!inp || inp.tagName!=="INPUT" || inp.type!=="number") return;
+      // a component built here already says it, in its own row
+      if(inp.closest && inp.closest(".fek-step, .fek-field")) return;
+      guardBox(inp);
+    }, true);
+  }
+  if(document.readyState==="loading")
+    document.addEventListener("DOMContentLoaded",guard);
+  else guard();
+
+  function mount(host,parts){
+    var h=typeof host==="string"?document.getElementById(host):host;
+    h.innerHTML=""; parts.forEach(function(p){ h.appendChild(p.el||p); }); return h;
+  }
+  /* Exported because a page building a component LABEL -- which stays HTML by
+     design -- still has to escape the data inside it. A private copy of an
+     escaper in one page was how the last one got lost when the kit was
+     re-emitted over it. */
+  return { version:"1.8.0", esc:escv, setField:setField, fields:fields, values:values, step:step, field:field, dial:dial, chips:chips, slider:slider,
+           picker:picker, photos:photos, crc32:crc32, tiles:tiles, banner:banner, mount:mount, buzz:buzz, guard:guard };
+})();
+/* ---- Keep v1.4.0 : local autosave, and honesty about what that is ---- */
+var KEEP = (function(){
+  /* The handle the last wire() returned, so a reader outside the page's closure
+     can ask the page what it is holding (v1.3.0, ADR-209). */
+  var LIVE = null;
+  function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g,function(c){
+    return c==="&"?"&amp;":c==="<"?"&lt;":c===">"?"&gt;":c==='"'?"&quot;":"&#39;"; }); }
+
+  /* Probe rather than assume. Safari in private mode used to throw on the
+     first write; storage can also be disabled by enterprise policy or by the
+     user, and in a sandboxed frame the accessor itself throws. All three look
+     identical to a page that only wraps setItem in a try. */
+  function usable(){
+    try {
+      var k = "__keep_probe__";
+      window.localStorage.setItem(k, "1");
+      window.localStorage.removeItem(k);
+      return true;
+    } catch(e){ return false; }
+  }
+
+  function when(ts){
+    if(!ts) return "";
+    try {
+      var d = new Date(ts), now = new Date();
+      var same = d.toDateString() === now.toDateString();
+      var hm = ("0"+d.getHours()).slice(-2) + ":" + ("0"+d.getMinutes()).slice(-2);
+      return same ? ("today " + hm) : (d.toISOString().slice(0,10) + " " + hm);
+    } catch(e){ return ""; }
+  }
+
+  function wire(o){
+    o = o || {};
+    var key = o.key, host = typeof o.mount === "string" ? document.getElementById(o.mount) : o.mount;
+    var fmt = o.format == null ? 1 : o.format;
+    var ok = usable(), lastErr = null, savedAt = null, restoredFrom = null, timer = null;
+    var noun = o.noun || "your work";
+
+    function read(){
+      if(!ok) return null;
+      try {
+        var raw = window.localStorage.getItem(key);
+        if(!raw) return null;
+        var p = JSON.parse(raw);
+        /* A format stamp, so a page that changes its state shape does not
+           restore a shape it can no longer read and fail in a way the user
+           reads as data loss. */
+        if(!p || p.format !== fmt) return null;
+        return p;
+      } catch(e){ return null; }
+    }
+
+    function write(){
+      timer = null;
+      if(!ok) return;
+      var body;
+      try { body = o.snapshot(); } catch(e){ lastErr = "could not read the page state"; paint(); return; }
+      if(body == null){
+        try { window.localStorage.removeItem(key); }catch(e){}
+        savedAt = null; lastErr = null; paint(); return;
+      }
+      try {
+        window.localStorage.setItem(key, JSON.stringify({ format:fmt, at:Date.now(), body:body }));
+        savedAt = Date.now(); lastErr = null;
+      } catch(e){
+        /* Do not swallow this. A quota failure that says nothing is worse than
+           no autosave at all, because it teaches the user to trust it. */
+        lastErr = (e && e.name === "QuotaExceededError")
+          ? "this browser's storage is full" : "this browser refused the write";
+      }
+      paint();
+    }
+
+    function touch(){
+      if(!ok) return;
+      if(timer) clearTimeout(timer);
+      timer = setTimeout(write, o.debounce == null ? 500 : o.debounce);
+    }
+
+    function flush(){ if(timer){ clearTimeout(timer); } write(); }
+
+    function forget(){
+      /* Cancel the pending write first. Without this the debounced save from
+         the edit that preceded the click -- or from the click itself, on a
+         page that listens for clicks -- lands a few hundred milliseconds later
+         and puts the copy straight back, which makes the button look like it
+         did nothing. */
+      if(timer){ clearTimeout(timer); timer = null; }
+      try { window.localStorage.removeItem(key); }catch(e){}
+      savedAt = null; restoredFrom = null; lastErr = null; paint();
+      if(o.onforget) o.onforget();
+    }
+
+    function paint(){
+      if(!host) return;
+      /* noprint: this is screen chrome -- a status line about a browser and a
+         button -- and the print audit is right to count anything else that
+         vanishes on paper as content lost. */
+      host.className = "keep noprint" + ((!ok || lastErr) ? " bad" : "");
+      var msg;
+      if(!ok){
+        msg = "<b>This browser is not keeping anything.</b> Storage is unavailable here &mdash; a "
+            + "private window, or site data switched off. Nothing is being saved, so export before "
+            + "you close the tab.";
+      } else if(lastErr){
+        msg = "<b>Autosave failed &mdash; " + esc(lastErr) + ".</b> What is on screen is not saved. "
+            + "Export it now.";
+      } else if(savedAt){
+        msg = "Saved on this device <b>" + esc(when(savedAt)) + "</b>"
+            + (restoredFrom ? " &middot; restored from " + esc(when(restoredFrom)) : "") + ".";
+      } else if(restoredFrom){
+        msg = "Restored " + esc(noun) + " from <b>" + esc(when(restoredFrom)) + "</b> on this device.";
+      } else {
+        msg = "Autosave is on. " + esc(noun.charAt(0).toUpperCase() + noun.slice(1))
+            + " will still be here if you close the tab.";
+      }
+      /* THE BUTTON IS BUILT ONCE (v1.2.0, ADR-207).
+         This wrote the whole strip with innerHTML on every repaint, so the
+         forget button was DESTROYED AND RE-CREATED whenever the autosave
+         changed state -- and the autosave changes state on every save. A
+         control that does not survive a repaint cannot be stamped, addressed
+         or kept in focus across one: audit_focus reported it as "mounted after
+         the last stamp and could not be measured", intermittently, on whichever
+         page happened to save while the sweep was looking. Only the words
+         change now. */
+      if(!host.firstChild){
+        var st = document.createElement("p"); st.className = "st";
+        var btn = document.createElement("button");
+        btn.type = "button"; btn.setAttribute("data-keep-forget", "");
+        btn.textContent = "Forget this device's copy";
+        btn.addEventListener("click", function(){
+          forget();
+          if(o.ontoast) o.ontoast("Saved copy removed from this device");
+        });
+        var note = document.createElement("p"); note.className = "note";
+        note.innerHTML = '<b>This is not a backup.</b> It is one browser on one device, and it goes '
+          + 'when site data is cleared, in a private window, or on any other machine. It exists so a '
+          + 'phone call does not cost you a morning. The exports are the durable copy.';
+        host.appendChild(st); host.appendChild(btn); host.appendChild(note);
+      }
+      host.firstChild.innerHTML = msg;
+    }
+
+    var got = read();
+    if(got){
+      var accepted = false;
+      try { accepted = o.restore(got.body) !== false; } catch(e){ accepted = false; }
+      if(accepted){ restoredFrom = got.at; }
+    }
+    paint();
+    /* A PHOTOGRAPH IS AN EDIT (v1.1.0, ADR-206). FEK.photos fires `fek-change`
+       when frames are added, removed or captioned; nothing else does, because
+       a hidden file input and a drop produce neither `input` nor `change`. A
+       page that had to remember to wire this is a page that would forget. */
+    try {
+      document.addEventListener("fek-change", function(){ touch(); }, true);
+    } catch(e){}
+    /* A tab closing mid-debounce is exactly the case this exists for. */
+    try {
+      window.addEventListener("pagehide", function(){ if(timer) flush(); });
+      document.addEventListener("visibilitychange", function(){
+        if(document.visibilityState === "hidden" && timer) flush(); });
+    } catch(e){}
+
+    var h = { touch:touch, flush:flush, forget:forget, usable:function(){ return ok; },
+             restored:function(){ return restoredFrom; }, savedAt:function(){ return savedAt; },
+             error:function(){ return lastErr; },
+             /* v1.1.0 (ADR-203). The page already describes its own state once,
+                here, for the autosave. The outbox needs the same description to
+                say whether it has left the device -- and a SECOND description
+                would be a second thing to keep in step, so the one that is
+                already exercised by every restore is the one it gets. Read
+                through this handle rather than by the page passing its snapshot
+                twice, because two references can be wired to two functions and
+                only one of them would ever be tested. */
+             snapshot:function(){ return o.snapshot(); } };
+    /* v1.3.0 (ADR-209). The live handle, reachable from outside the page's own
+       closure. A page wires KEEP inside an IIFE and keeps the handle in a local,
+       so the description of its state that the autosave and the outbox both
+       already read was reachable from nowhere else -- and an audit asking "how
+       much did that tap take" had to count rows on the screen instead. Rows on
+       the screen are not records: a plate shown once in a list and once in a
+       results table is one record counted twice, and a rule built on that cries
+       wolf on a row remover while under-reading a delete that cascades.
+       One description, read by everything that needs it (ADR-141). */
+    LIVE = h;
+    return h;
+  }
+
+  /* ---- generic form capture ----
+     Every page in the kit keeps its typed state in elements with ids -- real
+     inputs for text and dates, hidden write-through fields for the FEK
+     widgets. Capturing them by walking the DOM means a page that gains a field
+     does not also have to remember to add it to a list, which is how a
+     hand-maintained list of fields quietly stops covering the newest one. */
+  function formSnapshot(){
+    var out = {}, i, els = document.querySelectorAll("input[id], textarea[id]");
+    for(i=0;i<els.length;i++){
+      var e = els[i];
+      if(e.type === "file" || e.type === "button" || e.type === "submit") continue;
+      out[e.id] = (e.type === "checkbox" || e.type === "radio") ? (e.checked ? "1" : "") : e.value;
+    }
+    /* v1.4.0 (ADR-210). ...AND EVERY FEK CONTROL THAT DECLARES A FIELD BUT HAS
+       NO ELEMENT BEHIND IT. Walking the DOM finds a page's typed state only
+       where the page also remembered to write it into a hidden input; a
+       component that declared `field:"selN"` and nothing else was invisible
+       here, and its value came back as the widget's default over correct data.
+       Only the ones the DOM walk did not already find, so every page that has
+       been keeping its state through hidden inputs keeps writing exactly the
+       blob it wrote yesterday. */
+    try {
+      if (typeof FEK !== "undefined" && FEK && typeof FEK.values === "function") {
+        var fv = FEK.values(), fk;
+        for (fk in fv) if (fv.hasOwnProperty(fk) && !out.hasOwnProperty(fk)
+                           && fv[fk] != null && fv[fk] !== "") out[fk] = fv[fk];
+      }
+    } catch (e) { }
+    return out;
+  }
+  /* Restoring the hidden field is only half the job: the widget above it still
+     shows its construction default, and a correct value under a wrong-looking
+     dial is worse than no restore at all. FEK.setField (v1.3.0) puts the value
+     back through the widget for every component that declared its field. */
+  function formRestore(map){
+    if(!map) return 0;
+    var n = 0, id;
+    for(id in map){
+      if(!map.hasOwnProperty(id)) continue;
+      var e = document.getElementById(id);
+      if(!e){
+        /* v1.4.0: a field with no element behind it is a FEK control that
+           declared one; put the value back through the widget's own set(). */
+        if(typeof FEK !== "undefined" && FEK.setField && FEK.setField(id, map[id])) n++;
+        continue;
+      }
+      if(e.type === "checkbox" || e.type === "radio") e.checked = !!map[id];
+      else e.value = map[id];
+      if(typeof FEK !== "undefined" && FEK.setField){
+        var v = map[id];
+        if(e.type === "number" || /^-?\d+(\.\d+)?$/.test(String(v))) {
+          FEK.setField(id, v === "" ? null : parseFloat(v));
+        } else {
+          FEK.setField(id, v === "" ? null : v);
+        }
+      }
+      n++;
+    }
+    return n;
+  }
+
+  return { version:"1.4.0", wire:wire, usable:usable, live:function(){ return LIVE; },
+           formSnapshot:formSnapshot, formRestore:formRestore };
+})();
+/* ---- Outbox v1.0.0 : what has not left this device ---- */
+var OUT = (function(){
+  function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g,function(c){
+    return c==="&"?"&amp;":c==="<"?"&lt;":c===">"?"&gt;":c==='"'?"&quot;":"&#39;"; }); }
+
+  /* UTF-8 by hand rather than TextEncoder, because the two would be two code
+     paths and only one of them would ever be exercised -- and because what is
+     hashed has to be the same bytes on the phone in the field as on the laptop
+     that checks it. Surrogate pairs are joined: a filename or a note holding an
+     emoji must hash as the character it is, not as two halves. */
+  function utf8(s){
+    var out = [], i, c, c2, u;
+    for (i = 0; i < s.length; i++) {
+      c = s.charCodeAt(i);
+      if (c < 0x80) { out.push(c); continue; }
+      if (c < 0x800) { out.push(0xC0 | (c >> 6), 0x80 | (c & 63)); continue; }
+      if (c >= 0xD800 && c <= 0xDBFF && i + 1 < s.length
+          && (c2 = s.charCodeAt(i + 1)) >= 0xDC00 && c2 <= 0xDFFF) {
+        u = 0x10000 + ((c - 0xD800) << 10) + (c2 - 0xDC00); i++;
+        out.push(0xF0 | (u >> 18), 0x80 | ((u >> 12) & 63),
+                 0x80 | ((u >> 6) & 63), 0x80 | (u & 63));
+        continue;
+      }
+      out.push(0xE0 | (c >> 12), 0x80 | ((c >> 6) & 63), 0x80 | (c & 63));
+    }
+    return out;
+  }
+
+  /* ONE hash for the kit. FEK's, because the photographs already carry CRC-32
+     and a sheet whose two checksums disagreed would be a sheet nobody could
+     reconcile. No fallback: a second implementation here would drift silently,
+     and an outbox that hashed with something nothing else uses would report
+     "unchanged" for the wrong reason. */
+  function hash(o){
+    if (typeof FEK === "undefined" || !FEK || typeof FEK.crc32 !== "function") return null;
+    return FEK.crc32(utf8(JSON.stringify(o)));
+  }
+
+  function usable(){
+    try {
+      var k = "__out_probe__";
+      window.localStorage.setItem(k, "1");
+      window.localStorage.removeItem(k);
+      return true;
+    } catch(e){ return false; }
+  }
+
+  function when(ts){
+    if(!ts) return "";
+    try {
+      var d = new Date(ts), now = new Date();
+      var same = d.toDateString() === now.toDateString();
+      var hm = ("0"+d.getHours()).slice(-2) + ":" + ("0"+d.getMinutes()).slice(-2);
+      return same ? ("today " + hm) : (d.toISOString().slice(0,10) + " " + hm);
+    } catch(e){ return ""; }
+  }
+
+  function kb(n){
+    if(!n) return "0 bytes";
+    return n < 1024 ? (n + " bytes") : ((n/1024).toFixed(n < 10240 ? 1 : 0) + " kB");
+  }
+
+  /* One outbox per page, and the module-level sent() finds it. A page's copy
+     helper is defined long before the outbox is wired, so it cannot close over
+     a handle; guarding the call with `typeof` is exactly how ADR-201 lost an
+     export writer for a season. Instead a send that arrives before wiring is
+     REMEMBERED and reported by wire(), which turns a wiring-order mistake into
+     a red line instead of a silence. */
+  var LIVE = null, EARLY = [];
+
+  function wire(o){
+    o = o || {};
+    var key = o.key, host = typeof o.mount === "string" ? document.getElementById(o.mount) : o.mount;
+    var keep = o.keep, defs = o.exports || [], fmt = o.format == null ? 1 : o.format;
+    var ok = usable(), lastErr = null, sends = {}, timer = null;
+
+    function def(id){ var i; for(i=0;i<defs.length;i++) if(defs[i].id === id) return defs[i]; return null; }
+
+    /* The sheet's state comes from KEEP's snapshot and from nowhere else. Two
+       descriptions of "what is on this page" would be two things to keep in
+       step, and the one the outbox used would be the one nobody tested. */
+    function state(){
+      if(!keep || typeof keep.snapshot !== "function") return undefined;
+      try { return keep.snapshot(); } catch(e){ return undefined; }
+    }
+    function nowCrc(){
+      var st = state();
+      if(st === undefined) return null;
+      if(st === null) return "";
+      return hash(st);
+    }
+
+    function load(){
+      if(!ok) return;
+      try {
+        var raw = window.localStorage.getItem(key);
+        if(!raw) return;
+        var p = JSON.parse(raw);
+        if(!p || p.format !== fmt || !p.sends) return;
+        var id;
+        /* Only ids this sheet still declares. An export that was renamed or
+           removed leaves a stamp that can never go stale and would sit in the
+           ledger claiming a copy of something that no longer exists. */
+        for(id in p.sends) if(p.sends.hasOwnProperty(id) && def(id)) sends[id] = p.sends[id];
+      } catch(e){}
+    }
+    function save(){
+      if(!ok) return;
+      try { window.localStorage.setItem(key, JSON.stringify({format:fmt, sends:sends})); }
+      catch(e){
+        lastErr = (e && e.name === "QuotaExceededError")
+          ? "this browser's storage is full, so the outbox will forget what has gone when the tab closes"
+          : "this browser refused to keep the outbox, so it will forget what has gone when the tab closes";
+      }
+    }
+
+    /* THE SHEET AS IT CAME OUT OF THE BOX IS NOT WORK.
+       Three of these pages fill a date in for you, so "the snapshot is not
+       null" is not the same question as "is there anything here to send", and
+       an outbox that opened saying four exports were overdue on a sheet nobody
+       had touched would be ignored by the second morning. So the baseline is
+       the state at wire time -- UNLESS the autosave just restored something,
+       in which case every export is genuinely outstanding and saying so is the
+       entire point. */
+    var base = null;
+
+    function status(){
+      var crc = nowCrc(), rows = [], i, d, s;
+      for(i=0;i<defs.length;i++){
+        d = defs[i]; s = sends[d.id];
+        rows.push({ id:d.id, label:d.label, records:(d.records !== false),
+                    sent:!!s, at:(s?s.at:0), bytes:(s?s.bytes:0),
+                    stale: !!s && crc !== null && crc !== "" && s.crc !== crc });
+      }
+      var never = [], stale = [], last = 0, lastLabel = "", carry = [];
+      var blank = (crc === "") || (base !== null && crc === base);
+      for(i=0;i<rows.length;i++){
+        if(rows[i].at > last){ last = rows[i].at; lastLabel = rows[i].label; }
+        /* A copy that does not carry the sheet's records is DECLARED -- so that
+           no call site can hand out bytes this ledger has never heard of -- but
+           it is not counted. An outbox that nagged you to re-copy an AI prompt
+           every time you added a stem would be an outbox nobody reads, and an
+           outbox nobody reads is worse than none, because the page still looks
+           like it is keeping track. */
+        if(!rows[i].records) continue;
+        carry.push(rows[i]);
+        if(blank) continue;
+        if(!rows[i].sent) never.push(rows[i]);
+        else if(rows[i].stale) stale.push(rows[i]);
+      }
+      return { crc:crc, empty:blank, unreadable:(crc === null), rows:rows,
+               carry:carry, never:never, stale:stale, pending:never.length + stale.length,
+               last:last, lastLabel:lastLabel, err:lastErr, storing:ok };
+    }
+
+    function sent(id, bytes){
+      var d = def(id);
+      if(!d){
+        lastErr = 'an export this sheet does not declare: "' + String(id) + '". '
+                + 'Something left this device and the outbox cannot tell you what';
+        paint(); return false;
+      }
+      var crc = nowCrc();
+      if(crc === null){
+        lastErr = "the outbox could not read this sheet, so it has NOT marked "
+                + d.label + " as gone";
+        paint(); return false;
+      }
+      sends[id] = { crc:crc, at:Date.now(), bytes:(bytes|0) };
+      lastErr = null;
+      save(); paint();
+      return true;
+    }
+
+    function paint(){
+      if(!host) return;
+      var st = status(), msg, tone = "";
+      if(st.unreadable){
+        tone = " bad";
+        msg = "<b>The outbox cannot read this sheet.</b> It is not tracking what has left, so "
+            + "treat nothing here as sent.";
+      } else if(st.err){
+        tone = " bad";
+        msg = "<b>" + esc(st.err) + ".</b>";
+      } else if(st.empty){
+        msg = "Nothing on this sheet yet. The outbox starts counting when you do.";
+      } else if(st.pending === 0){
+        msg = "<b>Everything here has left this device.</b> Last export "
+            + esc(when(st.last)) + (st.lastLabel ? " \u2014 " + esc(st.lastLabel) : "") + ".";
+      } else {
+        tone = " hot";
+        msg = "<b>" + st.pending + " of " + st.carry.length + " export"
+            + (st.carry.length === 1 ? "" : "s") + " on this sheet " + (st.pending === 1 ? "has" : "have")
+            + " not left this device</b>"
+            + (st.last ? " \u2014 last export " + esc(when(st.last)) + "." : " at all.");
+      }
+      var li = "", i, r;
+      for(i=0;i<st.carry.length;i++){
+        r = st.carry[i];
+        if(!r.sent) li += "<li>" + esc(r.label) + " <span class=\"why\">never</span></li>";
+        else if(r.stale) li += "<li>" + esc(r.label) + " <span class=\"why\">changed since "
+                             + esc(when(r.at)) + "</span></li>";
+      }
+      host.className = "outbox noprint" + tone;
+      host.innerHTML =
+        '<p class="st" role="status" aria-live="polite">' + msg + '</p>'
+        + (li ? '<ul class="pend">' + li + '</ul>' : '')
+        + '<p class="note"><b>This is a ledger, not a transport.</b> A page opened from a card '
+        + 'cannot send anything by itself \u2014 what it can do is tell you exactly what is on '
+        + 'this device and nowhere else, so a few minutes of signal go on the right bytes.'
+        + (st.storing ? "" : " Storage is unavailable here, so this list starts again when the tab closes.")
+        + '</p>';
+    }
+
+    /* Repaint on anything that could have changed the sheet, debounced. No page
+       wiring: a page that gained a control would otherwise have to remember to
+       tell the outbox, and the one it forgot would be the one that went stale
+       quietly. */
+    function touch(){
+      if(timer) clearTimeout(timer);
+      timer = setTimeout(function(){ timer = null; paint(); }, o.debounce == null ? 400 : o.debounce);
+    }
+    try {
+      ["input", "change", "click"].forEach(function(ev){
+        document.addEventListener(ev, touch, true); });
+    } catch(e){}
+
+    load();
+    base = (keep && typeof keep.restored === "function" && keep.restored()) ? null : nowCrc();
+    var h = { sent:sent, status:status, paint:paint, touch:touch,
+              usable:function(){ return ok; }, error:function(){ return lastErr; } };
+    LIVE = h;
+    if(EARLY.length){
+      /* An export that happened before the outbox existed is a wiring-order
+         fault, and it is reported rather than replayed: the stamp it would have
+         taken is the state at a moment that has already gone. */
+      lastErr = "an export left this device before the outbox was wired ("
+              + EARLY.map(function(e){ return String(e[0]); }).join(", ") + ")";
+      EARLY = [];
+    }
+    paint();
+    return h;
+  }
+
+  return { version:"1.0.0", wire:wire, utf8:utf8, hash:hash,
+           sent:function(id, bytes){
+             if(!LIVE){ EARLY.push([id, bytes]); return false; }
+             return LIVE.sent(id, bytes);
+           },
+           status:function(){ return LIVE ? LIVE.status() : null; } };
+})();
+
+</script>
+<script>
+(function(){
+  "use strict";
+  var $=function(i){return document.getElementById(i);};
+  var val=function(i){var e=$(i);return e?String(e.value||"").trim():"";};
+  var nv=function(i){var e=$(i);var v=parseFloat(e&&e.value);return isFinite(v)?v:NaN;};
+
+  /* ---------------- Field Entry Kit ----------------
+     Same rule as Cell Bench: a stepper for a number you SET, a field for a
+     number you READ. A dilution exponent, a plated volume, a transfer volume
+     are settings — steppers. A colony count, an OD600, a zone diameter, a
+     breakpoint copied out of a table are readings — typed fields, at full
+     precision, with nothing rounded on the way in.
+     Everything writes through to the hidden field nv() already reads, so an
+     untouched entry stays NaN rather than reading as a recorded zero. */
+  function push(id,v){
+    var e=$(id); if(!e) return;
+    e.value=(v==null?"":String(v));
+    e.dispatchEvent(new Event("input",{bubbles:true}));
+    e.dispatchEvent(new Event("change",{bubbles:true}));
+  }
+
+  var PLN=FEK.step({ field:"plN", label:"dilution", unit:"10⁻ⁿ", min:0, max:12, step:1, dec:0,
+    nullable:true, start:5,
+    onchange:function(v){ push("plN",v); },
+    help:"The exponent, not the factor: 5 means the 10⁻⁵ tube." });
+  var PLV=FEK.step({ field:"plV", label:"volume plated", unit:"mL", value:0.1, min:0.001, max:10, step:0.05, dec:3,
+    onchange:function(v){ push("plV",v); },
+    help:"The conventional volumes are 0.1 mL spread, 1.0 mL pour — and they are not this page's choice: the spread volume is fixed at 0.1 mL in <span class='src'>FDA BAM</span>, and 1.0 mL is the volume that defines a pour plate. The volume is in the denominator, so getting it wrong scales every count." });
+  var PLC=FEK.field({ field:"plC", label:"colonies", dec:0, step:1, min:0,
+    onchange:function(v){ push("plC",v); },
+    help:"What you counted, including a plate you are about to discard — which plates you threw out, and why, is part of the result." });
+  FEK.mount("plEntry",[PLN,PLV,PLC]);
+
+  var DEST=FEK.field({ field:"dEst", label:"estimated titre", unit:"CFU/mL", dec:0, step:1000, min:0,
+    onchange:function(v){ push("dEst",v); },
+    help:"A guess is fine — that is the point of planning the series before you pour." });
+  var DVOL=FEK.step({ field:"dVol", label:"volume plated", unit:"mL", value:0.1, min:0.001, max:10, step:0.05, dec:3,
+    onchange:function(v){ push("dVol",v); } });
+  var DTR=FEK.step({ field:"dTr", label:"transfer volume", unit:"mL", value:1, min:0.01, max:100, step:0.5, dec:2,
+    onchange:function(v){ push("dTr",v); } });
+  var DBL=FEK.step({ field:"dBl", label:"diluent volume", unit:"mL", value:9, min:0.01, max:1000, step:0.5, dec:2,
+    onchange:function(v){ push("dBl",v); },
+    help:"1 into 9 is a ten-fold step. 1 into 99 is a hundred-fold — fewer tubes, and fewer chances to pipette wrong." });
+  FEK.mount("dilEntry",[DEST,DVOL,DTR,DBL]);
+
+  var GRT=FEK.field({ field:"grT", label:"time", unit:"h", dec:2, step:0.1, min:0,
+    onchange:function(v){ push("grT",v); } });
+  var GRO=FEK.field({ field:"grO", label:"OD₆₀₀", unit:"AU", dec:3, step:0.001, min:0, max:5,
+    onchange:function(v){ push("grO",v); },
+    help:"As the spectrophotometer reads it. Above about 0.8 the relationship with cell number stops being linear — the Method tab has the detail." });
+  FEK.mount("grEntry",[GRT,GRO]);
+
+  var ZMM=FEK.field({ field:"zMm", label:"zone diameter", unit:"mm", dec:1, step:0.5, min:0,
+    onchange:function(v){ push("zMm",v); },
+    help:"Including the disc, measured across the whole zone of inhibition." });
+  FEK.mount("zEntry",[ZMM]);
+
+  var ZS=FEK.field({ field:"zS", label:"susceptible if ≥", unit:"mm", dec:1, step:0.5, min:0,
+    onchange:function(v){ push("zS",v); } });
+  var ZR=FEK.field({ field:"zR", label:"resistant if ≤", unit:"mm", dec:1, step:0.5, min:0,
+    onchange:function(v){ push("zR",v); },
+    help:"Copied from the table in front of you, not remembered. These are typed fields for the same reason the page ships no breakpoints of its own." });
+  FEK.mount("bpEntry",[ZS,ZR]);
+  function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,function(c){
+    return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c];});}
+  function buzz(m){try{if(navigator.vibrate)navigator.vibrate(m||8);}catch(e){}}
+  var tt;function toast(m){var t=$("toast");t.textContent=m;t.classList.add("on");
+    clearTimeout(tt);tt=setTimeout(function(){t.classList.remove("on");},1700);}
+  function f(x,d){return isFinite(x)?x.toFixed(d==null?2:d):"—";}
+  function sup(n){return String(n).replace(/[-0-9]/g,function(c){
+    return {"-":"⁻","0":"⁰","1":"¹","2":"²","3":"³","4":"⁴","5":"⁵","6":"⁶","7":"⁷","8":"⁸","9":"⁹"}[c];});}
+  function sci(x){ if(!isFinite(x))return "—"; if(x===0)return "0";
+    var e=Math.floor(Math.log10(Math.abs(x))),m=x/Math.pow(10,e);
+    return m.toFixed(2)+"×10"+sup(e); }
+  function st(v,l,c){return '<div class="st'+(c?" "+c:"")+'"><div class="v">'+v+'</div><div class="l">'+l+'</div></div>';}
+
+  /* --------------------------------------------------------------- plates */
+  var plates=[];
+  $("plAdd").addEventListener("click",function(){
+    var n=nv("plN"), v=nv("plV"), c=nv("plC");
+    if(!isFinite(n)||!isFinite(v)||!isFinite(c)||v<=0){toast("Need dilution, volume and colonies");return;}
+    plates.push({n:n,v:v,c:c,label:val("plL")});
+    PLC.clear(); push("plC",null); $("plL").value="";
+    renderPl(); buzz(12);
+  });
+  function cfu(p){ return p.c/(p.v*Math.pow(10,-p.n)); }
+  function statusOf(p){ return p.c<30?"TFTC":(p.c>300?"TNTC":"countable"); }
+  function renderPl(){
+    var box=$("plList");
+    if(!plates.length){ box.innerHTML='<p class="fine" style="margin:0">No plates yet.</p>';
+      $("plOut").innerHTML=""; $("plNote").innerHTML=""; return; }
+    box.innerHTML=plates.map(function(p,i){
+      var s=statusOf(p);
+      return '<div class="row2'+(s!=="countable"?' inv':'')+'"><div class="g"><b>'+
+        esc(p.label||("10"+sup(-p.n)))+'</b><span>10'+sup(-p.n)+' · '+f(p.v,2)+' mL · '+
+        p.c+' colonies · <b>'+s+'</b></span></div><span class="cov">'+
+        (s==="countable"?sci(cfu(p)):"—")+'</span>'+
+        '<button type="button" data-i="'+i+'">✕</button></div>';
+    }).join("");
+    Array.prototype.forEach.call(box.querySelectorAll("button[data-i]"),function(b){
+      b.addEventListener("click",function(){ plates.splice(+b.getAttribute("data-i"),1); renderPl(); });
+    });
+
+    var good=plates.filter(function(p){return statusOf(p)==="countable";});
+    var o=$("plOut");
+    if(!good.length){
+      o.innerHTML='<h3 style="margin-top:0">Result</h3><div class="refuse"><b>No countable plate.</b> '+
+        'Every plate is outside the conventional 30–300 window, so there is no defensible CFU/mL from this run. '+
+        (plates.every(function(p){return p.c>300;})
+          ? 'All plates are TNTC — the dilution series did not go far enough. Extend it by two or three more steps.'
+          : (plates.every(function(p){return p.c<30;})
+             ? 'All plates are TFTC — the series went too far, or the sample is more dilute than you expected. Plate a lower dilution.'
+             : 'Plate the dilutions between the ones that were too crowded and too sparse.'))+
+        ' Report the run as it happened rather than quoting a number from an out-of-range plate.</div>';
+      $("plNote").innerHTML=""; return;
+    }
+    var vals=good.map(cfu);
+    var mean=vals.reduce(function(a,b){return a+b;},0)/vals.length;
+    var lo=Math.min.apply(null,vals), hi=Math.max.apply(null,vals);
+    var totCol=good.reduce(function(a,p){return a+p.c;},0);
+    var cv=100/Math.sqrt(totCol);
+    var h='<h3 style="margin-top:0">Result</h3><div class="stat">'+
+      st(sci(mean),"CFU/mL (mean of countable)","hi")+
+      st(good.length+" / "+plates.length,"countable plates")+
+      st(totCol,"colonies counted")+
+      st("±"+f(cv,1)+"%","Poisson CV", cv>18?"warnv":"")+'</div>';
+    h+='<div class="tw"><table><tr><th>plate</th><th class="n">dilution</th><th class="n">colonies</th>'+
+       '<th class="n">status</th><th class="n">CFU/mL</th></tr>';
+    plates.forEach(function(p){
+      var s=statusOf(p);
+      h+='<tr><td>'+esc(p.label||"—")+'</td><td class="n">10'+sup(-p.n)+'</td><td class="n">'+p.c+
+         '</td><td class="'+(s==="countable"?"ok":"no")+'">'+s+'</td><td class="n">'+
+         (s==="countable"?sci(cfu(p)):"excluded")+'</td></tr>';
+    });
+    h+='</table></div>';
+    o.innerHTML=h;
+
+    var a=[];
+    if(plates.length>good.length) a.push('<div class="verdict warn"><b>'+(plates.length-good.length)+
+      ' plate'+(plates.length-good.length===1?"":"s")+' excluded.</b> TFTC and TNTC plates are shown above and '+
+      'left out of the mean rather than dropped silently — which plates you discarded is part of the record.</div>');
+    if(hi/lo>2) a.push('<div class="warnbox"><b>Countable plates disagree by '+f(hi/lo,1)+'×.</b> '+
+      'Adjacent dilutions should give CFU/mL within about a factor of two of each other. A larger spread '+
+      'points at the dilution series — incomplete mixing between steps, a pipetting error, or carry-over — '+
+      'rather than at the organism. Repeat the series before reporting the mean.</div>');
+    if(totCol<30) a.push('<div class="verdict warn"><b>Only '+totCol+' colonies counted in total.</b> '+
+      'Poisson precision is ±'+f(cv,1)+'%. Count more plates at the countable dilution.</div>');
+    a.push('<div class="verdict"><b>This is CFU/mL, not cells/mL.</b> A chain, a clump or a hypha gives one '+
+      'colony, so the figure underestimates cell number by an amount set by how clumpy the organism is. '+
+      'For an environmental sample it also counts only what grows on this medium under these conditions, '+
+      'which is typically a small fraction of what is present.</div>');
+    $("plNote").innerHTML=a.join("");
+  }
+
+  /* ------------------------------------------------------------ dilution */
+  function dil(){
+    var est=nv("dEst"), vol=nv("dVol"), tr=nv("dTr"), bl=nv("dBl"), o=$("dilOut");
+    if(!isFinite(est)||est<=0||!isFinite(vol)||vol<=0||!isFinite(tr)||tr<=0||!isFinite(bl)){ o.innerHTML=""; return; }
+    var step=tr/(tr+bl);
+    var perStep=-Math.log10(step);
+    var rows=[], conc=est, k=0, best=null;
+    while(k<=12){
+      var expected=conc*vol;
+      rows.push({k:k,conc:conc,exp:expected});
+      if(expected>=30&&expected<=300&&!best) best=k;
+      conc*=step; k++;
+    }
+    var h='<div class="stat">'+st("1:"+f((tr+bl)/tr,0),"each step")+
+      st(f(perStep,2),"log₁₀ per step")+
+      st(best==null?"none":("step "+best),"lands in 30–300", best==null?"bad":"hi")+'</div>';
+    h+='<div class="tw"><table><tr><th>step</th><th class="n">dilution</th><th class="n">CFU/mL</th>'+
+       '<th class="n">expected colonies</th><th class="n">plate it?</th></tr>';
+    rows.forEach(function(r){
+      var ok=r.exp>=30&&r.exp<=300;
+      h+='<tr><td>'+r.k+'</td><td class="n">10'+sup(-Math.round(r.k*perStep))+'</td><td class="n">'+
+         sci(r.conc)+'</td><td class="n">'+f(r.exp,0)+'</td><td class="'+(ok?"ok":"no")+'">'+
+         (ok?"yes":(r.exp>300?"too many":"too few"))+'</td></tr>';
+    });
+    h+='</table></div>';
+    if(best==null) h+='<div class="warnbox"><b>No step lands in the window.</b> With '+f(vol,2)+' mL plated '+
+      'and this dilution factor, no step gives the conventional 30–300 colonies. Change the plated volume, or use a smaller '+
+      'dilution factor per step so the series has finer resolution.</div>';
+    else h+='<div class="verdict"><b>Plate step '+best+' — and step '+(best+1)+' as well.</b> '+
+      'Plating two adjacent dilutions is what lets you notice a series that has gone wrong: if the two '+
+      'computed CFU/mL disagree by more than about twofold, the problem is the dilutions, not the sample. '+
+      'The estimate above is only as good as your guess at the titre, so bracket it.</div>';
+    o.innerHTML=h;
+  }
+  ["dEst","dVol","dTr","dBl"].forEach(function(i){ $(i).addEventListener("input",dil); });
+
+  /* -------------------------------------------------------------- growth */
+  var pts=[];
+  $("grAdd").addEventListener("click",function(){
+    var t=nv("grT"), od=nv("grO");
+    if(!isFinite(t)||!isFinite(od)){toast("Need time and OD");return;}
+    if(od<=0){toast("OD must be above zero to take a log");return;}
+    pts.push({t:t,od:od,use:true}); pts.sort(function(a,b){return a.t-b.t;});
+    GRT.clear(); GRO.clear(); push("grT",null); push("grO",null); renderGr(); buzz(12);
+  });
+  /* ADR-209 */
+  $("grClear").addEventListener("click",function(){
+    if(pts.length && !confirm("Clear the growth curve? "+pts.length+" reading"+
+       (pts.length===1?"":"s")+" go and there is no undo.")) return;
+    pts=[]; renderGr(); });
+  $("grDemo").addEventListener("click",function(){
+    /* OD rising by a factor of sqrt(2) each half hour -- i.e. doubling every hour --
+       from 0.05, then flattening as the reading saturates optically past ~0.5 */
+    pts=[{t:0,od:0.050,use:true},{t:0.5,od:0.071,use:true},{t:1,od:0.100,use:true},
+         {t:1.5,od:0.141,use:true},{t:2,od:0.200,use:true},{t:2.5,od:0.283,use:true},
+         {t:3,od:0.400,use:true},{t:3.5,od:0.510,use:false},{t:4,od:0.580,use:false},
+         {t:4.5,od:0.610,use:false}];
+    renderGr(); toast("Loaded — last three points excluded as optically saturated"); buzz(14);
+  });
+  function reg(xs,ys){
+    var n=xs.length; if(n<2) return null;
+    var mx=0,my=0; xs.forEach(function(v){mx+=v;}); ys.forEach(function(v){my+=v;}); mx/=n; my/=n;
+    var sxx=0,sxy=0,syy=0;
+    for(var i=0;i<n;i++){var dx=xs[i]-mx,dy=ys[i]-my;sxx+=dx*dx;sxy+=dx*dy;syy+=dy*dy;}
+    if(sxx===0) return null;
+    var b=sxy/sxx;
+    return {b:b,a:my-b*mx,r2:syy===0?1:(sxy*sxy)/(sxx*syy),n:n};
+  }
+  function renderGr(){
+    var box=$("grList");
+    if(!pts.length){ box.innerHTML='<p class="fine" style="margin:0">No points yet.</p>'; $("grOut").innerHTML=""; return; }
+    box.innerHTML=pts.map(function(p,i){
+      return '<div class="row2"><div class="g"><b>'+f(p.t,2)+' h</b><span>OD '+f(p.od,3)+
+        ' · ln(OD) '+f(Math.log(p.od),3)+'</span></div>'+
+        '<button type="button" class="'+(p.use?"":"off")+'" data-u="'+i+'" style="font-weight:700;color:'+
+        (p.use?"var(--s1)":"var(--muted)")+'">'+(p.use?"✓ in fit":"excluded")+'</button>'+
+        '<button type="button" data-d="'+i+'">✕</button></div>';
+    }).join("");
+    Array.prototype.forEach.call(box.querySelectorAll("button[data-u]"),function(b){
+      b.addEventListener("click",function(){ var i=+b.getAttribute("data-u"); pts[i].use=!pts[i].use; renderGr(); });});
+    Array.prototype.forEach.call(box.querySelectorAll("button[data-d]"),function(b){
+      b.addEventListener("click",function(){ pts.splice(+b.getAttribute("data-d"),1); renderGr(); });});
+
+    var use=pts.filter(function(p){return p.use;});
+    var o=$("grOut");
+    if(use.length<3){ o.innerHTML='<p class="fine" style="margin:0">Mark at least three points as being in '+
+      'exponential phase.</p>'; return; }
+    var g=reg(use.map(function(p){return p.t;}), use.map(function(p){return Math.log(p.od);}));
+    if(!g){ o.innerHTML=""; return; }
+    var mu=g.b, td=mu>0?Math.LN2/mu:NaN;
+    var h='<h3 style="margin-top:0">Exponential fit</h3><div class="stat">'+
+      st(f(mu,4)+" h⁻¹","specific growth rate µ","hi")+
+      st(f(td,3)+" h","doubling time","hi")+
+      st(f(td*60,1)+" min","doubling time")+
+      st(f(g.r2,4),"r²", g.r2<0.98?"warnv":"")+
+      st(use.length+" / "+pts.length,"points in fit")+'</div>';
+    h+='<div class="eq">ln(OD) = '+f(g.a,4)+' + '+f(mu,4)+'·t &nbsp;·&nbsp; t_d = ln2 ÷ '+f(mu,4)+' = '+f(td,3)+' h</div>';
+    if(mu<=0) h+='<div class="warnbox"><b>Slope is not positive.</b> The selected points are not growing, so '+
+      'there is no growth rate to report. Check which points you marked.</div>';
+    if(g.r2<0.98) h+='<div class="warnbox"><b>r² = '+f(g.r2,4)+' across the selected window.</b> A genuine '+
+      'exponential phase is very straight in ln(OD). Curvature here usually means the window includes lag at '+
+      'the start or the approach to stationary at the end — narrow it.</div>';
+    /* ADR-233: THE SENTENCE IS COMPUTED. This used to say the high points "push
+       µ down" whatever they did -- and the micro-bench blind operator watched a
+       point above OD 0.6 push it UP (0.6931 -> 0.8189) under that sentence.
+       Optical saturation makes a reading LOW, so a point below the line of the
+       others is what it looks like; a point ABOVE that line is something
+       saturation cannot explain. The fit without them is computed and the
+       direction is said, with the number. */
+    var sat=satEffect(use);
+    if(sat) h+='<div class="warnbox"><b>Points above OD 0.6 are in the fit.</b> Above roughly '+
+      '0.4–0.6 a typical spectrophotometer reads low because of multiple scattering. '+sat.html+
+      ' Dilute before reading, or exclude them.</div>';
+    h+='<div class="verdict"><b>µ is a rate of increase in turbidity.</b> OD measures light scattering, and '+
+      'the scattering per cell changes with cell size and shape as the culture ages. Do not convert this to '+
+      'cells/mL without your own OD-to-CFU calibration for this strain, medium and instrument — and note '+
+      'that such a calibration is not transferable to another lab.</div>';
+    o.innerHTML=h;
+  }
+
+  /* ADR-233: what the points above OD 0.6 actually did to µ. null when none are
+     in the fit. Refits WITHOUT them when at least three remain, and says which
+     way they moved the slope -- DOWN is what optical saturation does (the
+     reading is low, the line flattens); UP means the high points sit ABOVE the
+     line of the others, which saturation cannot do, so the reading itself is
+     in question. */
+  function satEffect(use){
+    var hi=use.filter(function(p){ return p.od>0.6; });
+    if(!hi.length) return null;
+    var lo=use.filter(function(p){ return p.od<=0.6; });
+    var n=hi.length, pl=(n===1?"point":"points"), it=(n===1?"it":"they");
+    var all=reg(use.map(function(p){return p.t;}), use.map(function(p){return Math.log(p.od);}));
+    if(lo.length<3 || !all){
+      var t0=n+" "+pl+" above OD 0.6 "+(n===1?"is":"are")+" in the fit, and fewer than three points "+
+        "remain without "+(n===1?"it":"them")+", so what "+it+" did to µ cannot be separated out.";
+      return { html:t0, text:t0, dir:null };
+    }
+    var g=reg(lo.map(function(p){return p.t;}), lo.map(function(p){return Math.log(p.od);}));
+    if(!g) return null;
+    var a=all.b, b=g.b, d=a-b, pct=b!==0 ? Math.abs(d/b)*100 : NaN;
+    var dir = Math.abs(d)<1e-9 ? "none" : (d<0 ? "down" : "up");
+    var head="Without the "+n+" "+pl+" above OD 0.6, µ is "+f(b,4)+" h⁻¹; with "+(n===1?"it":"them")+", "+f(a,4)+" h⁻¹";
+    var tail;
+    if(dir==="none") tail=" — "+it+" did not move it.";
+    else if(dir==="down") tail=" — "+it+" pulled it DOWN by "+f(pct,1)+"%, which is what optical "+
+      "saturation does: the reading is low, so the line flattens.";
+    else tail=" — "+it+" pushed it UP by "+f(pct,1)+"%. Saturation makes a reading LOW, so a point above the "+
+      "line of the others is not saturation: check the reading, the blank and the dilution before trusting it.";
+    return { html:head+tail, text:head+tail, dir:dir, with:a, without:b };
+  }
+
+  /* --------------------------------------------------------------- zones */
+  var zones=[];
+  $("zAdd").addEventListener("click",function(){
+    var d=val("zDrug"), mm=nv("zMm");
+    if(!d||!isFinite(mm)){toast("Need an antimicrobial and a zone");return;}
+    /* ADR-233: the organism and the medium are READ at Add, per zone. They sat
+       on the form and reached nothing -- not the list, not the bench sheet, not
+       the zone CSV -- so a zone left the page without the two things its
+       interpretation depends on. Kept per zone, not read at export time, so a
+       later edit to the form does not rewrite a zone already recorded. */
+    zones.push({drug:d,cont:val("zCont"),mm:mm,org:val("zOrg"),med:val("zMed")});
+    $("zDrug").value=""; $("zCont").value=""; ZMM.clear(); push("zMm",null);
+    renderZ(); buzz(12);
+  });
+  /* ADR-233: THE BAND IS THE RULE THE PAGE APPLIES. A zone is S at >= S, R at
+     <= R, and I strictly between. This printed R+0.5 to S-0.5 -- "13.5–16.5 mm"
+     for S >= 17 / R <= 13 -- which is neither the rule (13.2 mm reads I here and
+     sat outside that band) nor the convention for whole-millimetre readings,
+     where the band is 14–16. It states the rule, and the whole-mm range when both
+     breakpoints are whole millimetres. */
+  function bandText(S,R){
+    var t="Intermediate: above "+f(R,1)+" mm and below "+f(S,1)+" mm";
+    if(S===Math.round(S) && R===Math.round(R)){
+      if(S-R>=2) t+=" — "+(R+1===S-1 ? (R+1)+" mm" : (R+1)+"–"+(S-1)+" mm")+" for whole-millimetre readings";
+      else t+=" — no whole-millimetre reading falls between them";
+    }
+    return t+".";
+  }
+  function renderZ(){
+    var box=$("zList"), S=nv("zS"), R=nv("zR"), src=val("zSrc");
+    var haveBp=isFinite(S)&&isFinite(R);
+    if(!zones.length){ box.innerHTML='<p class="fine" style="margin:0">No zones recorded.</p>'; }
+    else {
+      box.innerHTML=zones.map(function(z,i){
+        var interp="—";
+        if(haveBp) interp = z.mm>=S?"S":(z.mm<=R?"R":"I");
+        return '<div class="row2"><div class="g"><b>'+esc(z.drug)+(z.cont?' '+esc(z.cont):'')+
+          '</b><span>'+f(z.mm,1)+' mm'+(z.org?' · '+esc(z.org):'')+(z.med?' · '+esc(z.med):'')+
+          (haveBp?'':' · no breakpoints entered')+'</span></div>'+
+          '<span class="cov">'+interp+'</span><button type="button" data-z="'+i+'">✕</button></div>';
+      }).join("");
+      Array.prototype.forEach.call(box.querySelectorAll("button[data-z]"),function(b){
+        b.addEventListener("click",function(){ zones.splice(+b.getAttribute("data-z"),1); renderZ(); });});
+    }
+    var o=$("zOut");
+    if(!zones.length){ o.innerHTML=""; }
+    else if(!haveBp){
+      o.innerHTML='<div class="refuse"><b>Measurement only — no interpretation.</b> '+
+        'You have recorded '+zones.length+' zone'+(zones.length===1?"":"s")+' but no breakpoints. '+
+        'S/I/R cannot be derived from a zone diameter alone: it depends on the organism, the agent, the disc '+
+        'content, the medium and the method, and the table is revised every year. Enter the S and R values '+
+        'from the table you are working to, and the edition, and the interpretation appears.</div>';
+    } else if(S<=R){
+      o.innerHTML='<div class="refuse"><b>Those breakpoints are the wrong way round.</b> The susceptible '+
+        'threshold must be larger than the resistant one — a bigger zone means more susceptible. Check the row '+
+        'you are reading from the table.</div>';
+    } else {
+      o.innerHTML='<div class="verdict"><b>Interpreted against S ≥ '+f(S,1)+' mm, R ≤ '+f(R,1)+' mm'+
+        (src?', '+esc(src):'')+'.</b>'+(src?'':' <b>No source recorded</b> — put the table and its edition in '+
+        'the source field, because an interpretation without its breakpoint source is not reproducible.')+
+        ' '+bandText(S,R)+'</div>';
+    }
+    $("zRefuse").innerHTML='<h3 style="margin-top:0">Why no built-in table</h3>'+
+      '<p class="fine" style="margin-top:0">Breakpoint tables are revised annually and differ between CLSI '+
+      'and EUCAST. Software that hard-codes them prints confident answers that quietly go out of date, and a '+
+      'stale “susceptible” is a worse output than no output. This page therefore asks you for the numbers and '+
+      'records which edition they came from, so the interpretation travels with its source. The same reasoning '+
+      'is why the vegetation tool refuses to ship coefficients of conservatism and the fungal tool ships no '+
+      'edibility data.</p>';
+  }
+  ["zS","zR","zSrc"].forEach(function(i){ $(i).addEventListener("input",renderZ); });
+
+  /* --------------------------------------------------------- take it home
+     ADR-205. Until this slice, this page accepted plate counts, a dilution
+     plan, a growth curve and a set of zone diameters -- and offered NO WAY TO
+     GET ANY OF IT OUT. Not a copy button, not a CSV, not a print block.
+
+     EVERY PLATE IS CARRIED, INCLUDING THE REJECTED ONES. A CFU/mL reported
+     without the plates that were excluded is a count nobody can audit, and a
+     series where every plate fell outside 30-300 is a result in itself rather
+     than an absence of one. The sheet marks each plate TFTC, TNTC or
+     countable, the same judgement the screen makes.
+
+     AND A ZONE CARRIES ITS BREAKPOINT SOURCE. An S/I/R call without the table
+     and edition it came from is an opinion, which is exactly why this page
+     refuses to ship a table of its own; an export that dropped the source
+     would undo that refusal on the way out of the tab. */
+  function cell(v){ v=String(v==null?"":v); return /[",\n]/.test(v) ? '"'+v.replace(/"/g,'""')+'"' : v; }
+
+  function sheet(){
+    var L=[], any=false;
+    var d=new Date(), p2=function(n){ return (n<10?"0":"")+n; };
+    L.push("# Micro bench — " + d.getFullYear() + "-" + p2(d.getMonth()+1) + "-" + p2(d.getDate())
+           + " " + p2(d.getHours()) + ":" + p2(d.getMinutes()));
+
+    /* ---- plates ---- */
+    if(plates.length){
+      any=true;
+      L.push("", "## Plate counts (" + plates.length + ")");
+      plates.forEach(function(p){
+        var st2=statusOf(p);
+        L.push("  " + (p.label||("10^-"+p.n)) + "   10^-" + p.n + "   " + f(p.v,2) + " mL   "
+               + p.c + " colonies   " + st2
+               + (st2==="countable" ? "   " + cfu(p).toExponential(3) + " CFU/mL" : "   excluded"));
+      });
+      var good=plates.filter(function(p){ return statusOf(p)==="countable"; });
+      if(!good.length){
+        L.push("  NO COUNTABLE PLATE. Every plate is outside the conventional 30–300 window, so there "
+               + "is no defensible CFU/mL from this run — report it as it happened rather than quoting "
+               + "a number from an out-of-range plate.");
+      } else {
+        var vals=good.map(cfu);
+        var mean=vals.reduce(function(a,b){return a+b;},0)/vals.length;
+        var lo=Math.min.apply(null,vals), hi=Math.max.apply(null,vals);
+        var totCol=good.reduce(function(a,p){return a+p.c;},0);
+        L.push("  countable plates: " + good.length + " of " + plates.length
+               + "   colonies counted: " + totCol);
+        L.push("  CFU/mL (mean of countable): " + mean.toExponential(3)
+               + "   Poisson CV: ±" + f(100/Math.sqrt(totCol),1) + "%");
+        if(plates.length>good.length)
+          L.push("  " + (plates.length-good.length) + " plate(s) excluded — listed above rather than "
+                 + "dropped silently, because which plates you discarded is part of the record");
+        if(hi/lo>2)
+          L.push("  COUNTABLE PLATES DISAGREE BY " + f(hi/lo,1) + "× — adjacent dilutions should agree "
+                 + "within about a factor of two; this points at the dilution series, not the organism");
+        L.push("  this is CFU/mL, not cells/mL: a chain, a clump or a hypha gives one colony");
+      }
+    }
+
+    /* ---- the dilution plan ---- */
+    var est=nv("dEst"), dvol=nv("dVol"), tr=nv("dTr"), bl=nv("dBl");
+    if(isFinite(est)&&est>0&&isFinite(dvol)&&dvol>0&&isFinite(tr)&&tr>0&&isFinite(bl)){
+      any=true;
+      var step=tr/(tr+bl), perStep=-Math.log10(step);
+      L.push("", "## Dilution plan");
+      L.push("  estimate: " + est.toExponential(3) + " CFU/mL   plated volume: " + f(dvol,2) + " mL");
+      L.push("  transfer " + f(tr,2) + " mL into " + f(bl,2) + " mL blank = 1:" + f((tr+bl)/tr,0)
+             + " per step (" + f(perStep,2) + " log₁₀)");
+      var conc=est, best=null, k;
+      for(k=0;k<=12;k++){
+        var expc=conc*dvol;
+        if(expc>=30 && expc<=300 && best===null){ best=k; L.push("  plate step " + k + ": ~"
+              + f(expc,0) + " colonies expected"); }
+        conc*=step;
+      }
+      if(best===null) L.push("  NO STEP LANDS IN 30–300 with this plated volume and step size");
+    }
+
+    /* ---- growth ---- */
+    if(pts.length){
+      any=true;
+      L.push("", "## Growth curve (" + pts.length + " point" + (pts.length===1?"":"s") + ")");
+      pts.forEach(function(x){
+        L.push("  " + f(x.t,2) + " h   OD " + f(x.od,3) + "   ln(OD) " + f(Math.log(x.od),3)
+               + (x.use ? "   in fit" : "   EXCLUDED from fit"));
+      });
+      var use=pts.filter(function(x){ return x.use; });
+      if(use.length<3) L.push("  fewer than three points marked as exponential — no fit");
+      else {
+        var g=reg(use.map(function(x){return x.t;}), use.map(function(x){return Math.log(x.od);}));
+        if(g){
+          var mu=g.b, td= mu>0 ? Math.LN2/mu : NaN;
+          L.push("  fit over " + use.length + " of " + pts.length + " points: ln(OD) = "
+                 + f(g.a,4) + " + " + f(mu,4) + "·t   r² = " + f(g.r2,4));
+          L.push("  specific growth rate µ: " + f(mu,4) + " h⁻¹   doubling time: " + f(td,3)
+                 + " h (" + f(td*60,1) + " min)");
+          if(mu<=0) L.push("  SLOPE NOT POSITIVE — the selected points are not growing");
+          if(g.r2<0.98) L.push("  r² below 0.98 — the window probably includes lag or the approach "
+                 + "to stationary; narrow it");
+          var sat=satEffect(use);
+          if(sat) L.push("  POINTS ABOVE OD 0.6 ARE IN THE FIT — multiple scattering makes a "
+                 + "spectrophotometer read low there. " + sat.text);
+          L.push("  µ is a rate of increase in TURBIDITY; converting to cells/mL needs your own "
+                 + "OD-to-CFU calibration for this strain, medium and instrument");
+        }
+      }
+    }
+
+    /* ---- zones ---- */
+    if(zones.length){
+      any=true;
+      var S=nv("zS"), R=nv("zR"), src=val("zSrc"), haveBp=isFinite(S)&&isFinite(R);
+      L.push("", "## Disc diffusion (" + zones.length + " zone" + (zones.length===1?"":"s") + ")");
+      zones.forEach(function(z){
+        var interp = haveBp ? (z.mm>=S ? "S" : (z.mm<=R ? "R" : "I")) : "—";
+        L.push("  " + z.drug + (z.cont ? " " + z.cont : "") + "   " + f(z.mm,1) + " mm   " + interp
+               + (z.org ? "   " + z.org : "") + (z.med ? "   on " + z.med : ""));
+      });
+      if(!haveBp){
+        L.push("  MEASUREMENT ONLY — NO INTERPRETATION. No breakpoints were entered, and S/I/R cannot "
+               + "be derived from a diameter alone: it depends on the organism, the agent, the disc "
+               + "content, the medium and the method.");
+      } else if(S<=R){
+        L.push("  BREAKPOINTS THE WRONG WAY ROUND: the susceptible threshold must exceed the resistant "
+               + "one, so these interpretations are not to be used");
+      } else {
+        L.push("  interpreted against S ≥ " + f(S,1) + " mm, R ≤ " + f(R,1) + " mm"
+               + (src ? ", " + src : ""));
+        L.push("  " + bandText(S,R));
+        if(!src) L.push("  NO BREAKPOINT SOURCE RECORDED — an interpretation without the table and its "
+               + "edition is not reproducible, and these tables are revised annually");
+      }
+    }
+
+    if(!any) return "# record a plate, a point or a zone — the bench sheet appears here";
+    return L.join("\n");
+  }
+
+  function ecoOut(){ $("ecoOut").textContent = sheet(); }
+  /* Rebuilt on any entry, so the sheet on the Export tab is never a stale
+     answer to inputs that have since changed. */
+  document.addEventListener("input", ecoOut, true);
+  document.addEventListener("change", ecoOut, true);
+  document.addEventListener("click", function(){ setTimeout(ecoOut, 0); }, true);
+
+  /* A CSV IS AN INSTRUMENT READING, NOT A FLOAT DUMP. `p.c/(p.v*10^-n)` comes
+     out of binary floating point as 147999999.99999997 for a plate the page
+     displays as 1.480e+8, and a column of those says more than the count
+     knows -- eleven figures from a hundred and forty-eight colonies. Every
+     derived column is written at the precision the screen shows. */
+  function plCsv(){
+    var rows=[["label","dilution_exponent","volume_ml","colonies","status","cfu_per_ml"]
+                .map(cell).join(",")];
+    plates.forEach(function(p){
+      var st2=statusOf(p);
+      rows.push([p.label||"", p.n, p.v, p.c, st2,
+                 st2==="countable" ? cfu(p).toExponential(3) : ""].map(cell).join(","));
+    });
+    return rows.join("\n");
+  }
+  function grCsv(){
+    var rows=[["hours","od","ln_od","in_fit"].map(cell).join(",")];
+    pts.forEach(function(x){
+      rows.push([x.t, x.od, Math.log(x.od).toFixed(4), x.use?"yes":"no"].map(cell).join(","));
+    });
+    return rows.join("\n");
+  }
+  function znCsv(){
+    var S=nv("zS"), R=nv("zR"), src=val("zSrc"), haveBp=isFinite(S)&&isFinite(R)&&S>R;
+    var rows=[["antimicrobial","disc_content","zone_mm","interpretation","breakpoint_S_mm",
+               "breakpoint_R_mm","breakpoint_source","organism","medium"].map(cell).join(",")];
+    zones.forEach(function(z){
+      rows.push([z.drug, z.cont||"", z.mm, haveBp ? (z.mm>=S?"S":(z.mm<=R?"R":"I")) : "",
+                 isFinite(S)?S:"", isFinite(R)?R:"", src||"", z.org||"", z.med||""].map(cell).join(","));
+    });
+    return rows.join("\n");
+  }
+
+  function copyText(s,msg,id){
+    var a=document.createElement("textarea"); a.value=s;
+    a.style.position="fixed"; a.style.opacity="0"; document.body.appendChild(a); a.select();
+    /* ADR-203: execCommand reports failure by RETURNING FALSE and throws in
+       only some of the ways it can fail, so the return value is what decides
+       whether this copy happened. */
+    var ok=false; try{ ok=document.execCommand("copy"); }catch(e){}
+    document.body.removeChild(a);
+    toast(ok?msg:"Copy failed — select the text");
+    /* ADR-207: the mark, in the success path. ADR-205 gave this page its
+       exports; the ledger that says whether they have LEFT arrives now. */
+    if(ok) OUT.sent(id, s.length);
+    return ok;
+  }
+  $("ecoCopy").addEventListener("click",function(){
+    ecoOut(); copyText($("ecoOut").textContent,"Bench sheet copied","sheet"); });
+  $("plCopy").addEventListener("click",function(){
+    if(!plates.length){ toast("No plates yet"); return; }
+    copyText(plCsv(),"Plate CSV copied — "+plates.length+" row"+(plates.length===1?"":"s"),"plates"); });
+  $("grCopy").addEventListener("click",function(){
+    if(!pts.length){ toast("No points yet"); return; }
+    copyText(grCsv(),"Growth CSV copied — "+pts.length+" row"+(pts.length===1?"":"s"),"growth"); });
+  $("znCopy").addEventListener("click",function(){
+    if(!zones.length){ toast("No zones recorded"); return; }
+    copyText(znCsv(),"Zone CSV copied — "+zones.length+" row"+(zones.length===1?"":"s"),"zones"); });
+
+  /* ---------------------------------------------------------------- tabs */
+  document.querySelectorAll(".tab").forEach(function(tb){
+    tb.addEventListener("click",function(){
+      document.querySelectorAll(".tab").forEach(function(t){t.classList.toggle("on",t===tb);});
+      document.querySelectorAll(".pane").forEach(function(p){p.classList.toggle("on",p.id===tb.dataset.pane);});
+      window.scrollTo(0,0); buzz();
+    });
+  });
+  renderPl(); renderGr(); renderZ(); ecoOut();
+
+  /* ---- ADR-207: a page that takes records must keep them ----
+     This bench accepted a screen's worth of typed values and kept none of
+     them: close the tab, lose the morning. Six pages were in that state, and
+     they were the last -- the kit's rule is now that a page which takes
+     records keeps them, or says in its suite why it does not. */
+  var KEPT = KEEP.wire({
+    key: "csrbtMicroBench",
+    format: 1,
+    mount: "keepBox",
+    noun: "this bench",
+    ontoast: toast,
+    snapshot: function(){
+      var st = { plates:plates, pts:pts, zones:zones };
+      var any = plates.length || pts.length || zones.length;
+      var f = KEEP.formSnapshot(), k;
+      if(!any) for(k in f) if(f.hasOwnProperty(k) && String(f[k]).trim() !== "") { any = true; break; }
+      return any ? { fields: f, state: st } : null;
+    },
+    restore: function(b){
+      if(!b || !b.state) return false;
+      KEEP.formRestore(b.fields);
+      var st = b.state;
+      plates.length=0; (st.plates||[]).forEach(function(x){ plates.push(x); });
+      pts.length=0;    (st.pts||[]).forEach(function(x){ pts.push(x); });
+      zones.length=0;  (st.zones||[]).forEach(function(x){ zones.push(x); });
+      renderPl(); renderGr(); renderZ(); dil(); ecoOut();
+      return true;
+    }
+  });
+  ["input", "change", "click"].forEach(function(ev){
+    document.addEventListener(ev, function(){ KEPT.touch(); }, true); });
+  var SENT = OUT.wire({
+    key: "csrbtMicroBenchOut",
+    format: 1,
+    mount: "sendBox",
+    keep: KEPT,
+    exports: [
+      { id:"sheet", label:"the bench sheet" },
+      { id:"plates", label:"the plate CSV" },
+      { id:"growth", label:"the growth CSV" },
+      { id:"zones", label:"the zone CSV" },
+    ]
+  });
+
+})();
+</script>
+</body>
+</html>

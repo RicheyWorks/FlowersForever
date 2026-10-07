@@ -1,0 +1,2016 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>The Experiment Guider — how to run an experiment in this ecosystem</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<!-- Webfonts load without blocking first paint: a stylesheet request that
+     hangs (one bar of signal) otherwise holds the page blank indefinitely,
+     which breaks the offline constraint in ADR-031. See tools/audit_offline.py. -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Nunito+Sans:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" media="print" data-webfont>
+<noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Nunito+Sans:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap"></noscript>
+<script>(function(){var l=document.querySelector('link[data-webfont]');if(!l)return;
+  var on=function(){l.media="all";};
+  if(l.sheet){on();}else{l.addEventListener("load",on);l.addEventListener("error",function(){});}
+})();</script>
+<style>
+  :root {
+    color-scheme: light;
+    --page:#F5F1E6; --surface:#FFFDF7; --surface-2:#F3EEE0; --ink:#23281F; --ink-2:#4B5344;
+    --muted:#6B6B5E; --border:#E3DCC9; --s1:#2C784C; --s1-deep:#236240; --s2:#A94F26; --s3:#2B6C8F;
+    --soft:#E9F0E7; --warn-bg:#F6EAD8; --danger:#B23A32; --danger-bg:#F6E7E5; --gold:#8A6408;
+    --shadow:0 1px 2px rgba(35,40,31,.06),0 10px 28px rgba(35,40,31,.08);
+    --head:"Fraunces",Georgia,serif;
+    --body:"Nunito Sans",system-ui,-apple-system,sans-serif;
+    --mono:"JetBrains Mono",ui-monospace,Menlo,monospace;
+  }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  [hidden] { display:none !important; }
+  body { margin:0; background:var(--page); color:var(--ink); font:16px/1.5 var(--body);
+    -webkit-font-smoothing:antialiased; overscroll-behavior-y:contain; }
+  .app { max-width:960px; margin:0 auto; padding:14px 16px calc(104px + env(safe-area-inset-bottom)); }
+  .top { display:flex; align-items:baseline; justify-content:space-between; gap:10px; padding:6px 2px 12px; flex-wrap:wrap; }
+  .brand { font-family:var(--head); font-weight:700; font-size:22px; letter-spacing:-0.01em; }
+  .brand span { color:var(--s1); }
+  .top a { font-family:var(--mono); font-size:11.5px; color:var(--muted); text-decoration:none;
+    display:inline-flex; align-items:center; min-height:44px; padding:0 6px; margin:-10px -6px; touch-action:manipulation; }
+  .top a:hover { color:var(--s1); }
+  .sub { color:var(--muted); font-size:14px; margin:0 0 12px; line-height:1.55; }
+
+  .tabbar { position:fixed; left:0; right:0; bottom:0; z-index:20;
+    background:color-mix(in srgb, var(--surface) 94%, transparent); backdrop-filter:blur(10px);
+    border-top:1px solid var(--border); padding:8px max(8px, env(safe-area-inset-left)) calc(8px + env(safe-area-inset-bottom)); }
+  .tabbar .row { max-width:960px; margin:0 auto; display:grid; grid-template-columns:repeat(5,1fr); gap:4px; }
+  .tab { display:flex; flex-direction:column; align-items:center; gap:2px; border:0; background:none;
+    font:700 10.5px var(--body); color:var(--muted); padding:7px 1px; border-radius:12px; cursor:pointer;
+    min-height:54px; touch-action:manipulation; transition:background .15s ease, color .15s ease; }
+  .tab .ico { font-size:20px; line-height:1; }
+  .tab.on { color:var(--s1); background:var(--soft); }
+  .tab:active { transform:scale(.96); }
+  .pane { display:none; animation:fade .18s ease; }
+  .pane.on { display:block; }
+  @keyframes fade { from{opacity:0;transform:translateY(4px);} to{opacity:1;transform:none;} }
+  @media (prefers-reduced-motion: reduce){ .pane{animation:none;} }
+
+  h2 { font-family:var(--head); font-weight:600; font-size:20px; margin:6px 0 2px; }
+  h3 { font-family:var(--head); font-weight:600; font-size:16.5px; margin:16px 0 4px; }
+  .hint { color:var(--muted); font-size:14px; margin:0 0 12px; }
+  .card { background:var(--surface); border:1px solid var(--border); border-radius:16px;
+    padding:16px; box-shadow:var(--shadow); margin-bottom:14px; }
+  .fine { font-size:12.5px; color:var(--muted); margin-top:10px; line-height:1.55; }
+  .fine a, .card a { color:var(--s1-deep); }
+  /* inline links keep their place in prose but carry a 44px+ touch target */
+  .card p a, .fine a, .src a, .story a, td a { display:inline-block; padding:14px 3px; margin:-14px -3px; }
+  input[type=checkbox], input[type=file] { font-size:16px; }
+  .src { font-family:var(--mono); font-size:11px; color:var(--muted); }
+  .src a { color:var(--muted); }
+  .src a:hover { color:var(--s1); }
+
+  .story { border-left:4px solid var(--s1); background:var(--soft); border-radius:0 12px 12px 0;
+    padding:10px 14px; margin:10px 0; font-size:14.5px; line-height:1.55; }
+  .story.warn { border-left-color:var(--s2); background:var(--warn-bg); }
+  .story b.num { font-family:var(--mono); font-weight:500; }
+
+  table { border-collapse:collapse; width:100%; font-size:13.5px; margin:8px 0; }
+  th, td { text-align:left; padding:6px 8px; border-bottom:1px solid var(--border); vertical-align:top; }
+  th { font-size:12px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); }
+  td code, li code, p code { font-family:var(--mono); font-size:12.5px; background:var(--surface-2);
+    padding:1px 5px; border-radius:6px; white-space:nowrap; }
+  .scroll { overflow-x:auto; }
+
+  label { display:block; font-weight:700; font-size:13px; margin:10px 0 4px; }
+  input[type=text], input[type=number], select, textarea {
+    width:100%; font:16px/1.4 var(--body); color:var(--ink); background:var(--surface);
+    border:1px solid #8E8160; border-radius:10px; padding:10px 12px; min-height:44px; }
+  /* WCAG 1.4.11: the edge of a field you are meant to write in carries the
+     3:1 floor (#8E8160 on this ground), as on every kit page. The guide's
+     fields sat behind its Designer tab and no audit had measured them until
+     the audits opened tabs (ADR-130). */
+  textarea { font-family:var(--mono); font-size:16px; }
+  input:focus, select:focus, textarea:focus, button:focus, a:focus, summary:focus
+    { outline:3px solid var(--s3); outline-offset:1px; }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:0 12px; }
+  .grid4 { display:grid; grid-template-columns:repeat(4,1fr); gap:0 12px; }
+  @media (max-width:640px){ .grid4 { grid-template-columns:1fr 1fr; } }
+  .rowline { display:flex; gap:8px; align-items:flex-end; flex-wrap:wrap; }
+  .rowline > div { flex:1 1 120px; }
+  .rowline > .tight { flex:0 0 auto; }
+
+  button.btn { font:700 14px var(--body); color:var(--ink); background:var(--surface-2);
+    border:1px solid var(--border); border-radius:12px; padding:10px 16px; min-height:44px;
+    cursor:pointer; touch-action:manipulation; }
+  button.btn:hover { border-color:var(--s1); color:var(--s1-deep); }
+  button.btn.primary { background:var(--s1); border-color:var(--s1); color:#fff; }
+  button.btn.primary:hover { background:var(--s1-deep); color:#fff; }
+  button.btn:active { transform:scale(.97); }
+  .btnrow { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
+
+  .choice { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin:8px 0 4px; }
+  @media (max-width:560px){ .choice { grid-template-columns:1fr; } }
+  .choice button { text-align:left; background:var(--surface); border:2px solid var(--border);
+    border-radius:14px; padding:14px; cursor:pointer; font:inherit; color:inherit; min-height:44px; touch-action:manipulation; }
+  .choice button.on { border-color:var(--s1); background:var(--soft); }
+  .choice .t { font-weight:800; font-size:15px; }
+  .choice .d { color:var(--muted); font-size:13px; margin-top:2px; }
+
+  pre.out { font:13px/1.5 var(--mono); background:#26291F; color:#EDEAD9; border-radius:12px;
+    padding:14px; overflow-x:auto; margin:10px 0 0; white-space:pre; }
+  pre.cmd { font:13.5px/1.5 var(--mono); background:#26291F; color:#EDEAD9; border-radius:12px;
+    padding:12px 14px; overflow-x:auto; margin:8px 0; white-space:pre; }
+  .added { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
+  .chip { font:500 12px var(--mono); background:var(--surface-2); border:1px solid var(--border);
+    border-radius:999px; padding:8px 12px; display:inline-flex; align-items:center; gap:8px; min-height:44px; }
+  .chip button { border:0; background:none; cursor:pointer; font-size:14px; line-height:1;
+    color:var(--danger); padding:6px; margin:-6px; min-width:44px; min-height:44px; touch-action:manipulation; }
+  .empty { color:var(--muted); font-size:13px; font-style:italic; }
+
+  details { border:1px solid var(--border); border-radius:12px; background:var(--surface); margin:8px 0; }
+  summary { font-weight:700; font-size:14px; padding:12px 14px; cursor:pointer; min-height:44px;
+    display:flex; align-items:center; touch-action:manipulation; }
+  details > div { padding:0 14px 12px; }
+
+  .check { display:flex; gap:10px; align-items:flex-start; padding:9px 2px; border-bottom:1px dashed var(--border); }
+  .check:last-child { border-bottom:0; }
+  .check input { width:22px; height:22px; min-height:22px; margin-top:2px; accent-color:var(--s1); flex:0 0 auto; }
+  .check label { display:block; font-weight:400; font-size:14.5px; margin:0; line-height:1.5; }
+  .check label b { font-weight:800; }
+
+  .verdict { font-family:var(--mono); font-size:12px; font-weight:500; border-radius:8px; padding:2px 8px; white-space:nowrap; }
+  .verdict.ok { background:var(--soft); color:var(--s1-deep); }
+  .verdict.no { background:var(--danger-bg); color:var(--danger); }
+  .verdict.un { background:var(--warn-bg); color:var(--gold); }
+
+  .lint { display:flex; flex-direction:column; gap:7px; margin:2px 0 10px; }
+  .lint .row { display:flex; gap:9px; align-items:baseline; font-size:13.5px; line-height:1.45;
+    min-width:0; overflow-wrap:anywhere; }
+  .lint .row .verdict { flex:0 0 auto; }
+  .toast { position:fixed; left:50%; transform:translateX(-50%) translateY(20px); bottom:calc(96px + env(safe-area-inset-bottom));
+    background:var(--ink); color:var(--page); font:700 13.5px var(--body); border-radius:999px;
+    padding:10px 18px; opacity:0; pointer-events:none; transition:opacity .2s ease, transform .2s ease; z-index:30; }
+  .toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+
+  @media print {
+    body { background:#fff; }
+    .tabbar, .btnrow, .toast, .top a { display:none !important; }
+    .pane { display:block !important; }
+    .pane + .pane { page-break-before:always; }
+    /* paper carries the whole document: both Designer tracks print, whichever was active */
+    #eco-track, #eng-track { display:block !important; }
+    .card, .story, details { box-shadow:none; break-inside:avoid; }
+    details { border:1px solid #bbb; }
+    details:not([open]) > div { display:block; }
+    pre.out, pre.cmd { background:#fff; color:#111; border:1px solid #bbb; white-space:pre-wrap; }
+    .app { padding-bottom:16px; }
+  }
+  /* ============ Keep (local autosave) v1.4.0 ============ */
+  .keep { display:flex; flex-wrap:wrap; align-items:center; gap:10px;
+    background:var(--surface-2, #F3EEE0); border:1px solid var(--border, #E3DCC9);
+    border-radius:12px; padding:10px 13px; margin:12px 0 2px; }
+  .keep .st { font-family:var(--mono, monospace); font-size:11.5px; color:var(--muted, #6B6B5E);
+    line-height:1.5; flex:1 1 220px; min-width:0; }
+  .keep .st b { color:var(--ink, #23281F); }
+  .keep.bad { border-color:var(--danger, #B23A32); background:var(--danger-bg, #F6E7E5); }
+  .keep.bad .st b { color:var(--danger, #B23A32); }
+  .keep button { border:1.5px solid var(--border, #E3DCC9); background:none; border-radius:10px;
+    padding:0 14px; min-height:var(--tap, 44px); font:700 13px var(--body, sans-serif);
+    color:var(--ink-2, #4B5344); cursor:pointer; touch-action:manipulation; }
+  .keep button:hover { border-color:var(--danger, #B23A32); color:var(--danger, #B23A32); }
+  .keep .note { flex:1 1 100%; font-size:12px; color:var(--muted, #6B6B5E); line-height:1.5; }
+  @media print { .keep { display:none !important; } }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="top">
+    <div class="brand">The Experiment <span>Guider</span></div>
+    <a href="ecology.html">&larr; the living-systems lab</a>
+  </div>
+  <p class="sub">How to run an experiment in this ecosystem — for <b>scientists and engineers</b>.
+    The same discipline runs a meadow study and a storage-engine benchmark: write the rule before the run,
+    pin the seed, pay warm-up off the clock, and let the verdict say no.
+    This page teaches the method, then builds your experiment with you — a ready-to-run
+    <code>.eco</code> protocol, or a pre-registered measurement plan. Everything works offline and prints clean.</p>
+
+<!-- ══════════════════════════ METHOD ══════════════════════════ -->
+<section class="pane on" id="pane-method" aria-labelledby="tab-method">
+  <div class="card">
+    <h2>The five commitments</h2>
+    <p class="hint">None of these are theory. Every one was learned here the hard way, and each story below
+      carries its receipt — the document where the number lives.</p>
+
+    <h3>1 &middot; Write the rule before the run</h3>
+    <p>Decide what result would change your mind — and write it down — <b>before</b> you see any data.
+      A bar set after the numbers arrive is a bar the numbers set. In this ecosystem the habit is built in:
+      the <code>.eco</code> runner grades hypotheses that were in the spec before it ran, and every
+      performance experiment states its decision rule in the test's javadoc before the first timed pass.</p>
+    <div class="story">
+      Three pre-registered verdicts, one day. The cold-scan experiment set its bar at
+      <b class="num">5&times;</b> the raw-read floor and measured <b class="num">524&times;</b> — the trigger
+      <span class="verdict ok">FIRED</span> and a held feature earned its build. The preserve-cadence experiment
+      set a <b class="num">25%</b>-of-churn viability bar and measured <b class="num">191%</b> — the popular
+      workaround was <span class="verdict no">PRICED DEAD</span>, and nobody gets told "just preserve more often"
+      again. The memory-bound experiment set a <b class="num">1&nbsp;KB</b>-per-key bar and measured
+      <b class="num">181&nbsp;B</b> — the disk-pages seam <span class="verdict un">STAYS HELD</span>.
+      Two of the three said no. All three verdicts were kept.
+      <div class="src">sources:
+        <a href="https://github.com/RicheyWorks/WholeHog/blob/main/docs/EXPERIMENT-2026-08-20-cold-triggers.md">EXPERIMENT-2026-08-20-cold-triggers.md</a> &middot;
+        <a href="https://github.com/RicheyWorks/WholeHog/blob/main/docs/EXPERIMENT-2026-08-20-memory-bound.md">EXPERIMENT-2026-08-20-memory-bound.md</a></div>
+    </div>
+
+    <h3>2 &middot; Pin the seed</h3>
+    <p>A result nobody can reproduce is an anecdote. Every workload generator here takes a seed, and the
+      protocol runner is deterministic to the byte: <i>same spec, same bytes</i>. Reviewers do not have to
+      trust your run — they can have it.</p>
+    <div class="story">
+      The experiments above are not tables in a document that someone once produced — they are checked in as
+      seeded tests (<code>ColdScanExperimentTest</code>, <code>PreserveCadenceExperimentTest</code>,
+      <code>MemoryBoundExperimentTest</code>), so any machine can re-run the verdict of record.
+      <div class="src">source: <a href="https://github.com/RicheyWorks/WholeHog/blob/main/docs/EXPERIMENT-2026-08-20-cold-triggers.md">EXPERIMENT-2026-08-20-cold-triggers.md</a> ("checked in so any machine can reproduce them")</div>
+    </div>
+
+    <h3>3 &middot; Pay warm-up off the clock</h3>
+    <p>On a JIT-compiled runtime, the first pass through any code path pays compilation on your stopwatch.
+      Run one full untimed pass first; only then start timing.</p>
+    <div class="story warn">
+      Before ADR-022, the strategy tournament timed a single cold pass — and whichever competitor ran first
+      paid the JIT bill: <b class="num">62.4&nbsp;ms</b> cold vs <b class="num">17.2&nbsp;ms</b> warm
+      (<b class="num">3.6&times;</b>) for identical work. Rank orders differed across <i>identical inputs</i>.
+      The fix: one untimed warm-up pass, then timed passes on fresh contexts.
+      <div class="src">source: <a href="https://github.com/RicheyWorks/CSRBT/blob/main/docs/ADR-022-battle-methodology-2026-08-12.md">ADR-022</a>, finding V-D</div>
+    </div>
+
+    <h3>4 &middot; Take the median of three</h3>
+    <p>One timed pass is one sample of a noisy machine. Three timed passes on fresh state, keep the median —
+      it absorbs a single spike without averaging it into your result. Report the phase decomposition too:
+      a total that cannot say <i>where</i> the time went cannot name the enemy.</p>
+    <div class="story">
+      The cold-scan verdict was usable <i>because</i> it decomposed: inflate <b class="num">29&nbsp;ms</b>,
+      recover <b class="num">61&nbsp;ms</b>, scan <b class="num">434&nbsp;ms</b> of a
+      <b class="num">524&nbsp;ms</b> route at n=60,000. The decomposition named the enemy (the scan through a
+      store recovered only to be read once) — and the fix it pointed at measured
+      <b class="num">33&times;</b> faster.
+      <div class="src">source: <a href="https://github.com/RicheyWorks/WholeHog/blob/main/docs/EXPERIMENT-2026-08-20-cold-triggers.md">EXPERIMENT-2026-08-20-cold-triggers.md</a></div>
+    </div>
+
+    <h3>5 &middot; Measure the realized thing</h3>
+    <p>The easiest number to collect is usually a proxy for the number you care about. Ask of every metric:
+      <i>is this the behavior, or the worst case of the behavior? Is the subject actually allowed to do the
+      thing I claim to be measuring?</i></p>
+    <div class="story warn">
+      The tournament once benchmarked the Splay strategy <b>with splaying disabled</b> — searches ran through a
+      read path documented "never splays," so the self-adjusting structure could never self-adjust in the very
+      workloads written to favor it. And the "search depth" metric was the <i>root height</i> (worst case,
+      weighted &times;3 in the score), not nodes actually touched: it read <b class="num">~3000</b> where the
+      realized depth was under <b class="num">100</b>. Splay finished dead last in every seed — a structurally
+      guaranteed verdict, not a measured one.
+      <div class="src">source: <a href="https://github.com/RicheyWorks/CSRBT/blob/main/docs/ADR-022-battle-methodology-2026-08-12.md">ADR-022</a>, finding V-C</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Two habits that keep verdicts honest</h2>
+    <h3>Compare against a floor</h3>
+    <p>Before comparing solution A to solution B, name the <b>floor</b> — the least <i>any</i> solution could
+      possibly do. The cold-scan experiment measured its route against the cost of reading the archive's bytes
+      once; "524&times; the floor" is a claim about the problem, where "5&times; faster than the other guy" is
+      only a claim about the other guy.</p>
+    <h3>A refuted result is a result</h3>
+    <p>The report keeps what the run refuted, in writing, next to what it confirmed. The
+      <code>.eco</code> runner prints REFUTED beside a failed hypothesis instead of hiding it, and audit
+      documents here record <i>dismissed</i> suspicions alongside confirmed findings — a suspicion examined
+      and cleared is knowledge, and it stops the next person from re-hunting it.</p>
+    <p class="fine">This is also why UNGRADEABLE exists as a third verdict: a hypothesis naming a phase that
+      doesn't exist is a spec bug, not a result — the runner refuses to guess.
+      See <a href="eco-protocol-reference.html">the .eco reference</a>.</p>
+  </div>
+</section>
+
+<!-- ══════════════════════════ DESIGNER ══════════════════════════ -->
+<section class="pane" id="pane-designer" aria-labelledby="tab-designer">
+  <div class="card">
+    <h2>Design your experiment</h2>
+    <p class="hint">Pick a track. Both walks end with something you can run: a <code>.eco</code> protocol file,
+      or a pre-registered measurement plan with a test skeleton.</p>
+    <div id="keepBox"></div>
+    <div class="choice" role="group" aria-label="Experiment track">
+      <button type="button" id="track-eco" class="on">
+        <div class="t">&#127807; Ecology protocol</div>
+        <div class="d">A field or simulation study in the <code>.eco</code> format — phases, factors, models,
+          field data, and graded hypotheses. Runs in one command.</div>
+      </button>
+      <button type="button" id="track-eng">
+        <div class="t">&#9201;&#65039; Engineering measurement</div>
+        <div class="d">A performance question with a floor, a seed, warm-up, median-of-3 timing, and a
+          decision rule written before the run.</div>
+      </button>
+    </div>
+  </div>
+
+  <!-- ── ecology track ── -->
+  <div id="eco-track">
+    <div class="card" id="imp-card">
+      <details>
+        <summary>Already have a protocol? Import a .eco</summary>
+        <div>
+          <p class="hint">Paste a protocol below, choose a file, or drop one on this card. Importing replaces
+            the Designer's entries and runs the pre-flight lint over what came in. Directives the Designer
+            doesn't edit (<code>cross:</code>, <code>tree:</code>) are kept in the extra-lines box; comments
+            are dropped, the way the parser drops them.</p>
+          <label for="imp-text">Protocol text</label>
+          <textarea id="imp-text" rows="4" placeholder="name: meadow disturbance study&#10;phase: graze uniform 2000&#10;expect: evenness(graze) &gt; 0.9"></textarea>
+          <div class="btnrow">
+            <button type="button" class="btn primary" id="imp-go">Import</button>
+            <button type="button" class="btn" id="imp-file">Choose .eco file&hellip;</button>
+            <input type="file" id="imp-input" accept=".eco,text/plain" hidden>
+          </div>
+        </div>
+      </details>
+    </div>
+    <div class="card">
+      <h3>Step 1 — name the study</h3>
+      <div class="grid4">
+        <div><label for="e-name">Study name</label>
+          <input type="text" id="e-name" placeholder="meadow disturbance study" autocomplete="off"></div>
+        <div><label for="e-keys">Key population</label>
+          <input type="number" id="e-keys" value="100" min="1" inputmode="numeric"></div>
+        <div><label for="e-seed">Seed</label>
+          <input type="number" id="e-seed" value="42" inputmode="numeric"></div>
+        <div><label for="e-window">Recorder window (ops)</label>
+          <input type="number" id="e-window" value="250" min="1" inputmode="numeric"></div>
+      </div>
+      <p class="fine">Keys are species &middot; touches are abundance &middot; time is counted in operations.
+        The seed makes the whole run reproducible — same spec, same bytes.</p>
+    </div>
+
+    <div class="card">
+      <h3>Step 2 — write the story as phases</h3>
+      <p class="hint">Each phase is a named stretch of operations with one access pattern.
+        <code>uniform</code> spreads traffic evenly; <code>hot</code> concentrates it on a few keys
+        (a bloom, a disturbance); <code>churn</code> adds and removes keys (turnover, seasons).</p>
+      <div class="rowline">
+        <div><label for="p-name">Phase name</label>
+          <input type="text" id="p-name" placeholder="graze" autocomplete="off"></div>
+        <div><label for="p-kind">Pattern</label>
+          <select id="p-kind">
+            <option value="uniform">uniform — even traffic</option>
+            <option value="hot">hot — a few keys dominate</option>
+            <option value="churn">churn — keys come and go</option>
+          </select></div>
+        <div><label for="p-ops">Ops</label>
+          <input type="number" id="p-ops" value="2000" min="1" inputmode="numeric"></div>
+        <div id="p-hotwrap" hidden><label for="p-hotset">Hot set size</label>
+          <input type="number" id="p-hotset" value="5" min="1" inputmode="numeric"></div>
+        <div id="p-sharewrap" hidden><label for="p-hotshare">Hot share %</label>
+          <input type="number" id="p-hotshare" value="90" min="1" max="100" inputmode="numeric"></div>
+        <div id="p-addwrap" hidden><label for="p-addpct">Add %</label>
+          <input type="number" id="p-addpct" value="55" min="0" max="100" inputmode="numeric"></div>
+        <div class="tight"><button type="button" class="btn" id="p-add">+ Add phase</button></div>
+      </div>
+      <div class="added" id="p-list"><span class="empty">No phases yet — a study needs at least one.</span></div>
+    </div>
+
+    <div class="card">
+      <h3>Step 3 — set the abiotic stage <span class="src">(optional)</span></h3>
+      <p class="hint">Factors scale the theory models' rates and capacities: <code>area</code> scales K and
+        extinction pressure, <code>wind</code> scales colonization, <code>temperature</code> multiplies rates,
+        <code>distance</code> decays immigration. Leave a factor at its neutral value to leave it alone —
+        1.0 for the first three, 0 for <code>distance</code> (no isolation).</p>
+      <div class="grid4">
+        <div><label for="f-area">area</label><input type="number" id="f-area" step="0.1" placeholder="1.0" inputmode="decimal"></div>
+        <div><label for="f-wind">wind</label><input type="number" id="f-wind" step="0.1" placeholder="1.0" inputmode="decimal"></div>
+        <div><label for="f-temp">temperature</label><input type="number" id="f-temp" step="0.1" placeholder="1.0" inputmode="decimal"></div>
+        <div><label for="f-dist">distance</label><input type="number" id="f-dist" step="0.1" placeholder="0" inputmode="decimal"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Step 4 — run theory beside the field <span class="src">(optional)</span></h3>
+      <p class="hint">Models run next to the simulation so prediction and observation share a report.
+        Parameters are space-separated, in the order shown.</p>
+      <div class="rowline">
+        <div><label for="m-kind">Model</label>
+          <select id="m-kind">
+            <option value="logistic" data-hint="r K n0 steps" data-eg="0.15 120 5 60">logistic growth</option>
+            <option value="exponential" data-hint="r n0 steps" data-eg="0.1 5 40">exponential growth</option>
+            <option value="levins" data-hint="c e p0 steps" data-eg="0.4 0.1 0.05 40">levins metapopulation</option>
+            <option value="island" data-hint="c e pool s0 steps" data-eg="0.3 0.1 100 0 40">island biogeography</option>
+            <option value="competition" data-hint="r1 K1 r2 K2 a12 a21 n1 n2 steps" data-eg="0.4 100 0.4 80 0.7 1.1 5 5 80">Lotka&ndash;Volterra competition</option>
+            <option value="predation" data-hint="r a b m n0 p0 steps" data-eg="0.5 0.02 0.3 0.4 40 9 200">predator&ndash;prey</option>
+            <option value="hardyweinberg" data-hint="observed AA Aa aa" data-eg="298 489 213">Hardy&ndash;Weinberg</option>
+            <option value="eulerlotka" data-hint="lx:mx per age" data-eg="1.0:0 0.8:1.5 0.5:2.0 0.2:1.0">Euler&ndash;Lotka</option>
+            <option value="markrecapture" data-hint="marked caught recaptured" data-eg="120 90 30">mark&ndash;recapture</option>
+          </select></div>
+        <div><label for="m-params">Parameters &middot; <span class="src" id="m-hint">r K n0 steps</span></label>
+          <input type="text" id="m-params" placeholder="0.15 120 5 60" autocomplete="off"></div>
+        <div class="tight"><button type="button" class="btn" id="m-add">+ Add model</button></div>
+      </div>
+      <div class="added" id="m-list"><span class="empty">No models yet.</span></div>
+    </div>
+
+    <div class="card">
+      <h3>Step 5 — enter field data <span class="src">(optional)</span></h3>
+      <p class="hint">Your own observations, graded by the same instruments as the simulation.
+        Write <code>species=count</code> pairs, or bare names that tally like clipboard marks
+        (<code>peck peck flap</code> counts two pecks and a flap).</p>
+      <div class="rowline">
+        <div><label for="d-name">Dataset name</label>
+          <input type="text" id="d-name" placeholder="pondA" autocomplete="off"></div>
+        <div style="flex:2 1 240px"><label for="d-counts">Counts or tallies</label>
+          <input type="text" id="d-counts" placeholder="cattail=18 duckweed=44 frogbit=3" autocomplete="off"></div>
+        <div class="tight"><button type="button" class="btn" id="d-add">+ Add dataset</button></div>
+      </div>
+      <div class="added" id="d-list"><span class="empty">No datasets yet.</span></div>
+      <label for="e-notes" style="margin-top:12px">Field notebook <span class="src">(one note per line; <code>bloom: ...</code> attaches a note to a phase or dataset)</span></label>
+      <textarea id="e-notes" rows="3" placeholder="sampled both ponds after two dry weeks&#10;bloom: five keys took nearly all the traffic"></textarea>
+    </div>
+
+    <div class="card">
+      <h3>Step 6 — pre-register your hypotheses</h3>
+      <p class="hint">This is the step that makes it an experiment. Each expectation is graded
+        CONFIRMED or REFUTED after the run — and you are writing it <b>now</b>, before the run.
+        Numeric: <code>metric(phase) &lt; value</code>. Qualitative: <code>metric(phase) is word</code>,
+        graded against fixed bands.</p>
+      <div class="rowline">
+        <div><label for="x-metric">Metric</label>
+          <select id="x-metric">
+            <optgroup label="one community (a phase or dataset)">
+              <option value="richness">richness</option>
+              <option value="shannon">shannon</option>
+              <option value="evenness">evenness</option>
+              <option value="hill1">hill1</option>
+              <option value="chao1">chao1</option>
+            </optgroup>
+            <optgroup label="two communities">
+              <option value="brayCurtis">brayCurtis</option>
+              <option value="pianka">pianka</option>
+              <option value="jaccard">jaccard</option>
+              <option value="sorensen">sorensen</option>
+            </optgroup>
+            <optgroup label="qualitative (graded against bands)">
+              <option value="q-evenness">evenness &hellip; is &hellip;</option>
+              <option value="q-turnover">turnover(p, q) is &hellip;</option>
+              <option value="q-overlap">overlap(p, q) is &hellip;</option>
+              <option value="q-fit">fit(p) is &hellip;</option>
+              <option value="q-survivorship">survivorship is &hellip;</option>
+            </optgroup>
+          </select></div>
+        <div><label for="x-args">Phase / dataset name(s)</label>
+          <input type="text" id="x-args" placeholder="graze  or  graze, bloom" autocomplete="off"></div>
+        <div id="x-opwrap"><label for="x-op">Test</label>
+          <select id="x-op"><option>&gt;</option><option>&lt;</option><option>&gt;=</option><option>&lt;=</option></select></div>
+        <div id="x-valwrap"><label for="x-val">Value</label>
+          <input type="number" id="x-val" step="any" placeholder="0.9" inputmode="decimal"></div>
+        <div id="x-wordwrap" hidden><label for="x-word">Band</label>
+          <select id="x-word"></select></div>
+        <div class="tight"><button type="button" class="btn" id="x-add">+ Add hypothesis</button></div>
+      </div>
+      <div class="added" id="x-list"><span class="empty">No hypotheses yet — without one, it's a demo, not an experiment.</span></div>
+      <p class="fine">Comparing a simulated phase to an entered dataset grades UNGRADEABLE on purpose —
+        the numbers share no species. Compare phase-to-phase or dataset-to-dataset.
+        Advanced directives (<code>cross:</code> Mendelian genetics, <code>tree:</code> Newick phylogenies) are in
+        <a href="eco-protocol-reference.html">the full .eco reference</a>; paste them into the extra-lines box below.</p>
+      <label for="e-extra" style="margin-top:8px">Extra directives <span class="src">(optional, appended verbatim)</span></label>
+      <textarea id="e-extra" rows="2" placeholder="cross: Rr x Rr observed 5474 1850&#10;tree: pondlife (Porifera,(Cnidaria,(Mollusca,Chordata)));"></textarea>
+    </div>
+
+    <div class="card">
+      <h3>Your protocol</h3>
+      <p class="hint">Pre-flight lint — the same rules <code>ExperimentSpec.parse</code> applies, run before the
+        runner ever sees the file. A red line would land in the report's problem list; an amber line would
+        grade UNGRADEABLE or weaken the study.</p>
+      <div class="lint" id="lint" aria-live="polite"></div>
+      <pre class="out" id="eco-out" aria-label="Generated .eco protocol"></pre>
+      <div class="btnrow">
+        <button type="button" class="btn primary" id="eco-copy">Copy .eco</button>
+        <button type="button" class="btn" id="eco-download">Download .eco</button>
+        <button type="button" class="btn" id="eco-reset">Start over</button>
+      </div>
+      <p class="fine">If your viewer blocks downloads (some hosted viewers do), use <b>Copy .eco</b> and paste
+        into a file named after the study — the command below already carries the name.</p>
+      <h3>Then run it</h3>
+      <pre class="cmd" id="eco-cmd">./gradlew ecologyExperiment -Pspec=my-experiment.eco</pre>
+      <p class="fine">From the repo root. The runner prints the narrated report with each hypothesis graded,
+        and writes results <b>beside your spec</b>: <code>my-experiment-session.json</code> and
+        <code>my-experiment-out/</code> (CSV, Excel workbook, PowerPoint report, HTML). Drop the session file
+        onto <a href="ecology-lab.html">the interactive lab</a> to explore the run — or drop the
+        <code>.eco</code> itself onto the lab's Workbench to load it back for editing.</p>
+    </div>
+  </div>
+
+  <!-- ── engineering track ── -->
+  <div id="eng-track" hidden>
+    <div class="card">
+      <h3>Step 1 — the question and the floor</h3>
+      <div><label for="g-question">What are you measuring? <span class="src">(one sentence, a cost or a comparison)</span></label>
+        <input type="text" id="g-question" placeholder="What does one scan over a cold archive cost, end to end?" autocomplete="off"></div>
+      <div><label for="g-floor">The floor — the least ANY solution could do <span class="src">(what you compare against)</span></label>
+        <input type="text" id="g-floor" placeholder="reading the archive's bytes once, front to back" autocomplete="off"></div>
+      <p class="fine">A floor turns "X is slower than Y" into "X costs N&times; what the problem itself costs."
+        If no floor exists, name your baseline and say why it's the honest one.</p>
+    </div>
+
+    <div class="card">
+      <h3>Step 2 — the apparatus</h3>
+      <div class="grid2">
+        <div><label for="g-workload">Workload / input <span class="src">(shape and generator)</span></label>
+          <input type="text" id="g-workload" placeholder="60k-op churn, ~5k live keys, seeded generator" autocomplete="off"></div>
+        <div><label for="g-sizes">Sizes to run <span class="src">(comma-separated; two or more shows scaling)</span></label>
+          <input type="text" id="g-sizes" placeholder="20000, 60000" autocomplete="off"></div>
+        <div><label for="g-seed">Seed</label>
+          <input type="number" id="g-seed" value="42" inputmode="numeric"></div>
+        <div><label for="g-passes">Timed passes <span class="src">(median kept; 1 untimed warm-up first)</span></label>
+          <input type="number" id="g-passes" value="3" min="1" inputmode="numeric"></div>
+      </div>
+      <div><label for="g-phases">Phase decomposition <span class="src">(comma-separated stages you will time separately)</span></label>
+        <input type="text" id="g-phases" placeholder="inflate, recover, scan" autocomplete="off"></div>
+    </div>
+
+    <div class="card">
+      <h3>Step 3 — the decision rule</h3>
+      <p class="hint">Write what each outcome will <b>mean</b> — before the run. What number fires the trigger?
+        What number kills the idea? What happens on the boundary?</p>
+      <div><label for="g-rule">Rule <span class="src">(a bar and its consequence)</span></label>
+        <input type="text" id="g-rule" placeholder="fires if the route exceeds 5x the floor at the larger size" autocomplete="off"></div>
+      <div><label for="g-stakes">If it fails the bar</label>
+        <input type="text" id="g-stakes" placeholder="the seam stays held and the workaround is recorded as priced dead" autocomplete="off"></div>
+    </div>
+
+    <div class="card">
+      <h3>Step 4 — after the run: the numbers</h3>
+      <p class="hint">Come back once the run is done. Enter what you measured (milliseconds) and the floor;
+        totals and the ratio against the floor are computed for you and land in the table below.
+        Until then this step waits — the rule above was written first, and it stays written.</p>
+      <div id="meas"><p class="empty">Enter sizes in Step 2 to open measurement rows.</p></div>
+    </div>
+
+    <div class="card">
+      <h3>Step 5 — declare the verdict</h3>
+      <p class="hint">The page computes ratios; it does not decide. Read your rule, read the numbers, and say
+        which way it went. The house style puts verdict, bar, and consequence in one sentence — the
+        Grading tab shows three real ones.</p>
+      <div class="choice" role="group" aria-label="Verdict">
+        <button type="button" id="vd-fires"><div class="t">&#128293; THE TRIGGER FIRES</div>
+          <div class="d">the measured cost cleared the bar — the held feature earns its build</div></button>
+        <button type="button" id="vd-held"><div class="t">&#9202;&#65039; STAYS HELD</div>
+          <div class="d">the bar wasn't met — the seam waits, and the price is now on record</div></button>
+        <button type="button" id="vd-dead"><div class="t">&#9760;&#65039; PRICED DEAD</div>
+          <div class="d">the workaround everyone would reach for was measured unviable</div></button>
+        <button type="button" id="vd-clear"><div class="t">&#8634; No verdict yet</div>
+          <div class="d">clear the declaration — the report keeps its empty slot</div></button>
+      </div>
+      <div><label for="g-verdict-note">The verdict sentence <span class="src">(measured number beside the bar, then the consequence)</span></label>
+        <input type="text" id="g-verdict-note" placeholder="524x against a 5x bar - the columnar cold format is unlocked, format ADR first" autocomplete="off"></div>
+    </div>
+
+    <div class="card">
+      <h3>Your pre-registration</h3>
+      <div class="lint" id="eng-lint" aria-live="polite"></div>
+      <pre class="out" id="eng-out" aria-label="Generated pre-registration"></pre>
+      <div class="btnrow">
+        <button type="button" class="btn primary" id="eng-copy">Copy pre-registration</button>
+        <button type="button" class="btn" id="eng-skel">Copy JUnit skeleton</button>
+        <button type="button" class="btn" id="eng-reset">Start over</button>
+      </div>
+      <p class="fine">Paste the pre-registration into your experiment doc <i>before</i> running
+        (the convention here: <code>docs/EXPERIMENT-&lt;date&gt;-&lt;name&gt;.md</code>, method and rule first,
+        table and verdict appended after). The skeleton is a seeded JUnit test in the house style —
+        decision constants at the top, warm-up pass, median-of-3 helper — modeled on
+        <a href="https://github.com/RicheyWorks/WholeHog/blob/main/docs/EXPERIMENT-2026-08-20-cold-triggers.md">the checked-in experiments</a>.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════ GRADING ══════════════════════════ -->
+<section class="pane" id="pane-grading" aria-labelledby="tab-grading">
+  <div class="card">
+    <h2>How a verdict is earned</h2>
+    <p class="hint">Every hypothesis gets exactly one of three verdicts. There is no "sort of."</p>
+    <p><span class="verdict ok">CONFIRMED</span> — the observed value satisfied the test you pre-registered.<br>
+       <span class="verdict no">REFUTED</span> — it didn't. This stays in the report; a refuted prediction is a
+       measurement of your model, not an embarrassment.<br>
+       <span class="verdict un">UNGRADEABLE</span> — the hypothesis could not be tested: it names a phase or
+       dataset that doesn't exist, or compares a simulated phase to entered field data (they share no species,
+       so the number would be noise wearing a decimal point). An untestable hypothesis is a spec bug, and the
+       runner says so instead of guessing.</p>
+  </div>
+
+  <div class="card">
+    <h3>Numeric hypotheses — <code>metric(args) op value</code></h3>
+    <p class="hint">Operators: <code>&lt;</code> <code>&gt;</code> <code>&lt;=</code> <code>&gt;=</code>.
+      A community is a phase or an entered <code>data:</code> set.</p>
+    <div class="scroll"><table>
+      <tr><th>metric</th><th>of</th><th>asks</th></tr>
+      <tr><td><code>richness</code></td><td>one community</td><td>how many species were present</td></tr>
+      <tr><td><code>shannon</code></td><td>one community</td><td>diversity weighting rare species (H&prime;)</td></tr>
+      <tr><td><code>evenness</code></td><td>one community</td><td>how equally abundance is shared (0&ndash;1)</td></tr>
+      <tr><td><code>hill1</code></td><td>one community</td><td>the effective number of common species</td></tr>
+      <tr><td><code>chao1</code></td><td>one community</td><td>estimated true richness, from rarity</td></tr>
+      <tr><td><code>brayCurtis</code></td><td>two communities</td><td>abundance turnover between them (0 same &ndash; 1 disjoint)</td></tr>
+      <tr><td><code>jaccard</code> / <code>sorensen</code></td><td>two communities</td><td>presence/absence overlap</td></tr>
+      <tr><td><code>pianka</code></td><td>two communities</td><td>niche overlap (0 none &ndash; 1 identical use)</td></tr>
+    </table></div>
+    <p class="fine">Examples: <code>expect: evenness(graze) &gt; 0.9</code> &middot;
+      <code>expect: brayCurtis(graze, bloom) &gt; 0.5</code> &middot;
+      <code>expect: jaccard(pondA, pondB) &lt; 0.5</code></p>
+  </div>
+
+  <div class="card">
+    <h3>Qualitative hypotheses — <code>metric(args) is word</code></h3>
+    <p class="hint">Graded against the same fixed bands the narrated report uses, so your words and the
+      report's words can't drift apart.</p>
+    <div class="scroll"><table>
+      <tr><th>form</th><th>allowed words</th></tr>
+      <tr><td><code>evenness(p) is &hellip;</code></td><td><code>very-even</code> <code>moderate</code> <code>uneven</code> <code>dominated</code></td></tr>
+      <tr><td><code>turnover(p, q) is &hellip;</code></td><td><code>low</code> <code>moderate</code> <code>major</code> <span class="src">(Bray&ndash;Curtis bands)</span></td></tr>
+      <tr><td><code>overlap(p, q) is &hellip;</code></td><td><code>high</code> <code>partial</code> <code>little</code> <span class="src">(Pianka bands)</span></td></tr>
+      <tr><td><code>fit(p) is &hellip;</code></td><td><code>geometric</code> <code>brokenstick</code> <code>uniform</code> <span class="src">(rank-abundance best fit)</span></td></tr>
+      <tr><td><code>survivorship is &hellip;</code></td><td><code>type1</code> <code>type2</code> <code>type3</code> <span class="src">(no parentheses — reads the run's census)</span></td></tr>
+    </table></div>
+    <p class="fine">Everything beyond this deliberately stays out of the format — a hypothesis that needs more
+      belongs in Java against the instruments directly. The format stays small on purpose.
+      Full grammar: <a href="eco-protocol-reference.html">the .eco reference</a>.</p>
+  </div>
+
+  <div class="card">
+    <h3>Engineering verdicts</h3>
+    <p>Performance experiments here grade a <b>held decision</b>, not a number in isolation. The
+      pre-registered rule names the bar; the run answers one of:</p>
+    <p><span class="verdict ok">THE TRIGGER FIRES</span> — the measured cost cleared the bar; the held feature
+      earns its build, with its number attached (the cold-scan trigger fired at
+      <b class="src">524&times; against a 5&times; bar</b>).<br>
+      <span class="verdict un">STAYS HELD</span> — the bar wasn't met; the seam waits, and the price you
+      measured is recorded so the next reviewer doesn't re-litigate it from intuition
+      (the disk-pages seam stays held at <b class="src">181&nbsp;B/key against a 1&nbsp;KB bar</b>).<br>
+      <span class="verdict no">PRICED DEAD</span> — a workaround everyone would reach for was measured
+      unviable, in writing (preserve-often died at <b class="src">191% of churn time against a 25% bar</b>).</p>
+    <p class="fine">Sources for all three numbers:
+      <a href="https://github.com/RicheyWorks/WholeHog/blob/main/docs/EXPERIMENT-2026-08-20-cold-triggers.md">cold-triggers</a> and
+      <a href="https://github.com/RicheyWorks/WholeHog/blob/main/docs/EXPERIMENT-2026-08-20-memory-bound.md">memory-bound</a>.
+      Notice the pattern: verdict, bar, and consequence live in one sentence. Write yours the same way.</p>
+  </div>
+</section>
+
+<!-- ══════════════════════════ INSTRUMENTS ══════════════════════════ -->
+<section class="pane" id="pane-instruments" aria-labelledby="tab-instruments">
+  <div class="card">
+    <h2>The instrument bench</h2>
+    <p class="hint">What to reach for, by the job in front of you. Pages live beside this one in
+      <code>docs/</code>; engines live in their repos.</p>
+
+    <h3>Design the study</h3>
+    <div class="scroll"><table>
+      <tr><th>instrument</th><th>reach for it when</th></tr>
+      <tr><td><a href="eco-protocol-reference.html">.eco reference</a></td>
+          <td>you need the full protocol grammar — every directive, every model, every band</td></tr>
+      <tr><td><a href="eco-protocol-library.html">protocol library</a></td>
+          <td>you want a worked protocol to start from instead of a blank page</td></tr>
+      <tr><td><a href="survey-design.html">survey design</a></td>
+          <td>your study involves looking for things — it teaches the difference between
+              <i>absent</i> and <i>not looked for</i></td></tr>
+      <tr><td>this page's Designer tab</td>
+          <td>you want to be walked from question to runnable protocol</td></tr>
+    </table></div>
+
+    <h3>Run it</h3>
+    <div class="scroll"><table>
+      <tr><th>instrument</th><th>what it does</th></tr>
+      <tr><td><code>./gradlew ecologyExperiment -Pspec=your.eco</code></td>
+          <td>runs a protocol: simulates the phases, runs the models, grades every hypothesis, prints the
+              narrated report, writes the session + exports beside your spec</td></tr>
+      <tr><td>exports folder</td>
+          <td>every run emits CSV, a native Excel workbook, a PowerPoint report, and HTML — data leaves in
+              whatever your collaborators open
+              <span class="src">(<a href="https://github.com/RicheyWorks/CSRBT/blob/main/docs/ADR-030-native-office-export-2026-08-19.md">ADR-030</a>)</span></td></tr>
+      <tr><td><code>StrategyBattleRunner</code></td>
+          <td>races Red-Black, AVL, Splay, Hybrid on one seeded workload — 7 workload types, warm-up +
+              median-of-3, realized search depth
+              <span class="src">(<a href="https://github.com/RicheyWorks/CSRBT/blob/main/docs/ADR-022-battle-methodology-2026-08-12.md">ADR-022</a>)</span></td></tr>
+      <tr><td><code>csrbt-benchmarks</code> (JMH)</td>
+          <td>serious steady-state benchmarking; the battle runner is a diagnostics tool, JMH is the
+              measuring instrument of record</td></tr>
+      <tr><td>checked-in experiment tests</td>
+          <td>the reproducible verdicts: <code>NonStationary</code>, <code>SwitchingCost</code>,
+              <code>DiscriminatingSchedule</code>, <code>EvolutionAcceptance</code> in csrbt-core;
+              <code>EarlyWarning</code>, <code>CacheTransfer</code> in csrbt-experimental — read them as
+              worked examples of the method</td></tr>
+    </table></div>
+
+    <h3>Read the results</h3>
+    <div class="scroll"><table>
+      <tr><th>instrument</th><th>what it does</th></tr>
+      <tr><td><a href="ecology-lab.html">the interactive lab</a></td>
+          <td>drop a session JSON on it — the Workbench renders your run's communities, curves, and graded
+              hypotheses; drop a <code>.eco</code> to load a protocol back for editing</td></tr>
+      <tr><td><a href="field-notebook.html">field notebook</a></td>
+          <td>tap-to-tally live field data that transfers straight into a protocol</td></tr>
+      <tr><td><a href="tree-visualizer.html">tree visualizer</a></td>
+          <td>watch the structure your workload actually built</td></tr>
+      <tr><td><a href="ordination.html">ordination</a></td>
+          <td>many communities at once — which samples resemble which</td></tr>
+    </table></div>
+
+    <h3>The wider organism</h3>
+    <p>The storage ecosystem around the index has its own instruments, built for exactly this method —
+      every one is a seam an experiment can hold onto:</p>
+    <div class="scroll"><table>
+      <tr><th>engine</th><th>instrument</th></tr>
+      <tr><td><a href="https://github.com/RicheyWorks/Rub">Rub</a></td>
+          <td>the observer: <code>Vitals</code> meters and <code>pulse()</code> — op-relative deltas between
+              two readings, no wall clock involved</td></tr>
+      <tr><td><a href="https://github.com/RicheyWorks/Sizzle">Sizzle</a></td>
+          <td>deterministic chaos: seeded fault and latency injection, so a failure experiment reproduces
+              like any other run</td></tr>
+      <tr><td><a href="https://github.com/RicheyWorks/Twine">Twine</a></td>
+          <td><code>stats()</code> — a nonzero <code>journalReplays</code> is the observable trace of an
+              absorbed crash</td></tr>
+      <tr><td><a href="https://github.com/RicheyWorks/WholeHog">WholeHog</a></td>
+          <td>the composed organism: <code>Organism.report()</code> reads every meter in one call
+              (and two consecutive physicals are pinned identical — a physical never changes the patient)</td></tr>
+    </table></div>
+    <p class="fine">The pattern worth stealing: instrument first, then experiment. Every engine above grew a
+      meter <i>before</i> any claim was made about it — you cannot pre-register a rule about a number you
+      cannot read.</p>
+  </div>
+</section>
+
+<!-- ══════════════════════════ CHECKLIST ══════════════════════════ -->
+<section class="pane" id="pane-checklist" aria-labelledby="tab-checklist">
+  <div class="card">
+    <h2>Pre-flight checklist</h2>
+    <p class="hint">Fill this in before the first real run. If a box can't be ticked, the experiment isn't
+      ready — that's the checklist working. Print it and keep it with the run.</p>
+    <div id="cl">
+      <div class="check"><input type="checkbox" id="c1"><label for="c1"><b>The question is one sentence.</b>
+        If it needs two, it's two experiments.</label></div>
+      <div class="check"><input type="checkbox" id="c2"><label for="c2"><b>Each hypothesis is falsifiable.</b>
+        There is a result that would refute it, and you can say what that result is.</label></div>
+      <div class="check"><input type="checkbox" id="c3"><label for="c3"><b>The decision rule is written down.</b>
+        The bar, and what fires / stays held / dies on each side of it — recorded before any data exists.</label></div>
+      <div class="check"><input type="checkbox" id="c4"><label for="c4"><b>The floor or baseline is named.</b>
+        You know the least any solution could do, or the honest thing you're comparing against.</label></div>
+      <div class="check"><input type="checkbox" id="c5"><label for="c5"><b>The seed is pinned.</b>
+        Anyone with the spec (or the test) gets your bytes.</label></div>
+      <div class="check"><input type="checkbox" id="c6"><label for="c6"><b>Warm-up is planned and untimed.</b>
+        For timed runs: one full untimed pass; JIT pays off the clock.</label></div>
+      <div class="check"><input type="checkbox" id="c7"><label for="c7"><b>Timing is median-of-3 on fresh state.</b>
+        And the phases you'll decompose into are listed.</label></div>
+      <div class="check"><input type="checkbox" id="c8"><label for="c8"><b>You know where every output lands.</b>
+        Session, exports, tables — paths named before the run, so nothing overwrites a shipped artifact.</label></div>
+      <div class="check"><input type="checkbox" id="c9"><label for="c9"><b>The verdict has a home.</b>
+        A doc (or test) that will hold the result — including a refuted one.</label></div>
+      <div class="check"><input type="checkbox" id="c10"><label for="c10"><b>Refuted goes in the report.</b>
+        You've agreed with yourself, in advance, that a no is publishable.</label></div>
+    </div>
+    <div class="btnrow">
+      <button type="button" class="btn primary" id="cl-print">Print this page</button>
+      <button type="button" class="btn" id="cl-clear">Clear ticks</button>
+    </div>
+    <p class="fine">Ticks autosave on this device only. The checklist compresses the Method tab; when in doubt,
+      re-read the story behind the box you can't tick.</p>
+  </div>
+</section>
+</div>
+
+<nav class="tabbar" aria-label="Sections">
+  <div class="row">
+    <button class="tab on" id="tab-method"      aria-controls="pane-method"      type="button"><span class="ico" aria-hidden="true">&#129517;</span>Method</button>
+    <button class="tab"    id="tab-designer"    aria-controls="pane-designer"    type="button"><span class="ico" aria-hidden="true">&#129514;</span>Designer</button>
+    <button class="tab"    id="tab-grading"     aria-controls="pane-grading"     type="button"><span class="ico" aria-hidden="true">&#9878;&#65039;</span>Grading</button>
+    <button class="tab"    id="tab-instruments" aria-controls="pane-instruments" type="button"><span class="ico" aria-hidden="true">&#128301;</span>Instruments</button>
+    <button class="tab"    id="tab-checklist"   aria-controls="pane-checklist"   type="button"><span class="ico" aria-hidden="true">&#128203;</span>Checklist</button>
+  </div>
+</nav>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+/* ---- Number lists v1.1.0 : one grammar for a list typed into one box, and one for a coordinate ---- */
+var NUMS = (function(){
+  /* A LIST IS NUMBERS OR IT IS REFUSED (ADR-273). Generated from tools/nums.py;
+     edit there and run tools/nums_emit.py. */
+  var DEC = /^[-+]?\d+(\.\d+)?$/, INT = /^[-+]?\d+$/;
+  /* o: integer (a count), min (inclusive), above (exclusive), max, what (the
+     name of one item, for the sentence). Returns {ok, empty, values, why, bad}.
+     A refused list has NO values: the part that parsed is not the list. */
+  function list(text, o){
+    o = o || {};
+    var t = String(text == null ? "" : text).trim();
+    if (t === "") return { ok:true, empty:true, values:[], why:"", bad:"" };
+    var chunks = t.split(/\s+/), values = [], i, c, v, why;
+    for (i = 0; i < chunks.length; i++){
+      c = chunks[i].replace(/^,/, "").replace(/,$/, "");
+      if (c === "") continue;
+      why = "";
+      if (/\d,\d/.test(c)) why = c + " has a comma between two digits -- for one number drop the comma"
+        + " (a point for a decimal); for two, put a space after it";
+      else if (!(o.integer ? INT : DEC).test(c))
+        why = c + (o.integer && DEC.test(c) ? " is not a whole number" : " is not a number");
+      else {
+        v = +c;
+        if (o.min != null && v < o.min) why = c + " is below " + o.min;
+        else if (o.above != null && !(v > o.above)) why = c + " is not above " + o.above;
+        else if (o.max != null && v > o.max) why = c + " is above " + o.max;
+      }
+      if (why) return { ok:false, empty:false, values:[], why:(o.what ? o.what + " " : "") + why, bad:c };
+      values.push(v);
+    }
+    if (!values.length) return { ok:true, empty:true, values:[], why:"", bad:"" };
+    return { ok:true, empty:false, values:values, why:"", bad:"" };
+  }
+  /* A COORDINATE IS A NUMBER OR IT IS REFUSED (DWC v1.4.0, ADR-272; here since
+     NUMS v1.1.0, ADR-274, so a page that takes a coordinate and carries no
+     Darwin Core -- the deployment log -- reads it by the same rule). Signed
+     decimal degrees: an optional sign, digits, and an optional point and
+     digits -- nothing else. A decimal comma is not guessed at, because "1,5" is
+     a decimal on one keyboard and two numbers on another; a hemisphere letter
+     or a degree sign is not converted, because the sign it would need is the
+     thing most often wrong; a number past the axis's range is refused, because
+     a latitude of 121 is a longitude in the wrong box. Each refusal says why. */
+  var COORD = /^[-+]?\d+(\.\d+)?$/;
+  function hasCoord(v){ return v != null && COORD.test(String(v).trim()); }
+  function coord(text, axis){
+    var t = String(text==null?"":text).trim(), lon = (axis === "lon");
+    var name = lon ? "longitude" : "latitude", lim = lon ? 180 : 90;
+    if (t === "") return { ok:false, empty:true, value:null, text:"", why:"" };
+    var why = "";
+    if (/^[-+]?\d+,\d+$/.test(t)) why = "a decimal comma -- write " + t.replace(",", ".");
+    else if (/^[-+]?\d+(\.\d+)?[eE][-+]?\d+$/.test(t)) why = "scientific notation -- write the decimal";
+    else if (/[\u00b0'"]/.test(t) || /^[NSEWnsew][\s\d.+-]|[\d\s.][NSEWnsew]$/.test(t)) why = "degrees, minutes or a compass letter -- write signed decimal degrees";
+    else if (!COORD.test(t)) why = "not a decimal-degree number";
+    else if (Math.abs(+t) > lim) why = "outside \u00b1" + lim;
+    if (why) return { ok:false, empty:false, value:null, text:t, why:name + " " + t + " is " + why };
+    return { ok:true, empty:false, value:+t, text:t, why:"" };
+  }
+  /* Both or neither. A latitude with no longitude is not a place. */
+  function coordPair(latText, lonText){
+    var a = coord(latText, "lat"), b = coord(lonText, "lon");
+    var why = [a.why, b.why].filter(Boolean).join("; ");
+    if (!why && a.empty !== b.empty) why = "a coordinate needs both a latitude and a longitude";
+    return { ok: a.ok && b.ok, empty: a.empty && b.empty, lat: a, lon: b, why: why };
+  }
+  return { version:"1.1.0", list:list, coord:coord, coordPair:coordPair, hasCoord:hasCoord };
+})();
+
+/* ---- Keep v1.4.0 : local autosave, and honesty about what that is ---- */
+var KEEP = (function(){
+  /* The handle the last wire() returned, so a reader outside the page's closure
+     can ask the page what it is holding (v1.3.0, ADR-209). */
+  var LIVE = null;
+  function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g,function(c){
+    return c==="&"?"&amp;":c==="<"?"&lt;":c===">"?"&gt;":c==='"'?"&quot;":"&#39;"; }); }
+
+  /* Probe rather than assume. Safari in private mode used to throw on the
+     first write; storage can also be disabled by enterprise policy or by the
+     user, and in a sandboxed frame the accessor itself throws. All three look
+     identical to a page that only wraps setItem in a try. */
+  function usable(){
+    try {
+      var k = "__keep_probe__";
+      window.localStorage.setItem(k, "1");
+      window.localStorage.removeItem(k);
+      return true;
+    } catch(e){ return false; }
+  }
+
+  function when(ts){
+    if(!ts) return "";
+    try {
+      var d = new Date(ts), now = new Date();
+      var same = d.toDateString() === now.toDateString();
+      var hm = ("0"+d.getHours()).slice(-2) + ":" + ("0"+d.getMinutes()).slice(-2);
+      return same ? ("today " + hm) : (d.toISOString().slice(0,10) + " " + hm);
+    } catch(e){ return ""; }
+  }
+
+  function wire(o){
+    o = o || {};
+    var key = o.key, host = typeof o.mount === "string" ? document.getElementById(o.mount) : o.mount;
+    var fmt = o.format == null ? 1 : o.format;
+    var ok = usable(), lastErr = null, savedAt = null, restoredFrom = null, timer = null;
+    var noun = o.noun || "your work";
+
+    function read(){
+      if(!ok) return null;
+      try {
+        var raw = window.localStorage.getItem(key);
+        if(!raw) return null;
+        var p = JSON.parse(raw);
+        /* A format stamp, so a page that changes its state shape does not
+           restore a shape it can no longer read and fail in a way the user
+           reads as data loss. */
+        if(!p || p.format !== fmt) return null;
+        return p;
+      } catch(e){ return null; }
+    }
+
+    function write(){
+      timer = null;
+      if(!ok) return;
+      var body;
+      try { body = o.snapshot(); } catch(e){ lastErr = "could not read the page state"; paint(); return; }
+      if(body == null){
+        try { window.localStorage.removeItem(key); }catch(e){}
+        savedAt = null; lastErr = null; paint(); return;
+      }
+      try {
+        window.localStorage.setItem(key, JSON.stringify({ format:fmt, at:Date.now(), body:body }));
+        savedAt = Date.now(); lastErr = null;
+      } catch(e){
+        /* Do not swallow this. A quota failure that says nothing is worse than
+           no autosave at all, because it teaches the user to trust it. */
+        lastErr = (e && e.name === "QuotaExceededError")
+          ? "this browser's storage is full" : "this browser refused the write";
+      }
+      paint();
+    }
+
+    function touch(){
+      if(!ok) return;
+      if(timer) clearTimeout(timer);
+      timer = setTimeout(write, o.debounce == null ? 500 : o.debounce);
+    }
+
+    function flush(){ if(timer){ clearTimeout(timer); } write(); }
+
+    function forget(){
+      /* Cancel the pending write first. Without this the debounced save from
+         the edit that preceded the click -- or from the click itself, on a
+         page that listens for clicks -- lands a few hundred milliseconds later
+         and puts the copy straight back, which makes the button look like it
+         did nothing. */
+      if(timer){ clearTimeout(timer); timer = null; }
+      try { window.localStorage.removeItem(key); }catch(e){}
+      savedAt = null; restoredFrom = null; lastErr = null; paint();
+      if(o.onforget) o.onforget();
+    }
+
+    function paint(){
+      if(!host) return;
+      /* noprint: this is screen chrome -- a status line about a browser and a
+         button -- and the print audit is right to count anything else that
+         vanishes on paper as content lost. */
+      host.className = "keep noprint" + ((!ok || lastErr) ? " bad" : "");
+      var msg;
+      if(!ok){
+        msg = "<b>This browser is not keeping anything.</b> Storage is unavailable here &mdash; a "
+            + "private window, or site data switched off. Nothing is being saved, so export before "
+            + "you close the tab.";
+      } else if(lastErr){
+        msg = "<b>Autosave failed &mdash; " + esc(lastErr) + ".</b> What is on screen is not saved. "
+            + "Export it now.";
+      } else if(savedAt){
+        msg = "Saved on this device <b>" + esc(when(savedAt)) + "</b>"
+            + (restoredFrom ? " &middot; restored from " + esc(when(restoredFrom)) : "") + ".";
+      } else if(restoredFrom){
+        msg = "Restored " + esc(noun) + " from <b>" + esc(when(restoredFrom)) + "</b> on this device.";
+      } else {
+        msg = "Autosave is on. " + esc(noun.charAt(0).toUpperCase() + noun.slice(1))
+            + " will still be here if you close the tab.";
+      }
+      /* THE BUTTON IS BUILT ONCE (v1.2.0, ADR-207).
+         This wrote the whole strip with innerHTML on every repaint, so the
+         forget button was DESTROYED AND RE-CREATED whenever the autosave
+         changed state -- and the autosave changes state on every save. A
+         control that does not survive a repaint cannot be stamped, addressed
+         or kept in focus across one: audit_focus reported it as "mounted after
+         the last stamp and could not be measured", intermittently, on whichever
+         page happened to save while the sweep was looking. Only the words
+         change now. */
+      if(!host.firstChild){
+        var st = document.createElement("p"); st.className = "st";
+        var btn = document.createElement("button");
+        btn.type = "button"; btn.setAttribute("data-keep-forget", "");
+        btn.textContent = "Forget this device's copy";
+        btn.addEventListener("click", function(){
+          forget();
+          if(o.ontoast) o.ontoast("Saved copy removed from this device");
+        });
+        var note = document.createElement("p"); note.className = "note";
+        note.innerHTML = '<b>This is not a backup.</b> It is one browser on one device, and it goes '
+          + 'when site data is cleared, in a private window, or on any other machine. It exists so a '
+          + 'phone call does not cost you a morning. The exports are the durable copy.';
+        host.appendChild(st); host.appendChild(btn); host.appendChild(note);
+      }
+      host.firstChild.innerHTML = msg;
+    }
+
+    var got = read();
+    if(got){
+      var accepted = false;
+      try { accepted = o.restore(got.body) !== false; } catch(e){ accepted = false; }
+      if(accepted){ restoredFrom = got.at; }
+    }
+    paint();
+    /* A PHOTOGRAPH IS AN EDIT (v1.1.0, ADR-206). FEK.photos fires `fek-change`
+       when frames are added, removed or captioned; nothing else does, because
+       a hidden file input and a drop produce neither `input` nor `change`. A
+       page that had to remember to wire this is a page that would forget. */
+    try {
+      document.addEventListener("fek-change", function(){ touch(); }, true);
+    } catch(e){}
+    /* A tab closing mid-debounce is exactly the case this exists for. */
+    try {
+      window.addEventListener("pagehide", function(){ if(timer) flush(); });
+      document.addEventListener("visibilitychange", function(){
+        if(document.visibilityState === "hidden" && timer) flush(); });
+    } catch(e){}
+
+    var h = { touch:touch, flush:flush, forget:forget, usable:function(){ return ok; },
+             restored:function(){ return restoredFrom; }, savedAt:function(){ return savedAt; },
+             error:function(){ return lastErr; },
+             /* v1.1.0 (ADR-203). The page already describes its own state once,
+                here, for the autosave. The outbox needs the same description to
+                say whether it has left the device -- and a SECOND description
+                would be a second thing to keep in step, so the one that is
+                already exercised by every restore is the one it gets. Read
+                through this handle rather than by the page passing its snapshot
+                twice, because two references can be wired to two functions and
+                only one of them would ever be tested. */
+             snapshot:function(){ return o.snapshot(); } };
+    /* v1.3.0 (ADR-209). The live handle, reachable from outside the page's own
+       closure. A page wires KEEP inside an IIFE and keeps the handle in a local,
+       so the description of its state that the autosave and the outbox both
+       already read was reachable from nowhere else -- and an audit asking "how
+       much did that tap take" had to count rows on the screen instead. Rows on
+       the screen are not records: a plate shown once in a list and once in a
+       results table is one record counted twice, and a rule built on that cries
+       wolf on a row remover while under-reading a delete that cascades.
+       One description, read by everything that needs it (ADR-141). */
+    LIVE = h;
+    return h;
+  }
+
+  /* ---- generic form capture ----
+     Every page in the kit keeps its typed state in elements with ids -- real
+     inputs for text and dates, hidden write-through fields for the FEK
+     widgets. Capturing them by walking the DOM means a page that gains a field
+     does not also have to remember to add it to a list, which is how a
+     hand-maintained list of fields quietly stops covering the newest one. */
+  function formSnapshot(){
+    var out = {}, i, els = document.querySelectorAll("input[id], textarea[id]");
+    for(i=0;i<els.length;i++){
+      var e = els[i];
+      if(e.type === "file" || e.type === "button" || e.type === "submit") continue;
+      out[e.id] = (e.type === "checkbox" || e.type === "radio") ? (e.checked ? "1" : "") : e.value;
+    }
+    /* v1.4.0 (ADR-210). ...AND EVERY FEK CONTROL THAT DECLARES A FIELD BUT HAS
+       NO ELEMENT BEHIND IT. Walking the DOM finds a page's typed state only
+       where the page also remembered to write it into a hidden input; a
+       component that declared `field:"selN"` and nothing else was invisible
+       here, and its value came back as the widget's default over correct data.
+       Only the ones the DOM walk did not already find, so every page that has
+       been keeping its state through hidden inputs keeps writing exactly the
+       blob it wrote yesterday. */
+    try {
+      if (typeof FEK !== "undefined" && FEK && typeof FEK.values === "function") {
+        var fv = FEK.values(), fk;
+        for (fk in fv) if (fv.hasOwnProperty(fk) && !out.hasOwnProperty(fk)
+                           && fv[fk] != null && fv[fk] !== "") out[fk] = fv[fk];
+      }
+    } catch (e) { }
+    return out;
+  }
+  /* Restoring the hidden field is only half the job: the widget above it still
+     shows its construction default, and a correct value under a wrong-looking
+     dial is worse than no restore at all. FEK.setField (v1.3.0) puts the value
+     back through the widget for every component that declared its field. */
+  function formRestore(map){
+    if(!map) return 0;
+    var n = 0, id;
+    for(id in map){
+      if(!map.hasOwnProperty(id)) continue;
+      var e = document.getElementById(id);
+      if(!e){
+        /* v1.4.0: a field with no element behind it is a FEK control that
+           declared one; put the value back through the widget's own set(). */
+        if(typeof FEK !== "undefined" && FEK.setField && FEK.setField(id, map[id])) n++;
+        continue;
+      }
+      if(e.type === "checkbox" || e.type === "radio") e.checked = !!map[id];
+      else e.value = map[id];
+      if(typeof FEK !== "undefined" && FEK.setField){
+        var v = map[id];
+        if(e.type === "number" || /^-?\d+(\.\d+)?$/.test(String(v))) {
+          FEK.setField(id, v === "" ? null : parseFloat(v));
+        } else {
+          FEK.setField(id, v === "" ? null : v);
+        }
+      }
+      n++;
+    }
+    return n;
+  }
+
+  return { version:"1.4.0", wire:wire, usable:usable, live:function(){ return LIVE; },
+           formSnapshot:formSnapshot, formRestore:formRestore };
+})();
+
+(function () {
+  "use strict";
+  var $ = function (id) { return document.getElementById(id); };
+
+  /* ── storage (ADR-207) ──
+     This page carried the exact pattern KEEP exists to replace: a bare
+     `try{ localStorage.setItem(...) }catch(e){}` that swallowed every failure.
+     A full quota, a private window and storage disabled by policy all produced
+     the same result -- nothing saved, nothing said -- on the page that takes
+     more typed values than any other in this kit. The check that says "no
+     silent setItem left" existed, and looked only at the pages that had
+     already been converted.
+
+     KEEP does the writing now: it probes storage at wire time and says so up
+     front when this browser is keeping nothing, it surfaces a failed write
+     instead of swallowing it, and it states in the page what browser storage
+     is. `saveState` stays as the name every call site uses; it is a debounced
+     touch on the autosave rather than a write of its own. */
+  var KEY = "experiment-guider-v1";
+  var KEPT = null;
+  function saveState() { if (KEPT) KEPT.touch(); }
+  var S = {};
+  function blankState() {
+    S.phases = S.phases || []; S.models = S.models || []; S.datasets = S.datasets || [];
+    S.expects = S.expects || []; S.fields = S.fields || {}; S.ticks = S.ticks || {};
+    S.meas = S.meas || {}; S.verdict = (S.verdict == null ? null : S.verdict);
+    S.track = S.track === "eng" ? "eng" : "eco";
+  }
+  blankState();
+
+  /* ── toast ── */
+  var toastT = null;
+  function toast(msg) {
+    var t = $("toast"); t.textContent = msg; t.classList.add("show");
+    clearTimeout(toastT); toastT = setTimeout(function () { t.classList.remove("show"); }, 1800);
+  }
+
+  /* ── copy, with fallback for contexts without the async clipboard ── */
+  function copyText(text, label, msg) {
+    function said() { return msg || (label + " copied"); }
+    function fallback() {
+      var ta = document.createElement("textarea");
+      ta.value = text; ta.setAttribute("readonly", "");
+      ta.style.position = "fixed"; ta.style.opacity = "0";
+      document.body.appendChild(ta); ta.select();
+      var ok = false; try { ok = document.execCommand("copy"); } catch (e) {}
+      document.body.removeChild(ta);
+      toast(ok ? said() : "Copy failed — select the text by hand");
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () { toast(said()); }, fallback);
+    } else { fallback(); }
+  }
+
+  /* ── tabs ── */
+  var TABS = ["method", "designer", "grading", "instruments", "checklist"];
+  TABS.forEach(function (name) {
+    var tab = $("tab-" + name);
+    tab.addEventListener("click", function () {
+      TABS.forEach(function (n) {
+        var on = n === name;
+        $("tab-" + n).classList.toggle("on", on);
+        $("tab-" + n).setAttribute("aria-selected", on ? "true" : "false");
+        $("pane-" + n).classList.toggle("on", on);
+      });
+      window.scrollTo({ top: 0 });
+    });
+    tab.setAttribute("aria-selected", tab.classList.contains("on") ? "true" : "false");
+  });
+
+  /* ── track choice ── */
+  function showTrack() {
+    var eco = S.track !== "eng";
+    $("track-eco").classList.toggle("on", eco);
+    $("track-eng").classList.toggle("on", !eco);
+    $("eco-track").hidden = !eco;
+    $("eng-track").hidden = eco;
+  }
+  $("track-eco").addEventListener("click", function () { S.track = "eco"; showTrack(); saveState(); });
+  $("track-eng").addEventListener("click", function () { S.track = "eng"; showTrack(); saveState(); });
+
+  /* ── field persistence (plain inputs + textareas) ── */
+  var FIELDS = ["e-name", "e-keys", "e-seed", "e-window", "f-area", "f-wind", "f-temp", "f-dist",
+    "e-notes", "e-extra", "g-question", "g-floor", "g-workload", "g-sizes", "g-seed", "g-passes",
+    "g-phases", "g-rule", "g-stakes", "g-verdict-note"];
+  FIELDS.forEach(function (id) {
+    var el = $(id);
+    if (S.fields[id] !== undefined && S.fields[id] !== "") el.value = S.fields[id];
+    el.addEventListener("input", function () { S.fields[id] = el.value; saveState(); rebuild(); });
+  });
+
+  /* ── helpers ── */
+  function token(v, fallbackName) {
+    v = (v || "").trim().replace(/\s+/g, "-");
+    return v || fallbackName;
+  }
+  function chipList(el, items, describe, removeAt, emptyText) {
+    while (el.firstChild) el.removeChild(el.firstChild);
+    if (!items.length) {
+      var e = document.createElement("span"); e.className = "empty"; e.textContent = emptyText;
+      el.appendChild(e); return;
+    }
+    items.forEach(function (item, i) {
+      var chip = document.createElement("span"); chip.className = "chip";
+      var txt = document.createElement("span"); txt.textContent = describe(item);
+      var x = document.createElement("button"); x.type = "button"; x.textContent = "×";
+      x.setAttribute("aria-label", "Remove " + describe(item));
+      x.addEventListener("click", function () { removeAt(i); });
+      chip.appendChild(txt); chip.appendChild(x); el.appendChild(chip);
+    });
+  }
+
+  /* ── phases ── */
+  var pKind = $("p-kind");
+  function phaseParamVis() {
+    var k = pKind.value;
+    $("p-hotwrap").hidden = k !== "hot";
+    $("p-sharewrap").hidden = k !== "hot";
+    $("p-addwrap").hidden = k !== "churn";
+  }
+  pKind.addEventListener("change", phaseParamVis);
+  phaseParamVis();
+
+  function communityNames() {
+    return S.phases.map(function (p) { return p.name; })
+      .concat(S.datasets.map(function (d) { return d.name; }));
+  }
+  $("p-add").addEventListener("click", function () {
+    var name = token($("p-name").value, "phase" + (S.phases.length + 1));
+    if (communityNames().indexOf(name) >= 0) { toast("'" + name + "' is taken — community names must be unique"); return; }
+    var kind = pKind.value;
+    var ops = parseInt($("p-ops").value, 10) || 2000;
+    if (ops < 1 || ops > 10000000) { toast("phase ops out of range [1, 10000000]"); return; }
+    var ph = { name: name, kind: kind, ops: ops };
+    if (kind === "hot") {
+      ph.hotSet = parseInt($("p-hotset").value, 10) || 5;
+      ph.hotShare = parseInt($("p-hotshare").value, 10) || 90;
+    }
+    if (kind === "churn") ph.addPct = parseInt($("p-addpct").value, 10) || 55;
+    S.phases.push(ph); $("p-name").value = "";
+    renderPhases(); saveState(); rebuild();
+  });
+  function phaseLine(ph) {
+    if (ph.kind === "hot") return "phase: " + ph.name + " hot " + ph.ops + " " + ph.hotSet + " " + ph.hotShare;
+    if (ph.kind === "churn") return "phase: " + ph.name + " churn " + ph.ops + " " + ph.addPct;
+    return "phase: " + ph.name + " uniform " + ph.ops;
+  }
+  function renderPhases() {
+    chipList($("p-list"), S.phases, function (ph) { return phaseLine(ph).slice(7); },
+      function (i) { S.phases.splice(i, 1); renderPhases(); saveState(); rebuild(); },
+      "No phases yet — a study needs at least one.");
+  }
+
+  /* ── models ── */
+  var mKind = $("m-kind");
+  function modelHint() {
+    var o = mKind.options[mKind.selectedIndex];
+    $("m-hint").textContent = o.getAttribute("data-hint");
+    $("m-params").placeholder = o.getAttribute("data-eg");
+  }
+  mKind.addEventListener("change", modelHint);
+  modelHint();
+  var MODEL_ARITY = { levins: 4, logistic: 4, island: 5, exponential: 3,
+    competition: 9, predation: 7, hardyweinberg: 3, markrecapture: 3 };
+  var TRAJECTORY = { levins: 1, logistic: 1, island: 1, exponential: 1, competition: 1, predation: 1 };
+  /* Parse one phase value ("<name> <kind> <ops> ...") the way parsePhase does.
+     Returns {ph: {...}} or {err: "..."} — bounds are the lint's job. */
+  function phaseFrom(val) {
+    var p = val.trim().split(/\s+/);
+    if (p.length < 3) return { err: "phase needs: <name> <kind> <ops> ..." };
+    var kind = p[1].toLowerCase(), ops = parseInt(p[2], 10);
+    if (isNaN(ops)) return { err: "phase ops must be a whole number, not '" + p[2] + "'" };
+    if (kind === "uniform") return { ph: { name: p[0], kind: "uniform", ops: ops } };
+    if (kind === "hot") {
+      if (p.length < 5) return { err: "hot needs: <ops> <hotSetSize> <hotShare%>" };
+      return { ph: { name: p[0], kind: "hot", ops: ops,
+        hotSet: parseInt(p[3], 10), hotShare: parseInt(p[4], 10) } };
+    }
+    if (kind === "churn") {
+      if (p.length < 4) return { err: "churn needs: <ops> <addPercent>" };
+      return { ph: { name: p[0], kind: "churn", ops: ops, addPct: parseInt(p[3], 10) } };
+    }
+    return { err: "unknown phase kind '" + p[1] + "'" };
+  }
+  function modelProblem(kind, params) {
+    var toks = params.split(" ");
+    if (kind !== "eulerlotka" && !(kind in MODEL_ARITY)) return "unknown model '" + kind + "'";
+    if (kind === "eulerlotka") {
+      if (toks.length < 2) return "eulerlotka needs >= 2 lx:mx pairs";
+      for (var i = 0; i < toks.length; i++) {
+        var pair = toks[i].split(":");
+        if (pair.length !== 2 || !isFinite(parseFloat(pair[0])) || !isFinite(parseFloat(pair[1])))
+          return "pairs are lx:mx, got '" + toks[i] + "'";
+      }
+      return null;
+    }
+    var want = MODEL_ARITY[kind];
+    if (toks.length !== want) return "model " + kind + " needs " + want + " parameters";
+    for (var j = 0; j < toks.length; j++)
+      if (!isFinite(parseFloat(toks[j]))) return "'" + toks[j] + "' is not a number";
+    if (TRAJECTORY[kind]) {
+      var steps = parseFloat(toks[want - 1]);
+      if (steps < 0 || steps > 100000) return "steps out of range [0, 100000]";
+    }
+    return null;
+  }
+  $("m-add").addEventListener("click", function () {
+    var params = ($("m-params").value || "").trim().replace(/\s+/g, " ");
+    if (!params) params = mKind.options[mKind.selectedIndex].getAttribute("data-eg");
+    var bad = modelProblem(mKind.value, params);
+    if (bad) { toast(bad); return; }
+    S.models.push({ kind: mKind.value, params: params });
+    $("m-params").value = "";
+    renderModels(); saveState(); rebuild();
+  });
+  function renderModels() {
+    chipList($("m-list"), S.models, function (m) { return m.kind + " " + m.params; },
+      function (i) { S.models.splice(i, 1); renderModels(); saveState(); rebuild(); }, "No models yet.");
+  }
+
+  /* ── datasets ── */
+  $("d-add").addEventListener("click", function () {
+    var name = token($("d-name").value, "site" + (S.datasets.length + 1));
+    if (communityNames().indexOf(name) >= 0) { toast("'" + name + "' is taken — community names must be unique"); return; }
+    var counts = ($("d-counts").value || "").trim().replace(/\s+/g, " ");
+    if (!counts) { toast("Enter counts or tallies first"); return; }
+    S.datasets.push({ name: name, counts: counts });
+    $("d-name").value = ""; $("d-counts").value = "";
+    renderDatasets(); saveState(); rebuild();
+  });
+  function renderDatasets() {
+    chipList($("d-list"), S.datasets, function (d) { return d.name + " · " + d.counts; },
+      function (i) { S.datasets.splice(i, 1); renderDatasets(); saveState(); rebuild(); }, "No datasets yet.");
+  }
+
+  /* ── expectations ── */
+  var WORDS = {
+    "q-evenness": ["very-even", "moderate", "uneven", "dominated"],
+    "q-turnover": ["low", "moderate", "major"],
+    "q-overlap": ["high", "partial", "little"],
+    "q-fit": ["geometric", "brokenstick", "uniform"],
+    "q-survivorship": ["type1", "type2", "type3"]
+  };
+  var TWO_ARG = { brayCurtis: 1, pianka: 1, jaccard: 1, sorensen: 1, "q-turnover": 1, "q-overlap": 1 };
+  var xMetric = $("x-metric");
+  function expectVis() {
+    var v = xMetric.value, qual = v.indexOf("q-") === 0;
+    $("x-opwrap").hidden = qual; $("x-valwrap").hidden = qual; $("x-wordwrap").hidden = !qual;
+    $("x-args").disabled = v === "q-survivorship";
+    $("x-args").placeholder = TWO_ARG[v] ? "graze, bloom" : (v === "q-survivorship" ? "(reads the run's census)" : "graze");
+    if (qual) {
+      var sel = $("x-word");
+      while (sel.firstChild) sel.removeChild(sel.firstChild);
+      WORDS[v].forEach(function (w) {
+        var o = document.createElement("option"); o.value = w; o.textContent = w; sel.appendChild(o);
+      });
+    }
+  }
+  xMetric.addEventListener("change", expectVis);
+  expectVis();
+  $("x-add").addEventListener("click", function () {
+    var v = xMetric.value, qual = v.indexOf("q-") === 0;
+    var args = ($("x-args").value || "").split(",").map(function (a) { return token(a, ""); })
+      .filter(function (a) { return a; });
+    var need = v === "q-survivorship" ? 0 : (TWO_ARG[v] ? 2 : 1);
+    if (args.length < need) { toast(need === 2 ? "This metric needs two names" : "Name the phase or dataset"); return; }
+    var line;
+    if (v === "q-survivorship") line = "expect: survivorship is " + $("x-word").value;
+    else if (qual) line = "expect: " + v.slice(2) + "(" + args.slice(0, need).join(", ") + ") is " + $("x-word").value;
+    else {
+      var val = $("x-val").value;
+      if (val === "") { toast("Enter the value to test against"); return; }
+      line = "expect: " + v + "(" + args.slice(0, need).join(", ") + ") " + $("x-op").value + " " + val;
+    }
+    S.expects.push(line); $("x-args").value = "";
+    renderExpects(); saveState(); rebuild();
+  });
+  function renderExpects() {
+    chipList($("x-list"), S.expects, function (x) { return x.slice(8); },
+      function (i) { S.expects.splice(i, 1); renderExpects(); saveState(); rebuild(); },
+      "No hypotheses yet — without one, it's a demo, not an experiment.");
+  }
+
+  /* ── the .eco emitter ── */
+  function slug(name) {
+    var s = (name || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+    return s || "my-experiment";
+  }
+  function buildEco() {
+    var name = ($("e-name").value || "").trim() || "untitled study";
+    var out = [];
+    out.push("# " + name + " — written before the run, graded after.");
+    out.push("# Run me:  ./gradlew ecologyExperiment -Pspec=" + slug($("e-name").value) + ".eco");
+    out.push("");
+    out.push("name: " + name);
+    out.push("keys: " + (parseInt($("e-keys").value, 10) || 100));
+    out.push("seed: " + (parseInt($("e-seed").value, 10) || 42));
+    out.push("window: " + (parseInt($("e-window").value, 10) || 250));
+    if (S.phases.length) { out.push(""); S.phases.forEach(function (p) { out.push(phaseLine(p)); }); }
+    // Each factor's NEUTRAL value comes from the parser's own defaults
+    // (area/temperature/wind default 1, distance defaults 0) — emitting nothing
+    // must mean the same thing as emitting the neutral value.
+    var facts = [["area", "f-area", 1], ["wind", "f-wind", 1], ["temperature", "f-temp", 1], ["distance", "f-dist", 0]]
+      .filter(function (f) { return $(f[1]).value !== "" && parseFloat($(f[1]).value) !== f[2]; });
+    if (facts.length) { out.push(""); facts.forEach(function (f) { out.push("factor: " + f[0] + " " + parseFloat($(f[1]).value)); }); }
+    if (S.models.length) { out.push(""); S.models.forEach(function (m) { out.push("model: " + m.kind + " " + m.params); }); }
+    if (S.datasets.length) { out.push(""); S.datasets.forEach(function (d) { out.push("data: " + d.name + " " + d.counts); }); }
+    var notes = ($("e-notes").value || "").split("\n").map(function (l) { return l.trim(); }).filter(Boolean);
+    if (notes.length) {
+      out.push("");
+      var known = communityNames();
+      notes.forEach(function (l) {
+        // "bloom: text" attaches only when bloom is a declared phase or dataset —
+        // the parser reports a note with an unknown target as a spec problem.
+        var m = l.match(/^([A-Za-z0-9_-]+):\s*(.+)$/);
+        out.push(m && known.indexOf(m[1]) >= 0 ? "note(" + m[1] + "): " + m[2] : "note: " + l);
+      });
+    }
+    if (S.expects.length) { out.push(""); S.expects.forEach(function (x) { out.push(x); }); }
+    var extra = ($("e-extra").value || "").split("\n").map(function (l) { return l.trim(); }).filter(Boolean);
+    if (extra.length) { out.push(""); extra.forEach(function (l) { out.push(l); }); }
+    return out.join("\n") + "\n";
+  }
+
+  /* ── measurements: the numbers, entered after the run ── */
+  function val(id, fallback) { return ($(id).value || "").trim() || fallback; }
+  /* A REJECTED KEYSTROKE BUFFER IS NOT AN EMPTY ONE (ADR-150, ADR-151). Every
+     box below is a number input, and a number input whose contents Chromium
+     cannot parse hands the page "" -- the same string a box nobody touched
+     hands it. `validity.badInput` is the only thing that separates them,
+     because it is about the buffer rather than the value. ADR-150 wired three
+     boxes on this page to it; audit_badinput then asked the same question of
+     the other twelve and every one of them read a rejected buffer as blank:
+     the four factors emitted nothing (which the parser reads as the neutral
+     value), the grader's seed and passes fell back to 42 and 3, and a
+     measurement cell said "waiting for every cell", which is what it says
+     about a cell nobody has filled in. Same silence, seven places. */
+  function badEl(e) { return !!(e && e.validity && e.validity.badInput); }
+  function badInput(id) { return badEl($(id)); }
+  /* ADR-273: A LIST IS NUMBERS OR IT IS REFUSED. The sizes box was read twice,
+     two ways: here split on "," with parseInt, so "20,000" was 20 and 0 and the
+     0 was filtered away, leaving a plan at n = 20; and in the skeleton, where
+     anything that did not parse fell back to 20000, 60000 without a word. One
+     grammar (NUMS), read once, and a refused list opens no rows and says why. */
+  function sizesList() { return NUMS.list(val("g-sizes", ""), { integer: true, above: 0, what: "size" }); }
+  function measSizes() {
+    return sizesList().values.filter(function (n, i, a) { return a.indexOf(n) === i; });
+  }
+  function measPhases() {
+    var p = val("g-phases", "").split(",").map(function (s) { return s.trim(); }).filter(Boolean);
+    return p.length ? p : ["route"];
+  }
+  function rowOf(size) { return S.meas[size] || {}; }
+  function rowComplete(size) {
+    var row = rowOf(size), keys = measPhases().concat(["floor"]);
+    return keys.every(function (k) { return row[k] !== undefined && row[k] !== "" && isFinite(parseFloat(row[k])); });
+  }
+  function rowTotal(size) {
+    return measPhases().reduce(function (t, k) { return t + parseFloat(rowOf(size)[k]); }, 0);
+  }
+  function fmtMs(x) { return (Math.round(x * 10) / 10) + " ms"; }
+  function fmtRatio(total, floor) {
+    if (!(floor > 0)) return "—";
+    var r = total / floor;
+    return (r >= 10 ? Math.round(r) : Math.round(r * 10) / 10) + "×";
+  }
+  function anyCompleteRow() { return measSizes().some(rowComplete); }
+  /* WHICH CELL, AND WHY IT IS EMPTY. A measurement cell the browser rejected
+     reads .value back as "" and the row reads as one nobody has finished --
+     the same sentence, for a cell holding the reader's own characters. The
+     grid is asked directly rather than through S.meas, because S.meas holds
+     the value and the value is exactly the thing that cannot tell them apart. */
+  function badCells(grid) {
+    return [].slice.call(grid ? grid.querySelectorAll('input[type="number"]') : [])
+      .filter(badEl).map(function (e) { return e.getAttribute("data-cell") || "a cell"; });
+  }
+  function computedLine(size, grid) {
+    var bad = badCells(grid);
+    if (bad.length) return "waiting for every cell \u2014 " + bad.join(", ")
+      + (bad.length === 1 ? " holds" : " hold") + " something that is not a number";
+    if (!rowComplete(size)) return "waiting for every cell \u2014 totals appear when the row is complete";
+    var t = rowTotal(size), f = parseFloat(rowOf(size).floor);
+    return "total " + fmtMs(t) + " · floor " + fmtMs(f) + " · " + fmtRatio(t, f) + " the floor";
+  }
+  function renderMeas() {
+    var box = $("meas");
+    while (box.firstChild) box.removeChild(box.firstChild);
+    var sizes = measSizes(), sl = sizesList();
+    if (!sizes.length) {
+      var e = document.createElement("p"); e.className = "empty";
+      e.textContent = sl.ok ? "Enter sizes in Step 2 to open measurement rows."
+                            : "Sizes not read: " + sl.why + ". No measurement row opens until Step 2 is fixed.";
+      box.appendChild(e); return;
+    }
+    sizes.forEach(function (size) {
+      var wrap = document.createElement("div");
+      wrap.style.cssText = "border-top:1px dashed var(--border); padding:10px 0 4px; margin-top:8px;";
+      var head = document.createElement("b"); head.textContent = "n = " + size;
+      wrap.appendChild(head);
+      var grid = document.createElement("div"); grid.className = "grid4";
+      measPhases().concat(["floor"]).forEach(function (k) {
+        var cell = document.createElement("div");
+        var lab = document.createElement("label");
+        lab.textContent = k === "floor" ? "floor (ms)" : k + " (ms)";
+        var inp = document.createElement("input");
+        inp.type = "number"; inp.step = "any"; inp.min = "0"; inp.inputMode = "decimal";
+        inp.setAttribute("aria-label", lab.textContent + " at n = " + size);
+        inp.setAttribute("data-cell", lab.textContent);
+        if (rowOf(size)[k] !== undefined) inp.value = rowOf(size)[k];
+        inp.addEventListener("input", function () {
+          if (!S.meas[size]) S.meas[size] = {};
+          S.meas[size][k] = inp.value;
+          comp.textContent = computedLine(size, grid);
+          saveState(); rebuild();
+        });
+        cell.appendChild(lab); cell.appendChild(inp); grid.appendChild(cell);
+      });
+      wrap.appendChild(grid);
+      var comp = document.createElement("div"); comp.className = "fine";
+      // NAMED THE KIT'S WAY (ADR-146). The computed line is a figure, and a
+      // figure whose id is outside read-report's naming is one no task can
+      // hold -- audit_readable said so the moment this line got an id at all.
+      comp.id = "anMeas-" + size;
+      comp.textContent = computedLine(size, grid);
+      wrap.appendChild(comp);
+      box.appendChild(wrap);
+    });
+  }
+  ["g-sizes", "g-phases"].forEach(function (id) {
+    $(id).addEventListener("input", renderMeas);
+  });
+
+  /* ── the verdict: declared by the researcher, never by the page ── */
+  var VERDICT_WORDS = { fires: "THE TRIGGER FIRES", held: "STAYS HELD", dead: "PRICED DEAD" };
+  function paintVerdict() {
+    ["fires", "held", "dead"].forEach(function (v) {
+      $("vd-" + v).classList.toggle("on", S.verdict === v);
+    });
+  }
+  ["fires", "held", "dead"].forEach(function (v) {
+    $("vd-" + v).addEventListener("click", function () {
+      if (!val("g-rule", "")) { toast("No rule, no verdict — write the rule first (Step 3)"); return; }
+      if (!anyCompleteRow()) { toast("Enter the measured numbers first (Step 4)"); return; }
+      S.verdict = v; paintVerdict(); saveState(); rebuild();
+    });
+  });
+  $("vd-clear").addEventListener("click", function () {
+    S.verdict = null; paintVerdict(); saveState(); rebuild();
+  });
+
+  /* ── the pre-registration + skeleton emitters ── */
+  function buildPrereg() {
+    var q = val("g-question", "(one sentence: what are you measuring?)");
+    var today = new Date().toISOString().slice(0, 10);
+    var phases = measPhases();
+    var header = ["n"].concat(phases.map(function (p) { return p + " (ms)"; }))
+      .concat(["floor (ms)", "total (ms)", "total/floor"]);
+    var line = function (cells) { return "| " + cells.join(" | ") + " |"; };
+    var sizes = measSizes();
+    var rows = sizes.length ? sizes.map(function (size) {
+      var row = rowOf(size);
+      var cells = [String(size)].concat(phases.map(function (p) { return row[p] !== undefined && row[p] !== "" ? row[p] : " "; }));
+      cells.push(row.floor !== undefined && row.floor !== "" ? row.floor : " ");
+      if (rowComplete(size)) {
+        var t = rowTotal(size);
+        cells.push(String(Math.round(t * 10) / 10), fmtRatio(t, parseFloat(row.floor)));
+      } else cells.push(" ", " ");
+      return line(cells);
+    }) : [line(header.map(function () { return " "; }))];
+    var verdict = (S.verdict && anyCompleteRow())
+      ? "**VERDICT: " + VERDICT_WORDS[S.verdict] + "** — " +
+        val("g-verdict-note", "(write the sentence: the measured number beside the bar, then the consequence)")
+      : "**VERDICT:** _append after the run — the measured number beside the bar, and what it means._";
+    return [
+      "## Experiment — " + q,
+      "",
+      "**Pre-registered " + today + "** — the decision rule below was written before any run.",
+      "",
+      "**Floor:** " + val("g-floor", "(the least ANY solution could do)"),
+      "**Workload:** " + val("g-workload", "(shape and generator)") + "; sizes: " + val("g-sizes", "(n, ...)") +
+        "; seed " + val("g-seed", "42") + ".",
+      "**Timing:** one untimed warm-up pass, then " + val("g-passes", "3") +
+        " timed passes on fresh state, median kept" + (val("g-phases", "") ? "; phases timed separately." : "."),
+      "",
+      line(header),
+      line(header.map(function () { return "---"; }))
+    ].concat(rows).concat([
+      "",
+      "**Pre-registered rule:** " + val("g-rule", "(the bar, and what clearing it means)"),
+      "**If it fails the bar:** " + val("g-stakes", "(what is recorded, what stays held)"),
+      "",
+      verdict
+    ]).join("\n") + "\n";
+  }
+  function buildSkeleton() {
+    var q = val("g-question", "what does the route cost?");
+    var sl = sizesList();
+    var sizes = !sl.ok ? "" : sl.empty ? "20000, 60000" : measSizes().join(", ");
+    var passes = parseInt(val("g-passes", "3"), 10) || 3;
+    return [
+      "/**",
+      " * Pre-registered experiment — " + q,
+      " * Floor: " + val("g-floor", "(name it)"),
+      " * Rule (written before the run): " + val("g-rule", "(the bar)"),
+      " * Seeded, warm-up discarded, median-of-" + passes + " — ADR-022 methodology.",
+      " */",
+      "class MyExperimentTest {",
+      "    static final long SEED = " + val("g-seed", "42") + "L;",
+      "    static final int[] SIZES = {" + sizes + "};" + (sl.ok ? "" : "  // Step 2's sizes were not read: " + sl.why),
+      "    static final int TIMED_PASSES = " + passes + ";",
+      "",
+      "    @org.junit.jupiter.api.Test",
+      "    void verdictOfRecord() {",
+      "        for (int n : SIZES) {",
+      "            runOnce(n, SEED);                       // warm-up: JIT pays off the clock",
+      "            long[] t = new long[TIMED_PASSES];",
+      "            for (int i = 0; i < TIMED_PASSES; i++) t[i] = runOnce(n, SEED); // fresh state each pass",
+      "            java.util.Arrays.sort(t);",
+      "            long median = t[TIMED_PASSES / 2];",
+      "            long floor  = measureFloor(n, SEED);",
+      "            System.out.printf(\"n=%d  median=%,dns  floor=%,dns  ratio=%.1fx%n\",",
+      "                    n, median, floor, (double) median / Math.max(1, floor));",
+      "            // Grade against the pre-registered rule HERE — it was written before this line ran.",
+      "        }",
+      "    }",
+      "",
+      "    /** Build a fresh apparatus, run the route once, return elapsed nanos. */",
+      "    long runOnce(int n, long seed) { throw new UnsupportedOperationException(\"apparatus\"); }",
+      "",
+      "    /** The least ANY solution could do — the denominator of every claim. */",
+      "    long measureFloor(int n, long seed) { throw new UnsupportedOperationException(\"floor\"); }",
+      "}"
+    ].join("\n") + "\n";
+  }
+
+  /* ── pre-flight lint: the same rules ExperimentSpec.parse applies, before the runner sees the file ── */
+  var DIRECTIVE = /^(name|keys|seed|window|phase|factor|model|cross|data|note(\([A-Za-z0-9_-]+\))?|tree|expect):/;
+  var FACTOR_NAMES = ["area", "temperature", "wind", "distance"];
+  /* What's checkably wrong with one free-typed directive line (extra-lines box, imports).
+     cross:/data:/tree:/note:/expect: get their deep checks at parse or grading time. */
+  function extraLineProblem(l) {
+    if (l.indexOf(":") < 0) return "'" + l.slice(0, 40) + "' has no directive — reported, never guessed at";
+    if (!DIRECTIVE.test(l)) return "unknown directive '" + l.split(":")[0] + "'";
+    var key = l.slice(0, l.indexOf(":")).toLowerCase(), val = l.slice(l.indexOf(":") + 1).trim();
+    if (key === "phase") { var r = phaseFrom(val); if (r.err) return r.err; }
+    if (key === "model") {
+      var t = val.split(/\s+/);
+      return modelProblem(t[0].toLowerCase(), t.slice(1).join(" "));
+    }
+    if (key === "factor") {
+      var f = val.split(/\s+/);
+      if (f.length !== 2) return "factor needs: <name> <value>";
+      if (FACTOR_NAMES.indexOf(f[0].toLowerCase()) < 0)
+        return "unknown factor '" + f[0] + "' (area, temperature, wind, distance)";
+      if (!isFinite(parseFloat(f[1]))) return "'" + f[1] + "' is not a number";
+    }
+    return null;
+  }
+  function lintEco() {
+    var out = [];
+    function no(t) { out.push({ sev: "no", tag: "PROBLEM", text: t }); }
+    function un(t) { out.push({ sev: "un", tag: "WEAK", text: t }); }
+    /* BLANK AND UNPARSEABLE ARE THE SAME STRING (ADR-150). A number input whose
+       contents Chromium cannot parse reads `.value` back as "" -- so `value !==
+       ""`, the guard that lets a blank seed mean "use 42", also swallowed a seed
+       the user had typed and the browser had rejected. The box showed their
+       text, the protocol carried seed 42, and the linter said nothing. Only
+       `validity.badInput` tells the two apart, which is the interactive lab's
+       own rule (ADR-148's numField: reported, never guessed) reaching the page
+       next door. Keys and window were never silent -- they read as "out of
+       range" -- but that is a different sentence from the true one, and a
+       reader who typed "one hundred" deserves to be told which. */
+    if (badInput("e-keys")) no("keys is not a whole number");
+    else {
+      var keys = parseInt($("e-keys").value, 10);
+      if (isNaN(keys) || keys < 2 || keys > 1000000) no("keys out of range [2, 1000000]");
+    }
+    if (badInput("e-window")) no("window is not a whole number");
+    else {
+      var win = parseInt($("e-window").value, 10);
+      if (isNaN(win) || win < 16 || win > 1000000) no("window out of range [16, 1000000]");
+    }
+    if (badInput("e-seed")) no("seed is not a whole number — the box holds something that is not "
+                               + "one, and a BLANK seed would mean 42; this is not blank");
+    else if ($("e-seed").value !== "" && isNaN(parseInt($("e-seed").value, 10))) no("seed must be a whole number");
+    [["area", "f-area", "1"], ["wind", "f-wind", "1"], ["temperature", "f-temp", "1"],
+     ["distance", "f-dist", "0"]].forEach(function (f) {
+      // A factor box the browser rejected emits NOTHING, and emitting nothing
+      // is how this page says "the neutral value" -- so a typed factor the
+      // browser could not parse silently became 1 (or 0 for distance).
+      if (badInput(f[1])) no(f[0] + " is not a number \u2014 the box holds something that is not "
+                             + "one, and a factor left BLANK means " + f[2] + "; this is not blank");
+    });
+
+    var names = communityNames(), seen = {};
+    names.forEach(function (n) {
+      if (seen[n]) no("duplicate community name '" + n + "' — expectations address communities by name");
+      seen[n] = 1;
+    });
+    S.phases.forEach(function (p) {
+      if (p.ops < 1 || p.ops > 10000000) no("phase " + p.name + ": ops out of range [1, 10000000]");
+      if (p.kind === "hot" && (p.hotSet < 1 || p.hotSet > 1000000)) no("phase " + p.name + ": hotSetSize out of range [1, 1000000]");
+      if (p.kind === "hot" && (p.hotShare < 0 || p.hotShare > 100)) no("phase " + p.name + ": hotShare% out of range [0, 100]");
+      if (p.kind === "churn" && (p.addPct < 0 || p.addPct > 100)) no("phase " + p.name + ": addPercent out of range [0, 100]");
+    });
+    S.models.forEach(function (m) {
+      var bad = modelProblem(m.kind, m.params);
+      if (bad) no(bad);
+    });
+    var isPhase = {}, isData = {};
+    S.phases.forEach(function (p) { isPhase[p.name] = 1; });
+    S.datasets.forEach(function (d) { isData[d.name] = 1; });
+    S.expects.forEach(function (x) {
+      var m = x.match(/^expect:\s*([A-Za-z]+)\(([^)]*)\)/);
+      if (!m) return;                                    // survivorship — reads the census, no names
+      var args = m[2].split(",").map(function (a) { return a.trim(); }).filter(Boolean);
+      var unknown = args.filter(function (a) { return !isPhase[a] && !isData[a]; });
+      if (unknown.length) {
+        un("'" + m[1] + "(" + m[2] + ")' names " + (unknown.length > 1 ? "communities" : "a community") +
+           " that " + (unknown.length > 1 ? "don't" : "doesn't") + " exist (" + unknown.join(", ") +
+           ") — it will grade UNGRADEABLE");
+      } else if (args.length === 2 &&
+                 ((isPhase[args[0]] && isData[args[1]]) || (isData[args[0]] && isPhase[args[1]]))) {
+        un("'" + m[1] + "(" + m[2] + ")' compares a simulated phase to entered field data — " +
+           "they share no species, so it will grade UNGRADEABLE");
+      }
+    });
+    ($("e-extra").value || "").split("\n").forEach(function (l) {
+      l = l.replace(/#.*$/, "").trim();
+      if (!l) return;
+      var bad = extraLineProblem(l);
+      if (bad) no("extra line: " + bad);
+    });
+    if (!S.phases.length) un("no phases — nothing will be simulated (models and entered data still run)");
+    if (!S.expects.length) un("no pre-registered hypotheses — without one, it's a demo, not an experiment");
+    return out;
+  }
+  function lintEng() {
+    var out = [];
+    function un(t) { out.push({ sev: "un", tag: "MISSING", text: t }); }
+    function no(t) { out.push({ sev: "no", tag: "PROBLEM", text: t }); }
+    if (badInput("g-seed")) no("seed is not a whole number \u2014 the box holds something that is "
+                               + "not one, and a BLANK seed would mean 42; this is not blank");
+    if (badInput("g-passes")) no("timed passes is not a whole number \u2014 the box holds "
+                                 + "something that is not one, and BLANK would mean 3; this is not blank");
+    if (!$("g-question").value.trim()) un("no question — one sentence, a cost or a comparison");
+    if (!$("g-floor").value.trim()) un("no floor — without one, every claim is only about the other guy");
+    if (!$("g-rule").value.trim()) un("no decision rule — if you don't set the bar now, the numbers will set it for you");
+    var sl = sizesList();
+    if (!sl.ok) no("sizes are not read \u2014 " + sl.why);
+    else if (!$("g-sizes").value.trim()) un("no sizes — two or more shows how the cost scales");
+    return out;
+  }
+  function renderLint(el, items, cleanText) {
+    while (el.firstChild) el.removeChild(el.firstChild);
+    var list = items.length ? items : [{ sev: "ok", tag: "CLEAN", text: cleanText }];
+    list.forEach(function (it) {
+      var row = document.createElement("div"); row.className = "row";
+      var v = document.createElement("span"); v.className = "verdict " + it.sev; v.textContent = it.tag;
+      var t = document.createElement("span"); t.textContent = it.text;
+      row.appendChild(v); row.appendChild(t); el.appendChild(row);
+    });
+  }
+
+  /* ── rebuild outputs ── */
+  function rebuild() {
+    var eco = buildEco();
+    $("eco-out").textContent = eco;
+    $("eco-cmd").textContent = "./gradlew ecologyExperiment -Pspec=" + slug($("e-name").value) + ".eco";
+    $("eng-out").textContent = buildPrereg();
+    var dirs = eco.split("\n").filter(function (l) { return l.trim() && l.charAt(0) !== "#"; }).length;
+    renderLint($("lint"), lintEco(),
+      "would parse clean — " + dirs + " directives, " + S.expects.length +
+      (S.expects.length === 1 ? " hypothesis" : " hypotheses") + ", seed " + (parseInt($("e-seed").value, 10) || 42));
+    renderLint($("eng-lint"), lintEng(), "pre-registration complete — run it, then append the verdict");
+  }
+
+  $("eco-copy").addEventListener("click", function () { copyText(buildEco(), "Protocol"); });
+  $("eco-download").addEventListener("click", function () {
+    var blob = new Blob([buildEco()], { type: "text/plain" });
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = slug($("e-name").value) + ".eco";
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(function () { URL.revokeObjectURL(a.href); }, 4000);
+    /* ADR-212: a sandboxed frame refuses a page-started download silently -- no
+       throw, no return value, nothing to test -- and this kit is read as
+       published artifacts, so "Downloading x.eco" was a sentence no reader of
+       the published guide could rely on. The download is still attempted; the
+       protocol also goes on the clipboard, which reports failure, and the
+       message says which of the two is certain. */
+    copyText(buildEco(), "Protocol",
+             a.download + " copied \u2014 some viewers block a page-started "
+             + "download, so the copy is your protocol");
+  });
+  $("eng-copy").addEventListener("click", function () { copyText(buildPrereg(), "Pre-registration"); });
+  $("eng-skel").addEventListener("click", function () { copyText(buildSkeleton(), "Skeleton"); });
+
+  function resetAll(ecoSide) {
+    if (ecoSide) {
+      S.phases = []; S.models = []; S.datasets = []; S.expects = [];
+      ["e-name", "e-notes", "e-extra", "f-area", "f-wind", "f-temp", "f-dist"].forEach(function (id) {
+        $(id).value = ""; delete S.fields[id];
+      });
+      $("e-keys").value = 100; $("e-seed").value = 42; $("e-window").value = 250;
+      ["e-keys", "e-seed", "e-window"].forEach(function (id) { delete S.fields[id]; });
+      renderPhases(); renderModels(); renderDatasets(); renderExpects();
+    } else {
+      ["g-question", "g-floor", "g-workload", "g-sizes", "g-phases", "g-rule", "g-stakes", "g-verdict-note"].forEach(function (id) {
+        $(id).value = ""; delete S.fields[id];
+      });
+      $("g-seed").value = 42; $("g-passes").value = 3;
+      delete S.fields["g-seed"]; delete S.fields["g-passes"];
+      S.meas = {}; S.verdict = null; paintVerdict(); renderMeas();
+    }
+    saveState(); rebuild(); toast("Cleared");
+  }
+  /* ADR-209. "Start over" on the page that takes more typed values than any
+     other in this kit, next to Copy and Download, with no question asked. */
+  function resetCount(ecoSide) {
+    var n = 0, k;
+    if (ecoSide) {
+      n = S.phases.length + S.models.length + S.datasets.length + S.expects.length;
+      ["e-name", "e-notes", "e-extra", "f-area", "f-wind", "f-temp", "f-dist"]
+        .forEach(function (id) { if (String(($(id) || {}).value || "").trim()) n++; });
+    } else {
+      ["g-question", "g-floor", "g-workload", "g-sizes", "g-phases", "g-rule", "g-stakes",
+       "g-verdict-note"].forEach(function (id) {
+        if (String(($(id) || {}).value || "").trim()) n++; });
+      if (S.verdict != null) n++;
+    }
+    return n;
+  }
+  function askReset(ecoSide) {
+    var n = resetCount(ecoSide);
+    if (!n) return true;
+    return confirm("Start over? " + n + " thing" + (n === 1 ? "" : "s") + " you have entered on "
+      + (ecoSide ? "the ecology track" : "the engineering track")
+      + " go, and there is no undo. Copy the protocol first if you want it.");
+  }
+  $("eco-reset").addEventListener("click", function () { if (askReset(true)) resetAll(true); });
+  $("eng-reset").addEventListener("click", function () { if (askReset(false)) resetAll(false); });
+
+  /* ── import: the reverse path — read a .eco back into the Designer ── */
+  function setField(id, v) { $(id).value = v; S.fields[id] = String(v); }
+  function importEco(text) {
+    S.track = "eco";
+    S.phases = []; S.models = []; S.datasets = []; S.expects = [];
+    setField("e-name", ""); setField("e-keys", 100); setField("e-seed", 42); setField("e-window", 250);
+    setField("f-area", ""); setField("f-wind", ""); setField("f-temp", ""); setField("f-dist", "");
+    var notes = [], extra = [];
+    (text || "").split("\n").forEach(function (raw) {
+      var l = raw.replace(/#.*$/, "").trim();
+      if (!l) return;
+      var colon = l.indexOf(":");
+      if (colon < 0) { extra.push(l); return; }
+      var key = l.slice(0, colon).trim().toLowerCase(), val = l.slice(colon + 1).trim();
+      var noteTarget = key.match(/^note\(([A-Za-z0-9_-]+)\)$/);
+      if (noteTarget) { notes.push(noteTarget[1] + ": " + val); return; }
+      switch (key) {
+        case "note": notes.push(val); break;
+        case "name": setField("e-name", val); break;
+        case "keys": setField("e-keys", val); break;
+        case "seed": setField("e-seed", val); break;
+        case "window": setField("e-window", val); break;
+        case "phase": {
+          var r = phaseFrom(val);
+          if (r.ph) S.phases.push(r.ph); else extra.push(l);
+          break;
+        }
+        case "factor": {
+          var f = val.split(/\s+/);
+          var fid = { area: "f-area", wind: "f-wind", temperature: "f-temp", distance: "f-dist" }[(f[0] || "").toLowerCase()];
+          if (f.length === 2 && fid && isFinite(parseFloat(f[1]))) setField(fid, parseFloat(f[1]));
+          else extra.push(l);
+          break;
+        }
+        case "model": {
+          var t = val.split(/\s+/), kind = (t[0] || "").toLowerCase(), params = t.slice(1).join(" ");
+          if (!modelProblem(kind, params)) S.models.push({ kind: kind, params: params });
+          else extra.push(l);
+          break;
+        }
+        case "data": {
+          var d = val.split(/\s+/);
+          if (d.length >= 2 && d[0].indexOf("=") < 0)
+            S.datasets.push({ name: d[0], counts: d.slice(1).join(" ") });
+          else extra.push(l);
+          break;
+        }
+        case "expect": S.expects.push("expect: " + val.replace(/\s+/g, " ")); break;
+        default: extra.push(l);   // cross:, tree:, and anything unknown — the lint sorts them
+      }
+    });
+    setField("e-notes", notes.join("\n"));
+    setField("e-extra", extra.join("\n"));
+    showTrack(); renderPhases(); renderModels(); renderDatasets(); renderExpects();
+    saveState(); rebuild();
+    toast("Imported — " + S.phases.length + " phases, " + S.models.length + " models, " +
+          S.datasets.length + " datasets, " + S.expects.length + " hypotheses" +
+          (extra.length ? ", " + extra.length + " extra lines" : ""));
+  }
+  $("imp-go").addEventListener("click", function () {
+    var t = $("imp-text").value;
+    if (!t.trim()) { toast("Paste a protocol first"); return; }
+    importEco(t); $("imp-text").value = "";
+  });
+  $("imp-file").addEventListener("click", function () { $("imp-input").click(); });
+  function importFile(file) {
+    if (!file) return;
+    /* A protocol is text. A photograph dropped on this card by mistake used
+       to be read as one -- its bytes became "extra lines" in the lint, and
+       one of them was wide enough to push the page sideways on a phone (the
+       harness's page walk found it, ADR-128). Refused by name, with nothing
+       imported: a guess at what a JPEG means as directives would be worse
+       than no import. */
+    if (file.type && !/^text\/|json$|xml$/.test(file.type)) {
+      toast("Not a text file: " + file.name + " (" + file.type + ") -- a protocol is .eco text");
+      return;
+    }
+    var rd = new FileReader();
+    rd.onload = function () {
+      var t = String(rd.result);
+      if (/[\u0000-\u0008\u000E-\u001F\uFFFD]/.test(t)) {
+        toast("Not a text file: " + file.name + " -- a protocol is .eco text");
+        return;
+      }
+      importEco(t);
+    };
+    rd.readAsText(file);
+  }
+  $("imp-input").addEventListener("change", function () {
+    importFile($("imp-input").files[0]); $("imp-input").value = "";
+  });
+  $("imp-card").addEventListener("dragover", function (e) { e.preventDefault(); });
+  $("imp-card").addEventListener("drop", function (e) {
+    e.preventDefault();
+    if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length) importFile(e.dataTransfer.files[0]);
+  });
+
+  /* ── checklist ── */
+  for (var i = 1; i <= 10; i++) (function (id) {
+    var box = $(id);
+    if (S.ticks[id]) box.checked = true;
+    box.addEventListener("change", function () { S.ticks[id] = box.checked; saveState(); });
+  })("c" + i);
+  $("cl-print").addEventListener("click", function () { window.print(); });
+  $("cl-clear").addEventListener("click", function () {
+    S.ticks = {};
+    for (var i = 1; i <= 10; i++) $("c" + i).checked = false;
+    saveState(); toast("Cleared");
+  });
+
+  /* THE BOXES BEFORE THE RENDERS, and the order is not cosmetic: the
+     measurement rows are BUILT from what is in `g-sizes` and `g-phases`, so
+     a render that ran before those boxes were filled drew no rows at all and
+     a restored design came back without its measurements. */
+  function paintAll() {
+    var i, box, id;
+    for (i = 1; i <= 10; i++) { box = $("c" + i); if (box) box.checked = !!S.ticks["c" + i]; }
+    for (id in S.fields) if (S.fields.hasOwnProperty(id) && $(id)) $(id).value = S.fields[id];
+    showTrack(); renderPhases(); renderModels(); renderDatasets(); renderExpects();
+    renderMeas(); paintVerdict(); rebuild();
+  }
+
+  /* ── boot ── */
+  paintAll();
+
+  /* ADR-207. Wired after the first paint, so the autosave's restore lands on a
+     page that has already drawn itself once -- the same order every other
+     consumer in this kit uses. */
+  KEPT = KEEP.wire({
+    key: KEY,
+    format: 1,
+    mount: "keepBox",
+    noun: "this design",
+    ontoast: toast,
+    snapshot: function () {
+      var any = S.phases.length || S.models.length || S.datasets.length || S.expects.length
+                || S.verdict != null;
+      var k;
+      if (!any) for (k in S.fields)
+        if (S.fields.hasOwnProperty(k) && String(S.fields[k]).trim() !== "") { any = true; break; }
+      if (!any) for (k in S.ticks) if (S.ticks.hasOwnProperty(k) && S.ticks[k]) { any = true; break; }
+      return any ? S : null;
+    },
+    restore: function (b) {
+      if (!b) return false;
+      S = b;
+      blankState();
+      paintAll();
+      return true;
+    },
+    /* ADR-209. THE BUTTON THAT REMOVES THE BACKUP WAS ALSO REMOVING THE
+       ORIGINAL. "Forget this device's copy" says what it does, and what it did
+       was blank the design on the screen as well -- seventeen records gone to a
+       button whose label promises only that a saved copy stops existing. Every
+       other page in this kit leaves the working state alone; this one did not,
+       and nothing said so. The copy goes; what you are looking at stays, and
+       the next edit saves it again, which is what the label describes. */
+    onforget: function () { }
+  });
+})();
+</script>
+
+</body>
+</html>
