@@ -94,3 +94,18 @@ checkout. A fresh worktree from the verification branch produced 0 mismatches
 and passed `FieldScienceBundleTest`. If an older worktree still holds converted
 files after the attributes change, recreate that checkout or rewrite the files
 from their Git blobs; a routine restore may leave clean files untouched.
+
+## Reviewable farm-preview PR stack
+
+GitHub rejected the original combined PR diff at 413 files (300-file display
+limit). The first split still exceeded its 20,000-line diff limit for code and
+tests. Keep the review stack in this order: CSRBT bundle **#33**, data and
+migrations **#36**, crop notebooks **#37**, specialty notebooks **#38**, farm
+chooser and shared desktop wiring **#34**, specialty tests **#39**, remaining
+cross-workspace tests **#35**, then the README and guides **#31**. Each PR
+targets its immediate predecessor and its diff endpoint works. The full
+verification branch passed 2,683 Maven tests and 15 worker UI tests from a
+fresh Windows checkout. GitHub's Release and dependency-submission jobs did
+not start because of an account payment or spending-limit issue; this was an
+external CI blocker, not a test result. Keep the PRs draft until the stack and
+signed private release are approved.
