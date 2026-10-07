@@ -31,6 +31,19 @@ child had exited. Its harness now waits at most five seconds for that lock only,
 then checks health once and still checks every acknowledged saved record. A
 damaged/unreadable result or missing record is never retried into a pass.
 
+Verification: 307 focused cases passed, including 77 saved-snapshot and 40
+keyboard cases, plus 18 new restore/provenance/journal cases. The final clean
+`python -B scripts/verify_harness.py --isolated` run passed 2,952 tests and two
+packaged-JAR checks; the subsequent `--check` passed. All 206 suite/phase floors
+are met, coverage is 86.08% lines and 69.45% branches, and Checkstyle/SpotBugs
+report zero findings. The initial full run caught a missing receipt-parent null
+check; the corrected source passed the complete clean rerun. Source commit:
+`91f2c3b964f9e458a5e69b3095541d0b54a11cc2`. Source digest:
+`9389327d584d4a80eb1ed5efcee89f4418abcd5c2b86f2a8030646ab987763e4`.
+Evidence: `dist/harness-evidence/latest.json`; complete final log:
+`dist/harness-evidence/notebook-recovery-quality-final.log`. Runtime: Temurin
+22.0.2, Java 17 compilation target. Native installers were not rebuilt.
+
 Next UI candidate: the Seed Fields "Planning only" section description truncates
 at 850 pixels because the shared section description is a plain JLabel. Reproduce
 the compact layout before changing the shared component. Native installer and
