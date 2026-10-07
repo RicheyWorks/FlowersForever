@@ -82,3 +82,15 @@ combined README and five key guides found 108 references with no missing paths.
 The CSRBT `greenhouse.html` snapshot retains one upstream trailing space at
 line 3473. Leave that source byte intact: its manifest checksum and the
 provenance statement depend on the page matching the upstream commit.
+
+## CSRBT checksums on a Windows checkout
+
+The copied CSRBT pages had matching manifest hashes in the original working
+tree, but a new Windows checkout converted line endings and made all 44
+manifest entries appear mismatched. The Git blobs still held the correct
+upstream bytes. `.gitattributes` now marks
+`src/main/resources/csrbt-field-kit/**` as `-text`, preserving those bytes on
+checkout. A fresh worktree from the verification branch produced 0 mismatches
+and passed `FieldScienceBundleTest`. If an older worktree still holds converted
+files after the attributes change, recreate that checkout or rewrite the files
+from their Git blobs; a routine restore may leave clean files untouched.
