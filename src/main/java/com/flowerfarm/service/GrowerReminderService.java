@@ -25,6 +25,7 @@ public class GrowerReminderService {
     private final HarvestService harvestService;
     private final MarketDayPackingService marketDayPackingService;
     private final InventoryService inventoryService;
+    private final CoolerShelfLifeService coolerShelfLifeService;
     private final FarmProfile farmProfile;
 
     public GrowerReminderService(ProductionStudioService productionStudioService,
@@ -32,12 +33,14 @@ public class GrowerReminderService {
                                  HarvestService harvestService,
                                  MarketDayPackingService marketDayPackingService,
                                  InventoryService inventoryService,
+                                 CoolerShelfLifeService coolerShelfLifeService,
                                  FarmProfile farmProfile) {
         this.productionStudioService = productionStudioService;
         this.knowledgeService = knowledgeService;
         this.harvestService = harvestService;
         this.marketDayPackingService = marketDayPackingService;
         this.inventoryService = inventoryService;
+        this.coolerShelfLifeService = coolerShelfLifeService;
         this.farmProfile = farmProfile;
     }
 
@@ -55,8 +58,9 @@ public class GrowerReminderService {
         MarketDayPlan packing = marketDayPackingService.planForDay(day);
         boolean quietHarvest = harvestService.totalQuantityLast7Days() <= 0;
         List<Item> lowStock = lowStockItems(GrowerReminders.DEFAULT_LOW_STOCK);
+        CoolerShelfLife.Board cooler = coolerShelfLifeService.board(day);
         return GrowerReminders.assemble(day, tasks, followUps, packing, quietHarvest, lowStock,
-                GrowerReminders.DEFAULT_LOW_STOCK);
+                GrowerReminders.DEFAULT_LOW_STOCK, cooler.lots());
     }
 
     private List<Item> lowStockItems(int threshold) {

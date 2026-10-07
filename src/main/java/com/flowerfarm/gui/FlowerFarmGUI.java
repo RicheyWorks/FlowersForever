@@ -22,6 +22,7 @@ import com.flowerfarm.service.ReportService;
 import com.flowerfarm.service.SyncHistoryService;
 import com.flowerfarm.service.TrendService;
 import com.flowerfarm.service.SeasonPlanService;
+import com.flowerfarm.service.CoolerShelfLife;
 import com.flowerfarm.service.FloristAvailabilityExport;
 import com.flowerfarm.support.SupportGuide;
 import com.flowerfarm.update.AppVersion;
@@ -110,6 +111,7 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
     private DesktopBackupController backupController;
     private DesktopRemindersController remindersController;
     private DesktopFloristExportController floristExportController;
+    private DesktopCoolerReviewController coolerReviewController;
 
     private final Preferences prefs = Preferences.userNodeForPackage(FlowerFarmGUI.class);
     private boolean darkMode;
@@ -219,6 +221,12 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
     @Autowired(required = false)
     void setFloristExportController(DesktopFloristExportController floristExportController) {
         this.floristExportController = floristExportController;
+    }
+
+    /** Cooler lot shelf-life review (aging, intervals, QR labels). */
+    @Autowired(required = false)
+    void setCoolerReviewController(DesktopCoolerReviewController coolerReviewController) {
+        this.coolerReviewController = coolerReviewController;
     }
 
     // ── ApplicationRunner ─────────────────────────────────────────────────────
@@ -351,6 +359,10 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
             if (inventoryTab != null) {
                 inventoryTab.bindFloristShare(floristExportController::shareAvailability);
             }
+        }
+        if (coolerReviewController != null) {
+            coolerReviewController.attach(new DesktopCoolerReviewController.Host(
+                    frame, dialogs, fileChooser, this::setStatus));
         }
         javax.swing.SwingUtilities.invokeLater(() -> {
             maybeOfferStartHere();
@@ -554,6 +566,9 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
         helpMenu.add(menuItem("Today’s reminders…", KeyEvent.VK_T,
                 "See due field tasks, packing, harvest catch-up, low stock, and Knowledge follow-ups.",
                 e -> openReminders()));
+        helpMenu.add(menuItem("Cooler lot review…", KeyEvent.VK_O,
+                CoolerShelfLife.menuDescription(),
+                e -> openCoolerReview()));
         helpMenu.add(menuItem("About FlowersForever", KeyEvent.VK_A,
                 "Show the farm profile, application purpose, and active session.",
                 e -> dialogs.showMessage(frame,
@@ -993,6 +1008,16 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
         if (!chosen.equals(previous)) {
             setStatus(SupportGuide.statusSaved(chosen));
         }
+    }
+
+    private void openCoolerReview() {
+        if (coolerReviewController == null) {
+            dialogs.showMessage(frame,
+                    "Cooler lot review is not available in this session.",
+                    CoolerShelfLife.TITLE, javax.swing.JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+        coolerReviewController.openReview();
     }
 
     private void openReminders() {

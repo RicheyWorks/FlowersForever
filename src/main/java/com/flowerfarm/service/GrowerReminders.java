@@ -39,6 +39,7 @@ public final class GrowerReminders {
         }
     }
 
+
     public static Digest assemble(LocalDate date,
                                   List<ProductionTask> dueTasks,
                                   List<KnowledgeEntry> followUps,
@@ -46,11 +47,23 @@ public final class GrowerReminders {
                                   boolean harvestQuietWeek,
                                   List<Item> lowStock,
                                   int lowStockThreshold) {
+        return assemble(date, dueTasks, followUps, packing, harvestQuietWeek, lowStock,
+                lowStockThreshold, List.of());
+    }
+    public static Digest assemble(LocalDate date,
+                                  List<ProductionTask> dueTasks,
+                                  List<KnowledgeEntry> followUps,
+                                  MarketDayPlan packing,
+                                  boolean harvestQuietWeek,
+                                  List<Item> lowStock,
+                                  int lowStockThreshold,
+                                  List<CoolerShelfLife.AgedLot> coolerLots) {
         List<GrowerReminder> items = new ArrayList<>();
         addTasks(items, dueTasks, date);
         addPack(items, packing);
         addHarvest(items, harvestQuietWeek);
         addStock(items, lowStock, lowStockThreshold);
+        addCooler(items, coolerLots);
         addKnowledge(items, followUps);
         if (items.size() > MAX_ITEMS) {
             items = new ArrayList<>(items.subList(0, MAX_ITEMS));
@@ -167,6 +180,29 @@ public final class GrowerReminders {
                     "Follow-up · " + crop,
                     "Knowledge Log follow-up was due " + entry.getFollowUpDate() + ".",
                     "Knowledge Log"));
+        }
+    }
+
+
+    private static void addCooler(List<GrowerReminder> items, List<CoolerShelfLife.AgedLot> coolerLots) {
+        if (coolerLots == null || coolerLots.isEmpty()) {
+            return;
+        }
+        int shown = 0;
+        for (CoolerShelfLife.AgedLot lot : coolerLots) {
+            if (lot == null || lot.status() == CoolerShelfLife.Status.OK) {
+                continue;
+            }
+            String title = (lot.status() == CoolerShelfLife.Status.OVERDUE
+                    ? "Cooler overdue · "
+                    : "Cooler review due · ") + safe(lot.cropName());
+            String detail = "Lot " + lot.lotCode() + " in " + lot.storageLocation()
+                    + " · harvested " + lot.harvestDate() + " · " + lot.packFirstHint() + ".";
+            items.add(new GrowerReminder(GrowerReminder.Kind.COOLER, title, detail, "Inventory"));
+            shown++;
+            if (shown >= 3) {
+                break;
+            }
         }
     }
 
