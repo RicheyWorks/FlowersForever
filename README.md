@@ -2,297 +2,163 @@
 
 # FlowersForever
 
-### Beautiful flowers. A clearer farm day.
+### Your farm. One clearer day.
 
-**Plan the season. Know your stock. Keep your promises.**
+**Choose the work you do. See what needs attention. Keep the records together.**
 
-A desktop workspace for cut-flower growers that connects the beds, the cooler, the order book, and the lessons for next season.
+FlowersForever brings a farm's plans, harvests, stock, customers, orders, and field lessons into one desktop workspace. Start with one farm type or combine several as your operation grows. It is being shaped for Washington and Oregon growers, flower shops, and event teams.
 
-<img src="docs/images/flowersforever-hero.jpg" alt="Illustrative Pacific Northwest flower-farm scene with fresh-cut flowers and a laptop on a workbench at sunrise" width="100%">
-<br><sub>Illustrative farm scene. Explore actual app screens below.</sub>
+<img src="docs/images/flowersforever-hero.jpg" width="100%" alt="Illustration of a Pacific Northwest flower farm and workbench at sunrise">
 
-[![Explore private pilot access](https://img.shields.io/badge/EXPLORE_PRIVATE_PILOT_ACCESS-%E2%86%92-176f4d?style=for-the-badge)](docs/PILOT_ACCESS.md)
-[![See the app](https://img.shields.io/badge/SEE_THE_APP-%E2%86%92-b8344a?style=for-the-badge)](#see-it-in-action)
+<sub>Illustrative farm scene. Every app screen below shows the working product with sample data.</sub>
 
-**Local desktop records · Printable farm paperwork · Optional phone field entry**
+**Local desktop records · Printable farm paperwork · Optional connected phone field entry**
 
-<sub>v1.2 private preview · Approved pilot farms only · Proprietary RicheyWorks software</sub>
-
-**[The daily workflow](#from-first-planting-to-final-handoff)** · **[Real app screens](#see-it-in-action)** · **[Features](#what-flowersforever-helps-you-do)** · **[Getting started](#explore-the-private-pilot)** · **[Help](#help-and-documentation)**
+[See a five-minute farm day](#take-a-five-minute-tour) · [Explore farm types](#one-farm-can-be-many-things) · [Ask about the private preview](docs/PILOT_ACCESS.md)
 
 </div>
 
-## Open the farm day with a clear next step
+## Open the day with a useful next step
 
-Flowers ready to cut. Orders ready to pack. Stock that needs attention before the van leaves. The farm day starts with knowing where to focus.
-
-**FlowersForever brings the answers into one workspace.** Start with today's priorities, move into the record that needs attention, and carry the same farm data through harvest, packing, and closeout.
+What is ready to cut? What is in stock? Which orders need attention before the van leaves? **Today** puts the next job beside the numbers that explain it. Open a harvest, packing review, inventory, or day closeout from the same screen.
 
 <p align="center">
-  <a href="docs/images/app-dashboard.png"><img src="docs/images/app-dashboard.png" width="100%" alt="Actual FlowersForever Today dashboard with weekly harvest and completed revenue, inventory value, low-stock alerts, and direct farm actions"></a>
-  <br><strong>Your morning overview. Your next useful action.</strong><br>
-  <sub>Real app screen with sample farm data. Select any screenshot to see it at full size.</sub>
+  <a href="docs/images/app-dashboard.png"><img src="docs/images/app-dashboard.png" width="100%" alt="FlowersForever Today screen with harvest, sales, inventory, low-stock alerts, and the next farm action"></a><br>
+  <strong>Today's work, with the next action in reach.</strong><br>
+  <sub>Actual desktop screen · sample farm data · select any image for full size</sub>
+</p>
+
+## One farm can be many things
+
+Grow roses for weddings and sell stems or bouquets. Run a flower shop alongside your fields. Grow potatoes, apples, and cannabis on the same operation. **Choose the types that fit, then keep one set of customers, inventory, orders, and notes.**
+
+The farm menu offers **25 starting points**, including Rose & events, Wildflower farm, Flower shop, Cannabis farm, Potato farm, Apple orchard, Poultry & eggs, Dairy farm, Aquaculture farm, and Custom farm. The [farm-type guide](docs/FARM_TYPES.md) shows every choice and what its tools do today.
+
+<p align="center">
+  <a href="docs/images/app-combined-farm-launcher.png"><img src="docs/images/app-combined-farm-launcher.png" width="100%" alt="Farm menu showing potato, cannabis, and apple in one saved operation, with other types ready to add"></a><br>
+  <strong>Potato + cannabis + apple, in one farm workspace.</strong>
+</p>
+
+Add a type, remove it, or change the main focus later. Drag a card into the mix or use its button. Saved specialty plans stay available if you add that type again. **Custom farm** can join the mix for work that has no dedicated plan yet; name other crops in Farm setup and products in Inventory.
+
+<p align="center">
+  <a href="docs/images/app-combined-farm-search.png"><img src="docs/images/app-combined-farm-search.png" width="85%" alt="Combined farm editor with search, selected farm types, and drag targets for the mix and main focus"></a><br>
+  <strong>Search, drag, and shape the mix around your farm.</strong>
+</p>
+
+Floral growing and sales have the deepest end-to-end tools in this preview. Other farm types currently bring focused, editable plans or collection logs alongside shared farm records. Cannabis has cultivation planning and general sales records; it does not provide regulated tracking or compliance reporting. [See the exact scope of each farm type](docs/FARM_TYPES.md).
+
+## Follow the work from plan to handoff
+
+For a cut-flower team, one saved harvest updates matching stock and production history. Confirmed orders feed the packing review; completing a handoff deducts stock. A day closeout and searchable lessons draw on the same records. Planned stems stay separate from stock on hand.
+
+<p align="center">
+  <img src="docs/images/farm-day-flow.svg" width="100%" alt="Farm-day flow from season plan to harvest, stock, customer order, packing, handoff, closeout, and lessons">
 </p>
 
 <table>
   <tr>
-    <td width="33%" valign="top"><h3>🌱 See the season</h3>Plan beds and successions. Compare expected stems with actual harvests. Find overlaps and gaps while there is still time to adjust.</td>
-    <td width="33%" valign="top"><h3>📦 Pack with context</h3>Bring confirmed orders, available stock, shortages, and customer instructions into the same market-day review.</td>
-    <td width="33%" valign="top"><h3>📖 Keep what you learn</h3>Save field observations, labor, costs, and growing lessons where you can find them next season.</td>
+    <td width="50%" valign="top">
+      <a href="docs/images/app-season-planner.png"><img src="docs/images/app-season-planner.png" alt="Season planner with bed timelines and a visible overlap"></a><br>
+      <strong>Plan what comes next.</strong><br>See planting and harvest windows, spot bed overlaps, and compare planned stems with actual cuts.
+    </td>
+    <td width="50%" valign="top">
+      <a href="docs/images/app-harvest-log.png"><img src="docs/images/app-harvest-log.png" alt="Harvest entry with crop, quantity, unit, date, bed, and recent saved rows"></a><br>
+      <strong>Record the harvest once.</strong><br>Capture a cut while it is fresh, with its crop and bed attached.
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <a href="docs/images/app-inventory.png"><img src="docs/images/app-inventory.png" alt="Inventory showing products, on-hand quantities, and low-stock context"></a><br>
+      <strong>Know what is available.</strong><br>Review on-hand stock, prices, and low-stock items before promising an order.
+    </td>
+    <td width="50%" valign="top">
+      <a href="docs/images/app-market-day.png"><img src="docs/images/app-market-day.png" alt="Market Day packing view with confirmed orders, pick list, stock comparison, and handoff blockers"></a><br>
+      <strong>Pack with the full picture.</strong><br>See confirmed loads, stock needs, and missing handoff details before completing an order.
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <a href="docs/images/app-day-closeout.png"><img src="docs/images/app-day-closeout.png" alt="Day closeout with harvest, sales, open orders, and follow-up context"></a><br>
+      <strong>Close the day clearly.</strong><br>Review what was finished, what remains open, and what needs follow-up.
+    </td>
+    <td width="50%" valign="top">
+      <a href="docs/images/app-knowledge-log.png"><img src="docs/images/app-knowledge-log.png" alt="Knowledge Log with searchable farm observations, tags, and a selected lesson"></a><br>
+      <strong>Keep the lesson with the farm.</strong><br>Find an observation by crop, bed, month, or the words your team remembers.
+    </td>
   </tr>
 </table>
 
-## From first planting to final handoff
+## Make the workspace yours
 
-**One harvest entry does more than fill a row.** It updates matching stock and adds to your production history. Confirmed orders feed the packing list; completing a handoff deducts inventory. Invoices, briefings, and closeouts draw on those saved records.
-
-<p align="center">
-  <img src="docs/images/farm-day-flow.svg" width="100%" alt="The connected farm workflow: plan the season, harvest into stock, confirm orders, review packing, complete the handoff, and print the day's closeout">
-</p>
-
-Planned stems stay separate from on-hand stock. Confirming an order leaves inventory unchanged until completion. Those distinctions help you see what you expect, what you have, and what you have promised.
-
-## See it in action
-
-*Actual FlowersForever screens, shown with sample farm data.*
-
-### Make room for the next succession
-
-See sowing, growing, and harvest windows across the season. Catch overlapping beds, compare actual stems with the plan, and carry a saved planting into a new succession draft for review.
-
-<p align="center">
-  <a href="docs/images/app-season-planner.png"><img src="docs/images/app-season-planner.png" width="100%" alt="Season and Bed Planner showing growing and harvest timelines, actual stem progress, and a highlighted overlapping bed"></a>
-  <br><strong>The season has a shape. Now you can see it.</strong>
-</p>
-
-### Leave for market with the details together
-
-Build a pick list from confirmed orders, check shortages, and review each customer's handoff before loading. Print the packing sheet for the crew; complete the order when the handoff is done.
-
-<p align="center">
-  <a href="docs/images/app-market-day.png"><img src="docs/images/app-market-day.png" width="100%" alt="Market Day workspace with confirmed-order packing scope, product pick list, customer load-out details, and readiness checks"></a>
-  <br><strong>From the order book to the bucket count.</strong>
-</p>
-
-### Keep the work and the lesson together
-
-Choose a field task, check its crop and bed, and record the crew time, input cost, and observation in one place. Production Studio keeps unfinished task drafts when you refresh or move between tasks, with clear guidance when saved records change.
-
-<p align="center">
-  <a href="docs/images/app-production-studio.png"><img src="docs/images/app-production-studio.png" width="100%" alt="Production Studio field-work editor with the selected task's crop, bed, and due date above clearly labeled crew time, input cost, observation, save, and discard controls"></a>
-  <br><strong>The right task. The real work. The lesson worth keeping.</strong>
-</p>
-
-<details>
-<summary><strong>See harvest entry, inventory, weekly pace, and the farm's memory</strong></summary>
+Farm setup holds your mix of enterprises and named crops. Edit plan details as the season changes; name inventory products, categories, prices, and selling units in the app. Drag farm cards into a mix, move saved plans between stages, drop harvest lines into a batch, add stock to an order draft, or drag an order card to **Packed** after loading it. Buttons and keyboard paths are available for the same work.
 
 <table>
   <tr>
     <td width="50%" valign="top">
-      <a href="docs/images/app-harvest-log.png"><img src="docs/images/app-harvest-log.png" alt="Harvest Log with wide entry fields, visible save controls and draft status, and history filters below"></a>
-      <br><strong>Record the cut while it is fresh.</strong><br>
-      Log one harvest or a batch, retain crop and bed context, and correct an entry without losing its history.
+      <a href="docs/images/app-add-item.png"><img src="docs/images/app-add-item.png" alt="Add Item screen with editable product, category, unit, quantity, and price"></a><br>
+      <strong>Your products, your units.</strong><br>Record what this farm actually sells, then edit it when the details change.
     </td>
     <td width="50%" valign="top">
-      <a href="docs/images/app-inventory.png"><img src="docs/images/app-inventory.png" alt="Inventory with flower products, quantities, pricing, and low-stock highlighting"></a>
-      <br><strong>Know what is in the cooler.</strong><br>
-      Review on-hand stock, record a physical count, and print a reorder sheet or customer price list.
-    </td>
-  </tr>
-  <tr>
-    <td width="50%" valign="top">
-      <a href="docs/images/app-season-planner-weekly.png"><img src="docs/images/app-season-planner-weekly.png" alt="Weekly harvest pace chart comparing actual stem bars with the planned production line"></a>
-      <br><strong>Track the pace of the season.</strong><br>
-      Compare weekly actual stems with planned production and the amount expected by today.
-    </td>
-    <td width="50%" valign="top">
-      <a href="docs/images/app-trend-analysis.png"><img src="docs/images/app-trend-analysis.png" alt="Harvest outlook showing recorded weeks, fitted trend, forecast, and evidence quality"></a>
-      <br><strong>Read the evidence behind the outlook.</strong><br>
-      Review recent change, data coverage, and signal quality beside the harvest forecast.
+      <a href="docs/images/app-event-services.png"><img src="docs/images/app-event-services.png" alt="Wedding and memorial services catalog beside an editable event brief builder"></a><br>
+      <strong>Flowers for a real event.</strong><br>Build an editable wedding or memorial brief from service starters and keep the customer order nearby.
     </td>
   </tr>
 </table>
 
-<p align="center">
-  <a href="docs/images/app-knowledge-log.png"><img src="docs/images/app-knowledge-log.png" width="100%" alt="Farm Knowledge Log with plain-language search, reusable tags, saved lessons, and selected observation details"></a>
-  <br><strong>Keep the lesson with the farm.</strong><br>
-  Search observations, actions, outcomes, and follow-ups by familiar words, crop, bed, or month.
-</p>
-
-</details>
-
-## Your farm, your records, your way to add them
-
-Your varieties, selling units, growing templates, and bouquet recipes belong here. Start with a few essentials, reuse useful setup for the next entry, and add the detail your farm needs.
+The optional phone field screen connects to a running, authenticated farm instance. A worker can record field notes and supported work from a phone or tablet while the desktop keeps the full farm view. [See how field entry works](docs/USER_GUIDE.md#phonetablet-field-work).
 
 <p align="center">
-  <a href="docs/images/app-add-item.png"><img src="docs/images/app-add-item.png" width="100%" alt="Add Item screen with readable product and quantity fields, editable category and selling unit, live pricing context, and a prominent save button"></a>
-  <br><strong>A clear place for the details. A visible next step.</strong>
+  <a href="docs/images/app-field-note.jpg"><img src="docs/images/app-field-note.jpg" width="340" alt="Phone-width field screen with a sample observation draft and Save action"></a><br>
+  <strong>Capture the note where the work happens.</strong>
 </p>
 
-| Fresh from the field or farm office? | Start here |
+## A place for specialty work, too
+
+The combined workspace can show a berry block plan beside an egg collection log, or a nursery batch beside an orchard plan. Each specialty record can be opened and edited. General harvest, stock, customer, and order records remain shared.
+
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <a href="docs/images/app-berry-block-plan.png"><img src="docs/images/app-berry-block-plan.png" alt="Berry block plan with crop, cultivar, acreage, planned picking window, channel, and editable details"></a><br>
+      <strong>Plan a berry block.</strong><br>Name its crop, growing area, picking window, and intended channel.
+    </td>
+    <td width="50%" valign="top">
+      <a href="docs/images/app-egg-collection-form.png"><img src="docs/images/app-egg-collection-form.png" alt="Egg collection form with flock, date, collected and unusable counts, and usable total"></a><br>
+      <strong>Log an egg collection.</strong><br>Record counts by flock and day, then correct an entry if needed.
+    </td>
+  </tr>
+</table>
+
+The bundled **Field science** shelf brings relevant offline CSRBT tools into selected farm types. Cannabis growers can open Subcool's Super Soil in Soil Recipes, then save a reviewed text export and link a finding to that source. [Explore the farm-to-tool map](docs/CSRBT_FIELD_KIT_PORT.md).
+
+## Take a five-minute tour
+
+Follow a sample cut-flower farm from the morning overview through a harvest, packing review, day closeout, and saved lesson. The screens use sample data; a guided walkthrough uses a separate sample farm.
+
+1. [**Today:**](docs/images/app-dashboard.png) See what needs attention.
+2. [**Harvest Log:**](docs/images/app-harvest-log.png) Record a cut and review the saved entry.
+3. [**Market Day:**](docs/images/app-market-day.png) Check confirmed orders against available stock and resolve handoff blockers.
+4. [**Day closeout:**](docs/images/app-day-closeout.png) Review finished work and open follow-ups.
+5. [**Knowledge Log:**](docs/images/app-knowledge-log.png) Find a lesson worth using next season.
+
+FlowersForever is a **private preview**. External farm distribution awaits an approved signed release. Ask your established RicheyWorks contact about a guided walkthrough, fit, and timing. [Check private pilot access](docs/PILOT_ACCESS.md).
+
+## Find your next step
+
+| If you want to… | Start here |
 |---|---|
-| **Add your own crop or product** | **Inventory → Add item.** Choose or type a category and selling unit. |
-| **Record the stems you just cut** | **Harvest Log → Quick entry**, or **Log a harvest** on the field screen. |
-| **Save an observation** | **Knowledge Log**, or **Add a field note** on the field screen. |
-| **Plan another succession** | **Season Planner → Add planting**, or preview a growing template in **Production Studio**. |
-| **Prepare a buyer's order or a bouquet** | **CRM** for customers and orders; **Production Studio → Design recipes** for stem requirements and cost estimates. |
-
-<details>
-<summary><strong>Take harvests and field notes to a phone or tablet</strong></summary>
-
-<p align="center">
-  <a href="docs/images/app-field-note.png"><img src="docs/images/app-field-note.png" width="85%" alt="Phone and tablet Field Work screen with Log a harvest, Add a field note, a large observation field, and a visible save action"></a>
-  <br><strong>Capture the observation before the next task takes over.</strong>
-</p>
-
-The field screen connects to your farm's running FlowersForever instance. Supported entries can queue through a connection loss after the screen is opened and cached; pending entries remain visible for retry. Offline caching requires HTTPS or localhost, and no retry runs after the browser is fully closed. The desktop handles full planning, setup, and reports. Read the [phone/tablet field guide](docs/USER_GUIDE.md#phonetablet-field-work) for setup and storage limits.
-
-</details>
-
-## What FlowersForever helps you do
-
-| Plan and grow | Harvest and sell | Learn and prepare |
-|---|---|---|
-| Bed timelines, frost dates, growing templates, successions, due tasks, and production costs | Harvest lots, inventory, bouquet estimates, customers, orders, market packing, and invoices | Searchable farm lessons, weekly pace, reports, regional references, and printable briefings |
-
-<details>
-<summary><strong>Explore the complete feature guide — growing, selling, market day, farm knowledge, and regional references</strong></summary>
-
-### 🌱 Keep growing work connected
-
-- Save annual spring/fall frost anchors and reusable farm crop templates with spacing, rows, maturity, succession, germination, stems per plant, and work offsets.
-- Preview or commit full frost-relative successions; committed planting blocks automatically create soil-prep, sow, transplant, support, harvest-prep, and first-harvest work.
-- Regenerate open dependent work after a plan change without erasing completed or custom work.
-- Complete field work with actual crew minutes, input cost, and a concise field result retained on its planting-linked task.
-- Build a visual season timeline from sowing through each expected harvest window.
-- Track bed allocations, bed feet, crop varieties, status, and expected stems in one record.
-- Compare actual stem harvests with each crop-and-bed plan without double-counting overlapping blocks.
-- See weekly actual stems against a planned harvest-pace line, including a clear expected-by-today summary.
-- Read and copy a crop-by-crop weekly availability outlook while keeping planned supply distinct from confirmed inventory.
-- Flag overlapping bed allocations, week-long harvest gaps, and harvests that need a crop or bed match.
-- Draft the next succession from a saved block with every date shifted together for review.
-- Turn plan warnings into color-coded, date-specific insights with direct record-review actions.
-- Switch among the at-a-glance timeline, weekly pace chart, and sortable plan table without re-entering data.
-- Log, edit, batch, search, and filter harvests with unique lot codes, grade,
-  marketable quantity, loss/culls, and storage location.
-- Find an exact harvest lot and print a 4×6 QR label for buckets, shelves, or
-  cooler inventory.
-- Track production by bed or field.
-- Increase inventory automatically when flowers are harvested.
-- Get Kitsap-aware irrigation guidance from live weather or an offline seasonal fallback.
-
-### 🌸 Know what you can sell
-
-- Build reusable bouquet, event, subscription, or wholesale recipes from named inventory/crop ingredients.
-- Calculate required stems after waste, use planned and live supply first, round only the remaining shortage to complete wholesale packs, and show leftovers.
-- Include labor, overhead, revenue, profit, margin, and markup in the same estimate instead of treating flower cost as the whole design cost.
-- See on-hand quantities, pricing, costs, and low-stock warnings.
-- Record physical stock counts without losing the audit trail.
-- Print a low-stock reorder sheet or customer-ready price list.
-- Export visible information to CSV when you need a spreadsheet.
-
-### 🤝 Move orders from conversation to completion
-
-- Keep customer contacts, notes, and order history together.
-- Build Draft orders, review them, then confirm when they are ready.
-- Track Pickup, Delivery, and Market handoffs.
-- Deduct inventory only when an order is completed.
-- Print invoices and customer statements.
-
-### 📦 Make market day easier
-
-- Build packing lists from confirmed orders.
-- Compare required products with current stock before loading.
-- Review each customer handoff and catch missing information.
-- Print the packing PDF and complete orders safely.
-
-### ☀️ Start and close the day clearly
-
-- **Morning briefing:** what to pack, harvest, water, or restock.
-- **Day closeout:** completed sales, harvest activity, open work, and exceptions.
-- **Activity history:** a searchable record of imports, exports, harvests, and orders.
-- **Reports:** printable PDFs for the farm office, crew, market table, or customer.
-
-### 🧠 Keep hard-won farm knowledge on the farm
-
-- Record what happened, where it happened, what the crew tried, and what changed.
-- Tag lessons with familiar words such as mildew, irrigation, pests, timing, harvest, or market.
-- Search in ordinary language—for example, “What worked for mildew on this rose last August?”
-- Mark a lesson as needs review, an early signal, promising, or proven on this farm.
-- Add a follow-up date and optionally connect the lesson to a saved harvest, product, order, or customer.
-
-<p align="center"><strong>Keep the lesson with the crop, the season, and the people who learned it.</strong></p>
-
-### 🌿 Use regional references without hiding the source
-
-- Search 94 Pacific Northwest profiles spanning native plants, fruit and berries, vegetables, cut flowers, bulbs, herbs, and climate-ready ornamentals.
-- Combine plant type, origin, and light filters, then review moisture, season, uses, and a practical field note.
-- Keep the public source beside the guidance, including WSU Extension and Master Gardener material, Oregon State University Extension, University of Washington Botanic Gardens, and The Evergreen State College.
-- Send one selected profile into a validated Season Planner draft with source, light, moisture, season, and field context retained in notes—without inventing cultivar, date, or yield values.
-- Treat the guide as a research starting point—not a substitute for cultivar confirmation, site assessment, positive edible-plant identification, or current pest advice.
-
-### 💐 Coordinate weddings and memorials with dignity
-
-- Search 26 service starters across floral design, catering, décor and rentals, photography and media, logistics, and coordination.
-- Combine several deliverables into one editable brief with contacts, approvals, setup, strike, rentals, privacy, and safety prompts.
-- Route the reviewed brief into CRM instructions while keeping flowers and other physical goods as inventory-tracked order lines.
-- Keep memorial media private by default and require an appropriately licensed catering provider; the catalog supplies planning prompts, not vendor quotes, permits, contracts, or legal advice.
-
-</details>
-
-## Farm-friendly by design
-
-- **Keep the day's work close.** Core desktop records live on the workstation and work without an internet connection. No cloud account is required for the default desktop experience.
-- **Carry the paperwork with you.** Print packing lists, invoices, price lists, briefings, and closeouts for the crew, customer, or market table.
-- **Give helpers a clear place to work.** Optional OWNER, HAND, and VIEWER roles control access; the field screen covers supported harvest, task, count, note, and handoff workflows.
-- **Connect on your terms.** Import or export with CSV and Excel, configure [service connectors](docs/CONNECTORS_SANDBOX.md), or enable the optional [AI and automation bridge](docs/AI_HARNESS.md). Live services need their own credentials and connectivity.
-- **Keep the lessons available.** Reuse templates and recipes, review production costs, and search saved observations. [Seasonal comparisons and crew playbooks](docs/PRODUCT_ROADMAP.md) are future work.
-
-## Is it a fit for your farm?
-
-Built for small and growing cut-flower operations that want one desktop workspace for planning, daily records, and customer paperwork. Shaped by growing work in Port Orchard and Kitsap County, Washington, with room for your own crops, dates, units, and assumptions.
-
-**Current fit:** one farm workstation, with optional phones, tablets, and authenticated clients connecting to that running instance. Separate workstations sharing a database are outside the supported customer configuration. Review the [known limitations](docs/KNOWN_LIMITATIONS.md) before choosing a pilot setup.
-
-## Explore the private pilot
-
-**Start with a sample farm. Follow a stem from harvest to handoff. See whether the workflow fits your day.**
-
-1. **Arrange pilot access.** Approved farms receive the installer, checksum, onboarding, and direct support instructions from their established RicheyWorks contact. See the [private pilot access guide](docs/PILOT_ACCESS.md).
-2. **Open the desktop app.** Installers bundle their runtime; no separate Java installation or command line is needed. An empty farm starts with sample inventory.
-3. **Begin with Today.** Open a priority, log a harvest, and review stock. Continue with the [desktop user guide](docs/USER_GUIDE.md) or the [guided demo runbook](docs/DEMO.md).
-
-> [!IMPORTANT]
-> **Private preview, with unsigned pilot installers.** Windows SmartScreen, antivirus software, or macOS Gatekeeper may block an installer or show an unknown publisher. Accept installers only from your established RicheyWorks contact and verify the supplied SHA-256 checksum. Do not disable protection or create broad exceptions; stop for RicheyWorks review if security software blocks it. See the [installer safety note](docs/adr/ADR-002-code-signing.md).
-
-Prepare the workstation with the [deployment checklist](docs/DEPLOYMENT.md), and set up [backup and restore](docs/BACKUP_RESTORE.md) before entering your farm's working records.
-
-<p align="center">
-  <strong>Give tomorrow's farm day a clearer start.</strong><br><br>
-  <a href="docs/PILOT_ACCESS.md"><img src="https://img.shields.io/badge/EXPLORE_PRIVATE_PILOT_ACCESS-%E2%86%92-176f4d?style=for-the-badge" alt="Explore private pilot access"></a>
-  <a href="docs/USER_GUIDE.md"><img src="https://img.shields.io/badge/READ_THE_GROWER_GUIDE-%E2%86%92-b8344a?style=for-the-badge" alt="Read the grower guide"></a>
-</p>
-
-## Help and documentation
-
-| I want to… | Start here |
-|---|---|
-| Learn the desktop app | [User guide](docs/USER_GUIDE.md) |
-| Try a five-minute walkthrough | [Demo runbook](docs/DEMO.md) |
-| Set up a farm workstation | [Deployment checklist](docs/DEPLOYMENT.md) |
-| Protect or recover my data | [Backup and restore](docs/BACKUP_RESTORE.md) |
-| Keep installs up to date automatically | [Automatic updates](docs/AUTO_UPDATES.md) |
-| Understand roles and security | [Security guide](SECURITY.md) |
-| Connect another service | [Connector sandbox guide](docs/CONNECTORS_SANDBOX.md) |
-| Connect an AI or automation tool | [AI harness guide](docs/AI_HARNESS.md) |
-| Set up phones and tablets for field work | [Phone/tablet field guide](docs/USER_GUIDE.md#phonetablet-field-work) |
-| Review plant and event research | [Competitive and source research](docs/COMPETITIVE_RESEARCH.md) |
-| Inspect human-interaction coverage | [Harness audit](docs/HARNESS_AUDIT.md) |
-| Check current caveats | [Known limitations](docs/KNOWN_LIMITATIONS.md) |
-| Prepare signed release artifacts | [Maintainer signing gate](docs/SIGNING_SETUP.md) |
+| See all 25 farm types and their current scope | [Farm-type guide](docs/FARM_TYPES.md) |
+| Learn the desktop app | [Grower guide](docs/USER_GUIDE.md) |
+| Preview a guided farm day | [Five-minute tour](#take-a-five-minute-tour) and [presenter runbook](docs/DEMO.md) |
+| Protect your farm records | [Backup and restore](docs/BACKUP_RESTORE.md) |
+| Set up an approved workstation | [Deployment checklist](docs/DEPLOYMENT.md) |
+| Check what is still being built | [Known limitations](docs/KNOWN_LIMITATIONS.md) and [roadmap](docs/PRODUCT_ROADMAP.md) |
+| Work on the software | [Developer quick start](#help-for-developers) below |
 
 ---
+
+## Help for developers
 
 <details>
 <summary><strong>Developer quick start</strong></summary>
@@ -460,7 +326,7 @@ Full setup details: [connector sandbox guide](docs/CONNECTORS_SANDBOX.md).
 
 Printable inventory, harvest, invoice, statement, packing, weekly, and audit routes also provide PDF output. Browse `com.flowerfarm.controller` for the full API surface.
 
-When the opt-in AI harness is enabled, `GET /api/harness/manifest` publishes its authenticated protocol, current policy, plug-ins, and provider-neutral JSON-Schema tools. The headless `farm-data` plugin accepts nine mappable operational types—including production templates, planting plans, and nested floral recipes—and exposes production-task attachment metadata as a tenth readable/exportable type, without driving the desktop. Its three-step suggest/preview/import intake maps arbitrary spreadsheet or provider objects, while stable source-system and row keys make migration replay durable across request changes and application restarts. Complete farm snapshots can be created, recovered, and consumed as bounded checksummed parts across restarts; dedicated actions upload retry-safe task photos and read their verified bytes in bounded chunks. The transport is absent in ordinary disabled and CLI modes; an explicitly enabled container deployment requires both normal HTTP authentication and the harness token.
+When the opt-in AI harness is enabled, `GET /api/harness/manifest` publishes its authenticated protocol, current policy, plug-ins, and provider-neutral JSON-Schema tools. The headless `farm-data` plugin accepts nine mappable operational types—including production templates, planting plans, and nested floral recipes—and exposes production-task attachment metadata as a tenth readable/exportable type, without driving the desktop. Its three-step suggest/preview/import intake maps arbitrary spreadsheet or provider objects, while stable source-system and row keys make migration replay durable across request changes and application restarts. Checksummed snapshots of the plugin's published canonical record types can be created, recovered, and consumed across restarts; dedicated actions upload retry-safe task photos and read their verified bytes in bounded chunks. Farm setup is recovered through a [database backup](docs/BACKUP_RESTORE.md), not those snapshots. The transport is absent in ordinary disabled and CLI modes; an explicitly enabled container deployment requires both normal HTTP authentication and the harness token.
 
 </details>
 
@@ -505,7 +371,7 @@ The core harvest → inventory → order → market-day → closeout workflow, v
 
 ## Made for growers
 
-Built for Pacific Northwest flower growers in Port Orchard, Kitsap County, Washington.
+Built around Pacific Northwest cut-flower work in Port Orchard, Kitsap County, Washington. The farm-type menu is growing with Washington and Oregon operations, guided by the specific work each farm needs.
 
 Roses, compost, and Cascades mist included free of charge.
 
