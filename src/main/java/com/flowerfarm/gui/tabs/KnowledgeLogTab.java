@@ -3,6 +3,8 @@ package com.flowerfarm.gui.tabs;
 import com.flowerfarm.gui.FarmDialogs;
 import com.flowerfarm.gui.FarmUi;
 import com.flowerfarm.gui.GuiPermissions;
+import com.flowerfarm.model.FarmWorkspace;
+import com.flowerfarm.model.FieldScienceExportSummary;
 import com.flowerfarm.model.KnowledgeConfidence;
 import com.flowerfarm.model.KnowledgeEntry;
 import com.flowerfarm.model.KnowledgeKind;
@@ -40,6 +42,7 @@ import java.awt.GridBagLayout;
 import java.awt.Insets;
 import java.awt.Rectangle;
 import java.awt.event.MouseEvent;
+import java.net.URI;
 import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
 import java.util.Arrays;
@@ -75,6 +78,7 @@ public class KnowledgeLogTab implements FlowerFarmTab {
     private JButton recordButton;
     private JButton editButton;
     private JButton deleteButton;
+    private JButton openLinkedExportButton;
     private List<KnowledgeEntry> lastView = List.of();
     private boolean canWrite = true;
     private boolean loading;
@@ -82,6 +86,7 @@ public class KnowledgeLogTab implements FlowerFarmTab {
     private boolean savingDraft;
     private boolean updatingTags;
     private boolean searchQueued;
+    private FarmWorkspace workspace = FarmWorkspace.ROSE_AND_EVENTS;
     private Long requestedSelectionId;
     private Long retrySaveId;
     private KnowledgeEntry retrySaveDraft;
@@ -95,6 +100,14 @@ public class KnowledgeLogTab implements FlowerFarmTab {
         this.knowledgeService = knowledgeService;
         this.host = host;
         this.dialogs = java.util.Objects.requireNonNull(dialogs, "dialogs");
+    }
+
+    /** Choose examples for this farm or shop before building the tab. */
+    public void setWorkspace(FarmWorkspace workspace) {
+        if (panel != null) {
+            throw new IllegalStateException("Set the farm workspace before opening Knowledge Log.");
+        }
+        this.workspace = java.util.Objects.requireNonNull(workspace, "workspace");
     }
 
     @Override
@@ -133,6 +146,19 @@ public class KnowledgeLogTab implements FlowerFarmTab {
         updateActions();
     }
 
+    /** Keep an in-flight save or retained failed-save lesson when changing workspaces. */
+    public String applicationExitWarning() {
+        if (saving) {
+            return "Knowledge Log has a save or removal in progress.";
+        }
+        return retrySaveDraft == null ? null
+                : "Knowledge Log has a lesson draft kept after a failed save.";
+    }
+
+    public boolean hasPendingSave() {
+        return saving;
+    }
+
     private void buildUi() {
         panel = FarmUi.page();
         panel.setName("knowledge.page");
@@ -143,7 +169,10 @@ public class KnowledgeLogTab implements FlowerFarmTab {
         refreshButton.setName("knowledge.refresh");
         panel.add(FarmUi.pageHeader(
                 "Farm Knowledge Log",
-                "Keep the lessons in the ground—what happened, what you tried, and what worked.",
+                workspace == FarmWorkspace.ROSE_AND_EVENTS
+                        || workspace == FarmWorkspace.WILDFLOWER_FARM
+                        ? "Keep the lessons in the ground—what happened, what you tried, and what worked."
+                        : "Keep practical notes on what happened, what you tried, and what worked.",
                 FarmUi.toolbar(recordButton, refreshButton)), BorderLayout.NORTH);
 
         JPanel content = new KnowledgeBody(buildSearchSection(), buildWorkspace());
@@ -172,6 +201,7 @@ public class KnowledgeLogTab implements FlowerFarmTab {
         dueOnly.addActionListener(event -> startSearch());
         editButton.addActionListener(event -> editSelected());
         deleteButton.addActionListener(event -> deleteSelected());
+        openLinkedExportButton.addActionListener(event -> openLinkedExport());
         updateActions();
     }
 
@@ -213,7 +243,7 @@ public class KnowledgeLogTab implements FlowerFarmTab {
     private JPanel buildSearchSection() {
         searchField = FarmUi.initialFocus(FarmUi.searchField(
                 "Search farm knowledge",
-                "Try: What worked for mildew on this rose last August?", 38));
+                searchPrompt(), 38));
         searchField.setName("knowledge.search");
         tagFilter = new JComboBox<>(new String[]{ALL_TAGS});
         tagFilter.setName("knowledge.tagFilter");
@@ -242,6 +272,36 @@ public class KnowledgeLogTab implements FlowerFarmTab {
                 "Find what the farm already learned",
                 "Use ordinary words, crop names, months, beds, actions, results, or tags.",
                 controls);
+    }
+
+    private String searchPrompt() {
+        return switch (workspace) {
+            case ROSE_AND_EVENTS -> "Try: What worked for mildew on this rose last August?";
+            case WILDFLOWER_FARM -> "Try: Which wildflower mix held up best after harvest?";
+            case FLOWER_SHOP -> "Try: Which bouquet display sold well last spring?";
+            case CANNABIS_FARM -> "Try: What changed after the last watering adjustment?";
+            case POTATO_FARM -> "Try: Which field held its potato quality after harvest?";
+            case APPLE_ORCHARD -> "Try: What worked in the Honeycrisp block last season?";
+            case BERRY_FARM -> "Try: Which berry block held quality through the last pick?";
+            case NURSERY_FARM -> "Try: Which growing batch was ready on schedule?";
+            case LIVESTOCK_FARM -> "Try: Which pasture plan worked best for this herd group?";
+            case POULTRY_FARM -> "Try: Which flock had the most consistent egg collection this week?";
+            case DAIRY_FARM -> "Try: Which milking routine worked best for this group?";
+            case VINEYARD_FARM -> "Try: Which block needs the next vineyard check?";
+            case HAY_FARM -> "Try: What changed between this field's cuttings?";
+            case HOPS_FARM -> "Try: Which hop yard needs the next stringing check?";
+            case GRAIN_FARM -> "Try: What worked in this field's last crop rotation?";
+            case SEED_FARM -> "Try: What changed during this seed field's flowering window?";
+            case NUT_ORCHARD -> "Try: What helped this nut block prepare for harvest?";
+            case VEGETABLE_FARM -> "Try: Which planting interval worked for this vegetable crop?";
+            case AQUACULTURE_FARM -> "Try: Which growing-site conditions worked for this aquatic cohort?";
+            case CHRISTMAS_TREE_FARM -> "Try: Which shearing plan worked for this tree block?";
+            case APIARY_FARM -> "Try: What did you observe at the last hive check?";
+            case MUSHROOM_FARM -> "Try: Which substrate and method worked for this mushroom batch?";
+            case CRANBERRY_FARM -> "Try: What worked for this cranberry bed's harvest plan?";
+            case PUMPKIN_PATCH -> "Try: Which patch layout worked for pick-your-own visitors?";
+            case CUSTOM_FARM -> "Try: What worked in field 3 last season?";
+        };
     }
 
     private JSplitPane buildWorkspace() {
@@ -300,6 +360,13 @@ public class KnowledgeLogTab implements FlowerFarmTab {
         editButton.setName("knowledge.edit");
         deleteButton = FarmUi.dangerButton("Remove selected");
         deleteButton.setName("knowledge.delete");
+        openLinkedExportButton = FarmUi.secondaryButton("Open linked export");
+        openLinkedExportButton.setName("knowledge.openLinkedExport");
+        openLinkedExportButton.setToolTipText(
+                "Open the exact reviewed field science export linked to this lesson.");
+        openLinkedExportButton.getAccessibleContext().setAccessibleDescription(
+                openLinkedExportButton.getToolTipText());
+        openLinkedExportButton.setMargin(new Insets(2, 8, 2, 8));
         JPanel detailContent = new JPanel(new BorderLayout(0, FarmUi.CONTROL_GAP));
         detailContent.setOpaque(false);
         JScrollPane detailScroll = new JScrollPane(detailArea);
@@ -309,8 +376,20 @@ public class KnowledgeLogTab implements FlowerFarmTab {
         detailContent.add(FarmUi.toolbar(editButton, deleteButton), BorderLayout.SOUTH);
         JPanel detail = FarmUi.section(
                 "Selected lesson",
-                "Facts stay separate from confidence so the crew can judge what to repeat.",
+                "Observation, action, result, and confidence.",
                 detailContent);
+        JPanel detailHeading = (JPanel) ((BorderLayout) detail.getLayout())
+                .getLayoutComponent(BorderLayout.NORTH);
+        Component headingTitle = detailHeading.getComponent(0);
+        detailHeading.remove(headingTitle);
+        JPanel titleRow = new JPanel(new BorderLayout(FarmUi.CONTROL_GAP, 0));
+        titleRow.setOpaque(false);
+        titleRow.setAlignmentX(Component.LEFT_ALIGNMENT);
+        titleRow.add(headingTitle, BorderLayout.WEST);
+        titleRow.add(openLinkedExportButton, BorderLayout.EAST);
+        detailHeading.add(titleRow, 0);
+        ((JComponent) detailHeading.getComponent(1))
+                .setAlignmentX(Component.LEFT_ALIGNMENT);
         detail.setMinimumSize(new Dimension(320, 0));
 
         JSplitPane split = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, list, detail) {
@@ -466,6 +545,17 @@ public class KnowledgeLogTab implements FlowerFarmTab {
         updateActions();
     }
 
+    private void openLinkedExport() {
+        KnowledgeEntry selected = selectedEntry();
+        if (loading || saving || selected == null
+                || selected.getFieldScienceExportId() == null) {
+            return;
+        }
+        if (host != null) {
+            host.showFieldScienceExport(selected.getFieldScienceExportId());
+        }
+    }
+
     private KnowledgeEntry selectedEntry() {
         if (table == null || table.getSelectedRow() < 0) {
             return null;
@@ -517,6 +607,80 @@ public class KnowledgeLogTab implements FlowerFarmTab {
         }
     }
 
+    /** Open a reviewable lesson draft for a CSRBT instrument without copying browser data. */
+    public void recordFieldScienceFinding(String instrumentTitle, String sourceUrl) {
+        if (!readyForFieldScienceFinding()) {
+            return;
+        }
+        FieldScienceSource source = fieldScienceSource(instrumentTitle, sourceUrl);
+        KnowledgeEntry entry = showForm(null, "Record a field science finding",
+                source.title(), source.url());
+        if (entry == null) {
+            host.setStatus("No field science finding was saved.");
+        } else {
+            startSave(null, entry);
+        }
+    }
+
+    /** Start a farm observation linked to one exact reviewed export in the archive. */
+    public void recordFieldScienceFindingFromExport(FieldScienceExportSummary export) {
+        if (!readyForFieldScienceFinding()) {
+            return;
+        }
+        if (export == null || export.id() == null || export.id() <= 0
+                || export.title() == null || export.title().isBlank()
+                || export.title().length() > 180) {
+            throw new IllegalArgumentException("Choose a saved field science export.");
+        }
+        FieldScienceSource source = fieldScienceSource(
+                export.instrumentTitle(), export.sourceUrl());
+        KnowledgeEntry entry = showForm(null, "Record a finding from saved export",
+                source.title(), source.url(), export);
+        if (entry == null) {
+            host.setStatus("No field science finding was saved.");
+        } else {
+            startSave(null, entry);
+        }
+    }
+
+    private boolean readyForFieldScienceFinding() {
+        if (panel == null) {
+            getUIComponent();
+        }
+        if (!canWrite || (host != null && !host.canMutateData())) {
+            host.setStatus("This session cannot record a field science finding.");
+            return false;
+        }
+        if (saving || retrySaveDraft != null) {
+            host.setStatus("Finish or retry the current Knowledge Log lesson before "
+                    + "starting a field science finding.");
+            return false;
+        }
+        return true;
+    }
+
+    private static FieldScienceSource fieldScienceSource(
+            String instrumentTitle, String sourceUrl) {
+        String title = instrumentTitle == null ? "" : instrumentTitle.trim();
+        String source = sourceUrl == null ? "" : sourceUrl.trim();
+        if (title.isBlank() || title.length() > 180 || source.length() > 512) {
+            throw new IllegalArgumentException("A named field science source is required.");
+        }
+        URI sourceUri;
+        try {
+            sourceUri = URI.create(source);
+        } catch (IllegalArgumentException exception) {
+            throw new IllegalArgumentException("A valid HTTPS source is required.", exception);
+        }
+        if (!"https".equalsIgnoreCase(sourceUri.getScheme())
+                || sourceUri.getHost() == null) {
+            throw new IllegalArgumentException("A valid HTTPS source is required.");
+        }
+        return new FieldScienceSource(title, source);
+    }
+
+    private record FieldScienceSource(String title, String url) { }
+
     private void editSelected() {
         if (!GuiPermissions.requireWrite(host, panel, "edit a farm lesson")) {
             return;
@@ -540,7 +704,19 @@ public class KnowledgeLogTab implements FlowerFarmTab {
     }
 
     private KnowledgeEntry showForm(KnowledgeEntry existing, String title) {
-        KnowledgeForm form = new KnowledgeForm(existing);
+        return showForm(existing, title, null, null);
+    }
+
+    private KnowledgeEntry showForm(KnowledgeEntry existing, String title,
+                                    String sourceTitle, String sourceUrl) {
+        return showForm(existing, title, sourceTitle, sourceUrl, null);
+    }
+
+    private KnowledgeEntry showForm(KnowledgeEntry existing, String title,
+                                    String sourceTitle, String sourceUrl,
+                                    FieldScienceExportSummary export) {
+        KnowledgeForm form = new KnowledgeForm(existing, workspace,
+                sourceTitle, sourceUrl, export);
         JScrollPane scroll = FarmUi.dialogScroll(panel, form.panel(), new Dimension(720, 630));
         scroll.setName("knowledge.form.scroll");
         while (true) {
@@ -585,6 +761,9 @@ public class KnowledgeLogTab implements FlowerFarmTab {
                     retrySaveDraft = null;
                     requestedSelectionId = saved.getId();
                     saving = false;
+                    if (id == null && saved.getFieldScienceExportId() != null) {
+                        resetSearchControls();
+                    }
                     if (host != null) {
                         host.setStatus("Farm lesson saved: " + saved.getSummary());
                         host.refreshAll();
@@ -657,12 +836,16 @@ public class KnowledgeLogTab implements FlowerFarmTab {
     }
 
     private void clearSearch() {
+        resetSearchControls();
+        startSearch();
+    }
+
+    private void resetSearchControls() {
         searchField.setText("");
         updatingTags = true;
         tagFilter.setSelectedItem(ALL_TAGS);
         updatingTags = false;
         dueOnly.setSelected(false);
-        startSearch();
     }
 
     private void showFailure(String action, Throwable failure) {
@@ -703,6 +886,11 @@ public class KnowledgeLogTab implements FlowerFarmTab {
         GuiPermissions.setWritable(canWrite && ready, recordButton);
         GuiPermissions.setWritable(canWrite && ready && selectedEntry() != null,
                 editButton, deleteButton);
+        if (openLinkedExportButton != null) {
+            KnowledgeEntry selected = selectedEntry();
+            openLinkedExportButton.setEnabled(ready && selected != null
+                    && selected.getFieldScienceExportId() != null);
+        }
         if (searchButton != null) {
             searchButton.setEnabled(ready);
             clearButton.setEnabled(ready);
@@ -715,7 +903,8 @@ public class KnowledgeLogTab implements FlowerFarmTab {
                         linked("Harvest", entry.getHarvestId()),
                         linked("Inventory item", entry.getInventoryItemId()),
                         linked("Order", entry.getOrderId()),
-                        linked("Customer", entry.getCustomerId()))
+                        linked("Customer", entry.getCustomerId()),
+                        linked("Field science export", entry.getFieldScienceExportId()))
                 .stream().filter(value -> !value.isBlank()).collect(Collectors.joining("\n"));
     }
 
@@ -760,21 +949,73 @@ public class KnowledgeLogTab implements FlowerFarmTab {
         private final JTextField inventoryId = new JTextField(8);
         private final JTextField orderId = new JTextField(8);
         private final JTextField customerId = new JTextField(8);
+        private final String fieldScienceTitle;
+        private final String fieldScienceSourceUrl;
+        private final FieldScienceExportSummary sourceExport;
+        private final Long linkedExportId;
         private int row;
 
-        KnowledgeForm(KnowledgeEntry existing) {
+        KnowledgeForm(KnowledgeEntry existing, FarmWorkspace workspace) {
+            this(existing, workspace, null, null, null);
+        }
+
+        KnowledgeForm(KnowledgeEntry existing, FarmWorkspace workspace,
+                      String fieldScienceTitle, String fieldScienceSourceUrl) {
+            this(existing, workspace, fieldScienceTitle, fieldScienceSourceUrl, null);
+        }
+
+        KnowledgeForm(KnowledgeEntry existing, FarmWorkspace workspace,
+                      String fieldScienceTitle, String fieldScienceSourceUrl,
+                      FieldScienceExportSummary sourceExport) {
+            this.fieldScienceTitle = fieldScienceTitle;
+            this.fieldScienceSourceUrl = fieldScienceSourceUrl;
+            this.sourceExport = sourceExport;
+            this.linkedExportId = sourceExport == null
+                    ? existing == null ? null : existing.getFieldScienceExportId()
+                    : sourceExport.id();
             panel.setName("knowledge.form");
             panel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
             FarmUi.initialFocus(date);
             renderer(kind);
             renderer(confidence);
+            if (fieldScienceTitle != null) {
+                addHeading("Field science source");
+                JTextArea reference = area(3);
+                reference.setName("knowledge.form.fieldScienceSource");
+                reference.setText(fieldScienceTitle + "\n" + fieldScienceSourceUrl
+                        + (sourceExport == null ? "" : "\nSaved export #"
+                        + sourceExport.id() + " · " + sourceExport.title()
+                        + "\nSHA-256 " + sourceExport.sha256()));
+                reference.setEditable(false);
+                reference.setFocusable(false);
+                add(sourceExport == null ? "Instrument" : "Reviewed export",
+                        new JScrollPane(reference), sourceExport == null
+                                ? "The tool and source link will be saved with your finding. "
+                                        + "Review this note before saving; browser exports stay separate."
+                                : "Write your own observation below. The saved finding will "
+                                        + "link to this exact reviewed export; browser files stay separate.");
+            } else if (linkedExportId != null) {
+                addHeading("Field science source");
+                JTextArea reference = area(2);
+                reference.setName("knowledge.form.fieldScienceSource");
+                reference.setText("Saved export #" + linkedExportId
+                        + "\nOpen the linked export from the saved lesson to review its text.");
+                reference.setEditable(false);
+                reference.setFocusable(false);
+                add("Reviewed export", new JScrollPane(reference),
+                        "Editing this lesson keeps its link to the saved export.");
+            }
             add("Observation date *", date, "YYYY-MM-DD; future dates are not allowed.");
             add("What happened *", summary, "A short sentence the crew can scan later.");
             add("Type", kind, "Problem, opportunity, or practice worth repeating.");
-            add("Crop", crop, "For example: Rose, Dahlia, or Tulip.");
+            boolean roseWorkspace = workspace == FarmWorkspace.ROSE_AND_EVENTS;
+            add(roseWorkspace ? "Crop" : "Crop or product", crop,
+                    roseWorkspace ? "For example: Rose, Dahlia, or Tulip."
+                            : "Use the crop, product, or operation name your crew recognizes.");
             add("Variety", variety, "Optional cultivar or variety.");
             add("Bed or field", bed, "Where it happened.");
             add("Production stage", stage, "For example: vegetative, budding, harvest, or post-harvest.");
+            observation.setName("knowledge.form.observation");
             add("What did you notice? *", new JScrollPane(observation),
                     "Record facts: signs, timing, weather, scale, or opportunity.");
             add("What action did you take?", new JScrollPane(action),
@@ -792,6 +1033,11 @@ public class KnowledgeLogTab implements FlowerFarmTab {
             add("Customer #", customerId, "Optional saved customer id.");
             if (existing == null) {
                 date.setText(LocalDate.now().toString());
+                if (fieldScienceTitle != null) {
+                    summary.setText("Finding from " + fieldScienceTitle);
+                    tags.setText("field-science");
+                    confidence.setSelectedItem(KnowledgeConfidence.NEEDS_REVIEW);
+                }
             } else {
                 populate(existing);
             }
@@ -804,16 +1050,28 @@ public class KnowledgeLogTab implements FlowerFarmTab {
         KnowledgeEntry read() {
             LocalDate observed = requiredDate(date.getText(), "Observation date");
             LocalDate follow = optionalDate(followUp.getText(), "Follow-up date");
+            String observedText = observation.getText().trim();
+            if (fieldScienceTitle != null) {
+                if (observedText.isBlank()) {
+                    throw new IllegalArgumentException(
+                            "Describe your own finding before saving this field science note.");
+                }
+                observedText += "\n\nField science source: " + fieldScienceTitle
+                        + "\n" + fieldScienceSourceUrl
+                        + (sourceExport == null ? "" : "\nSaved export #"
+                        + sourceExport.id() + " · " + sourceExport.title());
+            }
             KnowledgeEntry entry = new KnowledgeEntry(
                     observed, summary.getText(), (KnowledgeKind) kind.getSelectedItem(),
                     crop.getText(), variety.getText(), bed.getText(), stage.getText(),
-                    observation.getText(), action.getText(), performedBy.getText(),
+                    observedText, action.getText(), performedBy.getText(),
                     result.getText(), follow,
                     (KnowledgeConfidence) confidence.getSelectedItem(), parseTags(tags.getText()));
             entry.setHarvestId(optionalId(harvestId.getText(), "Harvest #"));
             entry.setInventoryItemId(optionalId(inventoryId.getText(), "Inventory item #"));
             entry.setOrderId(optionalId(orderId.getText(), "Order #"));
             entry.setCustomerId(optionalId(customerId.getText(), "Customer #"));
+            entry.setFieldScienceExportId(linkedExportId);
             return entry;
         }
 

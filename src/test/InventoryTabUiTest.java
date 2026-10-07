@@ -1,8 +1,11 @@
 package com.flowerfarm.gui.tabs;
 
 import com.flowerfarm.model.FarmProfile;
+import com.flowerfarm.model.FarmWorkspace;
 import com.flowerfarm.gui.FarmUi;
+import com.flowerfarm.gui.FarmDialogs;
 import com.flowerfarm.gui.presenter.InventoryItemPresenter;
+import com.flowerfarm.gui.view.InventoryItemFormView;
 import com.flowerfarm.model.Item;
 import com.flowerfarm.repository.InMemoryInventoryRepository;
 import com.flowerfarm.service.InventoryCsvExporter;
@@ -15,6 +18,7 @@ import javax.swing.JButton;
 import javax.swing.JComponent;
 import javax.swing.JComboBox;
 import javax.swing.JLabel;
+import javax.swing.JOptionPane;
 import javax.swing.JTable;
 import javax.swing.JTextField;
 import javax.swing.JToggleButton;
@@ -33,6 +37,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
@@ -42,6 +48,38 @@ import static org.mockito.Mockito.when;
 
 @DisplayName("InventoryTab modern UI")
 class InventoryTabUiTest {
+
+    @Test
+    @DisplayName("nonrose workspace keeps inventory editing without showing rose fields")
+    void nonroseWorkspaceUsesNeutralInventoryCopyAndEditForm() throws Exception {
+        InventoryService service = mock(InventoryService.class);
+        when(service.getAllItems()).thenReturn(List.of(new Item(11L, "Legacy rose stock",
+                "Flowers/Plants", 4.5, "Per Stem", 1.2, 12,
+                "Type: Damask; Stored in row 2")));
+        FarmDialogs dialogs = mock(FarmDialogs.class);
+        when(dialogs.showConfirm(any(), any(), anyString(), anyInt(), anyInt()))
+                .thenAnswer(invocation -> {
+                    Component message = invocation.getArgument(1);
+                    InventoryItemFormView form = find(message, InventoryItemFormView.class).get(0);
+                    assertThat(findNamed(form, "inventory.roseVarietyGroup"))
+                            .singleElement().satisfies(group ->
+                                    assertThat(group.isVisible()).isFalse());
+                    assertThat(form.draft().roseVariety()).isEqualTo("Damask");
+                    return JOptionPane.CANCEL_OPTION;
+                });
+        InventoryTab tab = new InventoryTab(service, new TestHost(), dialogs);
+        tab.setWorkspace(FarmWorkspace.CANNABIS_FARM);
+        JComponent root = tab.getUIComponent();
+        assertThat(((JLabel) findNamed(root, "farm.pageSubtitle").get(0)).getText())
+                .isEqualTo("Search stock, review pricing, and prepare restock sheets.");
+        SwingUtilities.invokeAndWait(tab::initialize);
+        awaitInventoryRefresh(root);
+        SwingUtilities.invokeAndWait(() -> {
+            find(root, JTable.class).get(0).setRowSelectionInterval(0, 0);
+            button(root, "Edit selected").doClick();
+        });
+        verify(dialogs).showConfirm(any(), any(), anyString(), anyInt(), anyInt());
+    }
 
     @Test
     @DisplayName("builds the shared page hierarchy and empty state headlessly")

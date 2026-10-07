@@ -6,6 +6,8 @@ import org.jfree.chart.ChartFactory;
 import org.jfree.chart.ChartPanel;
 import org.jfree.chart.JFreeChart;
 import org.jfree.chart.axis.DateAxis;
+import org.jfree.chart.axis.DateTickUnit;
+import org.jfree.chart.axis.DateTickUnitType;
 import org.jfree.chart.plot.XYPlot;
 import org.jfree.chart.renderer.xy.XYLineAndShapeRenderer;
 import org.jfree.data.time.Day;
@@ -623,7 +625,43 @@ public class TrendAnalysisTab implements FlowerFarmTab {
         }
         XYPlot plot = trendChart.getXYPlot();
         plot.getRangeAxis().setLabel(unit.equals("units") ? "Harvest quantity" : unit);
+        spaceDateTicks(result, plot);
         trendChart.fireChartChanged();
+    }
+
+    private static void spaceDateTicks(TrendService.TrendResult result, XYPlot plot) {
+        if (!(plot.getDomainAxis() instanceof DateAxis dateAxis)) {
+            return;
+        }
+        LocalDate first = result.latestWeekStart();
+        LocalDate last = first;
+        for (TrendService.TrendPoint point : result.weeklyPoints()) {
+            LocalDate week = point.weekStart();
+            if (week != null) {
+                first = first == null || week.isBefore(first) ? week : first;
+                last = last == null || week.isAfter(last) ? week : last;
+            }
+        }
+        LocalDate forecast = result.forecastWeekStart();
+        if (result.isSuccess() && forecast != null) {
+            first = first == null || forecast.isBefore(first) ? forecast : first;
+            last = last == null || forecast.isAfter(last) ? forecast : last;
+        }
+        if (first == null || last == null) {
+            dateAxis.setAutoTickUnitSelection(true);
+            return;
+        }
+
+        long spanDays = ChronoUnit.DAYS.between(first, last);
+        long minimumSpacing = Math.max(1, (spanDays + 7) / 8);
+        int tickDays = 1;
+        for (int candidate : new int[]{1, 2, 3, 5, 7, 10, 14, 21, 28, 42, 56, 84, 112, 168, 224, 365}) {
+            tickDays = candidate;
+            if (candidate >= minimumSpacing) {
+                break;
+            }
+        }
+        dateAxis.setTickUnit(new DateTickUnit(DateTickUnitType.DAY, tickDays));
     }
 
     private void styleChart() {

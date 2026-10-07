@@ -718,26 +718,30 @@ public class MarketDayPackingService {
             doc.add(new Paragraph("Market Day Packing List", titleFont));
             String period = plan.from().equals(plan.to())
                     ? plan.marketDate().toString()
-                    : plan.from() + " → " + plan.to();
+                    : plan.from() + " to " + plan.to();
             doc.add(new Paragraph(
-                    "Date: " + period + "     ·     Scope: " + plan.scope()
+                    "Date: " + period + "     ·     Scope: " + scopeLabel(plan.scope())
                             + "     ·     Generated: " + LocalDate.now(),
                     small));
             doc.add(new Paragraph(
-                    "Load sequence: needs handoff review → Market → Delivery → Pickup",
+                    "Load sequence: handoff review > Market > Delivery > Pickup",
                     small));
             long unresolvedHandoffs = confirmedUnspecifiedHandoffCount(plan.customers());
             if (unresolvedHandoffs > 0) {
                 doc.add(new Paragraph(
                         "ACTION REQUIRED: " + unresolvedHandoffs
-                                + " confirmed order(s) need Pickup, Delivery, or Market before load-out.",
+                                + " confirmed order" + (unresolvedHandoffs == 1 ? "" : "s")
+                                + (unresolvedHandoffs == 1 ? " needs" : " need")
+                                + " Pickup, Delivery, or Market before load-out.",
                         FontFactory.getFont(FontFactory.HELVETICA_BOLD, 10, Color.RED)));
             }
             long contextFreeDeliveries = confirmedMissingDeliveryContextCount(plan.customers());
             if (contextFreeDeliveries > 0) {
                 doc.add(new Paragraph(
                         "ACTION REQUIRED: " + contextFreeDeliveries
-                                + " confirmed Delivery order(s) have no contact or destination context.",
+                                + " confirmed Delivery order" + (contextFreeDeliveries == 1 ? "" : "s")
+                                + (contextFreeDeliveries == 1 ? " has" : " have")
+                                + " no contact or destination context.",
                         FontFactory.getFont(FontFactory.HELVETICA_BOLD, 10, Color.RED)));
             }
             doc.add(Chunk.NEWLINE);
@@ -757,7 +761,7 @@ public class MarketDayPackingService {
             doc.add(Chunk.NEWLINE);
             if (plan.pickList().isEmpty()) {
                 doc.add(new Paragraph(
-                        "No CONFIRMED orders in range — create CRM orders first.", body));
+                        "No confirmed orders in range - create or confirm a customer order first.", body));
             } else {
                 PdfPTable pick = new PdfPTable(new float[]{3, 1.2f, 1.2f, 1.2f, 1.5f});
                 pick.setWidthPercentage(100);
@@ -788,7 +792,7 @@ public class MarketDayPackingService {
                     if (c.customerType() != null && !c.customerType().isBlank()) {
                         head += "  [" + c.customerType() + "]";
                     }
-                    head += "  " + c.status() + "  $"
+                    head += "  " + orderStatusLabel(c.status()) + "  $"
                             + String.format(Locale.US, "%.2f", c.orderTotal());
                     doc.add(new Paragraph(head,
                             FontFactory.getFont(FontFactory.HELVETICA_BOLD, 10, brandGreen)));
@@ -830,7 +834,7 @@ public class MarketDayPackingService {
             }
 
             doc.add(new Paragraph(
-                    "Tip: Fulfill in CRM after the market to deduct inventory & record revenue.",
+                    "After load-out, complete checked confirmed orders to deduct inventory and record revenue.",
                     small));
             doc.add(new Paragraph(
                     farmProfile.softwareFooter(), small));
@@ -927,6 +931,30 @@ public class MarketDayPackingService {
         return s.toString();
     }
 
+    /** Human-readable order scope for packing sheets and desktop review. */
+    public static String scopeLabel(String scope) {
+        return switch (scope == null ? "" : scope) {
+            case "CONFIRMED" -> "Confirmed orders";
+            case "CONFIRMED+DRAFT" -> "Confirmed and draft orders";
+            case "CONFIRMED+FULFILLED" -> "Confirmed and completed orders";
+            case "CONFIRMED+DRAFT+FULFILLED" -> "Confirmed, draft, and completed orders";
+            default -> "Selected orders";
+        };
+    }
+
+    private static String orderStatusLabel(String status) {
+        if (status == null || status.isBlank()) {
+            return "Unknown";
+        }
+        return switch (status.toUpperCase(Locale.ROOT)) {
+            case "CONFIRMED" -> "Confirmed";
+            case "DRAFT" -> "Draft";
+            case "FULFILLED" -> "Completed";
+            case "CANCELLED" -> "Cancelled";
+            default -> status;
+        };
+    }
+
     private static int stockForProduct(List<Item> inventory, String productName) {
         if (productName == null || productName.isBlank()) {
             return 0;
@@ -953,30 +981,36 @@ public class MarketDayPackingService {
         if (!from.equals(to)) {
             sb.append("Orders from : ").append(from).append(" → ").append(to).append('\n');
         }
-        sb.append("Scope       : ").append(scope).append('\n');
+        sb.append("Scope       : ").append(scopeLabel(scope)).append('\n');
         sb.append("Load order  : needs handoff review → Market → Delivery → Pickup\n");
         sb.append("Orders      : ").append(packs.size())
                 .append("   Pipeline $").append(String.format(Locale.US, "%,.2f", pipeline)).append('\n');
         long unresolvedHandoffs = confirmedUnspecifiedHandoffCount(packs);
         if (unresolvedHandoffs > 0) {
             sb.append("⚠ Unspecified handoffs: ").append(unresolvedHandoffs)
-                    .append(" confirmed order(s) need Pickup, Delivery, or Market\n");
+                    .append(" confirmed order").append(unresolvedHandoffs == 1 ? "" : "s")
+                    .append(unresolvedHandoffs == 1 ? " needs" : " need")
+                    .append(" Pickup, Delivery, or Market\n");
         }
         long contextFreeDeliveries = confirmedMissingDeliveryContextCount(packs);
         if (contextFreeDeliveries > 0) {
             sb.append("⚠ Missing Delivery context: ").append(contextFreeDeliveries)
-                    .append(" confirmed order(s) need contact or destination instructions\n");
+                    .append(" confirmed order").append(contextFreeDeliveries == 1 ? "" : "s")
+                    .append(contextFreeDeliveries == 1 ? " needs" : " need")
+                    .append(" contact or destination instructions\n");
         }
         if (shortfalls > 0) {
             sb.append("⚠ Packing issues: ").append(shortfalls)
-                    .append(" product(s) need attention\n");
+                    .append(" product").append(shortfalls == 1 ? "" : "s")
+                    .append(shortfalls == 1 ? " needs" : " need")
+                    .append(" attention\n");
         }
         sb.append('\n');
 
         sb.append("PICK LIST (aggregate)\n");
         sb.append("─────────────────────\n");
         if (pickList.isEmpty()) {
-            sb.append("  (no confirmed orders in range — create CONFIRMED CRM orders first)\n");
+            sb.append("  (no confirmed orders in range - create or confirm a customer order first)\n");
         } else {
             sb.append(String.format(Locale.US, "  %-28s %8s %-10s %8s %s%n",
                     "Product", "Need", "Unit", "Stock", "Status"));
@@ -1001,7 +1035,7 @@ public class MarketDayPackingService {
                 if (c.customerType() != null && !c.customerType().isBlank()) {
                     sb.append("  [").append(c.customerType()).append(']');
                 }
-                sb.append("  ").append(c.status())
+                sb.append("  ").append(orderStatusLabel(c.status()))
                         .append("  $").append(String.format(Locale.US, "%.2f", c.orderTotal()))
                         .append('\n');
                 sb.append("    handoff: ").append(friendlyHandoff(c.handoffType()))
@@ -1024,7 +1058,7 @@ public class MarketDayPackingService {
             }
         }
         sb.append('\n');
-        sb.append("Tip: Fulfill in CRM after the market to deduct inventory & record revenue.\n");
+        sb.append("After load-out, complete checked confirmed orders to deduct inventory and record revenue.\n");
         return sb.toString();
     }
 

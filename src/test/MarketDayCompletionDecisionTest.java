@@ -7,6 +7,7 @@ import com.flowerfarm.service.MarketDayPackingService.CustomerPack;
 import com.flowerfarm.service.MarketDayPackingService.FulfillBatchResult;
 import com.flowerfarm.service.MarketDayPackingService.MarketDayPlan;
 import com.flowerfarm.service.MarketDayPackingService.PackLine;
+import com.flowerfarm.service.MarketDayPackingService.ProductNeed;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -17,14 +18,19 @@ import org.mockito.ArgumentCaptor;
 import javax.swing.JButton;
 import javax.swing.JCheckBox;
 import javax.swing.JComponent;
+import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 import javax.swing.JTextField;
 import javax.swing.SwingUtilities;
 import javax.swing.Timer;
+import javax.swing.TransferHandler;
 import java.awt.Component;
 import java.awt.Container;
 import java.awt.SecondaryLoop;
 import java.awt.Toolkit;
+import java.awt.datatransfer.Clipboard;
+import java.awt.datatransfer.StringSelection;
+import java.awt.datatransfer.Transferable;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
@@ -51,6 +57,162 @@ import static org.mockito.Mockito.when;
 
 @DisplayName("Market Day completion requires current packing evidence and a current decision")
 class MarketDayCompletionDecisionTest {
+    @Test
+    void readyOrderCardDropMarksOnlyItsPackingCheck() throws Exception {
+        Fixture fixture = new Fixture(plan("Original pickup instructions"), false);
+        SwingUtilities.invokeAndWait(() -> {
+            JComponent source = fixture.user.named("marketDay.dragOrder.1", JComponent.class);
+            JLabel target = fixture.user.named("marketDay.packedDropZone", JLabel.class);
+            assertThat(source.getAccessibleContext().getAccessibleName())
+                    .contains("Drag order 1", "Packed drop zone");
+            assertThat(target.isEnabled()).isTrue();
+            Clipboard clipboard = new Clipboard("Market Day order drag test");
+            source.getTransferHandler().exportToClipboard(
+                    source, clipboard, TransferHandler.COPY);
+            Transferable card = clipboard.getContents(null);
+            assertThat(card).isNotNull();
+            TransferHandler.TransferSupport drop =
+                    new TransferHandler.TransferSupport(target, card);
+            assertThat(target.getTransferHandler().canImport(drop)).isTrue();
+            assertThat(target.getTransferHandler().importData(drop)).isTrue();
+            assertThat(fixture.packed().isSelected()).isTrue();
+            assertThat(fixture.completeButton().isEnabled()).isTrue();
+            assertThat(target.getTransferHandler().importData(drop)).isFalse();
+            assertThat(target.getText()).contains("Ready confirmed loads go here");
+        });
+        verify(fixture.service, never()).fulfillConfirmedOrders(any());
+    }
+
+    @Test
+    void packingDropRejectsUnrelatedViewerDirtyScopeAndStaleCards() throws Exception {
+        Fixture fixture = new Fixture(plan("Original pickup instructions"), false);
+        Transferable[] card = new Transferable[1];
+        SwingUtilities.invokeAndWait(() -> {
+            JComponent source = fixture.user.named("marketDay.dragOrder.1", JComponent.class);
+            JLabel target = fixture.user.named("marketDay.packedDropZone", JLabel.class);
+            Clipboard clipboard = new Clipboard("Market Day stale order drag test");
+            source.getTransferHandler().exportToClipboard(
+                    source, clipboard, TransferHandler.COPY);
+            card[0] = clipboard.getContents(null);
+            assertThat(target.getTransferHandler().canImport(
+                    new TransferHandler.TransferSupport(target,
+                            new StringSelection("1")))).isFalse();
+            fixture.tab.applyRolePermissions(false);
+            assertThat(target.getTransferHandler().importData(
+                    new TransferHandler.TransferSupport(target, card[0]))).isFalse();
+            fixture.tab.applyRolePermissions(true);
+            fixture.user.named("marketDay.date", JTextField.class)
+                    .setText(LocalDate.now().plusDays(1).toString());
+            assertThat(target.getTransferHandler().importData(
+                    new TransferHandler.TransferSupport(target, card[0]))).isFalse();
+            assertThat(fixture.packed().isSelected()).isFalse();
+            fixture.read.set(() -> plan("Changed pickup instructions"));
+            fixture.tab.refreshData();
+        });
+        fixture.awaitRefresh();
+        SwingUtilities.invokeAndWait(() -> {
+            JLabel target = fixture.user.named("marketDay.packedDropZone", JLabel.class);
+            assertThat(target.getTransferHandler().importData(
+                    new TransferHandler.TransferSupport(target, card[0]))).isFalse();
+            assertThat(fixture.packed().isSelected()).isFalse();
+        });
+        verify(fixture.service, never()).fulfillConfirmedOrders(any());
+    }
+
+    @Test
+    void accessBadgeDescribesPermissionWhileCompletionBadgeDescribesReadiness() throws Exception {
+        Fixture fixture = new Fixture();
+        JLabel access = fixture.user.named("marketDay.accessStatus", JLabel.class);
+        JLabel readiness = fixture.user.named("marketDay.fulfillmentStatus", JLabel.class);
+        assertThat(access.getText()).isEqualTo("Write access available");
+        assertThat(readiness.getText()).contains("ready to complete");
+        assertThat(fixture.completeButton().isEnabled()).isTrue();
+
+        SwingUtilities.invokeAndWait(() -> fixture.packed().doClick());
+        assertThat(access.getText()).isEqualTo("Write access available");
+        assertThat(readiness.getText()).contains("completion locked");
+        assertThat(fixture.completeButton().isEnabled()).isFalse();
+
+        SwingUtilities.invokeAndWait(() -> {
+            fixture.packed().doClick();
+            fixture.tab.applyRolePermissions(false);
+        });
+        assertThat(access.getText()).contains("View only");
+        assertThat(readiness.getText()).isEqualTo("View only · completion unavailable");
+        assertThat(fixture.completeButton().isEnabled()).isFalse();
+        assertThat(fixture.completeButton().getToolTipText()).contains("requires write access");
+    }
+
+    @Test
+    void marketScopeCodesStayInternalWhileSummaryAndPickListUseGrowerWords() throws Exception {
+        assertThat(MarketDayTab.orderScopeLabel("CONFIRMED")).isEqualTo("Confirmed orders");
+        assertThat(MarketDayTab.orderScopeLabel("CONFIRMED+DRAFT"))
+                .isEqualTo("Confirmed and draft orders");
+        assertThat(MarketDayTab.orderScopeLabel("CONFIRMED+FULFILLED"))
+                .isEqualTo("Confirmed and completed orders");
+        assertThat(MarketDayTab.orderScopeLabel("CONFIRMED+DRAFT+FULFILLED"))
+                .isEqualTo("Confirmed, draft, and completed orders");
+
+        MarketDayPlan source = plan("Original pickup instructions");
+        String rawScope = "CONFIRMED+DRAFT+FULFILLED";
+        MarketDayPlan combined = new MarketDayPlan(source.marketDate(), source.from(), source.to(),
+                rawScope, source.orderCount(), source.pipelineValue(), source.customers(),
+                source.pickList(), source.shortfallSkuCount(),
+                "Market day packing list\nScope       : " + rawScope + "\nPick list follows");
+        Fixture fixture = new Fixture(combined);
+
+        assertThat(fixture.user.named("marketDay.planStatus", JLabel.class).getText())
+                .contains("Confirmed, draft, and completed orders")
+                .doesNotContain(rawScope);
+        assertThat(fixture.user.text("marketDay.planText"))
+                .contains("Scope       : Confirmed, draft, and completed orders")
+                .doesNotContain("Scope       : " + rawScope);
+        assertThat(combined.scope()).isEqualTo(rawScope);
+        assertThat(combined.plainText()).contains("Scope       : " + rawScope);
+    }
+
+    @ParameterizedTest(name = "{0} confirmed packing issues have correct grammar and stay locked")
+    @ValueSource(ints = {1, 2})
+    void confirmedPackingIssueSummaryAgreesWithCountAndReadiness(int count) throws Exception {
+        MarketDayPlan source = plan("Original pickup instructions");
+        List<ProductNeed> issues = new ArrayList<>();
+        for (int index = 0; index < count; index++) {
+            issues.add(new ProductNeed("Tulips " + index, "stems", 10, 3, true, 7));
+        }
+        MarketDayPlan blocked = new MarketDayPlan(source.marketDate(), source.from(), source.to(),
+                source.scope(), source.orderCount(), source.pipelineValue(), source.customers(),
+                issues, count, "Packing review");
+        Fixture fixture = new Fixture(blocked, false);
+
+        assertThat(fixture.user.named("marketDay.planStatus", JLabel.class).getText())
+                .contains(count + " confirmed packing issue" + (count == 1 ? "" : "s")
+                        + " · completion locked")
+                .doesNotContain("issue(s)");
+        assertThat(fixture.completeButton().isEnabled()).isFalse();
+    }
+
+    @ParameterizedTest(name = "{0} draft preview issues leave confirmed completion available")
+    @ValueSource(ints = {1, 2})
+    void draftPreviewIssueSummaryAgreesWithCountAndReadiness(int count) throws Exception {
+        MarketDayPlan source = plan("Original pickup instructions");
+        List<ProductNeed> previewIssues = new ArrayList<>();
+        for (int index = 0; index < count; index++) {
+            previewIssues.add(new ProductNeed("Draft tulips " + index, "stems", 10, 3, true, 7));
+        }
+        MarketDayPlan preview = new MarketDayPlan(source.marketDate(), source.from(), source.to(),
+                "CONFIRMED+DRAFT", source.orderCount(), source.pipelineValue(),
+                source.customers(), previewIssues, count, List.of(), 0, "Draft packing review");
+        Fixture fixture = new Fixture(preview, false);
+
+        assertThat(fixture.user.named("marketDay.planStatus", JLabel.class).getText())
+                .contains(count + " draft preview issue" + (count == 1 ? "" : "s")
+                        + " · completion available")
+                .doesNotContain("issue(s)");
+        assertThat(fixture.packed().isEnabled()).isTrue();
+        SwingUtilities.invokeAndWait(() -> fixture.packed().doClick());
+        assertThat(fixture.completeButton().isEnabled()).isTrue();
+    }
+
     @ParameterizedTest(name = "{0} invalidates an open completion decision")
     @EnumSource(ModalChange.class)
     void changedModalContextDoesNotSubmitCompletion(ModalChange change) throws Exception {
@@ -299,6 +461,10 @@ class MarketDayCompletionDecisionTest {
         }
 
         private Fixture(MarketDayPlan plan) throws Exception {
+            this(plan, true);
+        }
+
+        private Fixture(MarketDayPlan plan, boolean packAfterRefresh) throws Exception {
             initial = plan;
             read = new AtomicReference<>(() -> initial);
             when(service.buildPlan(any(), anyInt(), anyBoolean(), anyBoolean()))
@@ -321,8 +487,10 @@ class MarketDayCompletionDecisionTest {
             root = built[0];
             user = SwingUserHarness.on(root);
             awaitRefresh();
-            SwingUtilities.invokeAndWait(() -> packed().doClick());
-            assertThat(completeButton().isEnabled()).isTrue();
+            if (packAfterRefresh) {
+                SwingUtilities.invokeAndWait(() -> packed().doClick());
+                assertThat(completeButton().isEnabled()).isTrue();
+            }
         }
 
         private JCheckBox packed() {

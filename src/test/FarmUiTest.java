@@ -56,6 +56,11 @@ class FarmUiTest {
         assertThat(header.getName()).isEqualTo("farm.brandHeader");
         assertThat(header.getAccessibleContext().getAccessibleName())
                 .isEqualTo("FLOWERSFOREVER · FlowersForever application header");
+        JPanel customHeader = FarmUi.brandHeader(
+                "Valley Orchard", "Fruit from our farm", "Yakima, WA",
+                "Wednesday · September 30", "Custom farm");
+        assertThat(customHeader.getAccessibleContext().getAccessibleName())
+                .contains("VALLEY ORCHARD", "Custom farm");
         assertThat(dashboard.getIconWidth()).isEqualTo(22);
         assertThat(harvest.getIconHeight()).isEqualTo(22);
     }
