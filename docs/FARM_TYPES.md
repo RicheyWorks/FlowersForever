@@ -409,5 +409,5 @@ name either enterprise; it does not satisfy any of these requirements.
    larger, different commodity mix; the WA/OR templates should not be assumed
    to fit every California farm.
 
-For today's supported farm day and release status, use the [sample-farm tour](../README.md#a-five-minute-sample-farm-tour)
+For today's supported farm day and release status, use the [sample-farm tour](../README.md#take-a-five-minute-tour)
 and [private pilot access guide](PILOT_ACCESS.md).
