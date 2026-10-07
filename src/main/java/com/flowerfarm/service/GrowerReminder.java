@@ -10,6 +10,7 @@ public record GrowerReminder(Kind kind, String title, String detail, String targ
         HARVEST,
         PACK,
         STOCK,
+        COOLER,
         KNOWLEDGE,
         CHECKLIST
     }

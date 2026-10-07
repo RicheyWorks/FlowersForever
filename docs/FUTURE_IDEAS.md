@@ -52,6 +52,8 @@ Consolidate saved recipe requirements by item and supplier, apply pack rounding 
 
 ## 7. Cooler lots with useful shelf-life reminders
 
+**Private-pilot slice shipped** in Help → Cooler lot review (aging board, crop intervals, count/quality/loss, QR labels). Lot-to-sale allocation and split/merge remain later.
+
 **Grower moment:** which bucket should be packed first?
 
 Build on existing harvest lot codes, grade, loss, storage, and QR labels. Let the farm set a review interval by crop and conditioning method. Show aging lots with their harvest date and storage location, then let the grower record a count, quality check, or loss. A reminder is not a guarantee of vase life.
