@@ -109,3 +109,17 @@ fresh Windows checkout. GitHub's Release and dependency-submission jobs did
 not start because of an account payment or spending-limit issue; this was an
 external CI blocker, not a test result. Keep the PRs draft until the stack and
 signed private release are approved.
+
+## Concurrent data-safety PR
+
+Draft-stack preparation overlapped with open data-safety PR #32 on branch
+`codex/data-safety`, based on the same `codex/recover-unpushed-work` tip.
+Both branches edit `FarmUi.java`, `CrmTab.java`, `HarvestLogTab.java`, and
+`application.properties`. A temporary merge of PR #32 into the complete farm
+preview had no textual conflicts. The combined tree compiled and passed 88
+focused tests in seven suites, including forced-close, failed-save, power-cut,
+farm-combination, and CRM/harvest safety checks. No part of PR #32 was copied
+into the farm stack. If #32 lands on the common base first, bring that updated
+base through the farm stack and retain both changes in those four files; keep
+the combined test result as evidence, not a substitute for the normal full
+release gate after integration.
