@@ -25,10 +25,9 @@ import java.io.OutputStream;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.AccessDeniedException;
-import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.security.DigestOutputStream;
 import java.security.MessageDigest;
@@ -112,7 +111,7 @@ public class FarmDataExportService {
         ensureExportRoot();
 
         Path destination = exportDirectory(exportId);
-        if (Files.exists(destination)) {
+        if (Files.exists(destination, LinkOption.NOFOLLOW_LINKS)) {
             return replayExisting(exportId, request);
         }
 
@@ -554,10 +553,25 @@ public class FarmDataExportService {
     }
 
     private void publish(Path staging, Path destination) throws IOException {
-        try {
-            Files.move(staging, destination, StandardCopyOption.ATOMIC_MOVE);
-        } catch (AtomicMoveNotSupportedException | AccessDeniedException exception) {
-            Files.move(staging, destination);
+        // The staging directory shares the destination's parent. An ordinary move
+        // rejects an existing destination; ATOMIC_MOVE may replace one on some file systems.
+        for (int attempt = 0; ; attempt++) {
+            try {
+                Files.move(staging, destination);
+                return;
+            } catch (AccessDeniedException denied) {
+                // Windows file scanners can briefly hold a newly written directory.
+                if (attempt >= 4 || Files.exists(destination, LinkOption.NOFOLLOW_LINKS)) {
+                    throw denied;
+                }
+                try {
+                    Thread.sleep(50L << attempt);
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                    throw new IOException("Interrupted while publishing record export.",
+                            interrupted);
+                }
+            }
         }
     }
 

@@ -62,7 +62,8 @@ class ProductionStudioVisualContractTest {
     private static final Path OUTPUT = Path.of("target", "ui-previews", "production-studio");
 
     @ParameterizedTest(name = "{0} theme at {1} by {2}")
-    @CsvSource({"light, 850, 500", "dark, 850, 500", "light, 1180, 760", "dark, 1180, 760"})
+    @CsvSource({"light, 850, 500", "dark, 850, 500", "light, 1180, 760", "dark, 1180, 760",
+            "light, 1180, 1000"})
     @DisplayName("all production workflows fit the real laptop content area and remain reachable")
     void rendersEveryWorkspaceWithReachableControls(String theme, int width, int height)
             throws Exception {
@@ -85,6 +86,14 @@ class ProductionStudioVisualContractTest {
         SwingUserHarness.on(root).awaitText("Production Studio refreshed");
         SwingUtilities.invokeAndWait(() -> {
             loadLibraryExamples(root);
+            JTabbedPane workspace = named(root, "productionStudio.workspace", JTabbedPane.class);
+            JTabbedPane plantings = named(root, "production.plantingWorkspace", JTabbedPane.class);
+            workspace.setSelectedIndex(1);
+            plantings.setSelectedIndex(1);
+            named(root, "production.refreshTasks", JButton.class).doClick();
+        });
+        SwingUserHarness.on(root).awaitText("Production Studio refreshed");
+        SwingUtilities.invokeAndWait(() -> {
             root.addNotify();
             try {
                 root.setSize(width, height);
@@ -105,6 +114,38 @@ class ProductionStudioVisualContractTest {
                         settleLayout(root);
                         scrollToTop(root);
                         render(view, root);
+                        if (width == 1180 && height == 1000 && section == 1 && detail == 1) {
+                            JTable tasks = named(root, "production.taskTable", JTable.class);
+                            JLabel selected = named(root, "production.selectedTaskSummary", JLabel.class);
+                            JLabel status = named(root, "production.status", JLabel.class);
+                            JButton save = named(root, "production.markTaskDone", JButton.class);
+                            assertThat(status.getText()).as("field-work gallery follows a work refresh")
+                                    .contains("Production Studio refreshed")
+                                    .doesNotContain("Previewed");
+                            assertThat(tasks.getValueAt(0, 3)).as("open task status matches the filter")
+                                    .isEqualTo("Open");
+                            assertThat(tasks.getValueAt(0, 4)).as("task type is readable in the gallery")
+                                    .isEqualTo("Soil prep");
+                            assertThat(tasks.getValueAt(1, 4)).as("short task type stays readable")
+                                    .isEqualTo("Sow");
+                            assertThat(selected.getText()).contains("Task #31", "Soil prep");
+                            render(view + "-gallery", root);
+                            assertThat(visibleBounds(tasks.getTableHeader(), root).height)
+                                    .as("task headers visible in the field-work gallery view")
+                                    .isGreaterThanOrEqualTo(24);
+                            assertThat(visibleBounds(selected, root).height)
+                                    .as("selected task identity visible in the field-work gallery view")
+                                    .isGreaterThanOrEqualTo(20);
+                            assertThat(visibleBounds(save, root).height)
+                                    .as("field-work save action visible in the gallery view")
+                                    .isGreaterThanOrEqualTo(32);
+                        }
+                        if (width == 850 && section == 3 && detail == 3) {
+                            JTextField order = named(root, "production.handoffOrder", JTextField.class);
+                            assertThat(visibleBounds(order, root).height)
+                                    .as("related order field is visible before scrolling at laptop size")
+                                    .isGreaterThanOrEqualTo(28);
+                        }
                         assertViewUsable(root, view);
                     }
                 }

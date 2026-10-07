@@ -330,8 +330,9 @@ public class InventoryService {
     }
 
     /**
-     * Increases quantity for the named SKU. If no SKU exists, creates one under
-     * category {@code Flowers/Plants} so harvest logging always grows stock.
+     * Increases quantity for the named SKU. New flower-unit harvests use the
+     * flower category; other units use a neutral harvested-crop category.
+     * Existing SKU categories are retained.
      */
     @Transactional
     public synchronized Item incrementQuantityByName(String name, int amount, String unit, String notesHint) {
@@ -341,9 +342,16 @@ public class InventoryService {
         if (amount < 0) {
             throw new IllegalArgumentException("Increment amount cannot be negative.");
         }
+        String harvestUnit = (unit == null || unit.isBlank()) ? "stems" : unit.trim();
         Optional<Item> found = repository.findAllByNameIgnoreCaseForUpdate(name).stream().findFirst();
         if (found.isPresent()) {
             Item item = found.get();
+            if (!InventoryUnits.equivalent(item.getUnit(), harvestUnit)) {
+                throw new IllegalArgumentException(
+                        "Cannot add harvest '" + item.getName() + "': harvest unit "
+                                + harvestUnit + " does not match inventory unit "
+                                + item.getUnit() + ".");
+            }
             final int next;
             try {
                 next = Math.addExact(item.getQuantity(), amount);
@@ -356,11 +364,15 @@ public class InventoryService {
             log.info("Inventory '{}' qty → {} (incremented by {})", saved.getName(), saved.getQuantity(), amount);
             return saved;
         }
-        String u = (unit == null || unit.isBlank()) ? "stems" : unit.trim();
         String notes = notesHint == null || notesHint.isBlank()
                 ? "Auto-created from harvest log"
                 : notesHint.trim();
-        Item created = new Item(name.trim(), "Flowers/Plants", 0.0, u, 0.0, amount, notes);
+        String category = switch (InventoryUnits.canonical(harvestUnit)) {
+            case "stem", "bunch", "bouquet", "plant" -> "Flowers/Plants";
+            default -> "Harvested crops";
+        };
+        Item created = new Item(name.trim(), category, 0.0,
+                harvestUnit, 0.0, amount, notes);
         Item saved = repository.save(created);
         log.info("Inventory created '{}' with qty {} from harvest", saved.getName(), amount);
         return saved;

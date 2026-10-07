@@ -468,7 +468,8 @@ class PriorityTabsUiTest {
                     assertThat(detail.getText())
                             .contains("Opens Inventory", "closeout low-stock queue");
                     assertThat(detail.getAccessibleContext().getAccessibleDescription())
-                            .contains("Count or restock", "Opened Inventory");
+                            .contains("Count or restock", "Opens Inventory")
+                            .doesNotContain("Opened Inventory");
                 });
         TrackingHost host = new TrackingHost();
         DashboardTab tab = new DashboardTab(
@@ -515,6 +516,25 @@ class PriorityTabsUiTest {
                                 day, day, day, "CONFIRMED", 0, 0,
                                 List.of(), List.of(), 0, "Packing"),
                         null, null, List.of(), 10, List.of(), "Briefing");
+        MarketDayPackingService.PackLine roseLine =
+                new MarketDayPackingService.PackLine(
+                        "Nootka Rose", "stems", 5, 4.50, 22.50, 421L);
+        MarketDayPackingService.MarketDayPlan handoffReview =
+                new MarketDayPackingService.MarketDayPlan(
+                        day, day, day, "CONFIRMED", 2, 45,
+                        List.of(new MarketDayPackingService.CustomerPack(
+                                        42L, "Kitsap Blooms", "FLORIST", "CONFIRMED",
+                                        day, "AM pickup", List.of(roseLine), 22.50),
+                                new MarketDayPackingService.CustomerPack(
+                                        43L, "Saturday Stall", "MARKET", "CONFIRMED",
+                                        day, "Load by 7", List.of(roseLine), 22.50)),
+                        List.of(new MarketDayPackingService.ProductNeed(
+                                "Nootka Rose", "stems", 10, 15, false, 0)),
+                        0, "Packing");
+        MorningBriefingService.MorningBriefing needsHandoffReview =
+                new MorningBriefingService.MorningBriefing(
+                        day, "06:00", "Kitsap", 40, 80, 45,
+                        handoffReview, null, null, List.of(), 10, List.of(), "Briefing");
 
         assertThat(DashboardTab.morningActions(busy))
                 .extracting(DashboardTab.MorningAction::targetTab)
@@ -525,6 +545,9 @@ class PriorityTabsUiTest {
         assertThat(DashboardTab.morningActions(busy).get(2).inventoryProducts())
                 .containsExactly("Nootka Rose");
         assertThat(DashboardTab.morningActions(ready)).isEmpty();
+        assertThat(DashboardTab.morningActions(needsHandoffReview))
+                .extracting(DashboardTab.MorningAction::summary)
+                .containsExactly("Review 2 order(s) for packing");
 
         DashboardTab.MorningActionChooser chooser =
                 DashboardTab.buildMorningActionChooser(
@@ -2560,9 +2583,14 @@ class PriorityTabsUiTest {
                 customer, LocalDate.now(), "CONFIRMED", "", "PICKUP");
         invalidQuantity.setId(66L);
         invalidQuantity.addLine(new OrderLine("Dahlia Mix", 0.4, "stems", 3.5));
+        CustomerOrder missingDeliveryContext = new CustomerOrder(
+                customer, LocalDate.now(), "CONFIRMED", "", "DELIVERY");
+        missingDeliveryContext.setId(67L);
+        missingDeliveryContext.addLine(new OrderLine("Dahlia Mix", 1, "stems", 3.5));
 
         List<CustomerOrder> confirmed = List.of(
-                ready, missingHandoff, empty, shortStock, wrongUnit, invalidQuantity);
+                ready, missingHandoff, empty, shortStock, wrongUnit, invalidQuantity,
+                missingDeliveryContext);
         when(customers.search(anyString())).thenReturn(List.of(customer));
         when(customers.getAll()).thenReturn(List.of(customer));
         when(inventory.getAllItems()).thenReturn(List.of(new Item(
@@ -2578,6 +2606,9 @@ class PriorityTabsUiTest {
             tab.initialize();
         });
         awaitCrmRefresh(root[0]);
+        assertThat(find(root[0], JLabel.class))
+                .anySatisfy(label -> assertThat(label.getText())
+                        .contains("7 confirmed"));
         SwingUtilities.invokeAndWait(() -> button(root[0], "Ready to complete").doClick());
         awaitCrmRefresh(root[0]);
 
@@ -2589,7 +2620,7 @@ class PriorityTabsUiTest {
         assertThat(readiness.getSelectedItem()).isEqualTo("Ready to complete");
         assertThat(find(root[0], JLabel.class))
                 .anySatisfy(label -> assertThat(label.getText())
-                        .isEqualTo("1 ready to complete · 5 need attention"));
+                        .isEqualTo("1 ready to complete · 6 need attention"));
         assertThat(button(root[0], "Ready to complete").getMnemonic())
                 .isEqualTo(java.awt.event.KeyEvent.VK_Y);
 
@@ -2598,22 +2629,24 @@ class PriorityTabsUiTest {
             button(root[0], "Apply filters").doClick();
         });
         awaitCrmRefresh(root[0]);
-        assertThat(table.getRowCount()).isEqualTo(5);
+        assertThat(table.getRowCount()).isEqualTo(6);
         assertThat(java.util.stream.IntStream.range(0, table.getRowCount())
                 .mapToObj(row -> table.getValueAt(row, 0)))
-                .containsExactly(62L, 63L, 64L, 65L, 66L);
+                .containsExactly(62L, 63L, 64L, 65L, 66L, 67L);
         assertThat(find(root[0], JLabel.class))
                 .anySatisfy(label -> assertThat(label.getText())
-                        .isEqualTo("5 need attention · 1 ready"));
+                        .isEqualTo("6 need attention · 1 ready"));
         assertThat(((JLabel) find(root[0], JLabel.class).stream()
-                .filter(label -> "5 need attention · 1 ready".equals(label.getText()))
+                .filter(label -> "6 need attention · 1 ready".equals(label.getText()))
                 .findFirst().orElseThrow()).getAccessibleContext().getAccessibleDescription())
                 .contains("handoff", "saved products", "quantities", "units", "stock");
+        SwingUtilities.invokeAndWait(() -> table.setRowSelectionInterval(5, 5));
+        assertThat(button(root[0], "Complete order").isEnabled()).isFalse();
 
         SwingUtilities.invokeAndWait(tab::refreshData);
         awaitCrmRefresh(root[0]);
         assertThat(readiness.getSelectedItem()).isEqualTo("Needs attention");
-        assertThat(table.getRowCount()).isEqualTo(5);
+        assertThat(table.getRowCount()).isEqualTo(6);
     }
 
     @Test
@@ -2681,7 +2714,8 @@ class PriorityTabsUiTest {
         assertThat(stock.getText()).contains(
                 "1 queue stock gap", "Dahlia Mix short 2 after earlier orders");
         assertThat(stock.getAccessibleContext().getAccessibleDescription())
-                .contains("Earlier dated ready orders reserve", "Complete those orders first");
+                .contains("Earlier dated confirmed orders are counted first",
+                        "Complete those orders first");
     }
 
     @Test
@@ -3744,9 +3778,9 @@ class PriorityTabsUiTest {
                 "Already saved on this order in 1 line",
                 "Short by 1 at completion",
                 "2 already saved + 3 entered = 5 required",
-                "6 inventory units reserved for earlier confirmed orders");
+                "6 inventory units counted toward earlier confirmed orders in this preview");
         assertThat(preview.getAccessibleContext().getAccessibleDescription())
-                .contains("Short by 1", "reserved for earlier confirmed orders");
+                .contains("Short by 1", "counted toward earlier confirmed orders");
         assertThat(((JLabel) findNamed(root[0], "crm.selectedOrderStock").get(0)).getText())
                 .isEqualTo("Stock covers selected order · 1 product");
         assertThat(button(root[0], "Add product to selected order").isEnabled()).isTrue();
@@ -7529,9 +7563,9 @@ class PriorityTabsUiTest {
             tab.startOrderConfirmation(42L, "the Kitsap Blooms order");
         });
         release.countDown();
-        awaitLabel(root[0], "Order #42 confirmed · ready to pack");
+        awaitLabel(root[0], "Order #42 confirmed · review packing");
         awaitCrmRefresh(root[0]);
-        awaitLabel(root[0], "Order #42 confirmed once · ready to pack");
+        awaitLabel(root[0], "Order #42 confirmed once · review packing");
 
         assertThat(calledOnUiThread).isFalse();
         assertThat(capturedReview.get()).satisfies(snapshot -> {
@@ -7670,7 +7704,7 @@ class PriorityTabsUiTest {
 
         SwingUtilities.invokeAndWait(tab::refreshData);
         awaitCrmRefresh(root[0]);
-        awaitLabel(root[0], "Order #42 confirmed once · ready to pack");
+        awaitLabel(root[0], "Order #42 confirmed once · review packing");
         assertThat(button(root[0], "Confirm order").isEnabled()).isFalse();
         verify(orders, times(1)).confirmReviewed(
                 eq(42L), any(OrderService.OrderReviewSnapshot.class));
@@ -9942,6 +9976,8 @@ class PriorityTabsUiTest {
                     assertThat(label.getAccessibleContext().getAccessibleDescription())
                             .contains("Dahlia Mix", "Resolve the order or Inventory issue");
                 });
+        assertThat(((JLabel) findNamed(root[0], "marketDay.dragOrder.1").get(0)).getText())
+                .contains("Resolve packing checks before dragging");
         assertThat(findNamed(root[0], "marketDay.handoffGroup.DELIVERY"))
                 .singleElement()
                 .satisfies(component -> assertThat(((JLabel) component).getText())
@@ -10476,10 +10512,10 @@ class PriorityTabsUiTest {
         assertThat(completion.getText()).contains("1 checked", "ready to complete");
         assertThat(button(root[0], "Complete confirmed orders…").isEnabled()).isTrue();
         assertThat(summary.getText()).contains(
-                "2", "$30.00", "Draft preview issue(s)", "completion available");
+                "2", "$30.00", "1 draft preview issue", "completion available");
         assertThat(host.status).contains(
                 "2 visible order(s)", "$30.00 active pipeline",
-                "1 confirmed", "$10.00 ready to complete");
+                "1 confirmed", "$10.00 confirmed for packing review");
     }
 
     @Test
@@ -10505,6 +10541,8 @@ class PriorityTabsUiTest {
             tab.initialize();
         });
         awaitMarketPlan(root[0]);
+        assertThat(host.status).contains("1 confirmed", "$0.00 confirmed for packing review")
+                .doesNotContain("ready to complete");
 
         SwingUtilities.invokeAndWait(() -> {
             JCheckBox packed = (JCheckBox) findNamed(

@@ -35,7 +35,11 @@ entry form, and explicit rows for actions, status, filters, and conditional SKU
 setup. `FarmUi.wrappingStatusBadge` is intended for a dedicated full-width row:
 it measures HTML renderer layout in actual pixels while keeping plain label and
 accessible text. History tables retain readable identity columns and use horizontal
-scrolling for extended record detail.
+scrolling for extended record detail. At 850×500, the entry/history split starts
+with enough space for crop, quantity, unit, date, and the full Add harvest action;
+optional fields scroll within the entry form, and history remains reachable below.
+Roomier views also expose bed and notes on entry. A manually moved divider keeps
+its position during ordinary relayout.
 
 ## Package Structure (as built)
 
@@ -86,6 +90,15 @@ column's assigned width and retains the original accessible guidance.
 Rendered dialog content: [Planting entry](images/app-planting-dialog.png) and
 [Farm lesson entry](images/app-lesson-dialog.png). These fixtures include the
 standard option buttons but do not capture native window decorations.
+
+Add Item preserves the paired entry fields in a width-tracking workspace and
+moves the economics cards below them on compact screens. Save actions and
+wrapping feedback have separate rows; keyboard focus reveals offscreen inputs
+and actions. Rose ruleset dialogs bound the selector independently of filename
+length and expose the full selected filename in a copyable reader. Dashboard
+morning briefing and day closeout previews reserve space for modal actions,
+with wrapping task guidance and readable report text. These layout changes keep
+the existing save, task handoff, and export decisions intact.
 
 ```
 com.flowerfarm.gui
@@ -243,6 +256,10 @@ Production Studio separates planning from field work and uses full-width forms
 with associated labels and vertical page scrolling. Wide record tables retain
 their own horizontal scrollbars. The task editor repeats the selected task's
 identity; recovery messages wrap without exposing internal control identifiers.
+The inner planting and economics tab rows use a compact height while preserving
+normal keyboard tab navigation. External Handoffs no longer repeats its tab
+title as a section heading; a short description leads into the form so its
+related order and recipe fields are visible at 850×500 before scrolling.
 
 Full Studio refresh, frost reload, and task actuals saves capture inputs on the
 EDT, call services through SwingWorker, and apply eligible results on the EDT.
@@ -277,6 +294,9 @@ approvals. A stale preflight rejection requires a successful plan rebuild before
 completion is enabled again. Refreshes during completion queue behind its result,
 preserving the captured packing evidence. These desktop guards complement the
 existing service preflight and transactional per-order checks.
+The completion-row access badge describes write permission; the adjacent status
+reports packing readiness. A viewer sees completion as unavailable even when
+loads have been checked, so a disabled action is never labeled ready.
 
 ### Inventory save and refresh outcomes
 

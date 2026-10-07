@@ -179,6 +179,64 @@ class InventoryServiceTest {
     }
 
     @Test
+    @DisplayName("rose and dahlia harvest units retain the flower inventory category")
+    void flowerHarvestUnitsRetainFlowerInventoryCategory() {
+        repository.deleteAll();
+
+        Item roseStems = service.incrementQuantityByName(
+                "Nootka Rose", 10, "stems", "First cut");
+        Item dahliaStems = service.incrementQuantityByName(
+                "Dahlia Mix", 24, "Per Stem", "Morning cut");
+        Item dahliaBunches = service.incrementQuantityByName(
+                "Dahlia Bunches", 4, "bunches", "Market cut");
+
+        assertThat(List.of(roseStems, dahliaStems, dahliaBunches))
+                .allSatisfy(item -> assertThat(item.getCategory())
+                        .isEqualTo("Flowers/Plants"));
+    }
+
+    @Test
+    @DisplayName("potato harvest creates a neutral inventory category")
+    void potatoHarvestCreatesNeutralInventoryCategory() {
+        repository.deleteAll();
+
+        Item created = service.incrementQuantityByName(
+                "Yukon Gold Potato", 80, "pounds", "Harvested from Field 2");
+
+        assertThat(created.getCategory()).isEqualTo("Harvested crops");
+        assertThat(created.getUnit()).isEqualTo("pounds");
+        assertThat(created.getQuantity()).isEqualTo(80);
+        assertThat(service.findById(created.getId())).get().satisfies(saved -> {
+            assertThat(saved.getCategory()).isEqualTo("Harvested crops");
+            assertThat(saved.getNotes()).isEqualTo("Harvested from Field 2");
+        });
+    }
+
+    @Test
+    @DisplayName("harvest increment rejects mismatched units and keeps a manually categorized SKU")
+    void harvestIncrementRejectsMismatchedUnits() {
+        repository.deleteAll();
+        Item potato = service.addItem(new Item("Yukon Gold Potato", "Vegetables",
+                2.0, "pounds", 0.75, 12, "Manual category"));
+
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> service.incrementQuantityByName(
+                        "Yukon Gold Potato", 5, "bags", "Harvested from Field 2"))
+                .withMessageContaining("harvest unit bags")
+                .withMessageContaining("inventory unit pounds");
+        assertThat(service.findById(potato.getId())).get().satisfies(saved -> {
+            assertThat(saved.getCategory()).isEqualTo("Vegetables");
+            assertThat(saved.getQuantity()).isEqualTo(12);
+        });
+
+        Item updated = service.incrementQuantityByName(
+                "Yukon Gold Potato", 5, "lb", "Harvested from Field 2");
+        assertThat(updated.getCategory()).isEqualTo("Vegetables");
+        assertThat(updated.getUnit()).isEqualTo("pounds");
+        assertThat(updated.getQuantity()).isEqualTo(17);
+    }
+
+    @Test
     @DisplayName("increment rejects integer overflow")
     void incrementRejectsOverflow() {
         repository.deleteAll();

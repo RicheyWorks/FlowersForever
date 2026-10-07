@@ -5,9 +5,10 @@ import com.flowerfarm.gui.FarmUi;
 import com.flowerfarm.gui.FarmDialogs;
 import com.flowerfarm.gui.FarmFileChooser;
 import com.flowerfarm.gui.presenter.InventoryItemPresenter;
-import com.flowerfarm.gui.view.InventoryItemFormView;
 import com.flowerfarm.gui.view.InventoryDraftReviewView;
+import com.flowerfarm.gui.view.InventoryItemFormView;
 import com.flowerfarm.gui.view.StockCountView;
+import com.flowerfarm.model.FarmWorkspace;
 import com.flowerfarm.model.Item;
 import com.flowerfarm.service.InventoryService;
 
@@ -51,6 +52,9 @@ public class InventoryTab implements FlowerFarmTab {
     private final FarmFileChooser files;
 
     private JPanel panel;
+    private FarmWorkspace workspace = FarmWorkspace.ROSE_AND_EVENTS;
+    private java.util.Set<FarmWorkspace> enabledWorkspaces =
+            java.util.Set.of(FarmWorkspace.ROSE_AND_EVENTS);
     private DefaultTableModel tableModel;
     private JTable inventoryTable;
     private TableRowSorter<DefaultTableModel> sorter;
@@ -125,6 +129,38 @@ public class InventoryTab implements FlowerFarmTab {
         if (shareAction != null) {
             floristShare = shareAction;
         }
+    }
+
+    /** Set the operation's presentation before this tab creates its Swing controls. */
+    public void setWorkspace(FarmWorkspace workspace) {
+        if (panel != null) {
+            throw new IllegalStateException("Choose the inventory workspace before opening it.");
+        }
+        this.workspace = java.util.Objects.requireNonNull(workspace, "workspace");
+        this.enabledWorkspaces = java.util.Set.of(workspace);
+    }
+
+    /** Show floral details when a combined operation includes a floral type. */
+    public void setEnabledWorkspaces(java.util.Set<FarmWorkspace> enabledWorkspaces) {
+        if (panel != null) {
+            throw new IllegalStateException("Choose inventory farm types before opening it.");
+        }
+        java.util.Objects.requireNonNull(enabledWorkspaces, "enabledWorkspaces");
+        if (!enabledWorkspaces.contains(workspace)) {
+            throw new IllegalArgumentException("Selected types must include the primary farm.");
+        }
+        this.enabledWorkspaces = java.util.Collections.unmodifiableSet(
+                new java.util.LinkedHashSet<>(enabledWorkspaces));
+    }
+
+    private boolean showRoseDetails() {
+        return enabledWorkspaces.contains(FarmWorkspace.ROSE_AND_EVENTS)
+                || enabledWorkspaces.contains(FarmWorkspace.FLOWER_SHOP);
+    }
+
+    private boolean showFloristShare() {
+        return showRoseDetails()
+                || enabledWorkspaces.contains(FarmWorkspace.WILDFLOWER_FARM);
     }
 
     @Override
@@ -348,7 +384,9 @@ public class InventoryTab implements FlowerFarmTab {
         header.setOpaque(false);
         header.add(FarmUi.pageHeader(
                 "Inventory",
-                "Search stock, review pricing, and prepare cooler restock sheets.",
+                showRoseDetails()
+                        ? "Search stock, review pricing, and prepare cooler restock sheets."
+                        : "Search stock, review pricing, and prepare restock sheets.",
                 FarmUi.toolbar(accessLabel, refreshBtn)), BorderLayout.NORTH);
         JPanel feedback = new JPanel(new BorderLayout(0, FarmUi.CONTROL_GAP));
         feedback.setOpaque(false);
@@ -487,7 +525,9 @@ public class InventoryTab implements FlowerFarmTab {
         tableState.add(tableScroll, "table");
         inventoryEmptyState = FarmUi.emptyStateView(
                 "No inventory yet",
-                "Add the first flower or farm product in Add item; it will appear here after save.");
+                showRoseDetails()
+                        ? "Add the first flower or farm product in Add item; it will appear here after save."
+                        : "Add the first product in Add item; it will appear here after save.");
         tableState.add(inventoryEmptyState.component(), "empty");
 
         JPanel content = new InventoryWorkspace();
@@ -504,7 +544,9 @@ public class InventoryTab implements FlowerFarmTab {
         // ── Bottom action bar ────────────────────────────────────────────────
         stockCountBtn = FarmUi.primaryButton("Record stock count…");
         stockCountBtn.setToolTipText(
-                "Replace the selected item's quantity with a physical cooler or shed count.");
+                showRoseDetails()
+                        ? "Replace the selected item's quantity with a physical cooler or shed count."
+                        : "Replace the selected item's quantity with a physical stock count.");
         editBtn = FarmUi.secondaryButton("Edit selected");
         deleteBtn = FarmUi.dangerButton("Delete selected");
         reorderBtn = FarmUi.secondaryButton("Low-stock reorder…");
@@ -537,7 +579,9 @@ public class InventoryTab implements FlowerFarmTab {
         JPanel actionRows = new JPanel(new GridLayout(0, 1, 0, FarmUi.CONTROL_GAP));
         actionRows.setOpaque(false);
         actionRows.add(FarmUi.toolbar(stockCountBtn, editBtn, deleteBtn, reviewNameConflictBtn));
-        actionRows.add(FarmUi.toolbar(reorderBtn, priceListBtn, shareAvailabilityBtn, exportBtn));
+        actionRows.add(showFloristShare()
+                ? FarmUi.toolbar(reorderBtn, priceListBtn, shareAvailabilityBtn, exportBtn)
+                : FarmUi.toolbar(reorderBtn, priceListBtn, exportBtn));
         draftStatusLabel = FarmUi.wrappingStatusBadge("No retained drafts", FarmUi.Tone.NEUTRAL);
         draftStatusLabel.setName("inventory.draftStatus");
         reviewDraftsBtn = FarmUi.secondaryButton("Review retained drafts…");
@@ -1150,6 +1194,7 @@ public class InventoryTab implements FlowerFarmTab {
         Item current = currentItems.get(modelRow);
         InventorySnapshot reviewed = InventorySnapshot.from(current);
         InventoryItemFormView editor = new InventoryItemFormView();
+        editor.setRoseVarietyVisible(showRoseDetails());
         editor.setItem(current);
         ItemSelection identity = ItemSelection.from(current);
         RetainedDraft retained = retainedDraft(current, false);
@@ -1696,9 +1741,11 @@ public class InventoryTab implements FlowerFarmTab {
             details.append("Count: ").append(draft.count()).append(' ').append(draft.product().unit());
         } else {
             InventoryItemPresenter.ItemDraft edit = draft.edit();
-            details.append("Name: ").append(edit.name()).append("\nCategory: ").append(edit.category())
-                    .append("\nRose variety: ").append(edit.roseVariety())
-                    .append("\nSelling price: ").append(edit.price()).append("\nUnit: ").append(edit.unit())
+            details.append("Name: ").append(edit.name()).append("\nCategory: ").append(edit.category());
+            if (showRoseDetails()) {
+                details.append("\nRose variety: ").append(edit.roseVariety());
+            }
+            details.append("\nSelling price: ").append(edit.price()).append("\nUnit: ").append(edit.unit())
                     .append("\nCost: ").append(edit.cost()).append("\nQuantity: ").append(edit.quantity())
                     .append("\nNotes: ").append(edit.notes());
         }

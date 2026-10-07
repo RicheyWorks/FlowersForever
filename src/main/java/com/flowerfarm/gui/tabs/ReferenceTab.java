@@ -15,27 +15,34 @@ public final class ReferenceTab implements FlowerFarmTab {
     private JPanel panel;
     private JTabbedPane workspace;
 
+    public ReferenceTab(List<FlowerFarmTab> references) {
+        if (references == null || references.isEmpty()) {
+            throw new IllegalArgumentException("Select at least one reference workspace.");
+        }
+        this.references = List.copyOf(references);
+    }
+
     public ReferenceTab(FlowerFarmTab roseGuide, FlowerFarmTab pricing,
                         FlowerFarmTab visualizer) {
-        references = List.of(roseGuide, pricing, visualizer);
+        this(List.of(roseGuide, pricing, visualizer));
     }
 
     public ReferenceTab(FlowerFarmTab plantGuide, FlowerFarmTab roseGuide,
                         FlowerFarmTab pricing, FlowerFarmTab visualizer) {
-        references = List.of(plantGuide, roseGuide, pricing, visualizer);
+        this(List.of(plantGuide, roseGuide, pricing, visualizer));
     }
 
     public ReferenceTab(FlowerFarmTab plantGuide, FlowerFarmTab eventServices,
                         FlowerFarmTab roseGuide, FlowerFarmTab pricing,
                         FlowerFarmTab visualizer) {
-        references = List.of(plantGuide, eventServices, roseGuide, pricing, visualizer);
+        this(List.of(plantGuide, eventServices, roseGuide, pricing, visualizer));
     }
 
     public ReferenceTab(FlowerFarmTab plantGuide, FlowerFarmTab eventServices,
                         FlowerFarmTab productionStudio, FlowerFarmTab roseGuide,
                         FlowerFarmTab pricing, FlowerFarmTab visualizer) {
-        references = List.of(plantGuide, eventServices, productionStudio,
-                roseGuide, pricing, visualizer);
+        this(List.of(plantGuide, eventServices, productionStudio,
+                roseGuide, pricing, visualizer));
     }
 
     @Override
@@ -45,7 +52,7 @@ public final class ReferenceTab implements FlowerFarmTab {
 
     @Override
     public String getDescription() {
-        return "Sourced PNW plants, rose guidance, pricing units, and planning tools";
+        return "Reference and planning tools available in this workspace";
     }
 
     @Override

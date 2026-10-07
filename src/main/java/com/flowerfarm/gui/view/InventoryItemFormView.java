@@ -42,6 +42,7 @@ public final class InventoryItemFormView extends JPanel {
     private final JTextField quantityField = new JTextField("0", 10);
     private final JTextField notesField = new JTextField(28);
     private final Map<String, JComponent> fields = new LinkedHashMap<>();
+    private JPanel roseFieldGroup;
     private Runnable validationCorrectionListener = () -> { };
     private Runnable draftChangeListener = () -> { };
 
@@ -85,7 +86,8 @@ public final class InventoryItemFormView extends JPanel {
         addField(constraints, 2, 0, 1, "Selling price ($) *", priceField, 'P');
         addField(constraints, 2, 1, 1, "Cost per unit ($) *", costField, 'O');
         addField(constraints, 3, 0, 1, "Notes · optional", notesField, 'T');
-        addField(constraints, 3, 1, 1, "Rose variety · optional", roseBox, 'R');
+        roseFieldGroup = addField(constraints, 3, 1, 1, "Rose variety · optional", roseBox, 'R');
+        roseFieldGroup.setName("inventory.roseVarietyGroup");
         JPanel verticalFiller = new JPanel();
         verticalFiller.setOpaque(false);
         constraints.gridx = 0;
@@ -95,6 +97,28 @@ public final class InventoryItemFormView extends JPanel {
         constraints.fill = GridBagConstraints.BOTH;
         add(verticalFiller, constraints);
         updateRoseAvailability();
+    }
+
+    /** Hide rose-specific editing for workspaces that use a general product catalog. */
+    public void setRoseVarietyVisible(boolean visible) {
+        roseFieldGroup.setVisible(visible);
+        if (visible) {
+            FarmUi.entryControl(nameField, "e.g. Café au Lait dahlia",
+                    "Use the product name your crew and customers recognize.");
+            FarmUi.entryControl(quantityField, "0",
+                    "Whole units on hand now. Start at zero if the crop is not ready.");
+            FarmUi.entryControl(notesField, "e.g. Cooler 2 · Friday market",
+                    "Optional growing, storage, or packing notes.");
+        } else {
+            FarmUi.entryControl(nameField, "e.g. Farm product",
+                    "Use the product name your crew and customers recognize.");
+            FarmUi.entryControl(quantityField, "0",
+                    "Whole units on hand now. Start at zero until the product is ready.");
+            FarmUi.entryControl(notesField, "e.g. Storage area · Friday market",
+                    "Optional storage, batch, or packing notes.");
+        }
+        revalidate();
+        repaint();
     }
 
     public InventoryItemPresenter.ItemDraft draft() {
@@ -263,6 +287,9 @@ public final class InventoryItemFormView extends JPanel {
                     applyFlowerStarter("Wedding Flower Bucket", "Per Unit");
             case "Flower subscription" ->
                     applyFlowerStarter("Flower Subscription Bouquet", "Per Unit");
+            case "Potted plant" -> applyFlowerStarter("Potted Plant", "Per Unit");
+            case "Seedling tray" -> applyFlowerStarter("Seedling Tray", "Per Unit");
+            case "Bare-root plant" -> applyFlowerStarter("Bare-root Plant", "Per Unit");
             case "Farm supply" -> {
                 categoryBox.setSelectedItem("Other");
                 unitBox.setSelectedItem("Per Unit");
@@ -329,13 +356,15 @@ public final class InventoryItemFormView extends JPanel {
         validationCorrectionListener.run();
     }
 
-    private void addField(GridBagConstraints constraints, int row, int column, int span, String text,
+    private JPanel addField(GridBagConstraints constraints, int row, int column, int span, String text,
                           JComponent field, char mnemonic) {
         constraints.gridx = column;
         constraints.gridy = row;
         constraints.gridwidth = span;
         constraints.weightx = 1;
-        add(FarmUi.entryField(text, field, field, mnemonic), constraints);
+        JPanel group = FarmUi.entryField(text, field, field, mnemonic);
+        add(group, constraints);
+        return group;
     }
 
     private void updateRoseAvailability() {

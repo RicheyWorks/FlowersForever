@@ -31,6 +31,7 @@ public final class HarvestBatchView extends JPanel {
     private final JButton logButton;
     private final JButton sampleButton;
     private final JLabel statusLabel;
+    private final String sampleLines;
 
     public HarvestBatchView(Runnable logAction) {
         this(logAction, () -> true);
@@ -38,7 +39,14 @@ public final class HarvestBatchView extends JPanel {
 
     public HarvestBatchView(Runnable logAction,
                             java.util.function.BooleanSupplier approveSampleReplacement) {
+        this(logAction, approveSampleReplacement, SAMPLE);
+    }
+
+    public HarvestBatchView(Runnable logAction,
+                            java.util.function.BooleanSupplier approveSampleReplacement,
+                            String sampleLines) {
         super(new BorderLayout(4, 4));
+        this.sampleLines = java.util.Objects.requireNonNull(sampleLines, "sampleLines");
         setOpaque(false);
         dateField = field(LocalDate.now().toString(), 10, "Batch harvest date",
                 "Date applied to every row in this batch; use YYYY-MM-DD.");
@@ -67,7 +75,7 @@ public final class HarvestBatchView extends JPanel {
         sampleButton = FarmUi.secondaryButton("Use sample lines");
         sampleButton.addActionListener(event -> {
             if (approveSampleReplacement.getAsBoolean()) {
-                batchArea.setText(SAMPLE);
+                batchArea.setText(this.sampleLines);
             }
         });
         statusLabel = FarmUi.wrappingStatusBadge("Checking batch…", FarmUi.Tone.NEUTRAL);

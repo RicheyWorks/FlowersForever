@@ -13,9 +13,9 @@ import java.util.List;
  */
 public class FarmProfile {
 
-    private String name = "Your Flower Farm";
+    private String name = "Your Farm";
     private String location = "";
-    private String tagline = "Locally grown flowers";
+    private String tagline = "Your farm, your records";
     private String email = "";
     private String phone = "";
     private String website = "";
@@ -26,7 +26,7 @@ public class FarmProfile {
     }
 
     public void setName(String name) {
-        this.name = clean(name, "Your Flower Farm");
+        this.name = clean(name, "Your Farm");
     }
 
     public String getLocation() {
@@ -42,7 +42,7 @@ public class FarmProfile {
     }
 
     public void setTagline(String tagline) {
-        this.tagline = clean(tagline, "Locally grown flowers");
+        this.tagline = clean(tagline, "Your farm, your records");
     }
 
     public String getEmail() {
@@ -123,7 +123,7 @@ public class FarmProfile {
 
     /** Quiet software attribution for document footers. */
     public String softwareFooter() {
-        return "Prepared with FlowersForever · local-first cut-flower farm operations";
+        return "Prepared with FlowersForever · local-first farm operations";
     }
 
     private static void addIfPresent(List<String> lines, String value) {

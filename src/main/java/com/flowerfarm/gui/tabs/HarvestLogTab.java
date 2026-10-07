@@ -11,15 +11,27 @@ import com.flowerfarm.model.HarvestGrade;
 import com.flowerfarm.service.HarvestService;
 
 import javax.swing.*;
+import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
+import java.awt.datatransfer.Clipboard;
+import java.awt.datatransfer.DataFlavor;
+import java.awt.datatransfer.Transferable;
+import java.awt.datatransfer.UnsupportedFlavorException;
+import java.awt.event.InputEvent;
 import java.io.File;
+import java.io.IOException;
+import java.io.Reader;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * Harvest log tab — add / edit / filter history, inventory-aware updates,
@@ -31,6 +43,12 @@ public class HarvestLogTab implements FlowerFarmTab {
     private final TabHost host;
     private final FarmDialogs dialogs;
     private final FarmFileChooser files;
+    private String defaultUnit = "stems";
+    private static final String GENERAL_BATCH_SAMPLE =
+            "# Crop,Quantity[,Unit][,Bed]\n"
+                    + "Example crop,40\nSecond crop,25,each\nThird crop,15,lbs,Field C\n";
+    private static final int MAX_BATCH_DROP_CHARS = 262_144;
+    private static final long MAX_BATCH_DROP_FILE_BYTES = 262_144L;
 
     private JPanel panel;
     private JPanel newSkuReviewPanel;
@@ -125,6 +143,22 @@ public class HarvestLogTab implements FlowerFarmTab {
         this.host = host;
         this.dialogs = java.util.Objects.requireNonNull(dialogs, "dialogs");
         this.files = java.util.Objects.requireNonNull(files, "files");
+    }
+
+    /** Configure the initial harvest unit before the tab UI is built. */
+    public void setDefaultUnit(String unit) {
+        if (panel != null) {
+            throw new IllegalStateException("Set the default harvest unit before building the tab.");
+        }
+        String clean = Objects.requireNonNull(unit, "unit").trim();
+        if (clean.isEmpty() || clean.length() > 64) {
+            throw new IllegalArgumentException("Default harvest unit must have 1 to 64 characters.");
+        }
+        defaultUnit = clean;
+    }
+
+    private boolean usesFlowerCopy() {
+        return "stems".equalsIgnoreCase(defaultUnit);
     }
 
     @Override public String getTabTitle() { return "Harvest Log"; }
@@ -463,11 +497,20 @@ public class HarvestLogTab implements FlowerFarmTab {
         setEntryToolChoices(canWrite);
         if (accessLabel != null) {
             FarmUi.updateStatusBadge(accessLabel,
-                    canWrite ? "HAND / OWNER · editing available" : "VIEWER · read and export only",
+                    canWrite ? "Can log and edit harvests" : "View and export harvests",
                     canWrite ? FarmUi.Tone.SUCCESS : FarmUi.Tone.NEUTRAL);
         }
         updateEntryMode();
         updateEntryToolActions();
+    }
+
+    private static String gradeLabel(HarvestGrade grade) {
+        return switch (grade) {
+            case UNGRADED -> "Not graded";
+            case SELECT -> "Select";
+            case STANDARD -> "Standard";
+            case PROCESSING -> "Processing";
+        };
     }
 
     private void buildUI() {
@@ -478,6 +521,7 @@ public class HarvestLogTab implements FlowerFarmTab {
         refreshHistoryBtn.setToolTipText("Reload harvest history using the current filters");
         refreshHistoryBtn.addActionListener(e -> applyFilter());
         accessLabel = FarmUi.statusBadge("Checking access…", FarmUi.Tone.NEUTRAL);
+        accessLabel.setName("harvest.accessStatus");
         newSkuStatusLabel = FarmUi.statusBadge(
                 "New inventory setup needed", FarmUi.Tone.WARNING);
         newSkuStatusLabel.setName("harvest.newSkuStatus");
@@ -496,7 +540,8 @@ public class HarvestLogTab implements FlowerFarmTab {
         header.setOpaque(false);
         header.add(FarmUi.pageHeader(
                 "Harvest log",
-                "Log today's cut. Stock updates automatically.",
+                usesFlowerCopy() ? "Log today's cut. Stock updates automatically."
+                        : "Log a harvest. Stock updates automatically.",
                 FarmUi.toolbar(accessLabel, refreshHistoryBtn)), BorderLayout.NORTH);
         JPanel feedback = new JPanel(new BorderLayout(0, FarmUi.CONTROL_GAP));
         feedback.setOpaque(false);
@@ -533,6 +578,16 @@ public class HarvestLogTab implements FlowerFarmTab {
             table.getColumnModel().getColumn(column).setPreferredWidth(historyWidths[column]);
             table.getColumnModel().getColumn(column).setMinWidth(historyWidths[column]);
         }
+        table.getColumnModel().getColumn(8).setCellRenderer(new DefaultTableCellRenderer() {
+            @Override
+            public Component getTableCellRendererComponent(JTable history, Object value,
+                                                           boolean selected, boolean focused,
+                                                           int row, int column) {
+                return super.getTableCellRendererComponent(history,
+                        value instanceof HarvestGrade grade ? gradeLabel(grade) : "",
+                        selected, focused, row, column);
+            }
+        });
         table.getSelectionModel().addListSelectionListener(e -> {
             if (!e.getValueIsAdjusting()) {
                 updateEntryMode();
@@ -587,12 +642,16 @@ public class HarvestLogTab implements FlowerFarmTab {
         workbench = new JTabbedPane();
         workbench.setName("harvest.workspace");
         workbench.addTab("Quick entry", FarmUi.section(
-                "Record today’s cut",
-                "Start with crop and quantity. Repeated cuts keep their date, crop, unit, and bed.",
+                usesFlowerCopy() ? "Record today’s cut" : "Record a harvest",
+                usesFlowerCopy()
+                        ? "Start with crop and quantity. Repeated cuts keep their date, crop, unit, and bed."
+                        : "Start with crop and quantity. Repeated entries keep their date, crop, unit, and field.",
                 buildForm()));
         workbench.addTab("Batch entry", FarmUi.section(
-                "Log a morning cut in one pass",
-                "Enter Crop, Quantity, optional Unit, and optional Bed on each line.",
+                usesFlowerCopy() ? "Log a morning cut in one pass"
+                        : "Log multiple harvests in one pass",
+                "Enter or drop text, .csv, or .txt with Crop, Quantity, optional Unit, and "
+                        + "optional Bed on each line. Review the preview before logging.",
                 buildBatchPanel()));
         workbench.addTab("Production totals", FarmUi.section(
                 "Season totals by crop",
@@ -603,12 +662,11 @@ public class HarvestLogTab implements FlowerFarmTab {
         workbench.setMnemonicAt(2, 'P');
         workbench.getAccessibleContext().setAccessibleName("Harvest entry and totals workspace");
         history.setMinimumSize(new Dimension(0, 420));
-        workbench.setMinimumSize(new Dimension(0, 400));
+        workbench.setMinimumSize(new Dimension(0, 350));
 
-        JSplitPane split = new JSplitPane(JSplitPane.VERTICAL_SPLIT, workbench, history);
+        JSplitPane split = new ResponsiveHarvestSplit(workbench, history);
+        split.setName("harvest.entryHistorySplit");
         split.setBorder(null);
-        split.setResizeWeight(0.52);
-        split.setDividerLocation(0.52);
         split.setContinuousLayout(true);
         split.setOneTouchExpandable(true);
         JPanel workspaceContent = new HarvestWorkspaceContent();
@@ -626,10 +684,20 @@ public class HarvestLogTab implements FlowerFarmTab {
     }
 
     private JPanel buildBatchPanel() {
-        HarvestBatchView view = new HarvestBatchView(this::logBatch, this::approveSampleReplacement);
+        HarvestBatchView view = usesFlowerCopy()
+                ? new HarvestBatchView(this::logBatch, this::approveSampleReplacement)
+                : new HarvestBatchView(this::logBatch, this::approveSampleReplacement,
+                        GENERAL_BATCH_SAMPLE);
         batchArea = view.batchArea();
+        batchArea.setToolTipText("Drop text or one .csv/.txt file with "
+                + "Crop,Quantity[,Unit][,Bed] lines. Review before logging.");
+        batchArea.getAccessibleContext().setAccessibleDescription(
+                "Enter, paste, or drop harvest lines. A drop changes only this unsaved batch "
+                        + "draft; review the preview and choose Log batch harvest to save.");
+        batchArea.setTransferHandler(new BatchLinesDropHandler(batchArea.getTransferHandler()));
         batchDateField = view.dateField();
         batchUnitField = view.unitField();
+        batchUnitField.setText(defaultUnit);
         batchBedField = view.bedField();
         batchNotesField = view.notesField();
         batchBtn = view.logButton();
@@ -987,13 +1055,23 @@ public class HarvestLogTab implements FlowerFarmTab {
         qtyField = new JTextField("1", 6);
         qtyField.setName("harvest.quantity");
         qtyField.putClientProperty("JTextField.placeholderText", "Amount");
-        unitField = new JTextField("stems", 8);
+        unitField = new JTextField(defaultUnit, 8);
         unitField.setName("harvest.unit");
         unitSuggest = new JComboBox<>(new String[]{
                 "stems", "bunches", "buckets", "lbs", "oz", "each"
         });
         unitSuggest.setName("harvest.unitPreset");
-        unitSuggest.setSelectedItem("stems");
+        boolean defaultIsPreset = false;
+        for (int index = 0; index < unitSuggest.getItemCount(); index++) {
+            if (defaultUnit.equalsIgnoreCase(unitSuggest.getItemAt(index))) {
+                defaultIsPreset = true;
+                break;
+            }
+        }
+        if (!defaultIsPreset) {
+            unitSuggest.addItem(defaultUnit);
+        }
+        unitSuggest.setSelectedItem(defaultUnit);
         unitSuggest.addActionListener(e -> {
             Object u = unitSuggest.getSelectedItem();
             if (u != null) {
@@ -1011,6 +1089,16 @@ public class HarvestLogTab implements FlowerFarmTab {
         lotCodeField.putClientProperty("JTextField.placeholderText", "Generated when blank");
         gradeField = new JComboBox<>(HarvestGrade.values());
         gradeField.setName("harvest.grade");
+        gradeField.setRenderer(new DefaultListCellRenderer() {
+            @Override
+            public Component getListCellRendererComponent(JList<?> list, Object value,
+                                                          int index, boolean selected,
+                                                          boolean focused) {
+                return super.getListCellRendererComponent(list,
+                        value instanceof HarvestGrade grade ? gradeLabel(grade) : "",
+                        index, selected, focused);
+            }
+        });
         gradeField.setSelectedItem(HarvestGrade.UNGRADED);
         lossQuantityField = new JTextField("0", 6);
         lossQuantityField.setName("harvest.lossQuantity");
@@ -1037,13 +1125,18 @@ public class HarvestLogTab implements FlowerFarmTab {
         lossQuantityField.getAccessibleContext().setAccessibleDescription(
                 "Unusable quantity recorded for yield evidence and excluded from inventory.");
         storageLocationField.getAccessibleContext().setAccessibleName("Harvest storage location");
-        FarmUi.entryControl(cropField, "e.g. Dahlia · Café au Lait", "Type any crop or choose a recent crop. Required.");
+        FarmUi.entryControl(cropField,
+                usesFlowerCopy() ? "e.g. Dahlia · Café au Lait" : "e.g. crop or product",
+                "Type any crop or choose a recent crop. Required.");
         FarmUi.entryControl(qtyField, "Amount", "Recorded quantity; inventory stores whole units and rounds to the nearest unit.");
         FarmUi.entryControl(dateField, "YYYY-MM-DD", "Harvest date; today's date is filled in for you.");
         dateField.setMinimumSize(dateField.getPreferredSize());
-        FarmUi.entryControl(unitField, "stems", "Choose a unit or type your own, such as bunches or buckets.");
+        FarmUi.entryControl(unitField, defaultUnit,
+                "Choose a unit or type your own, such as bunches, pounds, or each.");
         FarmUi.entryControl(bedField, "e.g. Field A · Bed 3", "Optional growing location for this harvest.");
-        FarmUi.entryControl(notesField, "e.g. Cut before the heat", "Optional field note; press Enter here to save.");
+        FarmUi.entryControl(notesField,
+                usesFlowerCopy() ? "e.g. Cut before the heat" : "e.g. Packed after harvest",
+                "Optional field note; press Enter here to save.");
         FarmUi.entryControl(lotCodeField, "Generated when blank", "Leave blank to generate a traceability code.");
         FarmUi.entryControl(lossQuantityField, "0", "Unusable quantity; kept out of inventory.");
         FarmUi.entryControl(storageLocationField, "e.g. Cooler 2 · rack B", "Optional storage destination.");
@@ -1088,7 +1181,9 @@ public class HarvestLogTab implements FlowerFarmTab {
         addBtn = FarmUi.primaryButton("Add harvest");
         addBtn.setName("harvest.add");
         addBtn.setToolTipText(
-                "Save this cut and keep the harvest context ready for another quantity.");
+                usesFlowerCopy()
+                        ? "Save this cut and keep the harvest context ready for another quantity."
+                        : "Save this harvest and keep the context ready for another quantity.");
         addBtn.addActionListener(e -> addHarvest());
         keepContextBox = new JCheckBox("Keep harvest context", true);
         keepContextBox.setName("harvest.keepContext");
@@ -1147,6 +1242,27 @@ public class HarvestLogTab implements FlowerFarmTab {
         pair.add(field, BorderLayout.CENTER);
         pair.add(preset, BorderLayout.EAST);
         return pair;
+    }
+
+    private static final class ResponsiveHarvestSplit extends JSplitPane {
+        private static final long serialVersionUID = 1L;
+        private Boolean compact;
+
+        private ResponsiveHarvestSplit(Component entry, Component history) {
+            super(JSplitPane.VERTICAL_SPLIT, entry, history);
+        }
+
+        @Override
+        public void doLayout() {
+            JViewport viewport = (JViewport) SwingUtilities.getAncestorOfClass(JViewport.class, this);
+            boolean compactNow = getWidth() < 1000 || viewport == null || viewport.getHeight() < 500;
+            if (compact == null || compact != compactNow) {
+                compact = compactNow;
+                setResizeWeight(compactNow ? 0.35 : 0.50);
+                setDividerLocation(compactNow ? 400 : 460);
+            }
+            super.doLayout();
+        }
     }
 
     private static final class HarvestWorkspaceContent extends JPanel implements Scrollable {
@@ -1406,7 +1522,8 @@ public class HarvestLogTab implements FlowerFarmTab {
         clearEntryValidation();
         updateEntryMode();
         updateEntryStatus(
-                "Saved · context kept for next cut", FarmUi.Tone.SUCCESS);
+                usesFlowerCopy() ? "Saved · context kept for next cut"
+                        : "Saved · context kept for next harvest", FarmUi.Tone.SUCCESS);
         markEntryFormClean();
         qtyField.requestFocusInWindow();
         qtyField.selectAll();
@@ -1580,7 +1697,9 @@ public class HarvestLogTab implements FlowerFarmTab {
                     + (createdProducts.isEmpty()
                     ? ". Inventory is up to date."
                     : ". A new Inventory SKU was created with zero price and cost; review its setup.")
-                    + (keepContext ? " Context kept for the next cut." : "")
+                    + (keepContext ? usesFlowerCopy()
+                            ? " Context kept for the next cut."
+                            : " Context kept for the next harvest." : "")
                     + refreshGuidance
                     : "Harvest updated. Inventory has been corrected automatically."
                     + refreshGuidance);
@@ -1712,6 +1831,12 @@ public class HarvestLogTab implements FlowerFarmTab {
     }
 
     private boolean approveSampleReplacement() {
+        return approveBatchReplacement("Use sample lines",
+                "The existing batch lines will be discarded and replaced with example "
+                        + "harvests. Your batch date, unit, bed, and notes are kept.");
+    }
+
+    private boolean approveBatchReplacement(String replaceLabel, String description) {
         if (!canWrite || hasPendingSave()) {
             return false;
         }
@@ -1719,11 +1844,10 @@ public class HarvestLogTab implements FlowerFarmTab {
             return true;
         }
         String reviewed = batchArea.getText();
-        Object[] choices = {"Keep batch", "Use sample lines"};
+        Object[] choices = {"Keep batch", replaceLabel};
         int choice = dialogs.showOption(panel, FarmUi.confirmationPanel(
                         "Replace the entered batch lines?",
-                        "The existing batch lines will be discarded and replaced with example "
-                                + "harvests. Your batch date, unit, bed, and notes are kept.",
+                        description,
                         FarmUi.Tone.WARNING),
                 "Replace batch harvest lines?", JOptionPane.DEFAULT_OPTION,
                 JOptionPane.WARNING_MESSAGE, null, choices, choices[0]);
@@ -1733,6 +1857,162 @@ public class HarvestLogTab implements FlowerFarmTab {
             host.setStatus("Batch harvest lines were kept. Nothing was saved or replaced.");
         }
         return approved;
+    }
+
+    /** Shared by the Swing drop handler and focused, headless interaction tests. */
+    boolean importBatchDrop(Transferable transferable) {
+        if (batchArea == null || !canWrite || hasPendingSave() || !batchArea.isEnabled()) {
+            return false;
+        }
+        try {
+            String dropped = readBatchDrop(transferable);
+            if (dropped.isBlank()) {
+                showBatchDropFailure("The dropped harvest list is empty.");
+                return false;
+            }
+            if (dropped.equals(batchArea.getText())) {
+                return true;
+            }
+            if (!approveBatchReplacement("Use dropped lines",
+                    "The existing batch lines will be replaced by the dropped harvest list. "
+                            + "Your batch date, unit, bed, and notes are kept.")) {
+                return false;
+            }
+            batchArea.setText(dropped);
+            batchArea.setCaretPosition(0);
+            updateBatchPreview();
+            if (host != null) {
+                host.setStatus("Dropped harvest lines are in the batch draft. "
+                        + "Review the preview, then choose Log batch harvest to save.");
+            }
+            return true;
+        } catch (IOException | UnsupportedFlavorException | IllegalArgumentException exception) {
+            showBatchDropFailure(exception.getMessage());
+            return false;
+        }
+    }
+
+    private String readBatchDrop(Transferable transferable)
+            throws IOException, UnsupportedFlavorException {
+        if (transferable == null) {
+            throw new IllegalArgumentException("Drop text or one .csv/.txt file.");
+        }
+        String raw;
+        if (transferable.isDataFlavorSupported(DataFlavor.javaFileListFlavor)) {
+            Object data = transferable.getTransferData(DataFlavor.javaFileListFlavor);
+            if (!(data instanceof List<?> files) || files.size() != 1
+                    || !(files.get(0) instanceof File file)) {
+                throw new IllegalArgumentException("Drop one .csv or .txt file at a time.");
+            }
+            String name = file.getName().toLowerCase(Locale.ROOT);
+            if (!name.endsWith(".csv") && !name.endsWith(".txt")) {
+                throw new IllegalArgumentException("Choose a .csv or .txt harvest list.");
+            }
+            if (!Files.isRegularFile(file.toPath())) {
+                throw new IllegalArgumentException("Choose a readable harvest list file.");
+            }
+            if (Files.size(file.toPath()) > MAX_BATCH_DROP_FILE_BYTES) {
+                throw new IllegalArgumentException("The dropped file is too large for a batch draft.");
+            }
+            raw = Files.readString(file.toPath(), StandardCharsets.UTF_8);
+        } else if (transferable.isDataFlavorSupported(DataFlavor.stringFlavor)) {
+            raw = (String) transferable.getTransferData(DataFlavor.stringFlavor);
+        } else {
+            DataFlavor textFlavor = DataFlavor.selectBestTextFlavor(
+                    transferable.getTransferDataFlavors());
+            if (textFlavor == null) {
+                throw new IllegalArgumentException("Drop text or one .csv/.txt harvest list.");
+            }
+            try (Reader reader = textFlavor.getReaderForText(transferable)) {
+                raw = readDroppedText(reader);
+            }
+        }
+        if (raw == null || raw.length() > MAX_BATCH_DROP_CHARS) {
+            throw new IllegalArgumentException("The dropped harvest list is too large for a batch draft.");
+        }
+        String cleaned = raw.startsWith("\uFEFF") ? raw.substring(1) : raw;
+        return commentCsvHeader(cleaned);
+    }
+
+    private static String readDroppedText(Reader reader) throws IOException {
+        StringBuilder content = new StringBuilder();
+        char[] buffer = new char[8192];
+        int count;
+        while ((count = reader.read(buffer)) >= 0) {
+            if (content.length() + count > MAX_BATCH_DROP_CHARS) {
+                throw new IllegalArgumentException(
+                        "The dropped harvest list is too large for a batch draft.");
+            }
+            content.append(buffer, 0, count);
+        }
+        return content.toString();
+    }
+
+    private static String commentCsvHeader(String lines) {
+        int end = lines.indexOf('\n');
+        String first = end < 0 ? lines : lines.substring(0, end);
+        String[] columns = first.trim().split("[,;\\t]", -1);
+        if (columns.length >= 2 && columns[0].trim().equalsIgnoreCase("crop")
+                && (columns[1].trim().equalsIgnoreCase("quantity")
+                || columns[1].trim().equalsIgnoreCase("qty"))) {
+            return "# " + lines;
+        }
+        return lines;
+    }
+
+    private void showBatchDropFailure(String detail) {
+        String guidance = detail == null || detail.isBlank()
+                ? "Use Crop,Quantity[,Unit][,Bed] text or one UTF-8 .csv/.txt file."
+                : detail;
+        FarmUi.updateStatusBadge(batchStatusLabel,
+                "Drop not used · " + guidance, FarmUi.Tone.WARNING);
+        batchStatusLabel.setToolTipText(guidance);
+        batchStatusLabel.getAccessibleContext().setAccessibleDescription(guidance);
+        if (host != null) {
+            host.setStatus("Harvest batch draft kept. " + guidance);
+        }
+    }
+
+    private final class BatchLinesDropHandler extends TransferHandler {
+        private final TransferHandler textHandler;
+
+        private BatchLinesDropHandler(TransferHandler textHandler) {
+            this.textHandler = textHandler;
+        }
+
+        @Override public boolean canImport(TransferSupport support) {
+            if (!support.isDrop()) {
+                return textHandler != null && textHandler.canImport(support);
+            }
+            return canWrite && !hasPendingSave() && batchArea.isEnabled()
+                    && (support.isDataFlavorSupported(DataFlavor.javaFileListFlavor)
+                    || support.isDataFlavorSupported(DataFlavor.stringFlavor)
+                    || DataFlavor.selectBestTextFlavor(support.getDataFlavors()) != null);
+        }
+
+        @Override public boolean importData(TransferSupport support) {
+            if (!support.isDrop()) {
+                return textHandler != null && textHandler.importData(support);
+            }
+            return canImport(support) && importBatchDrop(support.getTransferable());
+        }
+
+        @Override public int getSourceActions(JComponent component) {
+            return textHandler == null ? NONE : textHandler.getSourceActions(component);
+        }
+
+        @Override public void exportAsDrag(JComponent component, InputEvent event, int action) {
+            if (textHandler != null) {
+                textHandler.exportAsDrag(component, event, action);
+            }
+        }
+
+        @Override public void exportToClipboard(JComponent component, Clipboard clipboard,
+                                                int action) throws IllegalStateException {
+            if (textHandler != null) {
+                textHandler.exportToClipboard(component, clipboard, action);
+            }
+        }
     }
 
     private void keepEntryDraft(String guidance) {
@@ -1751,7 +2031,8 @@ public class HarvestLogTab implements FlowerFarmTab {
         dateField.setText(LocalDate.now().toString());
         cropField.setText("");
         qtyField.setText("1");
-        unitField.setText("stems");
+        unitField.setText(defaultUnit);
+        unitSuggest.setSelectedItem(defaultUnit);
         bedField.setText("");
         notesField.setText("");
         lotCodeField.setText("");
@@ -2153,7 +2434,10 @@ public class HarvestLogTab implements FlowerFarmTab {
         if (totals.isEmpty()) {
             totalsArea.setText(filtered
                     ? "(no rows in current filter)\nClear filter or log a harvest."
-                    : "(no harvests logged yet)\nTip: log Nootka rose stems after morning cut.");
+                    : "(no harvests logged yet)\n"
+                    + (usesFlowerCopy()
+                    ? "Tip: log Nootka rose stems after morning cut."
+                    : "Tip: log your first crop and quantity after harvest."));
             return;
         }
         StringBuilder sb = new StringBuilder();
@@ -2457,12 +2741,16 @@ public class HarvestLogTab implements FlowerFarmTab {
         if (allTotals.isEmpty()) {
             harvestEmptyState.updateCopy(
                     "No harvests yet",
-                    "Use Quick entry below — crop and quantity are enough. Help > Start here… "
-                            + "also opens this path for a new farm.");
+                    usesFlowerCopy()
+                            ? "Use Quick entry below — crop and quantity are enough. "
+                                    + "Help > Start here… also opens this path for a new farm."
+                            : "Use Quick entry below — crop and quantity are enough.");
         } else {
             harvestEmptyState.updateCopy(
                     "No harvests match these filters",
-                    "Clear the filters or log today's next cut below.");
+                    usesFlowerCopy()
+                            ? "Clear the filters or log today's next cut below."
+                            : "Clear the filters or log another harvest below.");
         }
     }
 

@@ -58,6 +58,7 @@ public final class ProductionStudioTab implements FlowerFarmTab {
     private final FarmDialogs dialogs;
 
     private JPanel panel;
+    private boolean retailMode;
     private boolean canWrite = true;
     private List<GrowingTemplate> templates = List.of();
     private List<FloralRecipe> recipes = List.of();
@@ -184,6 +185,14 @@ public final class ProductionStudioTab implements FlowerFarmTab {
         this.dialogs = java.util.Objects.requireNonNull(dialogs, "dialogs");
     }
 
+    /** Select the shop view before the tab creates its Swing controls. */
+    public void setRetailMode(boolean retailMode) {
+        if (panel != null) {
+            throw new IllegalStateException("Choose the Production Studio view before opening it.");
+        }
+        this.retailMode = retailMode;
+    }
+
     @Override
     public String getTabTitle() {
         return "Production Studio";
@@ -191,7 +200,9 @@ public final class ProductionStudioTab implements FlowerFarmTab {
 
     @Override
     public String getDescription() {
-        return "Farm templates, frost schedules, task chains, design recipes, profit, and handoffs";
+        return retailMode
+                ? "Floral design recipes, estimates, and reviewed external handoffs"
+                : "Farm templates, frost schedules, task chains, design recipes, profit, and handoffs";
     }
 
     @Override
@@ -240,11 +251,14 @@ public final class ProductionStudioTab implements FlowerFarmTab {
         updateStatus("Refreshing Production Studio… Your drafts stay in place.", FarmUi.Tone.INFO);
         new SwingWorker<StudioSnapshot, Void>() {
             @Override protected StudioSnapshot doInBackground() {
-                return new StudioSnapshot(safe(service.listTemplates()), safe(service.listRecipes()),
-                        service.findSeasonSettings(query.year()),
-                        safe(service.listTasks(query.from(), query.to())),
-                        safe(service.availability(query.week())),
-                        service.productionCosts(query.costYear(), null), safe(service.listHandoffs()));
+                return new StudioSnapshot(
+                        retailMode ? List.of() : safe(service.listTemplates()),
+                        safe(service.listRecipes()),
+                        retailMode ? Optional.empty() : service.findSeasonSettings(query.year()),
+                        retailMode ? List.of() : safe(service.listTasks(query.from(), query.to())),
+                        retailMode ? List.of() : safe(service.availability(query.week())),
+                        retailMode ? null : service.productionCosts(query.costYear(), null),
+                        safe(service.listHandoffs()));
             }
 
             @Override protected void done() {
@@ -261,14 +275,16 @@ public final class ProductionStudioTab implements FlowerFarmTab {
                         return;
                     }
                     applyLibraries(snapshot.templates(), snapshot.recipes());
-                    if (!frostDirty()) {
+                    if (!retailMode && !frostDirty()) {
                         applyFrost(query.year(), snapshot.frost());
                     }
-                    tasks = snapshot.tasks();
-                    taskReviewRequired = false;
-                    renderTasks();
-                    renderAvailability(snapshot.availability());
-                    renderProductionCosts(snapshot.costs());
+                    if (!retailMode) {
+                        tasks = snapshot.tasks();
+                        taskReviewRequired = false;
+                        renderTasks();
+                        renderAvailability(snapshot.availability());
+                        renderProductionCosts(snapshot.costs());
+                    }
                     renderHandoffs(snapshot.handoffs());
                     showRefreshStatus();
                 } catch (InterruptedException exception) {
@@ -299,6 +315,11 @@ public final class ProductionStudioTab implements FlowerFarmTab {
     }
 
     private void showRefreshStatus() {
+        if (retailMode) {
+            updateStatus("Production Studio refreshed. Design and handoff records are up to date.",
+                    FarmUi.Tone.SUCCESS);
+            return;
+        }
         if (taskDraftStale()) {
             updateStatus("Your task draft was kept, but its saved task changed or is no longer "
                     + "in this view. Review the task and choose Discard task draft before saving.",
@@ -356,14 +377,20 @@ public final class ProductionStudioTab implements FlowerFarmTab {
         panel.setName("productionStudio.page");
         refreshStudio = named(FarmUi.secondaryButton("Refresh studio"), "production.refreshStudio");
         panel.add(FarmUi.pageHeader("Production Studio",
-                "Plan the season, record the work, and know what each design costs.",
+                retailMode
+                        ? "Design flowers, estimate each order, and record reviewed handoffs."
+                        : "Plan the season, record the work, and know what each design costs.",
                 refreshStudio), BorderLayout.NORTH);
         JTabbedPane workspace = new JTabbedPane();
         workspace.setTabLayoutPolicy(JTabbedPane.SCROLL_TAB_LAYOUT);
         workspace.setName("productionStudio.workspace");
         workspace.getAccessibleContext().setAccessibleName("Production studio workspaces");
-        workspace.addTab("Frost & crop templates", buildTemplateWorkspace());
-        workspace.addTab("Plantings & work", buildPlantingWorkspace());
+        JComponent templatesView = buildTemplateWorkspace();
+        JComponent plantingView = buildPlantingWorkspace();
+        if (!retailMode) {
+            workspace.addTab("Frost & crop templates", templatesView);
+            workspace.addTab("Plantings & work", plantingView);
+        }
         workspace.addTab("Design recipes", buildRecipeWorkspace());
         workspace.addTab("Economics & handoffs", buildEconomicsWorkspace());
         panel.add(workspace, BorderLayout.CENTER);
@@ -517,6 +544,7 @@ public final class ProductionStudioTab implements FlowerFarmTab {
         addWide(actuals, 3, buttonRow(markTaskDone, reloadTaskActuals));
         addWide(actuals, 4, buttonRow(skipTask, reopenTask, regenerateTasks));
         JTabbedPane workspace = new JTabbedPane();
+        workspace.putClientProperty("JTabbedPane.tabHeight", 36);
         workspace.setName("production.plantingWorkspace");
         workspace.getAccessibleContext().setAccessibleName("Planting and field work views");
         workspace.addTab("Plan plantings", scroll(FarmUi.section("Build a planting schedule",
@@ -598,18 +626,20 @@ public final class ProductionStudioTab implements FlowerFarmTab {
 
         JTabbedPane economics = new JTabbedPane();
         economics.setTabLayoutPolicy(JTabbedPane.SCROLL_TAB_LAYOUT);
+        economics.putClientProperty("JTabbedPane.tabHeight", 36);
         economics.setName("production.economicsWorkspace");
         economics.getAccessibleContext().setAccessibleName("Economics and handoff workspaces");
         economics.addTab("Recipe profitability", scroll(FarmUi.section("Recipe costs and return",
                 "See purchase quantities, labor, waste, and the estimated return per design.", estimate)));
-        economics.addTab("Planned + live availability", scroll(FarmUi.section("Sellable availability",
-                "The event week's crop plan reconciled with live inventory.", availability)));
-        economics.addTab("Production costs", scroll(FarmUi.section("Planting and season costs",
-                "Task actuals plus matched harvests; unlinked work and unmatched harvests stay visible.",
-                buildProductionCostsPanel())));
-        economics.addTab("External handoffs", FarmUi.section("External handoffs",
-                "Reviewable references for contract, payment, and marketplace providers.",
-                buildHandoffPanel()));
+        JComponent productionCostsPanel = buildProductionCostsPanel();
+        if (!retailMode) {
+            economics.addTab("Planned + live availability", scroll(FarmUi.section("Sellable availability",
+                    "The event week's crop plan reconciled with live inventory.", availability)));
+            economics.addTab("Production costs", scroll(FarmUi.section("Planting and season costs",
+                    "Task actuals plus matched harvests; unlinked work and unmatched harvests stay visible.",
+                    productionCostsPanel)));
+        }
+        economics.addTab("External handoffs", buildHandoffPanel());
         return economics;
     }
 
@@ -669,7 +699,9 @@ public final class ProductionStudioTab implements FlowerFarmTab {
         handoffTable = table("production.handoffTable", handoffModel);
         JPanel result = new JPanel(new BorderLayout());
         result.setOpaque(false);
-        result.add(scroll(stacked(form,
+        result.add(scroll(stacked(
+                FarmUi.wrappingHint("Reviewable references for contract, payment, and marketplace providers."),
+                form,
                 FarmUi.section("Saved handoffs", "Recorded references; no payment or message is sent here.",
                         scroll(handoffTable)))), BorderLayout.CENTER);
         return result;
@@ -950,7 +982,8 @@ public final class ProductionStudioTab implements FlowerFarmTab {
     }
 
     private void loadTemplatesAndRecipes() {
-        applyLibraries(safe(service.listTemplates()), safe(service.listRecipes()));
+        applyLibraries(retailMode ? List.of() : safe(service.listTemplates()),
+                safe(service.listRecipes()));
     }
 
     private void applyLibraries(List<GrowingTemplate> loadedTemplates,
@@ -1072,7 +1105,8 @@ public final class ProductionStudioTab implements FlowerFarmTab {
             for (ProductionTask task : visibleTasks) {
                 boolean hasActuals = task.hasActuals();
                 taskModel.addRow(new Object[]{task.getId(), task.getDueDate(), taskTiming(task),
-                        task.getStatus(), task.getTaskType(), task.getCropName(),
+                        taskLabel(task.getStatus().name()), taskLabel(task.getTaskType().name()),
+                        task.getCropName(),
                         task.getBedOrField(), !hasActuals || task.getActualMinutes() == null
                                 ? "" : task.getActualMinutes() + " min",
                         hasActuals ? money(task.getInputCost()) : "",
@@ -1165,7 +1199,7 @@ public final class ProductionStudioTab implements FlowerFarmTab {
                     }
                     boolean refreshed = result.tasks() != null && result.costsLoaded()
                             && sameRange && sameYear;
-                    updateStatus("Task “" + task.getTaskType()
+                    updateStatus("Task “" + taskLabel(task.getTaskType().name())
                             + "” completed with labor, input cost, and field result saved."
                             + (refreshed ? "" : " Some views still show previous data. Use Refresh work "
                             + "and Refresh costs; do not repeat the saved action."),
@@ -1332,8 +1366,8 @@ public final class ProductionStudioTab implements FlowerFarmTab {
         ProductionTask task = visibleTasks.get(taskTable.convertRowIndexToModel(row));
         service.updateTaskStatus(task.getId(), status);
         loadTasks();
-        updateStatus("Task “" + task.getTaskType() + "” is now "
-                + status.toString().toLowerCase(Locale.ROOT) + ".", FarmUi.Tone.SUCCESS);
+        updateStatus("Task “" + taskLabel(task.getTaskType().name()) + "” is now "
+                + taskLabel(status.name()).toLowerCase(Locale.ROOT) + ".", FarmUi.Tone.SUCCESS);
     }
 
     private void regenerateSelectedTasks() {
@@ -1680,7 +1714,7 @@ public final class ProductionStudioTab implements FlowerFarmTab {
                     ? taskBaseline : task == null ? null : TaskContext.from(task);
             String summary = context == null ? "Select a task above to record its actuals."
                     : "Task #" + context.id() + " · "
-                    + context.kind().toLowerCase(Locale.ROOT).replace('_', ' ')
+                    + taskLabel(context.kind())
                     + " · " + context.crop() + " · " + context.bed() + " · due " + context.due();
             if (context != null && taskDraftStale()) {
                 summary += " — Saved task changed or is outside this view. Your draft is kept; "
@@ -1703,6 +1737,14 @@ public final class ProductionStudioTab implements FlowerFarmTab {
         }
         int modelRow = taskTable.convertRowIndexToModel(row);
         return modelRow < visibleTasks.size() ? visibleTasks.get(modelRow) : null;
+    }
+
+    private static String taskLabel(String code) {
+        if (ProductionTaskStatus.TODO.name().equals(code)) {
+            return "Open";
+        }
+        String words = code.toLowerCase(Locale.ROOT).replace('_', ' ');
+        return Character.toUpperCase(words.charAt(0)) + words.substring(1);
     }
 
     private void watchPlantingInput(JTextField input) {

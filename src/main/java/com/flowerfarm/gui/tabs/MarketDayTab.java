@@ -12,7 +12,14 @@ import com.flowerfarm.util.InventoryUnits;
 
 import javax.swing.*;
 import java.awt.*;
+import java.awt.datatransfer.DataFlavor;
+import java.awt.datatransfer.Transferable;
+import java.awt.datatransfer.UnsupportedFlavorException;
+import java.awt.event.InputEvent;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.io.File;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
@@ -28,6 +35,10 @@ import java.util.Map;
  * Market morning packing list — pick sheet + per-customer slips from CRM pipeline.
  */
 public class MarketDayTab implements FlowerFarmTab {
+
+    private static final DataFlavor PACKED_ORDER_FLAVOR = new DataFlavor(
+            DataFlavor.javaJVMLocalObjectMimeType + ";class=" + PackedOrderDrag.class.getName(),
+            "Market Day order card");
 
     private final MarketDayPackingService packingService;
     private final TabHost host;
@@ -53,6 +64,7 @@ public class MarketDayTab implements FlowerFarmTab {
     private JComboBox<String> exportType;
     private JLabel exportStatusLabel;
     private JPanel packingChecklist;
+    private JLabel packedDropZone;
     private JLabel packingProgressLabel;
     private JLabel checklistRefreshLabel;
     private JPanel handoffBanner;
@@ -218,8 +230,8 @@ public class MarketDayTab implements FlowerFarmTab {
         }
         updateFulfillAction();
         FarmUi.updateStatusBadge(accessLabel,
-                canWrite ? "Order completion enabled" : "View only — exports remain available",
-                canWrite ? FarmUi.Tone.SUCCESS : FarmUi.Tone.WARNING);
+                canWrite ? "Write access available" : "View only — exports remain available",
+                canWrite ? FarmUi.Tone.INFO : FarmUi.Tone.NEUTRAL);
     }
 
     private void buildUI() {
@@ -233,6 +245,7 @@ public class MarketDayTab implements FlowerFarmTab {
                 summaryLabel), BorderLayout.NORTH);
 
         dateField = new JTextField(LocalDate.now().toString(), 12);
+        dateField.setName("marketDay.date");
         FarmUi.initialFocus(dateField);
         dateField.setToolTipText("Market / delivery date (YYYY-MM-DD)");
         dateField.getAccessibleContext().setAccessibleName("Market or delivery date");
@@ -349,7 +362,8 @@ public class MarketDayTab implements FlowerFarmTab {
         exportStatusRow.add(exportStatusLabel, BorderLayout.CENTER);
         JPanel inventoryHandoff = FarmUi.toolbar(
                 shortfallLabel, resolveShortfallsBtn);
-        accessLabel = FarmUi.statusBadge("Order completion enabled", FarmUi.Tone.SUCCESS);
+        accessLabel = FarmUi.statusBadge("Write access available", FarmUi.Tone.INFO);
+        accessLabel.setName("marketDay.accessStatus");
         JPanel controls = new JPanel();
         controls.setOpaque(false);
         controls.setLayout(new BoxLayout(controls, BoxLayout.Y_AXIS));
@@ -373,7 +387,7 @@ public class MarketDayTab implements FlowerFarmTab {
         controls.add(Box.createVerticalStrut(FarmUi.CONTROL_GAP));
         controls.add(inventoryHandoff);
         controls.add(FarmUi.toolbar(FarmUi.formHint(
-                "Resolve stock gaps before checking customer loads as packed.")));
+                "Resolve packing issues before checking customer loads as packed.")));
         controls.add(Box.createVerticalStrut(FarmUi.CONTROL_GAP));
         controls.add(FarmUi.toolbar(accessLabel, fulfillBtn, fulfillmentStatusLabel));
         controls.add(FarmUi.toolbar(FarmUi.formHint(
@@ -398,6 +412,7 @@ public class MarketDayTab implements FlowerFarmTab {
         controls.add(fulfillmentResultScroll);
 
         planArea = new JTextArea(22, 72);
+        planArea.setName("marketDay.planText");
         planArea.setEditable(false);
         planArea.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
         planArea.setLineWrap(false);
@@ -437,10 +452,38 @@ public class MarketDayTab implements FlowerFarmTab {
         checklistScroll.setPreferredSize(new Dimension(460, 320));
         checklistScroll.setMinimumSize(new Dimension(340, 200));
         checklistScroll.getVerticalScrollBar().setUnitIncrement(24);
+        packedDropZone = new JLabel(
+                "Packed  ←  Drop a ready order here after loading it", SwingConstants.CENTER) {
+            @Override public void updateUI() {
+                super.updateUI();
+                if ("marketDay.packedDropZone".equals(getName())) {
+                    stylePackedDropZone(this, packedOrders.entrySet().stream().anyMatch(entry ->
+                            canPackDraggedOrder(new PackedOrderDrag(entry.getKey(),
+                                    packedOrderSignatures.get(entry.getKey()), packingSnapshot,
+                                    entry.getValue()))));
+                }
+            }
+        };
+        packedDropZone.setName("marketDay.packedDropZone");
+        packedDropZone.setOpaque(true);
+        stylePackedDropZone(packedDropZone, false);
+        packedDropZone.setToolTipText(
+                "Drop a ready confirmed order only after its products are packed. "
+                        + "The order is not completed by this check.");
+        packedDropZone.getAccessibleContext().setAccessibleName(
+                "Packed drop zone for ready confirmed order cards");
+        packedDropZone.getAccessibleContext().setAccessibleDescription(
+                "Drag a ready order card here after loading it, or use its packing checkbox. "
+                        + "This marks the load packed but does not complete the order.");
+        packedDropZone.setTransferHandler(new PackedOrderDropHandler());
+        JPanel checklistPane = new JPanel(new BorderLayout(0, FarmUi.CONTROL_GAP));
+        checklistPane.setOpaque(false);
+        checklistPane.add(packedDropZone, BorderLayout.NORTH);
+        checklistPane.add(checklistScroll, BorderLayout.CENTER);
         JScrollPane planScroll = new JScrollPane(planArea);
         planScroll.setMinimumSize(new Dimension(220, 200));
         JSplitPane execution = new JSplitPane(
-                JSplitPane.HORIZONTAL_SPLIT, planScroll, checklistScroll);
+                JSplitPane.HORIZONTAL_SPLIT, planScroll, checklistPane);
         execution.setName("marketDay.execution");
         execution.setBorder(null);
         execution.setResizeWeight(0.5);
@@ -660,6 +703,8 @@ public class MarketDayTab implements FlowerFarmTab {
                                     + "before completing orders."
                             : "Resolve every packing issue in Orders or Inventory, then rebuild "
                                     + "this packing list before completing orders.")
+                    : !canWrite
+                    ? "View only — completing orders requires write access."
                     : allPacked
                     ? "Complete " + confirmedReady
                     + " checked order(s) and deduct inventory after load-out."
@@ -694,6 +739,9 @@ public class MarketDayTab implements FlowerFarmTab {
                             + gaps + " " + issue + (gaps == 1 ? "" : "s")
                             + " · completion locked";
                     tone = FarmUi.Tone.DANGER;
+                } else if (!canWrite) {
+                    message = "View only · completion unavailable";
+                    tone = FarmUi.Tone.NEUTRAL;
                 } else if (allPacked) {
                     message = confirmedReady + " checked · ready to complete";
                     tone = FarmUi.Tone.SUCCESS;
@@ -714,6 +762,10 @@ public class MarketDayTab implements FlowerFarmTab {
         if (packingProgressLabel == null || nextUnpackedBtn == null) {
             return;
         }
+        stylePackedDropZone(packedDropZone, packedOrders.entrySet().stream().anyMatch(entry ->
+                canPackDraggedOrder(new PackedOrderDrag(entry.getKey(),
+                        packedOrderSignatures.get(entry.getKey()), packingSnapshot,
+                        entry.getValue()))));
         updatePackedCheckClearAction();
         long packed = packedOrders.values().stream().filter(JCheckBox::isSelected).count();
         if (confirmedReady == 0) {
@@ -1025,6 +1077,148 @@ public class MarketDayTab implements FlowerFarmTab {
         return readiness != null && readiness.ready();
     }
 
+    private boolean canPackDraggedOrder(PackedOrderDrag drag) {
+        if (drag == null || displayedPlan == null || !canWrite || fulfilling
+                || refreshingPlan || planRefreshQueued || planScopeDirty
+                || completionRefreshRequired || completionReviewRefreshRequired
+                || planRefreshFailure != null) {
+            return false;
+        }
+        JCheckBox current = packedOrders.get(drag.orderId());
+        return current == drag.check() && current.isEnabled() && !current.isSelected()
+                && orderReadyToPack(drag.orderId())
+                && java.util.Objects.equals(packingSnapshot, drag.snapshot())
+                && java.util.Objects.equals(
+                        packedOrderSignatures.get(drag.orderId()), drag.signature());
+    }
+
+    private void installPackedOrderDrag(JComponent source, PackedOrderDrag drag) {
+        source.setTransferHandler(new PackedOrderDragHandler(drag));
+        MouseAdapter gesture = new MouseAdapter() {
+            private Point start;
+            private boolean exported;
+
+            private void updateCursor() {
+                source.setCursor(Cursor.getPredefinedCursor(canPackDraggedOrder(drag)
+                        ? Cursor.HAND_CURSOR : Cursor.DEFAULT_CURSOR));
+            }
+
+            @Override public void mouseEntered(MouseEvent event) { updateCursor(); }
+
+            @Override public void mouseMoved(MouseEvent event) { updateCursor(); }
+
+            @Override public void mouseExited(MouseEvent event) {
+                source.setCursor(Cursor.getDefaultCursor());
+            }
+
+            @Override public void mousePressed(MouseEvent event) {
+                updateCursor();
+                start = event.getPoint();
+                exported = false;
+            }
+
+            @Override public void mouseReleased(MouseEvent event) {
+                start = null;
+                exported = false;
+            }
+
+            @Override public void mouseDragged(MouseEvent event) {
+                if (start != null && !exported && canPackDraggedOrder(drag)
+                        && (event.getModifiersEx() & InputEvent.BUTTON1_DOWN_MASK) != 0
+                        && start.distance(event.getPoint()) >= 4) {
+                    exported = true;
+                    source.getTransferHandler().exportAsDrag(
+                            source, event, TransferHandler.COPY);
+                }
+            }
+        };
+        source.addMouseListener(gesture);
+        source.addMouseMotionListener(gesture);
+    }
+
+    private void stylePackedDropZone(JLabel zone, boolean readyLoadAvailable) {
+        FarmUi.Tone tone = readyLoadAvailable ? FarmUi.Tone.SUCCESS : FarmUi.Tone.NEUTRAL;
+        zone.setText(readyLoadAvailable
+                ? "Packed  ←  Drop a ready order here after loading it"
+                : "Packed  ←  Ready confirmed loads go here");
+        zone.setBackground(FarmUi.toneSurfaceColor(tone));
+        zone.setForeground(FarmUi.toneForegroundColor(tone));
+        zone.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createDashedBorder(FarmUi.borderColor(), 1.2f, 4, 3, true),
+                BorderFactory.createEmptyBorder(8, 10, 8, 10)));
+    }
+
+    private record PackedOrderDrag(long orderId, String signature, String snapshot,
+                                   JCheckBox check) { }
+
+    private record PackedOrderTransferable(PackedOrderDrag drag) implements Transferable {
+        @Override public DataFlavor[] getTransferDataFlavors() {
+            return new DataFlavor[]{PACKED_ORDER_FLAVOR};
+        }
+
+        @Override public boolean isDataFlavorSupported(DataFlavor flavor) {
+            return PACKED_ORDER_FLAVOR.equals(flavor);
+        }
+
+        @Override public Object getTransferData(DataFlavor flavor)
+                throws UnsupportedFlavorException {
+            if (!isDataFlavorSupported(flavor)) {
+                throw new UnsupportedFlavorException(flavor);
+            }
+            return drag;
+        }
+    }
+
+    private final class PackedOrderDragHandler extends TransferHandler {
+        private final PackedOrderDrag drag;
+
+        private PackedOrderDragHandler(PackedOrderDrag drag) {
+            this.drag = drag;
+        }
+
+        @Override public int getSourceActions(JComponent component) {
+            return canPackDraggedOrder(drag) ? COPY : NONE;
+        }
+
+        @Override protected Transferable createTransferable(JComponent component) {
+            return canPackDraggedOrder(drag) ? new PackedOrderTransferable(drag) : null;
+        }
+    }
+
+    private final class PackedOrderDropHandler extends TransferHandler {
+        private PackedOrderDrag from(TransferSupport support) {
+            if (!support.isDataFlavorSupported(PACKED_ORDER_FLAVOR)) {
+                return null;
+            }
+            try {
+                Object value = support.getTransferable().getTransferData(PACKED_ORDER_FLAVOR);
+                return value instanceof PackedOrderDrag drag ? drag : null;
+            } catch (UnsupportedFlavorException | IOException | ClassCastException exception) {
+                return null;
+            }
+        }
+
+        @Override public boolean canImport(TransferSupport support) {
+            return canPackDraggedOrder(from(support));
+        }
+
+        @Override public boolean importData(TransferSupport support) {
+            if (!canImport(support)) {
+                return false;
+            }
+            PackedOrderDrag drag = from(support);
+            if (!canPackDraggedOrder(drag)) {
+                return false;
+            }
+            drag.check().setSelected(true);
+            if (host != null) {
+                host.setStatus("Order #" + drag.orderId()
+                        + " marked packed. Complete confirmed orders separately after review.");
+            }
+            return true;
+        }
+    }
+
     private static String packingIssueNoun(MarketDayPlan plan) {
         boolean nonStockIssue = emptyConfirmedOrderCount(plan) > 0
                 || unspecifiedConfirmedOrderCount(plan) > 0
@@ -1165,7 +1359,7 @@ public class MarketDayTab implements FlowerFarmTab {
                     + "Customers & Orders, then rebuild this list.\n"
                     + "You can also include unconfirmed drafts to preview upcoming work.");
         } else {
-            planArea.setText(plan.plainText());
+            planArea.setText(visiblePackingList(plan));
         }
         planArea.setCaretPosition(0);
         int packingIssues = packingIssueCount(plan);
@@ -1174,9 +1368,9 @@ public class MarketDayTab implements FlowerFarmTab {
         String shortMsg = emptyPlan
                 ? " · no work in scope"
                 : completionIssues > 0
-                ? " · ⚠ " + completionIssues + " confirmed packing issue(s) · completion locked"
+                ? packingIssueSummary(completionIssues, true)
                 : packingIssues > 0
-                ? " · ⚠ " + packingIssues + " Draft preview issue(s) · completion available"
+                ? packingIssueSummary(packingIssues, false)
                 : " · stock OK";
         String planDescription = emptyPlan
                 ? "No orders are ready in this date window. Review draft orders, create an order "
@@ -1184,7 +1378,7 @@ public class MarketDayTab implements FlowerFarmTab {
                 : "Packing list, customer checklist, and inventory shortfalls are current.";
         showPlanRefreshState(String.format(
                         "Orders: %d  ·  Value $%,.2f  ·  %s%s",
-                        plan.orderCount(), plan.pipelineValue(), plan.scope(), shortMsg),
+                        plan.orderCount(), plan.pipelineValue(), orderScopeLabel(plan.scope()), shortMsg),
                 planDescription,
                 emptyPlan ? FarmUi.Tone.NEUTRAL
                         : packingIssues > 0 ? FarmUi.Tone.WARNING : FarmUi.Tone.SUCCESS);
@@ -1193,11 +1387,27 @@ public class MarketDayTab implements FlowerFarmTab {
                     + plan.orderCount() + " visible order(s), $"
                     + String.format("%,.2f", plan.pipelineValue()) + " active pipeline; "
                     + plan.confirmedOrderCount() + " confirmed, $"
-                    + String.format("%,.2f", plan.confirmedValue()) + " ready to complete.");
+                    + String.format("%,.2f", plan.confirmedValue())
+                    + " confirmed for packing review.");
         }
         if (pendingFulfillmentPresentation != null) {
             applyFulfillmentPresentation(pendingFulfillmentPresentation);
         }
+    }
+
+    static String orderScopeLabel(String scope) {
+        return MarketDayPackingService.scopeLabel(scope);
+    }
+
+    private static String packingIssueSummary(int count, boolean confirmed) {
+        return " · " + count + (confirmed ? " confirmed packing issue" : " draft preview issue")
+                + (count == 1 ? "" : "s")
+                + (confirmed ? " · completion locked" : " · completion available");
+    }
+
+    static String visiblePackingList(MarketDayPlan plan) {
+        return plan.plainText().replace("Scope       : " + plan.scope(),
+                "Scope       : " + orderScopeLabel(plan.scope()));
     }
 
     private void failPlanRefresh(Throwable failure) {
@@ -1368,11 +1578,6 @@ public class MarketDayTab implements FlowerFarmTab {
             if (retainPacked) {
                 retainedChecks++;
             }
-            packed.addItemListener(event -> {
-                completionDecisionVersion++;
-                packedCheckClearApproval = null;
-                updateFulfillAction();
-            });
             packedOrders.put(customer.orderId(), packed);
             packedOrderSignatures.put(customer.orderId(), signature);
             JLabel details = FarmUi.mutedLabel(orderDetails(customer));
@@ -1389,6 +1594,36 @@ public class MarketDayTab implements FlowerFarmTab {
                     "Packing readiness for order " + customer.orderId());
             readinessLabel.getAccessibleContext().setAccessibleDescription(
                     readiness.guidance());
+            PackedOrderDrag drag = new PackedOrderDrag(customer.orderId(), signature,
+                    packingSnapshot, packed);
+            JLabel dragHandle = FarmUi.mutedLabel(readiness.ready()
+                    ? retainPacked ? "✓ Packed load checked" : "↗ Drag this load to Packed"
+                    : "Resolve packing checks before dragging");
+            dragHandle.setName("marketDay.dragOrder." + customer.orderId());
+            dragHandle.setToolTipText(readiness.ready()
+                    ? "After loading this ready order, drag here to mark its packing checkbox."
+                    : readiness.guidance());
+            dragHandle.getAccessibleContext().setAccessibleName(
+                    readiness.ready()
+                            ? "Drag order " + customer.orderId() + " to the Packed drop zone"
+                            : "Order " + customer.orderId() + " cannot be dragged until packing checks are clear");
+            if (readiness.ready()) {
+                installPackedOrderDrag(dragHandle, drag);
+                installPackedOrderDrag(details, drag);
+                installPackedOrderDrag(readinessLabel, drag);
+            }
+            packed.addItemListener(event -> {
+                completionDecisionVersion++;
+                packedCheckClearApproval = null;
+                if (readiness.ready()) {
+                    dragHandle.setText(packed.isSelected()
+                            ? "✓ Packed load checked" : "↗ Drag this load to Packed");
+                    dragHandle.getAccessibleContext().setAccessibleName(packed.isSelected()
+                            ? "Order " + customer.orderId() + " packed load checked"
+                            : "Drag order " + customer.orderId() + " to the Packed drop zone");
+                }
+                updateFulfillAction();
+            });
             JButton reviewOrder = FarmUi.secondaryButton(
                     "Open order #" + customer.orderId());
             reviewOrder.setName("marketDay.openOrder." + customer.orderId());
@@ -1412,11 +1647,15 @@ public class MarketDayTab implements FlowerFarmTab {
                     BorderFactory.createMatteBorder(0, 0, 1, 0, FarmUi.borderColor()),
                     BorderFactory.createEmptyBorder(3, 0, 7, 0)));
             orderCard.setAlignmentX(Component.LEFT_ALIGNMENT);
+            if (readiness.ready()) {
+                installPackedOrderDrag(orderCard, drag);
+            }
             orderCard.add(packed, BorderLayout.NORTH);
             orderCard.add(details, BorderLayout.CENTER);
             JPanel cardActions = new JPanel(new BorderLayout(0, 3));
             cardActions.setOpaque(false);
             cardActions.add(readinessLabel, BorderLayout.NORTH);
+            cardActions.add(dragHandle, BorderLayout.CENTER);
             cardActions.add(reviewOrder, BorderLayout.SOUTH);
             orderCard.add(cardActions, BorderLayout.SOUTH);
             packingChecklist.add(orderCard);
@@ -1428,7 +1667,7 @@ public class MarketDayTab implements FlowerFarmTab {
         } else {
             packingChecklist.add(Box.createVerticalStrut(FarmUi.CONTROL_GAP));
             packingChecklist.add(FarmUi.formHint(
-                    "Completion unlocks when every confirmed customer is checked."));
+                    "Completion requires a clear packing list and every confirmed load checked."));
         }
         int removedChecks = previouslyPacked.size() - retainedChecks;
         if (previouslyPacked.isEmpty()) {

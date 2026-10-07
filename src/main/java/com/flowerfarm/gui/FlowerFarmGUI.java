@@ -1,13 +1,36 @@
 package com.flowerfarm.gui;
 
 import com.flowerfarm.auth.DesktopSession;
+import com.flowerfarm.model.FieldScienceExportSummary;
+import com.flowerfarm.model.FarmOperationSettings;
 import com.flowerfarm.model.FarmProfile;
+import com.flowerfarm.model.FarmWorkspace;
 import com.flowerfarm.model.PnwPlantProfile;
 import com.flowerfarm.connector.ConnectorRegistry;
 import com.flowerfarm.gui.automation.SwingHarnessBridge;
 import com.flowerfarm.gui.presenter.ConnectorActionPresenter;
 import com.flowerfarm.gui.tabs.*;
 import com.flowerfarm.service.CustomerService;
+import com.flowerfarm.service.CannabisCultivationService;
+import com.flowerfarm.service.CropAreaPlanService;
+import com.flowerfarm.service.BerryBlockPlanService;
+import com.flowerfarm.service.NurseryBatchService;
+import com.flowerfarm.service.HerdGroupService;
+import com.flowerfarm.service.EggCollectionService;
+import com.flowerfarm.service.MilkCollectionService;
+import com.flowerfarm.service.VineyardBlockPlanService;
+import com.flowerfarm.service.HayCuttingService;
+import com.flowerfarm.service.HopYardPlanService;
+import com.flowerfarm.service.GrainFieldPlanService;
+import com.flowerfarm.service.SeedFieldPlanService;
+import com.flowerfarm.service.NutBlockPlanService;
+import com.flowerfarm.service.VegetablePlantingPlanService;
+import com.flowerfarm.service.AquaticCohortPlanService;
+import com.flowerfarm.service.ChristmasTreeBlockPlanService;
+import com.flowerfarm.service.HiveCheckService;
+import com.flowerfarm.service.MushroomBatchPlanService;
+import com.flowerfarm.service.CranberryBedPlanService;
+import com.flowerfarm.service.PumpkinPatchPlanService;
 import com.flowerfarm.service.HarvestService;
 import com.flowerfarm.service.InventoryService;
 import com.flowerfarm.service.IrrigationAdvisorService;
@@ -15,6 +38,8 @@ import com.flowerfarm.service.MarketDayPackingService;
 import com.flowerfarm.service.KnowledgeService;
 import com.flowerfarm.service.CustomerStatementService;
 import com.flowerfarm.service.DayCloseoutService;
+import com.flowerfarm.service.FarmOperationSettingsService;
+import com.flowerfarm.service.FieldScienceExportService;
 import com.flowerfarm.service.MorningBriefingService;
 import com.flowerfarm.service.OrderService;
 import com.flowerfarm.service.ProductionStudioService;
@@ -45,14 +70,16 @@ import java.io.File;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.prefs.Preferences;
 
 /**
- * Next-level Flower Farm Manager GUI — Kitsap County / PNW West of the Cascades.
+ * Desktop shell for the selected farm or floral retail workspace.
  *
  * <p>This class is a <b>lightweight orchestrator</b>. Each major feature lives
  * in its own {@link FlowerFarmTab} implementation under {@code gui.tabs}; the
@@ -76,6 +103,7 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
     private final GuiLoginGate loginGate;
     private final DesktopSession session;
     private final FarmProfile farmProfile;
+    private final FarmOperationSettingsService farmOperationSettingsService;
     private final FarmDialogs dialogs;
     private final FarmClipboard clipboard;
     private final FarmMailer mailer;
@@ -88,6 +116,8 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
     // Created lazily on the EDT inside initialise() — never touched before run().
     private JFrame frame;
     private JTabbedPane tabbedPane;
+    private JPanel contentDeck;
+    private FarmTypeLauncher farmTypeLauncher;
     private FarmTabNavigator navigator;
     private JLabel statusLabel;
     private JLabel sessionLabel;
@@ -96,6 +126,9 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
     private final List<AbstractButton> mutateButtons = new ArrayList<>();
 
     private final List<FlowerFarmTab> tabs = new ArrayList<>();
+    private FarmWorkspace currentWorkspace = FarmWorkspace.ROSE_AND_EVENTS;
+    private FarmOperationSettings currentOperationSettings;
+    private boolean workspaceLoadFailed;
     private DashboardTab dashboard;
     private TrendAnalysisTab trendTab;
     private InventoryTab inventoryTab;
@@ -106,6 +139,30 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
     private CrmTab crmTab;
     private SeasonPlannerTab seasonPlannerTab;
     private ProductionStudioTab productionStudioTab;
+    private CannabisCultivationTab cultivationTab;
+    private CropAreaPlanTab cropAreaTab;
+    private List<CropAreaPlanTab> cropAreaTabs = List.of();
+    private BerryBlockPlanTab berryBlockPlanTab;
+    private NurseryGrowingBatchTab nurseryGrowingBatchTab;
+    private HerdGroupTab herdGroupTab;
+    private EggCollectionTab eggCollectionTab;
+    private MilkCollectionTab milkCollectionTab;
+    private VineyardBlockPlanTab vineyardBlockPlanTab;
+    private HayCuttingTab hayCuttingTab;
+    private HopYardPlanTab hopYardPlanTab;
+    private GrainFieldPlanTab grainFieldPlanTab;
+    private SeedFieldPlanTab seedFieldPlanTab;
+    private NutBlockPlanTab nutBlockPlanTab;
+    private VegetablePlantingTab vegetablePlantingTab;
+    private AquaticCohortTab aquaticCohortTab;
+    private ChristmasTreeBlockTab christmasTreeBlockTab;
+    private HiveCheckTab hiveCheckTab;
+    private MushroomBatchTab mushroomBatchTab;
+    private CranberryBedTab cranberryBedTab;
+    private PumpkinPatchTab pumpkinPatchTab;
+    private KnowledgeLogTab knowledgeTab;
+    private FieldScienceTab fieldScienceTab;
+    private EventServicesTab eventServicesTab;
 
     private DesktopUpdateController updateController;
     private DesktopBackupController backupController;
@@ -121,11 +178,14 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
     private static final String PREF_HEIGHT = "window.height";
     private static final String PREF_TAB    = "tab.lastIndex";
     private static final String PREF_TAB_TITLE = "tab.lastTitle";
+    private static final String PREF_WORKSPACE = "tab.lastWorkspace";
     private static final String PREF_DARK   = "ui.dark";
     private static final String PREF_INTEGRATIONS = "ui.integrationsExpanded";
     /** Once true, the automatic first-run Start here dialog stays quiet. */
     private static final String PREF_START_HERE_DONE = StartHereGuide.PREF_DONE;
     private static final String PREF_SUPPORT_EMAIL = SupportGuide.PREF_EMAIL;
+    private static final String LAUNCHER_CARD = "farm-type-launcher";
+    private static final String WORKSPACE_CARD = "farm-workspace";
 
     @Autowired
     public FlowerFarmGUI(InventoryService inventoryService,
@@ -144,15 +204,45 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
                          KnowledgeService knowledgeService,
                          SeasonPlanService seasonPlanService,
                          ProductionStudioService productionStudioService,
+                         CannabisCultivationService cannabisCultivationService,
+                         CropAreaPlanService cropAreaPlanService,
+                         BerryBlockPlanService berryBlockPlanService,
+                         NurseryBatchService nurseryBatchService,
+                         HerdGroupService herdGroupService,
+                         EggCollectionService eggCollectionService,
+                         MilkCollectionService milkCollectionService,
+                         VineyardBlockPlanService vineyardBlockPlanService,
+                         HayCuttingService hayCuttingService,
+                         HopYardPlanService hopYardPlanService,
+                         GrainFieldPlanService grainFieldPlanService,
+                         SeedFieldPlanService seedFieldPlanService,
+                         NutBlockPlanService nutBlockPlanService,
+                         VegetablePlantingPlanService vegetablePlantingService,
+                         AquaticCohortPlanService aquaticCohortService,
+                         ChristmasTreeBlockPlanService christmasTreeBlockService,
+                         HiveCheckService hiveCheckService,
+                         MushroomBatchPlanService mushroomBatchPlanService,
+                         CranberryBedPlanService cranberryBedPlanService,
+                         PumpkinPatchPlanService pumpkinPatchPlanService,
                          GuiLoginGate loginGate,
                          DesktopSession session,
                          FarmProfile farmProfile,
+                         FarmOperationSettingsService farmOperationSettingsService,
                          SwingHarnessBridge harnessBridge) {
         this(inventoryService, trendService, connectorRegistry, harvestService,
                 syncHistoryService, customerService, orderService, reportService,
                 irrigationAdvisorService, marketDayPackingService, morningBriefingService,
                 dayCloseoutService, customerStatementService, knowledgeService,
-                seasonPlanService, productionStudioService, loginGate, session, farmProfile,
+                seasonPlanService, productionStudioService, cannabisCultivationService,
+                cropAreaPlanService, berryBlockPlanService, nurseryBatchService,
+                herdGroupService, eggCollectionService, milkCollectionService,
+                vineyardBlockPlanService, hayCuttingService, hopYardPlanService,
+                grainFieldPlanService, seedFieldPlanService, nutBlockPlanService,
+                vegetablePlantingService, aquaticCohortService, christmasTreeBlockService,
+                hiveCheckService, mushroomBatchPlanService, cranberryBedPlanService,
+                pumpkinPatchPlanService,
+                loginGate, session, farmProfile,
+                farmOperationSettingsService,
                 harnessBridge,
                 FarmDialogs.swing(), FarmFileChooser.swing());
     }
@@ -179,16 +269,932 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
                   SwingHarnessBridge harnessBridge,
                   FarmDialogs dialogs,
                   FarmFileChooser fileChooser) {
+        this(inventoryService, trendService, connectorRegistry, harvestService,
+                syncHistoryService, customerService, orderService, reportService,
+                irrigationAdvisorService, marketDayPackingService, morningBriefingService,
+                dayCloseoutService, customerStatementService, knowledgeService,
+                seasonPlanService, productionStudioService, loginGate, session, farmProfile,
+                null, harnessBridge, dialogs, fileChooser);
+    }
+
+    FlowerFarmGUI(InventoryService inventoryService,
+                  TrendService trendService,
+                  ConnectorRegistry connectorRegistry,
+                  HarvestService harvestService,
+                  SyncHistoryService syncHistoryService,
+                  CustomerService customerService,
+                  OrderService orderService,
+                  ReportService reportService,
+                  IrrigationAdvisorService irrigationAdvisorService,
+                  MarketDayPackingService marketDayPackingService,
+                  MorningBriefingService morningBriefingService,
+                  DayCloseoutService dayCloseoutService,
+                  CustomerStatementService customerStatementService,
+                  KnowledgeService knowledgeService,
+                  SeasonPlanService seasonPlanService,
+                  ProductionStudioService productionStudioService,
+                  GuiLoginGate loginGate,
+                  DesktopSession session,
+                  FarmProfile farmProfile,
+                  FarmOperationSettingsService farmOperationSettingsService,
+                  SwingHarnessBridge harnessBridge,
+                  FarmDialogs dialogs,
+                  FarmFileChooser fileChooser) {
+        this(inventoryService, trendService, connectorRegistry, harvestService,
+                syncHistoryService, customerService, orderService, reportService,
+                irrigationAdvisorService, marketDayPackingService, morningBriefingService,
+                dayCloseoutService, customerStatementService, knowledgeService,
+                seasonPlanService, productionStudioService, null, null,
+                loginGate, session, farmProfile,
+                farmOperationSettingsService, harnessBridge, dialogs, fileChooser);
+    }
+
+    FlowerFarmGUI(InventoryService inventoryService,
+                  TrendService trendService,
+                  ConnectorRegistry connectorRegistry,
+                  HarvestService harvestService,
+                  SyncHistoryService syncHistoryService,
+                  CustomerService customerService,
+                  OrderService orderService,
+                  ReportService reportService,
+                  IrrigationAdvisorService irrigationAdvisorService,
+                  MarketDayPackingService marketDayPackingService,
+                  MorningBriefingService morningBriefingService,
+                  DayCloseoutService dayCloseoutService,
+                  CustomerStatementService customerStatementService,
+                  KnowledgeService knowledgeService,
+                  SeasonPlanService seasonPlanService,
+                  ProductionStudioService productionStudioService,
+                  CannabisCultivationService cannabisCultivationService,
+                  CropAreaPlanService cropAreaPlanService,
+                  GuiLoginGate loginGate,
+                  DesktopSession session,
+                  FarmProfile farmProfile,
+                  FarmOperationSettingsService farmOperationSettingsService,
+                  SwingHarnessBridge harnessBridge,
+                  FarmDialogs dialogs,
+                  FarmFileChooser fileChooser) {
+        this(inventoryService, trendService, connectorRegistry, harvestService,
+                syncHistoryService, customerService, orderService, reportService,
+                irrigationAdvisorService, marketDayPackingService, morningBriefingService,
+                dayCloseoutService, customerStatementService, knowledgeService,
+                seasonPlanService, productionStudioService, cannabisCultivationService,
+                cropAreaPlanService, null,
+                loginGate, session, farmProfile, farmOperationSettingsService,
+                harnessBridge, dialogs, fileChooser);
+    }
+
+    FlowerFarmGUI(InventoryService inventoryService,
+                  TrendService trendService,
+                  ConnectorRegistry connectorRegistry,
+                  HarvestService harvestService,
+                  SyncHistoryService syncHistoryService,
+                  CustomerService customerService,
+                  OrderService orderService,
+                  ReportService reportService,
+                  IrrigationAdvisorService irrigationAdvisorService,
+                  MarketDayPackingService marketDayPackingService,
+                  MorningBriefingService morningBriefingService,
+                  DayCloseoutService dayCloseoutService,
+                  CustomerStatementService customerStatementService,
+                  KnowledgeService knowledgeService,
+                  SeasonPlanService seasonPlanService,
+                  ProductionStudioService productionStudioService,
+                  CannabisCultivationService cannabisCultivationService,
+                  CropAreaPlanService cropAreaPlanService,
+                  BerryBlockPlanService berryBlockPlanService,
+                  GuiLoginGate loginGate,
+                  DesktopSession session,
+                  FarmProfile farmProfile,
+                  FarmOperationSettingsService farmOperationSettingsService,
+                  SwingHarnessBridge harnessBridge,
+                  FarmDialogs dialogs,
+                  FarmFileChooser fileChooser) {
+        this(inventoryService, trendService, connectorRegistry, harvestService,
+                syncHistoryService, customerService, orderService, reportService,
+                irrigationAdvisorService, marketDayPackingService, morningBriefingService,
+                dayCloseoutService, customerStatementService, knowledgeService,
+                seasonPlanService, productionStudioService, cannabisCultivationService,
+                cropAreaPlanService, berryBlockPlanService, null,
+                loginGate, session, farmProfile, farmOperationSettingsService,
+                harnessBridge, dialogs, fileChooser);
+    }
+
+    FlowerFarmGUI(InventoryService inventoryService,
+                  TrendService trendService,
+                  ConnectorRegistry connectorRegistry,
+                  HarvestService harvestService,
+                  SyncHistoryService syncHistoryService,
+                  CustomerService customerService,
+                  OrderService orderService,
+                  ReportService reportService,
+                  IrrigationAdvisorService irrigationAdvisorService,
+                  MarketDayPackingService marketDayPackingService,
+                  MorningBriefingService morningBriefingService,
+                  DayCloseoutService dayCloseoutService,
+                  CustomerStatementService customerStatementService,
+                  KnowledgeService knowledgeService,
+                  SeasonPlanService seasonPlanService,
+                  ProductionStudioService productionStudioService,
+                  CannabisCultivationService cannabisCultivationService,
+                  CropAreaPlanService cropAreaPlanService,
+                  BerryBlockPlanService berryBlockPlanService,
+                  NurseryBatchService nurseryBatchService,
+                  GuiLoginGate loginGate,
+                  DesktopSession session,
+                  FarmProfile farmProfile,
+                  FarmOperationSettingsService farmOperationSettingsService,
+                  SwingHarnessBridge harnessBridge,
+                  FarmDialogs dialogs,
+                  FarmFileChooser fileChooser) {
+        this(inventoryService, trendService, connectorRegistry, harvestService,
+                syncHistoryService, customerService, orderService, reportService,
+                irrigationAdvisorService, marketDayPackingService, morningBriefingService,
+                dayCloseoutService, customerStatementService, knowledgeService,
+                seasonPlanService, productionStudioService, cannabisCultivationService,
+                cropAreaPlanService, berryBlockPlanService, nurseryBatchService,
+                null, loginGate, session, farmProfile, farmOperationSettingsService,
+                harnessBridge, dialogs, fileChooser);
+    }
+
+    FlowerFarmGUI(InventoryService inventoryService,
+                  TrendService trendService,
+                  ConnectorRegistry connectorRegistry,
+                  HarvestService harvestService,
+                  SyncHistoryService syncHistoryService,
+                  CustomerService customerService,
+                  OrderService orderService,
+                  ReportService reportService,
+                  IrrigationAdvisorService irrigationAdvisorService,
+                  MarketDayPackingService marketDayPackingService,
+                  MorningBriefingService morningBriefingService,
+                  DayCloseoutService dayCloseoutService,
+                  CustomerStatementService customerStatementService,
+                  KnowledgeService knowledgeService,
+                  SeasonPlanService seasonPlanService,
+                  ProductionStudioService productionStudioService,
+                  CannabisCultivationService cannabisCultivationService,
+                  CropAreaPlanService cropAreaPlanService,
+                  BerryBlockPlanService berryBlockPlanService,
+                  NurseryBatchService nurseryBatchService,
+                  HerdGroupService herdGroupService,
+                  GuiLoginGate loginGate,
+                  DesktopSession session,
+                  FarmProfile farmProfile,
+                  FarmOperationSettingsService farmOperationSettingsService,
+                  SwingHarnessBridge harnessBridge,
+                  FarmDialogs dialogs,
+                  FarmFileChooser fileChooser) {
+        this(inventoryService, trendService, connectorRegistry, harvestService,
+                syncHistoryService, customerService, orderService, reportService,
+                irrigationAdvisorService, marketDayPackingService, morningBriefingService,
+                dayCloseoutService, customerStatementService, knowledgeService,
+                seasonPlanService, productionStudioService, cannabisCultivationService,
+                cropAreaPlanService, berryBlockPlanService, nurseryBatchService,
+                herdGroupService, null, loginGate, session, farmProfile,
+                farmOperationSettingsService, harnessBridge, dialogs, fileChooser);
+    }
+
+    FlowerFarmGUI(InventoryService inventoryService,
+                  TrendService trendService,
+                  ConnectorRegistry connectorRegistry,
+                  HarvestService harvestService,
+                  SyncHistoryService syncHistoryService,
+                  CustomerService customerService,
+                  OrderService orderService,
+                  ReportService reportService,
+                  IrrigationAdvisorService irrigationAdvisorService,
+                  MarketDayPackingService marketDayPackingService,
+                  MorningBriefingService morningBriefingService,
+                  DayCloseoutService dayCloseoutService,
+                  CustomerStatementService customerStatementService,
+                  KnowledgeService knowledgeService,
+                  SeasonPlanService seasonPlanService,
+                  ProductionStudioService productionStudioService,
+                  CannabisCultivationService cannabisCultivationService,
+                  CropAreaPlanService cropAreaPlanService,
+                  BerryBlockPlanService berryBlockPlanService,
+                  NurseryBatchService nurseryBatchService,
+                  HerdGroupService herdGroupService,
+                  EggCollectionService eggCollectionService,
+                  GuiLoginGate loginGate,
+                  DesktopSession session,
+                  FarmProfile farmProfile,
+                  FarmOperationSettingsService farmOperationSettingsService,
+                  SwingHarnessBridge harnessBridge,
+                  FarmDialogs dialogs,
+                  FarmFileChooser fileChooser) {
+        this(inventoryService, trendService, connectorRegistry, harvestService,
+                syncHistoryService, customerService, orderService, reportService,
+                irrigationAdvisorService, marketDayPackingService, morningBriefingService,
+                dayCloseoutService, customerStatementService, knowledgeService,
+                seasonPlanService, productionStudioService, cannabisCultivationService,
+                cropAreaPlanService, berryBlockPlanService, nurseryBatchService,
+                herdGroupService, eggCollectionService, null, loginGate, session,
+                farmProfile, farmOperationSettingsService, harnessBridge, dialogs, fileChooser);
+    }
+
+    FlowerFarmGUI(InventoryService inventoryService,
+                  TrendService trendService,
+                  ConnectorRegistry connectorRegistry,
+                  HarvestService harvestService,
+                  SyncHistoryService syncHistoryService,
+                  CustomerService customerService,
+                  OrderService orderService,
+                  ReportService reportService,
+                  IrrigationAdvisorService irrigationAdvisorService,
+                  MarketDayPackingService marketDayPackingService,
+                  MorningBriefingService morningBriefingService,
+                  DayCloseoutService dayCloseoutService,
+                  CustomerStatementService customerStatementService,
+                  KnowledgeService knowledgeService,
+                  SeasonPlanService seasonPlanService,
+                  ProductionStudioService productionStudioService,
+                  CannabisCultivationService cannabisCultivationService,
+                  CropAreaPlanService cropAreaPlanService,
+                  BerryBlockPlanService berryBlockPlanService,
+                  NurseryBatchService nurseryBatchService,
+                  HerdGroupService herdGroupService,
+                  EggCollectionService eggCollectionService,
+                  MilkCollectionService milkCollectionService,
+                  GuiLoginGate loginGate,
+                  DesktopSession session,
+                  FarmProfile farmProfile,
+                  FarmOperationSettingsService farmOperationSettingsService,
+                  SwingHarnessBridge harnessBridge,
+                  FarmDialogs dialogs,
+                  FarmFileChooser fileChooser) {
+        this(inventoryService, trendService, connectorRegistry, harvestService,
+                syncHistoryService, customerService, orderService, reportService,
+                irrigationAdvisorService, marketDayPackingService, morningBriefingService,
+                dayCloseoutService, customerStatementService, knowledgeService,
+                seasonPlanService, productionStudioService, cannabisCultivationService,
+                cropAreaPlanService, berryBlockPlanService, nurseryBatchService,
+                herdGroupService, eggCollectionService, milkCollectionService,
+                null, loginGate, session, farmProfile, farmOperationSettingsService,
+                harnessBridge, dialogs, fileChooser);
+    }
+
+    FlowerFarmGUI(InventoryService inventoryService,
+                  TrendService trendService,
+                  ConnectorRegistry connectorRegistry,
+                  HarvestService harvestService,
+                  SyncHistoryService syncHistoryService,
+                  CustomerService customerService,
+                  OrderService orderService,
+                  ReportService reportService,
+                  IrrigationAdvisorService irrigationAdvisorService,
+                  MarketDayPackingService marketDayPackingService,
+                  MorningBriefingService morningBriefingService,
+                  DayCloseoutService dayCloseoutService,
+                  CustomerStatementService customerStatementService,
+                  KnowledgeService knowledgeService,
+                  SeasonPlanService seasonPlanService,
+                  ProductionStudioService productionStudioService,
+                  CannabisCultivationService cannabisCultivationService,
+                  CropAreaPlanService cropAreaPlanService,
+                  BerryBlockPlanService berryBlockPlanService,
+                  NurseryBatchService nurseryBatchService,
+                  HerdGroupService herdGroupService,
+                  EggCollectionService eggCollectionService,
+                  MilkCollectionService milkCollectionService,
+                  VineyardBlockPlanService vineyardBlockPlanService,
+                  GuiLoginGate loginGate,
+                  DesktopSession session,
+                  FarmProfile farmProfile,
+                  FarmOperationSettingsService farmOperationSettingsService,
+                  SwingHarnessBridge harnessBridge,
+                  FarmDialogs dialogs,
+                  FarmFileChooser fileChooser) {
+        this(inventoryService, trendService, connectorRegistry, harvestService,
+                syncHistoryService, customerService, orderService, reportService,
+                irrigationAdvisorService, marketDayPackingService, morningBriefingService,
+                dayCloseoutService, customerStatementService, knowledgeService,
+                seasonPlanService, productionStudioService, cannabisCultivationService,
+                cropAreaPlanService, berryBlockPlanService, nurseryBatchService,
+                herdGroupService, eggCollectionService, milkCollectionService,
+                vineyardBlockPlanService, null, loginGate, session, farmProfile,
+                farmOperationSettingsService, harnessBridge, dialogs, fileChooser);
+    }
+
+    FlowerFarmGUI(InventoryService inventoryService,
+                  TrendService trendService,
+                  ConnectorRegistry connectorRegistry,
+                  HarvestService harvestService,
+                  SyncHistoryService syncHistoryService,
+                  CustomerService customerService,
+                  OrderService orderService,
+                  ReportService reportService,
+                  IrrigationAdvisorService irrigationAdvisorService,
+                  MarketDayPackingService marketDayPackingService,
+                  MorningBriefingService morningBriefingService,
+                  DayCloseoutService dayCloseoutService,
+                  CustomerStatementService customerStatementService,
+                  KnowledgeService knowledgeService,
+                  SeasonPlanService seasonPlanService,
+                  ProductionStudioService productionStudioService,
+                  CannabisCultivationService cannabisCultivationService,
+                  CropAreaPlanService cropAreaPlanService,
+                  BerryBlockPlanService berryBlockPlanService,
+                  NurseryBatchService nurseryBatchService,
+                  HerdGroupService herdGroupService,
+                  EggCollectionService eggCollectionService,
+                  MilkCollectionService milkCollectionService,
+                  VineyardBlockPlanService vineyardBlockPlanService,
+                  HayCuttingService hayCuttingService,
+                  GuiLoginGate loginGate,
+                  DesktopSession session,
+                  FarmProfile farmProfile,
+                  FarmOperationSettingsService farmOperationSettingsService,
+                  SwingHarnessBridge harnessBridge,
+                  FarmDialogs dialogs,
+                  FarmFileChooser fileChooser) {
+        this(inventoryService, trendService, connectorRegistry, harvestService,
+                syncHistoryService, customerService, orderService, reportService,
+                irrigationAdvisorService, marketDayPackingService, morningBriefingService,
+                dayCloseoutService, customerStatementService, knowledgeService,
+                seasonPlanService, productionStudioService, cannabisCultivationService,
+                cropAreaPlanService, berryBlockPlanService, nurseryBatchService,
+                herdGroupService, eggCollectionService, milkCollectionService,
+                vineyardBlockPlanService, hayCuttingService, null,
+                loginGate, session, farmProfile, farmOperationSettingsService,
+                harnessBridge, dialogs, fileChooser);
+    }
+
+    FlowerFarmGUI(InventoryService inventoryService,
+                  TrendService trendService,
+                  ConnectorRegistry connectorRegistry,
+                  HarvestService harvestService,
+                  SyncHistoryService syncHistoryService,
+                  CustomerService customerService,
+                  OrderService orderService,
+                  ReportService reportService,
+                  IrrigationAdvisorService irrigationAdvisorService,
+                  MarketDayPackingService marketDayPackingService,
+                  MorningBriefingService morningBriefingService,
+                  DayCloseoutService dayCloseoutService,
+                  CustomerStatementService customerStatementService,
+                  KnowledgeService knowledgeService,
+                  SeasonPlanService seasonPlanService,
+                  ProductionStudioService productionStudioService,
+                  CannabisCultivationService cannabisCultivationService,
+                  CropAreaPlanService cropAreaPlanService,
+                  BerryBlockPlanService berryBlockPlanService,
+                  NurseryBatchService nurseryBatchService,
+                  HerdGroupService herdGroupService,
+                  EggCollectionService eggCollectionService,
+                  MilkCollectionService milkCollectionService,
+                  VineyardBlockPlanService vineyardBlockPlanService,
+                  HayCuttingService hayCuttingService,
+                  HopYardPlanService hopYardPlanService,
+                  GuiLoginGate loginGate,
+                  DesktopSession session,
+                  FarmProfile farmProfile,
+                  FarmOperationSettingsService farmOperationSettingsService,
+                  SwingHarnessBridge harnessBridge,
+                  FarmDialogs dialogs,
+                  FarmFileChooser fileChooser) {
+        this(inventoryService, trendService, connectorRegistry, harvestService,
+                syncHistoryService, customerService, orderService, reportService,
+                irrigationAdvisorService, marketDayPackingService, morningBriefingService,
+                dayCloseoutService, customerStatementService, knowledgeService,
+                seasonPlanService, productionStudioService, cannabisCultivationService,
+                cropAreaPlanService, berryBlockPlanService, nurseryBatchService,
+                herdGroupService, eggCollectionService, milkCollectionService,
+                vineyardBlockPlanService, hayCuttingService, hopYardPlanService, null,
+                loginGate, session, farmProfile, farmOperationSettingsService,
+                harnessBridge, dialogs, fileChooser);
+    }
+
+    FlowerFarmGUI(InventoryService inventoryService,
+                  TrendService trendService,
+                  ConnectorRegistry connectorRegistry,
+                  HarvestService harvestService,
+                  SyncHistoryService syncHistoryService,
+                  CustomerService customerService,
+                  OrderService orderService,
+                  ReportService reportService,
+                  IrrigationAdvisorService irrigationAdvisorService,
+                  MarketDayPackingService marketDayPackingService,
+                  MorningBriefingService morningBriefingService,
+                  DayCloseoutService dayCloseoutService,
+                  CustomerStatementService customerStatementService,
+                  KnowledgeService knowledgeService,
+                  SeasonPlanService seasonPlanService,
+                  ProductionStudioService productionStudioService,
+                  CannabisCultivationService cannabisCultivationService,
+                  CropAreaPlanService cropAreaPlanService,
+                  BerryBlockPlanService berryBlockPlanService,
+                  NurseryBatchService nurseryBatchService,
+                  HerdGroupService herdGroupService,
+                  EggCollectionService eggCollectionService,
+                  MilkCollectionService milkCollectionService,
+                  VineyardBlockPlanService vineyardBlockPlanService,
+                  HayCuttingService hayCuttingService,
+                  HopYardPlanService hopYardPlanService,
+                  GrainFieldPlanService grainFieldPlanService,
+                  GuiLoginGate loginGate,
+                  DesktopSession session,
+                  FarmProfile farmProfile,
+                  FarmOperationSettingsService farmOperationSettingsService,
+                  SwingHarnessBridge harnessBridge,
+                  FarmDialogs dialogs,
+                  FarmFileChooser fileChooser) {
+        this(inventoryService, trendService, connectorRegistry, harvestService,
+                syncHistoryService, customerService, orderService, reportService,
+                irrigationAdvisorService, marketDayPackingService, morningBriefingService,
+                dayCloseoutService, customerStatementService, knowledgeService,
+                seasonPlanService, productionStudioService, cannabisCultivationService,
+                cropAreaPlanService, berryBlockPlanService, nurseryBatchService,
+                herdGroupService, eggCollectionService, milkCollectionService,
+                vineyardBlockPlanService, hayCuttingService, hopYardPlanService,
+                grainFieldPlanService, null, loginGate, session, farmProfile,
+                farmOperationSettingsService, harnessBridge, dialogs, fileChooser);
+    }
+
+    FlowerFarmGUI(InventoryService inventoryService,
+                  TrendService trendService,
+                  ConnectorRegistry connectorRegistry,
+                  HarvestService harvestService,
+                  SyncHistoryService syncHistoryService,
+                  CustomerService customerService,
+                  OrderService orderService,
+                  ReportService reportService,
+                  IrrigationAdvisorService irrigationAdvisorService,
+                  MarketDayPackingService marketDayPackingService,
+                  MorningBriefingService morningBriefingService,
+                  DayCloseoutService dayCloseoutService,
+                  CustomerStatementService customerStatementService,
+                  KnowledgeService knowledgeService,
+                  SeasonPlanService seasonPlanService,
+                  ProductionStudioService productionStudioService,
+                  CannabisCultivationService cannabisCultivationService,
+                  CropAreaPlanService cropAreaPlanService,
+                  BerryBlockPlanService berryBlockPlanService,
+                  NurseryBatchService nurseryBatchService,
+                  HerdGroupService herdGroupService,
+                  EggCollectionService eggCollectionService,
+                  MilkCollectionService milkCollectionService,
+                  VineyardBlockPlanService vineyardBlockPlanService,
+                  HayCuttingService hayCuttingService,
+                  HopYardPlanService hopYardPlanService,
+                  GrainFieldPlanService grainFieldPlanService,
+                  SeedFieldPlanService seedFieldPlanService,
+                  GuiLoginGate loginGate,
+                  DesktopSession session,
+                  FarmProfile farmProfile,
+                  FarmOperationSettingsService farmOperationSettingsService,
+                  SwingHarnessBridge harnessBridge,
+                  FarmDialogs dialogs,
+                  FarmFileChooser fileChooser) {
+        this(inventoryService, trendService, connectorRegistry, harvestService,
+                syncHistoryService, customerService, orderService, reportService,
+                irrigationAdvisorService, marketDayPackingService, morningBriefingService,
+                dayCloseoutService, customerStatementService, knowledgeService,
+                seasonPlanService, productionStudioService, cannabisCultivationService,
+                cropAreaPlanService, berryBlockPlanService, nurseryBatchService,
+                herdGroupService, eggCollectionService, milkCollectionService,
+                vineyardBlockPlanService, hayCuttingService, hopYardPlanService,
+                grainFieldPlanService, seedFieldPlanService, null,
+                loginGate, session, farmProfile, farmOperationSettingsService,
+                harnessBridge, dialogs, fileChooser);
+    }
+
+    FlowerFarmGUI(InventoryService inventoryService,
+                  TrendService trendService,
+                  ConnectorRegistry connectorRegistry,
+                  HarvestService harvestService,
+                  SyncHistoryService syncHistoryService,
+                  CustomerService customerService,
+                  OrderService orderService,
+                  ReportService reportService,
+                  IrrigationAdvisorService irrigationAdvisorService,
+                  MarketDayPackingService marketDayPackingService,
+                  MorningBriefingService morningBriefingService,
+                  DayCloseoutService dayCloseoutService,
+                  CustomerStatementService customerStatementService,
+                  KnowledgeService knowledgeService,
+                  SeasonPlanService seasonPlanService,
+                  ProductionStudioService productionStudioService,
+                  CannabisCultivationService cannabisCultivationService,
+                  CropAreaPlanService cropAreaPlanService,
+                  BerryBlockPlanService berryBlockPlanService,
+                  NurseryBatchService nurseryBatchService,
+                  HerdGroupService herdGroupService,
+                  EggCollectionService eggCollectionService,
+                  MilkCollectionService milkCollectionService,
+                  VineyardBlockPlanService vineyardBlockPlanService,
+                  HayCuttingService hayCuttingService,
+                  HopYardPlanService hopYardPlanService,
+                  GrainFieldPlanService grainFieldPlanService,
+                  SeedFieldPlanService seedFieldPlanService,
+                  NutBlockPlanService nutBlockPlanService,
+                  GuiLoginGate loginGate,
+                  DesktopSession session,
+                  FarmProfile farmProfile,
+                  FarmOperationSettingsService farmOperationSettingsService,
+                  SwingHarnessBridge harnessBridge,
+                  FarmDialogs dialogs,
+                  FarmFileChooser fileChooser) {
+        this(inventoryService, trendService, connectorRegistry, harvestService,
+                syncHistoryService, customerService, orderService, reportService,
+                irrigationAdvisorService, marketDayPackingService, morningBriefingService,
+                dayCloseoutService, customerStatementService, knowledgeService,
+                seasonPlanService, productionStudioService, cannabisCultivationService,
+                cropAreaPlanService, berryBlockPlanService, nurseryBatchService,
+                herdGroupService, eggCollectionService, milkCollectionService,
+                vineyardBlockPlanService, hayCuttingService, hopYardPlanService,
+                grainFieldPlanService, seedFieldPlanService, nutBlockPlanService, null,
+                loginGate, session, farmProfile, farmOperationSettingsService,
+                harnessBridge, dialogs, fileChooser);
+    }
+
+    FlowerFarmGUI(InventoryService inventoryService,
+                  TrendService trendService,
+                  ConnectorRegistry connectorRegistry,
+                  HarvestService harvestService,
+                  SyncHistoryService syncHistoryService,
+                  CustomerService customerService,
+                  OrderService orderService,
+                  ReportService reportService,
+                  IrrigationAdvisorService irrigationAdvisorService,
+                  MarketDayPackingService marketDayPackingService,
+                  MorningBriefingService morningBriefingService,
+                  DayCloseoutService dayCloseoutService,
+                  CustomerStatementService customerStatementService,
+                  KnowledgeService knowledgeService,
+                  SeasonPlanService seasonPlanService,
+                  ProductionStudioService productionStudioService,
+                  CannabisCultivationService cannabisCultivationService,
+                  CropAreaPlanService cropAreaPlanService,
+                  BerryBlockPlanService berryBlockPlanService,
+                  NurseryBatchService nurseryBatchService,
+                  HerdGroupService herdGroupService,
+                  EggCollectionService eggCollectionService,
+                  MilkCollectionService milkCollectionService,
+                  VineyardBlockPlanService vineyardBlockPlanService,
+                  HayCuttingService hayCuttingService,
+                  HopYardPlanService hopYardPlanService,
+                  GrainFieldPlanService grainFieldPlanService,
+                  SeedFieldPlanService seedFieldPlanService,
+                  NutBlockPlanService nutBlockPlanService,
+                  VegetablePlantingPlanService vegetablePlantingService,
+                  GuiLoginGate loginGate,
+                  DesktopSession session,
+                  FarmProfile farmProfile,
+                  FarmOperationSettingsService farmOperationSettingsService,
+                  SwingHarnessBridge harnessBridge,
+                  FarmDialogs dialogs,
+                  FarmFileChooser fileChooser) {
+        this(inventoryService, trendService, connectorRegistry, harvestService,
+                syncHistoryService, customerService, orderService, reportService,
+                irrigationAdvisorService, marketDayPackingService, morningBriefingService,
+                dayCloseoutService, customerStatementService, knowledgeService,
+                seasonPlanService, productionStudioService, cannabisCultivationService,
+                cropAreaPlanService, berryBlockPlanService, nurseryBatchService,
+                herdGroupService, eggCollectionService, milkCollectionService,
+                vineyardBlockPlanService, hayCuttingService, hopYardPlanService,
+                grainFieldPlanService, seedFieldPlanService, nutBlockPlanService,
+                vegetablePlantingService, null, loginGate, session, farmProfile,
+                farmOperationSettingsService, harnessBridge, dialogs, fileChooser);
+    }
+
+    FlowerFarmGUI(InventoryService inventoryService,
+                  TrendService trendService,
+                  ConnectorRegistry connectorRegistry,
+                  HarvestService harvestService,
+                  SyncHistoryService syncHistoryService,
+                  CustomerService customerService,
+                  OrderService orderService,
+                  ReportService reportService,
+                  IrrigationAdvisorService irrigationAdvisorService,
+                  MarketDayPackingService marketDayPackingService,
+                  MorningBriefingService morningBriefingService,
+                  DayCloseoutService dayCloseoutService,
+                  CustomerStatementService customerStatementService,
+                  KnowledgeService knowledgeService,
+                  SeasonPlanService seasonPlanService,
+                  ProductionStudioService productionStudioService,
+                  CannabisCultivationService cannabisCultivationService,
+                  CropAreaPlanService cropAreaPlanService,
+                  BerryBlockPlanService berryBlockPlanService,
+                  NurseryBatchService nurseryBatchService,
+                  HerdGroupService herdGroupService,
+                  EggCollectionService eggCollectionService,
+                  MilkCollectionService milkCollectionService,
+                  VineyardBlockPlanService vineyardBlockPlanService,
+                  HayCuttingService hayCuttingService,
+                  HopYardPlanService hopYardPlanService,
+                  GrainFieldPlanService grainFieldPlanService,
+                  SeedFieldPlanService seedFieldPlanService,
+                  NutBlockPlanService nutBlockPlanService,
+                  VegetablePlantingPlanService vegetablePlantingService,
+                  AquaticCohortPlanService aquaticCohortService,
+                  GuiLoginGate loginGate,
+                  DesktopSession session,
+                  FarmProfile farmProfile,
+                  FarmOperationSettingsService farmOperationSettingsService,
+                  SwingHarnessBridge harnessBridge,
+                  FarmDialogs dialogs,
+                  FarmFileChooser fileChooser) {
+        this(inventoryService, trendService, connectorRegistry, harvestService,
+                syncHistoryService, customerService, orderService, reportService,
+                irrigationAdvisorService, marketDayPackingService, morningBriefingService,
+                dayCloseoutService, customerStatementService, knowledgeService,
+                seasonPlanService, productionStudioService, cannabisCultivationService,
+                cropAreaPlanService, berryBlockPlanService, nurseryBatchService,
+                herdGroupService, eggCollectionService, milkCollectionService,
+                vineyardBlockPlanService, hayCuttingService, hopYardPlanService,
+                grainFieldPlanService, seedFieldPlanService, nutBlockPlanService,
+                vegetablePlantingService, aquaticCohortService, null,
+                loginGate, session, farmProfile, farmOperationSettingsService,
+                harnessBridge, dialogs, fileChooser);
+    }
+
+    FlowerFarmGUI(InventoryService inventoryService,
+                  TrendService trendService,
+                  ConnectorRegistry connectorRegistry,
+                  HarvestService harvestService,
+                  SyncHistoryService syncHistoryService,
+                  CustomerService customerService,
+                  OrderService orderService,
+                  ReportService reportService,
+                  IrrigationAdvisorService irrigationAdvisorService,
+                  MarketDayPackingService marketDayPackingService,
+                  MorningBriefingService morningBriefingService,
+                  DayCloseoutService dayCloseoutService,
+                  CustomerStatementService customerStatementService,
+                  KnowledgeService knowledgeService,
+                  SeasonPlanService seasonPlanService,
+                  ProductionStudioService productionStudioService,
+                  CannabisCultivationService cannabisCultivationService,
+                  CropAreaPlanService cropAreaPlanService,
+                  BerryBlockPlanService berryBlockPlanService,
+                  NurseryBatchService nurseryBatchService,
+                  HerdGroupService herdGroupService,
+                  EggCollectionService eggCollectionService,
+                  MilkCollectionService milkCollectionService,
+                  VineyardBlockPlanService vineyardBlockPlanService,
+                  HayCuttingService hayCuttingService,
+                  HopYardPlanService hopYardPlanService,
+                  GrainFieldPlanService grainFieldPlanService,
+                  SeedFieldPlanService seedFieldPlanService,
+                  NutBlockPlanService nutBlockPlanService,
+                  VegetablePlantingPlanService vegetablePlantingService,
+                  AquaticCohortPlanService aquaticCohortService,
+                  ChristmasTreeBlockPlanService christmasTreeBlockService,
+                  GuiLoginGate loginGate,
+                  DesktopSession session,
+                  FarmProfile farmProfile,
+                  FarmOperationSettingsService farmOperationSettingsService,
+                  SwingHarnessBridge harnessBridge,
+                  FarmDialogs dialogs,
+                  FarmFileChooser fileChooser) {
+        this(inventoryService, trendService, connectorRegistry, harvestService,
+                syncHistoryService, customerService, orderService, reportService,
+                irrigationAdvisorService, marketDayPackingService, morningBriefingService,
+                dayCloseoutService, customerStatementService, knowledgeService,
+                seasonPlanService, productionStudioService, cannabisCultivationService,
+                cropAreaPlanService, berryBlockPlanService, nurseryBatchService,
+                herdGroupService, eggCollectionService, milkCollectionService,
+                vineyardBlockPlanService, hayCuttingService, hopYardPlanService,
+                grainFieldPlanService, seedFieldPlanService, nutBlockPlanService,
+                vegetablePlantingService, aquaticCohortService,
+                christmasTreeBlockService, null,
+                loginGate, session, farmProfile, farmOperationSettingsService,
+                harnessBridge, dialogs, fileChooser);
+    }
+
+    FlowerFarmGUI(InventoryService inventoryService,
+                  TrendService trendService,
+                  ConnectorRegistry connectorRegistry,
+                  HarvestService harvestService,
+                  SyncHistoryService syncHistoryService,
+                  CustomerService customerService,
+                  OrderService orderService,
+                  ReportService reportService,
+                  IrrigationAdvisorService irrigationAdvisorService,
+                  MarketDayPackingService marketDayPackingService,
+                  MorningBriefingService morningBriefingService,
+                  DayCloseoutService dayCloseoutService,
+                  CustomerStatementService customerStatementService,
+                  KnowledgeService knowledgeService,
+                  SeasonPlanService seasonPlanService,
+                  ProductionStudioService productionStudioService,
+                  CannabisCultivationService cannabisCultivationService,
+                  CropAreaPlanService cropAreaPlanService,
+                  BerryBlockPlanService berryBlockPlanService,
+                  NurseryBatchService nurseryBatchService,
+                  HerdGroupService herdGroupService,
+                  EggCollectionService eggCollectionService,
+                  MilkCollectionService milkCollectionService,
+                  VineyardBlockPlanService vineyardBlockPlanService,
+                  HayCuttingService hayCuttingService,
+                  HopYardPlanService hopYardPlanService,
+                  GrainFieldPlanService grainFieldPlanService,
+                  SeedFieldPlanService seedFieldPlanService,
+                  NutBlockPlanService nutBlockPlanService,
+                  VegetablePlantingPlanService vegetablePlantingService,
+                  AquaticCohortPlanService aquaticCohortService,
+                  ChristmasTreeBlockPlanService christmasTreeBlockService,
+                  HiveCheckService hiveCheckService,
+                  GuiLoginGate loginGate,
+                  DesktopSession session,
+                  FarmProfile farmProfile,
+                  FarmOperationSettingsService farmOperationSettingsService,
+                  SwingHarnessBridge harnessBridge,
+                  FarmDialogs dialogs,
+                  FarmFileChooser fileChooser) {
+        this(inventoryService, trendService, connectorRegistry, harvestService,
+                syncHistoryService, customerService, orderService, reportService,
+                irrigationAdvisorService, marketDayPackingService, morningBriefingService,
+                dayCloseoutService, customerStatementService, knowledgeService,
+                seasonPlanService, productionStudioService, cannabisCultivationService,
+                cropAreaPlanService, berryBlockPlanService, nurseryBatchService,
+                herdGroupService, eggCollectionService, milkCollectionService,
+                vineyardBlockPlanService, hayCuttingService, hopYardPlanService,
+                grainFieldPlanService, seedFieldPlanService, nutBlockPlanService,
+                vegetablePlantingService, aquaticCohortService,
+                christmasTreeBlockService, hiveCheckService, null,
+                loginGate, session, farmProfile, farmOperationSettingsService,
+                harnessBridge, dialogs, fileChooser);
+    }
+
+    FlowerFarmGUI(InventoryService inventoryService,
+                  TrendService trendService,
+                  ConnectorRegistry connectorRegistry,
+                  HarvestService harvestService,
+                  SyncHistoryService syncHistoryService,
+                  CustomerService customerService,
+                  OrderService orderService,
+                  ReportService reportService,
+                  IrrigationAdvisorService irrigationAdvisorService,
+                  MarketDayPackingService marketDayPackingService,
+                  MorningBriefingService morningBriefingService,
+                  DayCloseoutService dayCloseoutService,
+                  CustomerStatementService customerStatementService,
+                  KnowledgeService knowledgeService,
+                  SeasonPlanService seasonPlanService,
+                  ProductionStudioService productionStudioService,
+                  CannabisCultivationService cannabisCultivationService,
+                  CropAreaPlanService cropAreaPlanService,
+                  BerryBlockPlanService berryBlockPlanService,
+                  NurseryBatchService nurseryBatchService,
+                  HerdGroupService herdGroupService,
+                  EggCollectionService eggCollectionService,
+                  MilkCollectionService milkCollectionService,
+                  VineyardBlockPlanService vineyardBlockPlanService,
+                  HayCuttingService hayCuttingService,
+                  HopYardPlanService hopYardPlanService,
+                  GrainFieldPlanService grainFieldPlanService,
+                  SeedFieldPlanService seedFieldPlanService,
+                  NutBlockPlanService nutBlockPlanService,
+                  VegetablePlantingPlanService vegetablePlantingService,
+                  AquaticCohortPlanService aquaticCohortService,
+                  ChristmasTreeBlockPlanService christmasTreeBlockService,
+                  HiveCheckService hiveCheckService,
+                  MushroomBatchPlanService mushroomBatchPlanService,
+                  GuiLoginGate loginGate,
+                  DesktopSession session,
+                  FarmProfile farmProfile,
+                  FarmOperationSettingsService farmOperationSettingsService,
+                  SwingHarnessBridge harnessBridge,
+                  FarmDialogs dialogs,
+                  FarmFileChooser fileChooser) {
+        this(inventoryService, trendService, connectorRegistry, harvestService,
+                syncHistoryService, customerService, orderService, reportService,
+                irrigationAdvisorService, marketDayPackingService, morningBriefingService,
+                dayCloseoutService, customerStatementService, knowledgeService,
+                seasonPlanService, productionStudioService, cannabisCultivationService,
+                cropAreaPlanService, berryBlockPlanService, nurseryBatchService,
+                herdGroupService, eggCollectionService, milkCollectionService,
+                vineyardBlockPlanService, hayCuttingService, hopYardPlanService,
+                grainFieldPlanService, seedFieldPlanService, nutBlockPlanService,
+                vegetablePlantingService, aquaticCohortService,
+                christmasTreeBlockService, hiveCheckService, mushroomBatchPlanService,
+                null, loginGate, session, farmProfile, farmOperationSettingsService,
+                harnessBridge, dialogs, fileChooser);
+    }
+
+    FlowerFarmGUI(InventoryService inventoryService,
+                  TrendService trendService,
+                  ConnectorRegistry connectorRegistry,
+                  HarvestService harvestService,
+                  SyncHistoryService syncHistoryService,
+                  CustomerService customerService,
+                  OrderService orderService,
+                  ReportService reportService,
+                  IrrigationAdvisorService irrigationAdvisorService,
+                  MarketDayPackingService marketDayPackingService,
+                  MorningBriefingService morningBriefingService,
+                  DayCloseoutService dayCloseoutService,
+                  CustomerStatementService customerStatementService,
+                  KnowledgeService knowledgeService,
+                  SeasonPlanService seasonPlanService,
+                  ProductionStudioService productionStudioService,
+                  CannabisCultivationService cannabisCultivationService,
+                  CropAreaPlanService cropAreaPlanService,
+                  BerryBlockPlanService berryBlockPlanService,
+                  NurseryBatchService nurseryBatchService,
+                  HerdGroupService herdGroupService,
+                  EggCollectionService eggCollectionService,
+                  MilkCollectionService milkCollectionService,
+                  VineyardBlockPlanService vineyardBlockPlanService,
+                  HayCuttingService hayCuttingService,
+                  HopYardPlanService hopYardPlanService,
+                  GrainFieldPlanService grainFieldPlanService,
+                  SeedFieldPlanService seedFieldPlanService,
+                  NutBlockPlanService nutBlockPlanService,
+                  VegetablePlantingPlanService vegetablePlantingService,
+                  AquaticCohortPlanService aquaticCohortService,
+                  ChristmasTreeBlockPlanService christmasTreeBlockService,
+                  HiveCheckService hiveCheckService,
+                  MushroomBatchPlanService mushroomBatchPlanService,
+                  CranberryBedPlanService cranberryBedPlanService,
+                  GuiLoginGate loginGate,
+                  DesktopSession session,
+                  FarmProfile farmProfile,
+                  FarmOperationSettingsService farmOperationSettingsService,
+                  SwingHarnessBridge harnessBridge,
+                  FarmDialogs dialogs,
+                  FarmFileChooser fileChooser) {
+        this(inventoryService, trendService, connectorRegistry, harvestService,
+                syncHistoryService, customerService, orderService, reportService,
+                irrigationAdvisorService, marketDayPackingService, morningBriefingService,
+                dayCloseoutService, customerStatementService, knowledgeService,
+                seasonPlanService, productionStudioService, cannabisCultivationService,
+                cropAreaPlanService, berryBlockPlanService, nurseryBatchService,
+                herdGroupService, eggCollectionService, milkCollectionService,
+                vineyardBlockPlanService, hayCuttingService, hopYardPlanService,
+                grainFieldPlanService, seedFieldPlanService, nutBlockPlanService,
+                vegetablePlantingService, aquaticCohortService,
+                christmasTreeBlockService, hiveCheckService, mushroomBatchPlanService,
+                cranberryBedPlanService, null,
+                loginGate, session, farmProfile, farmOperationSettingsService,
+                harnessBridge, dialogs, fileChooser);
+    }
+
+    FlowerFarmGUI(InventoryService inventoryService,
+                  TrendService trendService,
+                  ConnectorRegistry connectorRegistry,
+                  HarvestService harvestService,
+                  SyncHistoryService syncHistoryService,
+                  CustomerService customerService,
+                  OrderService orderService,
+                  ReportService reportService,
+                  IrrigationAdvisorService irrigationAdvisorService,
+                  MarketDayPackingService marketDayPackingService,
+                  MorningBriefingService morningBriefingService,
+                  DayCloseoutService dayCloseoutService,
+                  CustomerStatementService customerStatementService,
+                  KnowledgeService knowledgeService,
+                  SeasonPlanService seasonPlanService,
+                  ProductionStudioService productionStudioService,
+                  CannabisCultivationService cannabisCultivationService,
+                  CropAreaPlanService cropAreaPlanService,
+                  BerryBlockPlanService berryBlockPlanService,
+                  NurseryBatchService nurseryBatchService,
+                  HerdGroupService herdGroupService,
+                  EggCollectionService eggCollectionService,
+                  MilkCollectionService milkCollectionService,
+                  VineyardBlockPlanService vineyardBlockPlanService,
+                  HayCuttingService hayCuttingService,
+                  HopYardPlanService hopYardPlanService,
+                  GrainFieldPlanService grainFieldPlanService,
+                  SeedFieldPlanService seedFieldPlanService,
+                  NutBlockPlanService nutBlockPlanService,
+                  VegetablePlantingPlanService vegetablePlantingService,
+                  AquaticCohortPlanService aquaticCohortService,
+                  ChristmasTreeBlockPlanService christmasTreeBlockService,
+                  HiveCheckService hiveCheckService,
+                  MushroomBatchPlanService mushroomBatchPlanService,
+                  CranberryBedPlanService cranberryBedPlanService,
+                  PumpkinPatchPlanService pumpkinPatchPlanService,
+                  GuiLoginGate loginGate,
+                  DesktopSession session,
+                  FarmProfile farmProfile,
+                  FarmOperationSettingsService farmOperationSettingsService,
+                  SwingHarnessBridge harnessBridge,
+                  FarmDialogs dialogs,
+                  FarmFileChooser fileChooser) {
         // No AWT calls here — Spring safe to construct this bean at any time.
         this.tabCatalog = new FarmTabCatalog(inventoryService, trendService, harvestService,
                 syncHistoryService, customerService, orderService, reportService,
                 irrigationAdvisorService, marketDayPackingService, morningBriefingService,
                 dayCloseoutService, customerStatementService, knowledgeService,
-                seasonPlanService, productionStudioService);
+                seasonPlanService, productionStudioService, cannabisCultivationService,
+                cropAreaPlanService, berryBlockPlanService, nurseryBatchService,
+                herdGroupService, eggCollectionService, milkCollectionService,
+                vineyardBlockPlanService, hayCuttingService, hopYardPlanService,
+                grainFieldPlanService, seedFieldPlanService, nutBlockPlanService,
+                vegetablePlantingService, aquaticCohortService,
+                christmasTreeBlockService, hiveCheckService, mushroomBatchPlanService,
+                cranberryBedPlanService, pumpkinPatchPlanService);
         this.connectorActions = new ConnectorActionPresenter(inventoryService, connectorRegistry);
         this.loginGate = loginGate;
         this.session = session;
         this.farmProfile = farmProfile;
+        this.farmOperationSettingsService = farmOperationSettingsService;
         this.harnessBridge = Objects.requireNonNull(harnessBridge, "harnessBridge");
         this.dialogs = Objects.requireNonNull(dialogs, "dialogs");
         this.clipboard = FarmClipboard.system();
@@ -229,6 +1235,11 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
         this.coolerReviewController = coolerReviewController;
     }
 
+    @Autowired
+    void configureFieldScienceExportService(FieldScienceExportService service) {
+        tabCatalog.setFieldScienceExportService(service);
+    }
+
     // ── ApplicationRunner ─────────────────────────────────────────────────────
 
     @Override
@@ -254,6 +1265,7 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
         // Apply the saved theme before any Swing components are created.
         darkMode = prefs.getBoolean(PREF_DARK, false);
         applyLookAndFeel(darkMode);
+        currentWorkspace = loadWorkspace();
 
         frame = new JFrame(applicationTitle());
         frame.setSize(prefs.getInt(PREF_WIDTH, 1500), prefs.getInt(PREF_HEIGHT, 900));
@@ -264,33 +1276,10 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
         frame.add(brandHeader, BorderLayout.NORTH);
 
         // Build tabs (constructor injection of services + this TabHost).
-        FarmTabCatalog.Catalog catalog = tabCatalog.create(this);
-        dashboard = catalog.dashboard();
-        trendTab = catalog.trend();
-        inventoryTab = catalog.inventory();
-        addItemTab = catalog.addItem();
-        harvestTab = catalog.harvest();
-        marketDayTab = catalog.marketDay();
-        irrigationTab = catalog.irrigation();
-        crmTab = catalog.crm();
-        seasonPlannerTab = catalog.seasonPlanner();
-        productionStudioTab = catalog.productionStudio();
-        tabs.clear();
-        tabs.addAll(catalog.tabs());
-
-        tabbedPane = new JTabbedPane(JTabbedPane.LEFT);
-        tabbedPane.setTabLayoutPolicy(JTabbedPane.SCROLL_TAB_LAYOUT);
-        tabbedPane.setName("farm.primaryNavigation");
-        tabbedPane.getAccessibleContext().setAccessibleName("Primary farm workflows");
-        tabbedPane.getAccessibleContext().setAccessibleDescription(
-                "Use Alt plus the shown mnemonic, or Alt+1 through Alt+9, to switch workflows.");
-        navigator = new FarmTabNavigator(tabbedPane, tabs);
-        navigator.populate();
-        tabbedPane.addChangeListener(e -> navigator.refreshSelected(index -> {
-            prefs.putInt(PREF_TAB, index);
-            prefs.put(PREF_TAB_TITLE, tabbedPane.getTitleAt(index));
-        }));
-        frame.add(tabbedPane, BorderLayout.CENTER);
+        contentDeck = new JPanel(new CardLayout());
+        contentDeck.setName("farm.contentDeck");
+        frame.add(contentDeck, BorderLayout.CENTER);
+        buildPrimaryNavigation();
 
         frame.add(buildSouthBar(), BorderLayout.SOUTH);
 
@@ -300,20 +1289,27 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
 
         frame.setLocationRelativeTo(null);
 
-        // Restore the last-open tab and re-assert custom component paints.
+        // Restore a tab only when the saved navigation belongs to this workspace.
+        String savedWorkspace = prefs.get(PREF_WORKSPACE, "");
         String lastTitle = prefs.get(PREF_TAB_TITLE, "");
-        if (lastTitle.isBlank() || !navigator.select(lastTitle)) {
-            int lastTab = prefs.getInt(PREF_TAB, 0);
+        boolean sameWorkspace = currentWorkspace.name().equals(savedWorkspace)
+                || (savedWorkspace.isBlank()
+                        && currentWorkspace == FarmWorkspace.ROSE_AND_EVENTS);
+        if (!sameWorkspace || lastTitle.isBlank() || !navigator.select(lastTitle)) {
+            int lastTab = sameWorkspace && currentWorkspace == FarmWorkspace.ROSE_AND_EVENTS
+                    ? prefs.getInt(PREF_TAB, 0) : 0;
             if (lastTab >= 0 && lastTab < tabs.size()) {
                 tabbedPane.setSelectedIndex(lastTab);
             }
         }
-        if (dashboard != null) {
+        if (dashboard != null && currentWorkspace == FarmWorkspace.ROSE_AND_EVENTS) {
             dashboard.applyTheme(darkMode);
         }
-        if (trendTab != null) {
+        if (trendTab != null && (currentWorkspace == FarmWorkspace.ROSE_AND_EVENTS
+                || currentWorkspace == FarmWorkspace.WILDFLOWER_FARM)) {
             trendTab.applyTheme();
         }
+        showFarmTypeLauncher();
 
         // Preserve meaningful CRM drafts unless the worker explicitly discards them.
         frame.addWindowListener(new WindowAdapter() {
@@ -327,7 +1323,13 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
         });
 
         frame.setVisible(true);
-        harnessBridge.attach(frame.getRootPane(), navigator::select);
+        harnessBridge.attach(frame.getRootPane(), title -> {
+            boolean selected = navigator.select(title);
+            if (selected) {
+                showWorkspace();
+            }
+            return selected;
+        });
         refreshAll();
         if (loginGate.isEnabled()) {
             setStatus("Signed in as " + session.displayName() + " · " + session.roleHint());
@@ -346,30 +1348,125 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
             remindersController.attach(new DesktopRemindersController.Host(
                     frame, dialogs, this::setStatus, this::selectTab,
                     () -> showHarvestEntry(null, null)));
-            if (dashboard != null) {
-                dashboard.bindReminders(remindersController::openReminder,
-                        remindersController::hideBannerForToday,
-                        remindersController::refreshBanner);
-                remindersController.attachDashboardBanner(dashboard.remindersPanel());
-            }
         }
         if (floristExportController != null) {
             floristExportController.attach(new DesktopFloristExportController.Host(
                     frame, dialogs, fileChooser, clipboard, mailer, this::setStatus));
-            if (inventoryTab != null) {
-                inventoryTab.bindFloristShare(floristExportController::shareAvailability);
-            }
         }
         if (coolerReviewController != null) {
             coolerReviewController.attach(new DesktopCoolerReviewController.Host(
                     frame, dialogs, fileChooser, this::setStatus));
         }
+        bindCurrentWorkspaceActions();
         javax.swing.SwingUtilities.invokeLater(() -> {
-            maybeOfferStartHere();
             if (remindersController != null) {
                 remindersController.maybeNotifyOnStartup();
             }
         });
+        if (workspaceLoadFailed) {
+            setStatus("Farm workspace could not be loaded; showing the default rose view. "
+                    + "Check the local data store.");
+        }
+    }
+
+    /** Rebind actions after the selected farm type rebuilds its navigation. */
+    private void bindCurrentWorkspaceActions() {
+        if (remindersController != null) {
+            if (dashboard != null && tabs.contains(dashboard)) {
+                dashboard.bindReminders(remindersController::openReminder,
+                        remindersController::hideBannerForToday,
+                        remindersController::refreshBanner);
+                remindersController.attachDashboardBanner(dashboard.remindersPanel());
+            } else {
+                remindersController.attachDashboardBanner(null);
+            }
+        }
+        if (floristExportController != null && inventoryTab != null) {
+            inventoryTab.bindFloristShare(floristExportController::shareAvailability);
+        }
+    }
+
+    private FarmWorkspace loadWorkspace() {
+        if (farmOperationSettingsService == null) {
+            return FarmWorkspace.ROSE_AND_EVENTS;
+        }
+        try {
+            var settings = farmOperationSettingsService.getSettings();
+            currentOperationSettings = settings;
+            return settings == null ? FarmWorkspace.ROSE_AND_EVENTS : settings.getWorkspace();
+        } catch (RuntimeException exception) {
+            workspaceLoadFailed = true;
+            return FarmWorkspace.ROSE_AND_EVENTS;
+        }
+    }
+
+    private void buildPrimaryNavigation() {
+        FarmTabCatalog.Catalog catalog = tabCatalog.create(
+                this, dialogs, fileChooser, currentWorkspace,
+                currentOperationSettings);
+        dashboard = catalog.dashboard();
+        trendTab = catalog.trend();
+        inventoryTab = catalog.inventory();
+        addItemTab = catalog.addItem();
+        harvestTab = catalog.harvest();
+        marketDayTab = catalog.marketDay();
+        irrigationTab = catalog.irrigation();
+        crmTab = catalog.crm();
+        seasonPlannerTab = catalog.seasonPlanner();
+        productionStudioTab = catalog.productionStudio();
+        cultivationTab = catalog.cultivation();
+        cropAreaTab = catalog.cropArea();
+        cropAreaTabs = catalog.cropAreas();
+        berryBlockPlanTab = catalog.berryBlocks();
+        nurseryGrowingBatchTab = catalog.nurseryBatches();
+        herdGroupTab = catalog.herdGroups();
+        eggCollectionTab = catalog.eggCollections();
+        milkCollectionTab = catalog.milkCollections();
+        vineyardBlockPlanTab = catalog.vineyardBlocks();
+        hayCuttingTab = catalog.hayCuttings();
+        hopYardPlanTab = catalog.hopYards();
+        grainFieldPlanTab = catalog.grainFields();
+        seedFieldPlanTab = catalog.seedFields();
+        nutBlockPlanTab = catalog.nutBlocks();
+        vegetablePlantingTab = catalog.vegetablePlantings();
+        aquaticCohortTab = catalog.aquaticCohorts();
+        christmasTreeBlockTab = catalog.treeBlocks();
+        hiveCheckTab = catalog.hiveChecks();
+        mushroomBatchTab = catalog.mushroomBatches();
+        cranberryBedTab = catalog.cranberryBeds();
+        pumpkinPatchTab = catalog.pumpkinPatches();
+        knowledgeTab = catalog.knowledge();
+        fieldScienceTab = catalog.fieldScience();
+        eventServicesTab = catalog.eventServices();
+        tabs.clear();
+        tabs.addAll(catalog.tabs());
+
+        if (tabbedPane != null) {
+            contentDeck.remove(tabbedPane);
+        }
+        tabbedPane = new JTabbedPane(JTabbedPane.LEFT);
+        tabbedPane.setTabLayoutPolicy(JTabbedPane.SCROLL_TAB_LAYOUT);
+        tabbedPane.setName("farm.primaryNavigation");
+        tabbedPane.getAccessibleContext().setAccessibleName("Primary farm workflows");
+        tabbedPane.getAccessibleContext().setAccessibleDescription(
+                "Use Alt plus the shown mnemonic, or Alt+1 through Alt+9, to switch workflows.");
+        navigator = new FarmTabNavigator(tabbedPane, tabs, currentWorkspace,
+                currentOperationSettings != null
+                        && currentOperationSettings.getEnabledWorkspaces().size() > 1);
+        navigator.populate();
+        JTabbedPane activePane = tabbedPane;
+        FarmTabNavigator activeNavigator = navigator;
+        tabbedPane.addChangeListener(e -> {
+            if (activePane != tabbedPane) {
+                return;
+            }
+            activeNavigator.refreshSelected(index -> {
+            prefs.putInt(PREF_TAB, index);
+            prefs.put(PREF_TAB_TITLE, activePane.getTitleAt(index));
+            prefs.put(PREF_WORKSPACE, currentWorkspace.name());
+            });
+        });
+        contentDeck.add(tabbedPane, WORKSPACE_CARD);
     }
 
     /** Frame-level integrations and status chrome, kept separate for theme verification. */
@@ -451,15 +1548,28 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
         if (frame != null && loginGate.isEnabled()) {
             frame.setTitle(applicationTitle() + " · " + session.displayName());
         }
+        if (farmTypeLauncher != null && farmTypeLauncher.isShowing()) {
+            showFarmTypeLauncher();
+        }
     }
 
     // ── Menu bar ──────────────────────────────────────────────────────────────
 
     JMenuBar buildMenuBar() {
         JMenuBar menuBar = new JMenuBar();
+        Set<FarmWorkspace> enabled = currentOperationSettings == null
+                ? Set.of(currentWorkspace)
+                : currentOperationSettings.getEnabledWorkspaces();
 
         JMenu fileMenu = menu("File", KeyEvent.VK_F,
                 "Import farm data, export a local backup, or exit FlowersForever.");
+        JMenuItem chooseFarmType = menuItem("Choose or combine farm types…", KeyEvent.VK_T,
+                "Open the farm-type menu to enter, combine, or change workspaces.",
+                e -> showFarmTypeLauncher());
+        chooseFarmType.setAccelerator(KeyStroke.getKeyStroke(
+                KeyEvent.VK_F, InputEvent.CTRL_DOWN_MASK | InputEvent.SHIFT_DOWN_MASK));
+        fileMenu.add(chooseFarmType);
+        fileMenu.addSeparator();
         fileMenu.add(writeMenuItem("Import from spreadsheet…", KeyEvent.VK_I,
                 "Bring products from a CSV or Excel spreadsheet you already use.",
                 e -> importFromSpreadsheet()));
@@ -472,9 +1582,13 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
         fileMenu.add(menuItem("Export All to CSV…", KeyEvent.VK_A,
                 "Save all current inventory records to a CSV file.",
                 e -> exportAllToCsv()));
-        fileMenu.add(menuItem("Share availability with florists…", KeyEvent.VK_L,
-                "Copy or save a Florlist-friendly live stock list with this week’s planned stems.",
-                e -> shareFloristAvailability()));
+        if (enabled.contains(FarmWorkspace.ROSE_AND_EVENTS)
+                || enabled.contains(FarmWorkspace.WILDFLOWER_FARM)
+                || enabled.contains(FarmWorkspace.FLOWER_SHOP)) {
+            fileMenu.add(menuItem("Share availability with florists…", KeyEvent.VK_L,
+                    "Copy or save a Florlist-friendly live stock list with this week’s planned stems.",
+                    e -> shareFloristAvailability()));
+        }
         fileMenu.addSeparator();
         fileMenu.add(menuItem("Back up now…", KeyEvent.VK_B,
                 "Save a checked backup of all farm records while you keep working.",
@@ -485,6 +1599,11 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
         fileMenu.add(writeMenuItem("Automatic backups…", KeyEvent.VK_U,
                 "Choose a folder or USB drive for regular automatic backups.",
                 e -> automaticBackups()));
+        fileMenu.addSeparator();
+        fileMenu.add(menuItem("Farm setup…", KeyEvent.VK_S,
+                "Choose a workspace, farm state, enterprises, and specialties. "
+                        + "Only an OWNER can save changes.",
+                e -> showFarmSetup()));
         fileMenu.addSeparator();
         fileMenu.add(menuItem("Exit", KeyEvent.VK_X,
                 "Close FlowersForever after reviewing any unfinished work.",
@@ -510,12 +1629,15 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
         viewMenu.add(darkModeItem);
         menuBar.add(viewMenu);
 
-        JMenu toolsMenu = menu("Tools", KeyEvent.VK_T,
-                "Open farm analysis and planning tools.");
-        toolsMenu.add(menuItem("Run Harvest Forecast", KeyEvent.VK_H,
-                "Open Trend Analysis and calculate the latest harvest forecast.",
-                e -> runTrendAnalysis()));
-        menuBar.add(toolsMenu);
+        if (enabled.contains(FarmWorkspace.ROSE_AND_EVENTS)
+                || enabled.contains(FarmWorkspace.WILDFLOWER_FARM)) {
+            JMenu toolsMenu = menu("Tools", KeyEvent.VK_T,
+                    "Open farm analysis and planning tools.");
+            toolsMenu.add(menuItem("Run Harvest Forecast", KeyEvent.VK_H,
+                    "Open Trend Analysis and calculate the latest harvest forecast.",
+                    e -> runTrendAnalysis()));
+            menuBar.add(toolsMenu);
+        }
 
         JMenu accountMenu = menu("Account", KeyEvent.VK_A,
                 "Review the active worker, role, and sign-in options.");
@@ -542,21 +1664,32 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
 
         JMenu helpMenu = menu("Help", KeyEvent.VK_H,
                 "Open growing guidance, contact support, or application information.");
-        helpMenu.add(menuItem("Start here…", KeyEvent.VK_S,
-                "Set up a cut-flower farm: log today’s cut, import a spreadsheet, or add a product.",
-                e -> openStartHere()));
-        helpMenu.addSeparator();
-        JMenuItem growingGuide = menuItem("PNW Plant Guide", KeyEvent.VK_P,
-                "Open the sourced Pacific Northwest plant and crop reference.",
-                e -> selectTab("PNW Plant Guide"));
-        growingGuide.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_F1, 0));
-        helpMenu.add(growingGuide);
-        helpMenu.add(menuItem("Wedding & Memorial Services", KeyEvent.VK_W,
-                "Open sourced floral, catering, décor, photography, and event-service starters.",
-                e -> selectTab("Event Services")));
-        helpMenu.add(menuItem("PNW Rose Growing Guide", KeyEvent.VK_G,
-                "Open the Pacific Northwest rose variety reference.",
-                e -> selectTab("Rose Varieties")));
+        if (enabled.contains(FarmWorkspace.ROSE_AND_EVENTS)
+                || enabled.contains(FarmWorkspace.WILDFLOWER_FARM)) {
+            helpMenu.add(menuItem("Start here…", KeyEvent.VK_S,
+                    "Set up a cut-flower farm: log today’s cut, import a spreadsheet, or add a product.",
+                    e -> openStartHere()));
+            helpMenu.addSeparator();
+        }
+        if (enabled.contains(FarmWorkspace.ROSE_AND_EVENTS)
+                || enabled.contains(FarmWorkspace.WILDFLOWER_FARM)) {
+            JMenuItem growingGuide = menuItem("PNW Plant Guide", KeyEvent.VK_P,
+                    "Open the sourced Pacific Northwest plant and crop reference.",
+                    e -> selectTab("PNW Plant Guide"));
+            growingGuide.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_F1, 0));
+            helpMenu.add(growingGuide);
+        }
+        if (enabled.contains(FarmWorkspace.ROSE_AND_EVENTS)
+                || enabled.contains(FarmWorkspace.FLOWER_SHOP)) {
+            helpMenu.add(menuItem("Wedding & Memorial Services", KeyEvent.VK_W,
+                    "Open sourced floral, catering, décor, photography, and event-service starters.",
+                    e -> selectTab("Event Services")));
+        }
+        if (enabled.contains(FarmWorkspace.ROSE_AND_EVENTS)) {
+            helpMenu.add(menuItem("PNW Rose Growing Guide", KeyEvent.VK_G,
+                    "Open the Pacific Northwest rose variety reference.",
+                    e -> selectTab("Rose Varieties")));
+        }
         helpMenu.add(menuItem("Check for updates…", KeyEvent.VK_U,
                 "See whether a newer FlowersForever is ready, or turn automatic checks on or off.",
                 e -> checkForUpdates()));
@@ -591,6 +1724,344 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
             return;
         }
         updateController.checkNow();
+    }
+
+    private void showFarmTypeLauncher() {
+        if (contentDeck == null) {
+            return;
+        }
+        if (farmTypeLauncher != null) {
+            contentDeck.remove(farmTypeLauncher);
+        }
+        boolean canChange = farmOperationSettingsService != null
+                && !workspaceLoadFailed && session.role() == com.flowerfarm.auth.FarmRole.OWNER;
+        Set<FarmWorkspace> included = currentOperationSettings == null
+                ? Set.of(currentWorkspace)
+                : currentOperationSettings.getEnabledWorkspaces();
+        farmTypeLauncher = new FarmTypeLauncher(currentWorkspace, included, canChange,
+                this::selectFarmType, this::showFarmSetup, this::showFarmCombination);
+        contentDeck.add(farmTypeLauncher, LAUNCHER_CARD);
+        ((CardLayout) contentDeck.getLayout()).show(contentDeck, LAUNCHER_CARD);
+        contentDeck.revalidate();
+        contentDeck.repaint();
+        SwingUtilities.invokeLater(() -> {
+            if (farmTypeLauncher != null && farmTypeLauncher.isShowing()) {
+                farmTypeLauncher.currentEnterButton().requestFocusInWindow();
+            }
+        });
+    }
+
+    private void showWorkspace() {
+        if (contentDeck == null) {
+            return;
+        }
+        ((CardLayout) contentDeck.getLayout()).show(contentDeck, WORKSPACE_CARD);
+        contentDeck.revalidate();
+        contentDeck.repaint();
+        SwingUtilities.invokeLater(this::maybeOfferStartHere);
+    }
+
+    /** Called by a launcher card; never discards a workflow draft or an in-flight save. */
+    void selectFarmType(FarmWorkspace chosen) {
+        Objects.requireNonNull(chosen, "chosen");
+        if (chosen == currentWorkspace) {
+            showWorkspace();
+            setStatus("Opened " + FarmSetupDialog.workspaceLabel(chosen) + " workspace.");
+            return;
+        }
+        if (currentOperationSettings != null
+                && currentOperationSettings.getEnabledWorkspaces().size() > 1
+                && currentOperationSettings.getEnabledWorkspaces().contains(chosen)) {
+            showWorkspace();
+            if (navigator != null) {
+                navigator.select(startingTabFor(chosen));
+            }
+            setStatus("Opened " + FarmSetupDialog.workspaceLabel(chosen)
+                    + " tools in the combined farm.");
+            return;
+        }
+        if (currentOperationSettings != null
+                && currentOperationSettings.getEnabledWorkspaces().size() > 1) {
+            showFarmCombination(chosen);
+            return;
+        }
+        if (session.role() != com.flowerfarm.auth.FarmRole.OWNER) {
+            dialogs.showMessage(frame, "Only an owner can change the farm type.",
+                    "Farm type unchanged", JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+        if (farmOperationSettingsService == null || workspaceLoadFailed) {
+            dialogs.showMessage(frame, "The farm type cannot be changed until farm setup "
+                    + "can read the local data store.", "Farm type unavailable",
+                    JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+        String unfinished = workspaceSwitchWarning();
+        if (unfinished != null) {
+            dialogs.showMessage(frame,
+                    "Finish the current unfinished work before selecting a different farm type. "
+                            + "Your current draft and farm type were kept.\n\n" + unfinished,
+                    "Farm type unchanged", JOptionPane.INFORMATION_MESSAGE);
+            setStatus("Farm type unchanged; finish the current draft or pending save first.");
+            return;
+        }
+        FarmOperationSettings saved;
+        try {
+            FarmOperationSettings latest = farmOperationSettingsService.getSettings();
+            FarmOperationSettings selected = FarmTypeLauncher.settingsFor(latest, chosen);
+            saved = farmOperationSettingsService.saveSettings(selected);
+        } catch (RuntimeException exception) {
+            dialogs.showMessage(frame,
+                    "Farm type was not changed. Check the local data store and try again.",
+                    "Farm type unavailable", JOptionPane.ERROR_MESSAGE);
+            setStatus("Farm type unchanged; save failed.");
+            return;
+        }
+        applyWorkspaceChange(saved);
+        showWorkspace();
+        setStatus("Opened " + FarmSetupDialog.workspaceLabel(chosen)
+                + " workspace. Farm type saved.");
+    }
+
+    private static String startingTabFor(FarmWorkspace workspace) {
+        return switch (workspace) {
+            case ROSE_AND_EVENTS -> "Dashboard";
+            case WILDFLOWER_FARM -> "Market Day";
+            case FLOWER_SHOP -> "Production Studio";
+            case CANNABIS_FARM -> "Cultivation";
+            case POTATO_FARM -> "Field plans";
+            case APPLE_ORCHARD -> "Orchard blocks";
+            case BERRY_FARM -> "Berry blocks";
+            case NURSERY_FARM -> "Growing batches";
+            case LIVESTOCK_FARM -> "Herd groups";
+            case POULTRY_FARM -> "Egg collections";
+            case DAIRY_FARM -> "Milk collections";
+            case VINEYARD_FARM -> "Vineyard blocks";
+            case HAY_FARM -> "Hay cuttings";
+            case HOPS_FARM -> "Hop yards";
+            case GRAIN_FARM -> "Grain fields";
+            case SEED_FARM -> "Seed fields";
+            case NUT_ORCHARD -> "Nut blocks";
+            case VEGETABLE_FARM -> "Vegetable plantings";
+            case AQUACULTURE_FARM -> "Aquatic cohorts";
+            case CHRISTMAS_TREE_FARM -> "Tree blocks";
+            case APIARY_FARM -> "Hive checks";
+            case MUSHROOM_FARM -> "Mushroom batches";
+            case CRANBERRY_FARM -> "Cranberry beds";
+            case PUMPKIN_PATCH -> "Pumpkin patches";
+            case CUSTOM_FARM -> "Workspace";
+        };
+    }
+
+    /** Saves a chosen mix only after open workflows can safely be rebuilt. */
+    void showFarmCombination() {
+        showFarmCombination(null);
+    }
+
+    /** Opens the existing mix with one requested type already selected. */
+    private void showFarmCombination(FarmWorkspace addCandidate) {
+        if (session.role() != com.flowerfarm.auth.FarmRole.OWNER) {
+            dialogs.showMessage(frame, "Only an owner can change the farm mix.",
+                    "Farm mix unchanged", JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+        if (farmOperationSettingsService == null || workspaceLoadFailed) {
+            dialogs.showMessage(frame, "The farm mix cannot be changed until farm setup "
+                            + "can read the local data store.", "Farm mix unavailable",
+                    JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+        String unfinished = workspaceSwitchWarning();
+        if (unfinished != null) {
+            dialogs.showMessage(frame,
+                    "Finish unfinished work before editing the farm mix. "
+                            + "Your current draft and farm mix were kept.\n\n" + unfinished,
+                    "Farm mix unchanged", JOptionPane.INFORMATION_MESSAGE);
+            setStatus("Farm mix unchanged; finish the current draft or pending save first.");
+            return;
+        }
+        FarmCombinationDialog picker = new FarmCombinationDialog(dialogs);
+        LinkedHashSet<FarmWorkspace> included = new LinkedHashSet<>(
+                currentOperationSettings == null
+                        ? Set.of(currentWorkspace)
+                        : currentOperationSettings.getEnabledWorkspaces());
+        if (addCandidate != null) {
+            included.add(addCandidate);
+        }
+        FarmCombinationDialog.Selection selection = picker
+                .show(frame, currentWorkspace, included, session.role());
+        while (selection != null) {
+            if (selection.primary() == currentWorkspace && currentOperationSettings != null
+                    && selection.included().equals(
+                            currentOperationSettings.getEnabledWorkspaces())) {
+                showWorkspace();
+                return;
+            }
+            FarmOperationSettings saved;
+            try {
+                FarmOperationSettings latest = farmOperationSettingsService.getSettings();
+                FarmOperationSettings selected = FarmTypeLauncher.settingsForCombination(
+                        latest, selection.primary(), selection.included());
+                saved = farmOperationSettingsService.saveSettings(selected);
+            } catch (RuntimeException exception) {
+                Object[] options = {"Retry save", "Edit mix", "Cancel"};
+                int choice = dialogs.showOption(frame,
+                        "Farm mix was not saved. Your selections are kept here. "
+                                + "Check the local data store, then retry or edit the mix.",
+                        "Farm mix not saved", JOptionPane.DEFAULT_OPTION,
+                        JOptionPane.ERROR_MESSAGE, null, options, options[0]);
+                if (choice == 0) {
+                    continue;
+                }
+                if (choice == 1) {
+                    selection = picker.show(frame, selection.primary(),
+                            selection.included(), session.role());
+                    continue;
+                }
+                setStatus("Farm mix unchanged; save cancelled.");
+                return;
+            }
+            applyWorkspaceChange(saved);
+            showWorkspace();
+            setStatus(saved.getEnabledWorkspaces().size() > 1
+                    ? "Combined farm saved · " + saved.getEnabledWorkspaces().size()
+                            + " farm types available."
+                    : "Farm type saved · "
+                            + FarmSetupDialog.workspaceLabel(saved.getWorkspace()) + ".");
+            return;
+        }
+        if (addCandidate != null) {
+            setStatus("Farm mix unchanged; add cancelled.");
+        }
+    }
+
+    private void showFarmSetup() {
+        if (farmOperationSettingsService == null) {
+            dialogs.showMessage(frame, "Farm setup is unavailable in this session.",
+                    "Farm setup unavailable", JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+        if (session.role() == com.flowerfarm.auth.FarmRole.OWNER) {
+            String unfinished = workspaceSwitchWarning();
+            if (unfinished != null) {
+                dialogs.showMessage(frame,
+                        "Finish unfinished work before changing farm setup. "
+                                + "Your current draft and settings were kept.\n\n"
+                                + unfinished,
+                        "Farm setup unchanged", JOptionPane.INFORMATION_MESSAGE);
+                return;
+            }
+        }
+        var saved = new FarmSetupDialog(farmOperationSettingsService, dialogs)
+                .show(frame, farmProfile, session.role(), this::showFarmTypeLauncher);
+        if (saved != null) {
+            boolean navigationChanged = saved.getWorkspace() != currentWorkspace
+                    || currentOperationSettings == null
+                    || !saved.getEnabledWorkspaces().equals(
+                            currentOperationSettings.getEnabledWorkspaces());
+            if (!navigationChanged) {
+                currentOperationSettings = saved;
+            }
+            if (!navigationChanged
+                    && saved.getEnabledWorkspaces().contains(FarmWorkspace.CUSTOM_FARM)) {
+                tabs.stream().filter(tab -> tab instanceof WorkspaceHomeTab)
+                        .map(tab -> (WorkspaceHomeTab) tab)
+                        .findFirst().ifPresent(home -> home.setCustomFocus(
+                                saved.getEnabledWorkspaces().size() > 1
+                                        ? FarmTabCatalog.customMixFocus(saved)
+                                        : FarmTabCatalog.customFocus(saved)));
+            }
+            if (navigationChanged) {
+                applyWorkspaceChange(saved);
+            }
+            showWorkspace();
+            setStatus("Farm setup saved · " + FarmSetupDialog.stateLabel(saved.getState())
+                    + " · " + FarmSetupDialog.workspaceLabel(saved.getWorkspace())
+                    + " · " + FarmSetupDialog.enterpriseLabel(saved.getPrimaryEnterprise()));
+        }
+    }
+
+    private String workspaceSwitchWarning() {
+        return combinedExitWarning(
+                crmTab == null ? null : crmTab.applicationExitWarning(),
+                marketDayTab == null ? null : marketDayTab.applicationExitWarning(),
+                harvestTab == null ? null : harvestTab.applicationExitWarning(),
+                inventoryTab == null ? null : inventoryTab.applicationExitWarning(),
+                addItemTab == null ? null : addItemTab.applicationExitWarning(),
+                seasonPlannerTab == null ? null : seasonPlannerTab.applicationExitWarning(),
+                productionStudioTab == null ? null : productionStudioTab.applicationExitWarning(),
+                cultivationTab == null ? null : cultivationTab.applicationExitWarning(),
+                cropAreaWarning(),
+                berryBlockPlanTab == null ? null : berryBlockPlanTab.applicationExitWarning(),
+                nurseryGrowingBatchTab == null ? null
+                        : nurseryGrowingBatchTab.applicationExitWarning(),
+                herdGroupTab == null ? null : herdGroupTab.applicationExitWarning(),
+                eggCollectionTab == null ? null : eggCollectionTab.applicationExitWarning(),
+                milkCollectionTab == null ? null : milkCollectionTab.applicationExitWarning(),
+                vineyardBlockPlanTab == null ? null : vineyardBlockPlanTab.applicationExitWarning(),
+                hayCuttingTab == null ? null : hayCuttingTab.applicationExitWarning(),
+                hopYardPlanTab == null ? null : hopYardPlanTab.applicationExitWarning(),
+                grainFieldPlanTab == null ? null : grainFieldPlanTab.applicationExitWarning(),
+                seedFieldPlanTab == null ? null : seedFieldPlanTab.applicationExitWarning(),
+                nutBlockPlanTab == null ? null : nutBlockPlanTab.applicationExitWarning(),
+                vegetablePlantingTab == null ? null
+                        : vegetablePlantingTab.applicationExitWarning(),
+                aquaticCohortTab == null ? null
+                        : aquaticCohortTab.applicationExitWarning(),
+                christmasTreeBlockTab == null ? null
+                        : christmasTreeBlockTab.applicationExitWarning(),
+                hiveCheckTab == null ? null : hiveCheckTab.applicationExitWarning(),
+                mushroomBatchTab == null ? null : mushroomBatchTab.applicationExitWarning(),
+                cranberryBedTab == null ? null : cranberryBedTab.applicationExitWarning(),
+                pumpkinPatchTab == null ? null : pumpkinPatchTab.applicationExitWarning(),
+                knowledgeTab == null ? null : knowledgeTab.applicationExitWarning(),
+                fieldScienceTab == null ? null : fieldScienceTab.applicationExitWarning(),
+                eventServicesTab == null ? null : eventServicesTab.applicationExitWarning());
+    }
+
+    private String cropAreaWarning() {
+        if (cropAreaTabs.isEmpty()) {
+            return cropAreaTab == null ? null : cropAreaTab.applicationExitWarning();
+        }
+        return combinedExitWarning(cropAreaTabs.stream()
+                .map(CropAreaPlanTab::applicationExitWarning).toArray(String[]::new));
+    }
+
+    private boolean cropAreaPendingSave() {
+        if (cropAreaTabs.isEmpty()) {
+            return cropAreaTab != null && cropAreaTab.hasPendingSave();
+        }
+        return cropAreaTabs.stream().anyMatch(CropAreaPlanTab::hasPendingSave);
+    }
+
+    private void applyWorkspaceChange(FarmOperationSettings saved) {
+        currentOperationSettings = Objects.requireNonNull(saved, "saved");
+        currentWorkspace = saved.getWorkspace();
+        workspaceLoadFailed = false;
+        buildPrimaryNavigation();
+        bindCurrentWorkspaceActions();
+        frame.remove(brandHeader);
+        brandHeader = buildBrandHeader();
+        frame.add(brandHeader, BorderLayout.NORTH);
+        mutateButtons.removeIf(button -> button instanceof JMenuItem);
+        frame.setJMenuBar(buildMenuBar());
+        installShortcuts();
+        applyRoleToUi();
+        frame.setTitle(applicationTitle()
+                + (loginGate.isEnabled() ? " · " + session.displayName() : ""));
+        tabbedPane.setSelectedIndex(0);
+        prefs.putInt(PREF_TAB, 0);
+        prefs.put(PREF_TAB_TITLE, tabbedPane.getTitleAt(0));
+        prefs.put(PREF_WORKSPACE, currentWorkspace.name());
+        frame.revalidate();
+        frame.repaint();
+        if (dashboard != null && tabs.contains(dashboard)) {
+            dashboard.applyTheme(darkMode);
+        }
+        if (trendTab != null && tabs.contains(trendTab)) {
+            trendTab.applyTheme();
+        }
+        refreshAll();
     }
 
     private void showWhoAmI() {
@@ -641,13 +2112,68 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
                 marketDayTab == null ? null : marketDayTab.applicationExitWarning(),
                 harvestTab == null ? null : harvestTab.applicationExitWarning(),
                 inventoryTab == null ? null : inventoryTab.applicationExitWarning(),
+                addItemTab == null ? null : addItemTab.applicationExitWarning(),
                 seasonPlannerTab == null ? null : seasonPlannerTab.applicationExitWarning(),
-                productionStudioTab == null ? null : productionStudioTab.applicationExitWarning());
+                productionStudioTab == null ? null : productionStudioTab.applicationExitWarning(),
+                cultivationTab == null ? null : cultivationTab.applicationExitWarning(),
+                cropAreaWarning(),
+                berryBlockPlanTab == null ? null : berryBlockPlanTab.applicationExitWarning(),
+                nurseryGrowingBatchTab == null ? null
+                        : nurseryGrowingBatchTab.applicationExitWarning(),
+                herdGroupTab == null ? null : herdGroupTab.applicationExitWarning(),
+                eggCollectionTab == null ? null : eggCollectionTab.applicationExitWarning(),
+                milkCollectionTab == null ? null : milkCollectionTab.applicationExitWarning(),
+                vineyardBlockPlanTab == null ? null : vineyardBlockPlanTab.applicationExitWarning(),
+                hayCuttingTab == null ? null : hayCuttingTab.applicationExitWarning(),
+                hopYardPlanTab == null ? null : hopYardPlanTab.applicationExitWarning(),
+                grainFieldPlanTab == null ? null : grainFieldPlanTab.applicationExitWarning(),
+                seedFieldPlanTab == null ? null : seedFieldPlanTab.applicationExitWarning(),
+                nutBlockPlanTab == null ? null : nutBlockPlanTab.applicationExitWarning(),
+                vegetablePlantingTab == null ? null
+                        : vegetablePlantingTab.applicationExitWarning(),
+                aquaticCohortTab == null ? null
+                        : aquaticCohortTab.applicationExitWarning(),
+                christmasTreeBlockTab == null ? null
+                        : christmasTreeBlockTab.applicationExitWarning(),
+                hiveCheckTab == null ? null : hiveCheckTab.applicationExitWarning(),
+                mushroomBatchTab == null ? null : mushroomBatchTab.applicationExitWarning(),
+                cranberryBedTab == null ? null : cranberryBedTab.applicationExitWarning(),
+                pumpkinPatchTab == null ? null : pumpkinPatchTab.applicationExitWarning(),
+                knowledgeTab == null ? null : knowledgeTab.applicationExitWarning(),
+                fieldScienceTab == null ? null : fieldScienceTab.applicationExitWarning(),
+                eventServicesTab == null ? null : eventServicesTab.applicationExitWarning());
         if (warning != null) {
             boolean savePending = (productionStudioTab != null && productionStudioTab.hasPendingSave())
+                    || (cultivationTab != null && cultivationTab.hasPendingSave())
+                    || cropAreaPendingSave()
+                    || (berryBlockPlanTab != null && berryBlockPlanTab.hasPendingSave())
+                    || (nurseryGrowingBatchTab != null
+                            && nurseryGrowingBatchTab.hasPendingSave())
+                    || (herdGroupTab != null && herdGroupTab.hasPendingSave())
+                    || (eggCollectionTab != null && eggCollectionTab.hasPendingSave())
+                    || (milkCollectionTab != null && milkCollectionTab.hasPendingSave())
+                    || (vineyardBlockPlanTab != null && vineyardBlockPlanTab.hasPendingSave())
+                    || (hayCuttingTab != null && hayCuttingTab.hasPendingSave())
+                    || (hopYardPlanTab != null && hopYardPlanTab.hasPendingSave())
+                    || (grainFieldPlanTab != null && grainFieldPlanTab.hasPendingSave())
+                    || (seedFieldPlanTab != null && seedFieldPlanTab.hasPendingSave())
+                    || (nutBlockPlanTab != null && nutBlockPlanTab.hasPendingSave())
+                    || (vegetablePlantingTab != null
+                            && vegetablePlantingTab.hasPendingSave())
+                    || (aquaticCohortTab != null
+                            && aquaticCohortTab.hasPendingSave())
+                    || (christmasTreeBlockTab != null
+                            && christmasTreeBlockTab.hasPendingSave())
+                    || (hiveCheckTab != null && hiveCheckTab.hasPendingSave())
+                    || (mushroomBatchTab != null && mushroomBatchTab.hasPendingSave())
+                    || (cranberryBedTab != null && cranberryBedTab.hasPendingSave())
+                    || (pumpkinPatchTab != null && pumpkinPatchTab.hasPendingSave())
                     || (harvestTab != null && harvestTab.hasPendingSave())
                     || (inventoryTab != null && inventoryTab.hasPendingSave())
+                    || (addItemTab != null && addItemTab.hasPendingSave())
                     || (seasonPlannerTab != null && seasonPlannerTab.hasPendingSave())
+                    || (knowledgeTab != null && knowledgeTab.hasPendingSave())
+                    || (fieldScienceTab != null && fieldScienceTab.hasPendingSave())
                     || (crmTab != null && crmTab.hasPendingSave())
                     || (marketDayTab != null && marketDayTab.hasPendingSave());
             Object[] options = {"Keep working", savePending ? "Exit before result"
@@ -734,7 +2260,7 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
         navigator.installShortcuts(frame.getRootPane(), () -> {
             refreshAll();
             setStatus("All tabs refreshed.");
-        });
+        }, () -> farmTypeLauncher == null || !farmTypeLauncher.isVisible());
     }
 
     // ── Theming & preferences ──────────────────────────────────────────────────
@@ -760,10 +2286,10 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
             frame.revalidate();
             frame.repaint();
         }
-        if (dashboard != null) {
+        if (dashboard != null && tabs.contains(dashboard)) {
             dashboard.applyTheme(dark);   // re-assert custom card colors after the L&F reset
         }
-        if (trendTab != null) {
+        if (trendTab != null && tabs.contains(trendTab)) {
             trendTab.applyTheme();
         }
         prefs.putBoolean(PREF_DARK, dark);
@@ -776,11 +2302,14 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
                 farmProfile.getTagline(),
                 farmProfile.locationLabel(),
                 LocalDate.now(farmProfile.zoneId()).format(DateTimeFormatter.ofPattern(
-                        "EEEE · MMMM d", Locale.US)));
+                        "EEEE · MMMM d", Locale.US)),
+                FarmSetupDialog.workspaceLabel(currentWorkspace));
     }
 
     private String applicationTitle() {
-        return "FlowersForever — " + farmProfile.getName();
+        String title = "FlowersForever — " + farmProfile.getName();
+        return currentWorkspace == FarmWorkspace.ROSE_AND_EVENTS ? title
+                : title + " · " + FarmSetupDialog.workspaceLabel(currentWorkspace);
     }
 
     private void savePreferences() {
@@ -796,6 +2325,7 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
             }
         }
         prefs.putBoolean(PREF_DARK, darkMode);
+        prefs.put(PREF_WORKSPACE, currentWorkspace.name());
     }
 
     // ── Connector bar ───────────────────────────────────────────────────────
@@ -978,7 +2508,12 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
         if (navigator != null) {
             String resolved = "CRM".equals(tabTitle) ? "Customers & Orders"
                     : "Sync History".equals(tabTitle) ? "Activity History" : tabTitle;
-            navigator.select(resolved);
+            if (navigator.select(resolved)) {
+                showWorkspace();
+            } else {
+                setStatus(resolved + " is not shown in the "
+                        + FarmSetupDialog.workspaceLabel(currentWorkspace) + " workspace.");
+            }
         }
     }
 
@@ -1060,7 +2595,8 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
     }
 
     private void maybeOfferStartHere() {
-        if (prefs.getBoolean(PREF_START_HERE_DONE, false)) {
+        if (!hasCutFlowerHarvestWorkspace()
+                || prefs.getBoolean(PREF_START_HERE_DONE, false)) {
             return;
         }
         if (!StartHereGuide.looksEmpty(inventoryService.getAllItems().size(),
@@ -1068,6 +2604,13 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
             return;
         }
         showStartHereDialog(true);
+    }
+
+    private boolean hasCutFlowerHarvestWorkspace() {
+        Set<FarmWorkspace> enabled = currentOperationSettings == null
+                ? Set.of(currentWorkspace) : currentOperationSettings.getEnabledWorkspaces();
+        return enabled.contains(FarmWorkspace.ROSE_AND_EVENTS)
+                || enabled.contains(FarmWorkspace.WILDFLOWER_FARM);
     }
 
     private void showStartHereDialog(boolean automatic) {
@@ -1234,6 +2777,44 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
     }
 
     @Override
+    public void showFieldScienceFinding(String instrumentTitle, String sourceUrl) {
+        selectTab("Knowledge Log");
+        if (knowledgeTab != null) {
+            knowledgeTab.recordFieldScienceFinding(instrumentTitle, sourceUrl);
+        } else {
+            setStatus("Knowledge Log is unavailable for this farm workspace.");
+        }
+    }
+
+    @Override
+    public void showFieldScienceFindingFromExport(FieldScienceExportSummary export) {
+        if (export == null || export.id() == null || export.id() <= 0) {
+            setStatus("Select a saved field science export before recording a finding.");
+            return;
+        }
+        if (!canMutateData()) {
+            setStatus("This session cannot record a field science finding.");
+            return;
+        }
+        if (knowledgeTab == null) {
+            setStatus("Knowledge Log is unavailable for this farm workspace.");
+            return;
+        }
+        selectTab("Knowledge Log");
+        knowledgeTab.recordFieldScienceFindingFromExport(export);
+    }
+
+    @Override
+    public void showFieldScienceExport(long exportId) {
+        if (exportId <= 0 || fieldScienceTab == null) {
+            setStatus("The linked field science export is unavailable in this workspace.");
+            return;
+        }
+        selectTab("Field science");
+        fieldScienceTab.showSavedExport(exportId);
+    }
+
+    @Override
     public void showOrderLine(long orderId, Long lineId, String productName,
                               String returnTab, String returnLabel) {
         selectTab("Customers & Orders");
@@ -1305,10 +2886,12 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
 
     @Override
     public void runTrendAnalysis() {
-        selectTab("Trend Analysis");
-        if (trendTab != null) {
-            trendTab.runAnalysis();
+        if (trendTab == null || !tabs.contains(trendTab)) {
+            setStatus("Trend Analysis is not in this workspace.");
+            return;
         }
+        selectTab("Trend Analysis");
+        trendTab.runAnalysis();
     }
 
     @Override

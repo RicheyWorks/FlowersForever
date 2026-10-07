@@ -17,11 +17,11 @@ class FarmProfileTest {
     void defaultsAreNeutralAndKeepProductAttributionQuiet() {
         FarmProfile profile = new FarmProfile();
 
-        assertThat(profile.getName()).isEqualTo("Your Flower Farm");
+        assertThat(profile.getName()).isEqualTo("Your Farm");
         assertThat(profile.locationLabel()).isEqualTo("LOCAL FARM");
         assertThat(profile.documentBanner("Price List"))
-                .isEqualTo("Your Flower Farm  ·  Price List");
-        assertThat(profile.contactBlock()).isEqualTo("Your Flower Farm");
+                .isEqualTo("Your Farm  ·  Price List");
+        assertThat(profile.contactBlock()).isEqualTo("Your Farm");
         assertThat(profile.softwareFooter()).startsWith("Prepared with FlowersForever");
     }
 

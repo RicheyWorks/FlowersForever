@@ -630,10 +630,7 @@ public class RoseVisualizerTab implements FlowerFarmTab {
         }
         JTextField nameField = new JTextField(currentSystem.getName(), 28);
         nameField.getAccessibleContext().setAccessibleName("Ruleset name");
-        JPanel nameForm = new JPanel(new BorderLayout(0, FarmUi.CONTROL_GAP));
-        nameForm.add(new JLabel("Name this ruleset before saving it to your library."),
-                BorderLayout.NORTH);
-        nameForm.add(nameField, BorderLayout.CENTER);
+        JScrollPane nameForm = rulesetSaveDialog(panel, nameField);
         String name = null;
         while (name == null) {
             int choice = dialogs.showConfirm(panel, nameForm, "Save L-System ruleset",
@@ -692,9 +689,7 @@ public class RoseVisualizerTab implements FlowerFarmTab {
             String[] names = files.stream().map(p -> p.getFileName().toString()).toArray(String[]::new);
             JComboBox<String> rulesetBox = new JComboBox<>(names);
             rulesetBox.getAccessibleContext().setAccessibleName("Saved ruleset to load");
-            JPanel loadForm = new JPanel(new BorderLayout(0, FarmUi.CONTROL_GAP));
-            loadForm.add(new JLabel("Choose a saved ruleset:"), BorderLayout.NORTH);
-            loadForm.add(rulesetBox, BorderLayout.CENTER);
+            JScrollPane loadForm = rulesetLoadDialog(panel, rulesetBox);
             int choice = dialogs.showConfirm(panel, loadForm, "Load L-System",
                     JOptionPane.OK_CANCEL_OPTION, JOptionPane.QUESTION_MESSAGE);
             if (choice != JOptionPane.OK_OPTION) {
@@ -717,6 +712,80 @@ public class RoseVisualizerTab implements FlowerFarmTab {
         } catch (Exception ex) {
             dialogs.showMessage(panel, ex.getMessage(), "Load failed", JOptionPane.ERROR_MESSAGE);
         }
+    }
+
+    static JScrollPane rulesetSaveDialog(Component owner, JTextField nameField) {
+        nameField.setName("rose.rulesetName");
+        FarmUi.entryControl(nameField, null,
+                "Name this ruleset before saving it to your library.");
+        FarmUi.initialFocus(nameField);
+        JPanel form = new JPanel(new BorderLayout(0, FarmUi.CONTROL_GAP));
+        form.setName("rose.rulesetSaveForm");
+        form.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+        JLabel guidance = FarmUi.wrappingHint(
+                "Name this ruleset before saving it to your library.");
+        guidance.setLabelFor(nameField);
+        form.add(guidance, BorderLayout.NORTH);
+        form.add(nameField, BorderLayout.CENTER);
+        JScrollPane scroll = FarmUi.dialogScroll(owner, form, new Dimension(520, 100));
+        scroll.setName("rose.rulesetSaveScroll");
+        return scroll;
+    }
+
+    static JScrollPane rulesetLoadDialog(Component owner, JComboBox<String> rulesetBox) {
+        rulesetBox.setName("rose.savedRuleset");
+        rulesetBox.setPrototypeDisplayValue("Rose_ruleset_collection_2026.json");
+        FarmUi.entryControl(rulesetBox, null, "Choose a saved ruleset:");
+        FarmUi.initialFocus(rulesetBox);
+        rulesetBox.setRenderer(new DefaultListCellRenderer() {
+            @Override public Component getListCellRendererComponent(JList<?> list, Object value,
+                    int index, boolean selected, boolean focus) {
+                JLabel label = (JLabel) super.getListCellRendererComponent(
+                        list, value, index, selected, focus);
+                label.putClientProperty("html.disable", Boolean.TRUE);
+                String name = value == null ? "" : value.toString();
+                label.setText(name);
+                label.setToolTipText(rulesetFilenameTooltip(name));
+                label.getAccessibleContext().setAccessibleName(name);
+                return label;
+            }
+        });
+        JTextArea selectedName = FarmUi.displayArea(3, 36);
+        selectedName.setName("rose.selectedRulesetFilename");
+        selectedName.setFont(selectedName.getFont().deriveFont(14f));
+        selectedName.getAccessibleContext().setAccessibleName("Selected ruleset filename");
+        Runnable showSelectedName = () -> {
+            Object selected = rulesetBox.getSelectedItem();
+            String name = selected == null ? "" : selected.toString();
+            selectedName.setText(name);
+            selectedName.setCaretPosition(0);
+            selectedName.getAccessibleContext().setAccessibleDescription(name);
+            rulesetBox.setToolTipText(rulesetFilenameTooltip(name));
+            rulesetBox.getAccessibleContext().setAccessibleDescription(name);
+        };
+        rulesetBox.addActionListener(event -> showSelectedName.run());
+        showSelectedName.run();
+        JScrollPane filenameScroll = new JScrollPane(selectedName,
+                JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED, JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+        filenameScroll.setName("rose.selectedRulesetFilenameScroll");
+        filenameScroll.setBorder(BorderFactory.createLineBorder(FarmUi.borderColor()));
+        filenameScroll.setPreferredSize(new Dimension(480, 82));
+        filenameScroll.setMinimumSize(new Dimension(100, 82));
+        filenameScroll.getVerticalScrollBar().setUnitIncrement(18);
+        JPanel form = new JPanel(new BorderLayout(0, FarmUi.CONTROL_GAP));
+        form.setName("rose.rulesetLoadForm");
+        form.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+        form.add(FarmUi.entryField("Choose a saved ruleset:", rulesetBox, rulesetBox, '\0'),
+                BorderLayout.NORTH);
+        form.add(filenameScroll, BorderLayout.CENTER);
+        JScrollPane scroll = FarmUi.dialogScroll(owner, form, new Dimension(520, 170));
+        scroll.setName("rose.rulesetLoadScroll");
+        return scroll;
+    }
+
+    private static String rulesetFilenameTooltip(String name) {
+        return "<html>" + name.replace("&", "&amp;").replace("<", "&lt;")
+                .replace(">", "&gt;") + "</html>";
     }
 
     private void exportPng() {

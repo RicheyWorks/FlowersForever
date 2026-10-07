@@ -4,6 +4,7 @@ import com.flowerfarm.model.KnowledgeEntry;
 import com.flowerfarm.model.FarmProfile;
 import com.flowerfarm.repository.CustomerOrderRepository;
 import com.flowerfarm.repository.CustomerRepository;
+import com.flowerfarm.repository.FieldScienceExportRepository;
 import com.flowerfarm.repository.HarvestRepository;
 import com.flowerfarm.repository.InventoryRepository;
 import com.flowerfarm.repository.KnowledgeRepository;
@@ -61,6 +62,7 @@ public class KnowledgeService {
     private final InventoryRepository inventoryRepository;
     private final CustomerOrderRepository orderRepository;
     private final CustomerRepository customerRepository;
+    private final FieldScienceExportRepository fieldScienceExportRepository;
     private final SyncHistoryService syncHistoryService;
     private final Clock clock;
 
@@ -71,9 +73,11 @@ public class KnowledgeService {
                             CustomerOrderRepository orderRepository,
                             CustomerRepository customerRepository,
                             SyncHistoryService syncHistoryService,
+                            FieldScienceExportRepository fieldScienceExportRepository,
                             FarmProfile farmProfile) {
         this(repository, harvestRepository, inventoryRepository, orderRepository,
-                customerRepository, syncHistoryService, Clock.system(farmProfile.zoneId()));
+                customerRepository, syncHistoryService, fieldScienceExportRepository,
+                Clock.system(farmProfile.zoneId()));
     }
 
     KnowledgeService(KnowledgeRepository repository,
@@ -83,11 +87,24 @@ public class KnowledgeService {
                      CustomerRepository customerRepository,
                      SyncHistoryService syncHistoryService,
                      Clock clock) {
+        this(repository, harvestRepository, inventoryRepository, orderRepository,
+                customerRepository, syncHistoryService, null, clock);
+    }
+
+    KnowledgeService(KnowledgeRepository repository,
+                     HarvestRepository harvestRepository,
+                     InventoryRepository inventoryRepository,
+                     CustomerOrderRepository orderRepository,
+                     CustomerRepository customerRepository,
+                     SyncHistoryService syncHistoryService,
+                     FieldScienceExportRepository fieldScienceExportRepository,
+                     Clock clock) {
         this.repository = repository;
         this.harvestRepository = harvestRepository;
         this.inventoryRepository = inventoryRepository;
         this.orderRepository = orderRepository;
         this.customerRepository = customerRepository;
+        this.fieldScienceExportRepository = fieldScienceExportRepository;
         this.syncHistoryService = syncHistoryService;
         this.clock = clock;
     }
@@ -194,6 +211,12 @@ public class KnowledgeService {
                 "inventory item");
         requireExisting(entry.getOrderId(), orderRepository::findById, "order");
         requireExisting(entry.getCustomerId(), customerRepository::findById, "customer");
+        Long exportId = entry.getFieldScienceExportId();
+        if (exportId != null && (fieldScienceExportRepository == null
+                || !fieldScienceExportRepository.existsById(exportId))) {
+            throw new IllegalArgumentException(
+                    "Linked field science export #" + exportId + " was not found.");
+        }
     }
 
     private static <T> void requireExisting(Long id,

@@ -606,11 +606,11 @@ public class DashboardTab implements FlowerFarmTab {
 
         if (rev != null) {
             if (rev.confirmedOrderCount() > 0) {
-                alerts.append("• Ready to pack: ").append(rev.confirmedOrderCount())
+                alerts.append("• Packing review: ").append(rev.confirmedOrderCount())
                         .append(" confirmed order(s) — $")
                         .append(String.format("%,.2f", rev.pipeline())).append(" total\n");
                 priorities.add(new DashboardPriority(20,
-                        rev.confirmedOrderCount() + " confirmed order(s) ready to pack",
+                        rev.confirmedOrderCount() + " confirmed order(s) to review for packing",
                         "Market Day",
                         "Opened Market Day for confirmed orders."));
             }
@@ -662,7 +662,7 @@ public class DashboardTab implements FlowerFarmTab {
         }
 
         if (packing != null && packing.orderCount() > 0) {
-            alerts.append("• Pack today: ").append(packing.orderCount())
+            alerts.append("• Packing review today: ").append(packing.orderCount())
                     .append(" confirmed order(s) — $")
                     .append(String.format("%,.2f", packing.pipelineValue()))
                     .append(" total")
@@ -682,7 +682,7 @@ public class DashboardTab implements FlowerFarmTab {
                 }
             } else if (!sourceFailed(partialFailures, "Market Day")) {
                 priorities.add(new DashboardPriority(15,
-                        "Pack " + packing.orderCount() + " order(s) for today",
+                        "Review " + packing.orderCount() + " order(s) for packing today",
                         "Market Day",
                         "Opened today’s market packing list."));
             }
@@ -1254,34 +1254,18 @@ public class DashboardTab implements FlowerFarmTab {
     private void presentMorningBriefing(MorningBriefingService.MorningBriefing briefing) {
         try {
             List<MorningAction> morningActions = morningActions(briefing);
-            JTextArea area = new JTextArea(briefing.plainText(), 24, 68);
-            area.setEditable(false);
-            area.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
-            area.setCaretPosition(0);
-            JScrollPane scroll = new JScrollPane(area);
-            scroll.setPreferredSize(new Dimension(680, 460));
-
             JLabel readiness = FarmUi.statusBadge(
                     morningActions.isEmpty() ? "Farm ready"
                             : morningActions.size() + " morning priorit"
                             + (morningActions.size() == 1 ? "y" : "ies"),
                     morningActions.isEmpty() ? FarmUi.Tone.SUCCESS : FarmUi.Tone.WARNING);
-            JPanel briefingView = new JPanel(new BorderLayout(0, FarmUi.CONTROL_GAP));
-            briefingView.setOpaque(false);
-            JPanel briefingGuidance = new JPanel(new BorderLayout(0, FarmUi.CONTROL_GAP));
-            briefingGuidance.setOpaque(false);
-            briefingGuidance.add(FarmUi.toolbar(readiness, FarmUi.formHint(
-                    morningActions.isEmpty()
-                            ? "No operational startup task is waiting."
-                            : "Choose today’s next job, then refresh after completing it.")),
-                    BorderLayout.NORTH);
             MorningActionChooser actionChooser = morningActions.isEmpty()
                     ? null : buildMorningActionChooser(morningActions);
-            if (actionChooser != null) {
-                briefingGuidance.add(actionChooser.component(), BorderLayout.SOUTH);
-            }
-            briefingView.add(briefingGuidance, BorderLayout.NORTH);
-            briefingView.add(scroll, BorderLayout.CENTER);
+            JComponent briefingView = buildDailySheetPreview(panel, "dashboard.morning",
+                    briefing.plainText(), readiness, morningActions.isEmpty()
+                            ? "No operational startup task is waiting."
+                            : "Choose today’s next job, then refresh after completing it.",
+                    actionChooser == null ? null : actionChooser.component());
 
             Object[] options = morningActions.isEmpty()
                     ? new Object[]{"Export PDF…", "Close"}
@@ -1307,6 +1291,46 @@ public class DashboardTab implements FlowerFarmTab {
         }
     }
 
+    static JScrollPane buildDailySheetPreview(Component owner, String name, String report,
+                                               JLabel readiness, String guidance, JComponent chooser) {
+        JTextArea area = FarmUi.displayArea(16, 60);
+        area.setName(name + ".report");
+        area.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 13));
+        area.setBorder(BorderFactory.createEmptyBorder(12, 14, 12, 14));
+        area.setText(report);
+        area.setCaretPosition(0);
+        area.getAccessibleContext().setAccessibleName("Complete daily farm report");
+        area.getAccessibleContext().setAccessibleDescription(
+                "Read-only briefing or closeout text. Select and copy any part of the complete report.");
+        JScrollPane reportScroll = new JScrollPane(area,
+                JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED, JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+        reportScroll.setName(name + ".reportScroll");
+        reportScroll.setPreferredSize(new Dimension(640, 300));
+        reportScroll.setMinimumSize(new Dimension(260, 180));
+        reportScroll.getVerticalScrollBar().setUnitIncrement(24);
+
+        JPanel heading = new JPanel(new BorderLayout(0, FarmUi.CONTROL_GAP));
+        heading.setOpaque(false);
+        heading.add(FarmUi.toolbar(readiness), BorderLayout.NORTH);
+        JLabel hint = FarmUi.wrappingHint(guidance);
+        hint.setName(name + ".guidance");
+        heading.add(hint, BorderLayout.CENTER);
+        if (chooser != null) {
+            heading.add(chooser, BorderLayout.SOUTH);
+        }
+        JPanel preview = new JPanel(new BorderLayout(0, FarmUi.SECTION_GAP));
+        preview.setName(name + ".preview");
+        preview.setOpaque(false);
+        preview.setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
+        preview.add(heading, BorderLayout.NORTH);
+        preview.add(reportScroll, BorderLayout.CENTER);
+        int contentHeight = Math.min(540, preview.getPreferredSize().height);
+        JScrollPane dialog = FarmUi.dialogScroll(owner, preview, new Dimension(680, contentHeight));
+        dialog.setName(name + ".dialogScroll");
+        dialog.getAccessibleContext().setAccessibleName("Daily report and selected task preview");
+        return dialog;
+    }
+
     static List<MorningAction> morningActions(
             MorningBriefingService.MorningBriefing briefing) {
         List<MorningAction> actions = new ArrayList<>();
@@ -1318,8 +1342,8 @@ public class DashboardTab implements FlowerFarmTab {
                         "Opened Market Day to resolve today’s packing shortfalls.", List.of()));
             } else {
                 actions.add(new MorningAction(15, "Market Day",
-                        "Pack " + marketDay.orderCount() + " order(s)",
-                        "Opened Market Day to begin today’s customer load-out.", List.of()));
+                        "Review " + marketDay.orderCount() + " order(s) for packing",
+                        "Opened Market Day to review today’s customer load-out.", List.of()));
             }
         }
         IrrigationAdvisorService.IrrigationAdvice irrigation = briefing.irrigation();
@@ -1397,12 +1421,14 @@ public class DashboardTab implements FlowerFarmTab {
                 snapshot.toArray(MorningAction[]::new));
         queue.setName("dashboard.morningTaskQueue");
         queue.getAccessibleContext().setAccessibleName("Ranked morning task queue");
-        JLabel detail = FarmUi.formHint(" ");
+        configureDailyTaskQueue(queue);
+        JLabel detail = FarmUi.wrappingHint(" ");
         detail.setName("dashboard.morningTaskDetail");
         detail.getAccessibleContext().setAccessibleName(
                 "Selected morning task destination and urgency");
         Runnable update = () -> {
             MorningAction selected = (MorningAction) queue.getSelectedItem();
+            queue.setToolTipText(selected == null ? null : selected.toString());
             if (selected == null) {
                 detail.setText("No morning task selected.");
                 detail.getAccessibleContext().setAccessibleDescription(
@@ -1411,17 +1437,16 @@ public class DashboardTab implements FlowerFarmTab {
             }
             String urgency = selected.rank() <= 10 ? "Urgent"
                     : selected.rank() <= 30 ? "Next up" : "Follow-up";
-            String guidance = urgency + " · Opens " + selected.targetTab()
-                    + " · " + selected.navigationMessage();
+            String guidance = urgency + " · "
+                    + dailySheetActionPreview(selected.targetTab(), selected.navigationMessage());
             detail.setText(guidance);
             detail.getAccessibleContext().setAccessibleDescription(
                     "Selected " + urgency.toLowerCase() + " morning task: "
-                            + selected.summary() + ". Opens " + selected.targetTab() + ". "
-                            + selected.navigationMessage());
+                            + selected.summary() + ". " + guidance);
         };
         queue.addActionListener(event -> update.run());
         update.run();
-        JPanel component = new JPanel(new BorderLayout(FarmUi.CONTROL_GAP, 0));
+        JPanel component = new JPanel(new BorderLayout(FarmUi.CONTROL_GAP, FarmUi.CONTROL_GAP));
         component.setOpaque(false);
         JLabel label = new JLabel("Start:");
         label.setLabelFor(queue);
@@ -1430,6 +1455,26 @@ public class DashboardTab implements FlowerFarmTab {
         component.add(queue, BorderLayout.CENTER);
         component.add(detail, BorderLayout.SOUTH);
         return new MorningActionChooser(component, queue);
+    }
+
+    private static void configureDailyTaskQueue(JComboBox<?> queue) {
+        FarmUi.entryControl(queue, "", "Choose a task; its destination and urgency are shown below.");
+        queue.setPreferredSize(new Dimension(420, 36));
+        queue.setMinimumSize(new Dimension(80, 36));
+        queue.setMaximumRowCount(8);
+        DefaultListCellRenderer renderer = new DefaultListCellRenderer();
+        renderer.putClientProperty("html.disable", Boolean.TRUE);
+        queue.setRenderer(renderer);
+    }
+
+    private static String dailySheetActionPreview(String targetTab, String navigationMessage) {
+        if (navigationMessage == null || navigationMessage.isBlank()) {
+            return "Opens " + targetTab + ".";
+        }
+        if (navigationMessage.startsWith("Opened ")) {
+            return "Opens " + navigationMessage.substring("Opened ".length());
+        }
+        return "Opens " + targetTab + " · " + navigationMessage;
     }
 
     record MorningActionChooser(JPanel component, JComboBox<MorningAction> queue) {
@@ -1491,34 +1536,18 @@ public class DashboardTab implements FlowerFarmTab {
     private void presentDayCloseout(DayCloseoutService.DayCloseout closeout) {
         try {
             List<CloseoutAction> followUps = closeoutActions(closeout);
-            JTextArea area = new JTextArea(closeout.plainText(), 24, 68);
-            area.setEditable(false);
-            area.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
-            area.setCaretPosition(0);
-            JScrollPane scroll = new JScrollPane(area);
-            scroll.setPreferredSize(new Dimension(680, 460));
-
             JLabel readiness = FarmUi.statusBadge(
                     followUps.isEmpty() ? "Ready to close"
                             : followUps.size() + " follow-up area"
                             + (followUps.size() == 1 ? "" : "s"),
                     followUps.isEmpty() ? FarmUi.Tone.SUCCESS : FarmUi.Tone.WARNING);
-            JPanel closeoutView = new JPanel(new BorderLayout(0, FarmUi.CONTROL_GAP));
-            closeoutView.setOpaque(false);
-            JPanel closeoutGuidance = new JPanel(new BorderLayout(0, FarmUi.CONTROL_GAP));
-            closeoutGuidance.setOpaque(false);
-            closeoutGuidance.add(FarmUi.toolbar(readiness, FarmUi.formHint(
-                    followUps.isEmpty()
-                            ? "No operational blockers remain for today."
-                            : "Choose a follow-up, resolve it, then rebuild closeout.")),
-                    BorderLayout.NORTH);
             CloseoutActionChooser actionChooser = followUps.isEmpty()
                     ? null : buildCloseoutActionChooser(followUps);
-            if (actionChooser != null) {
-                closeoutGuidance.add(actionChooser.component(), BorderLayout.SOUTH);
-            }
-            closeoutView.add(closeoutGuidance, BorderLayout.NORTH);
-            closeoutView.add(scroll, BorderLayout.CENTER);
+            JComponent closeoutView = buildDailySheetPreview(panel, "dashboard.closeout",
+                    closeout.plainText(), readiness, followUps.isEmpty()
+                            ? "No operational blockers remain for today."
+                            : "Choose a follow-up, resolve it, then rebuild closeout.",
+                    actionChooser == null ? null : actionChooser.component());
 
             Object[] options = followUps.isEmpty()
                     ? new Object[]{"Export PDF…", "Close"}
@@ -1797,27 +1826,29 @@ public class DashboardTab implements FlowerFarmTab {
                 snapshot.toArray(CloseoutAction[]::new));
         queue.setName("dashboard.closeoutFollowUps");
         queue.getAccessibleContext().setAccessibleName("Day closeout follow-up queue");
-        JLabel detail = FarmUi.formHint(" ");
+        configureDailyTaskQueue(queue);
+        JLabel detail = FarmUi.wrappingHint(" ");
         detail.setName("dashboard.closeoutFollowUpDetail");
         detail.getAccessibleContext().setAccessibleName(
                 "Selected closeout follow-up destination");
         Runnable update = () -> {
             CloseoutAction selected = (CloseoutAction) queue.getSelectedItem();
+            queue.setToolTipText(selected == null ? null : selected.toString());
             if (selected == null) {
                 detail.setText("No follow-up selected.");
                 detail.getAccessibleContext().setAccessibleDescription(
                         "No closeout follow-up is selected.");
                 return;
             }
-            String guidance = "Opens " + selected.targetTab() + " · "
-                    + selected.navigationMessage();
+            String guidance = dailySheetActionPreview(
+                    selected.targetTab(), selected.navigationMessage());
             detail.setText(guidance);
             detail.getAccessibleContext().setAccessibleDescription(
                     "Selected follow-up: " + selected.summary() + ". " + guidance);
         };
         queue.addActionListener(event -> update.run());
         update.run();
-        JPanel component = new JPanel(new BorderLayout(FarmUi.CONTROL_GAP, 0));
+        JPanel component = new JPanel(new BorderLayout(FarmUi.CONTROL_GAP, FarmUi.CONTROL_GAP));
         component.setOpaque(false);
         JLabel label = new JLabel("Resolve:");
         label.setLabelFor(queue);

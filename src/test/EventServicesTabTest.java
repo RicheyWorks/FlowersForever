@@ -15,9 +15,13 @@ import javax.swing.JTable;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
 import javax.swing.SwingUtilities;
+import javax.swing.TransferHandler;
 import java.awt.Component;
 import java.awt.Container;
 import java.awt.Point;
+import java.awt.datatransfer.Clipboard;
+import java.awt.datatransfer.StringSelection;
+import java.awt.datatransfer.Transferable;
 import java.awt.event.FocusEvent;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -65,6 +69,8 @@ class EventServicesTabTest {
                 .isGreaterThan(90).isEqualTo(startCrm.getWidth());
         assertThat(user.visibleExtent("eventServices.startCrmBrief").height())
                 .isEqualTo(startCrm.getHeight());
+        assertThat(user.visibleExtent("eventServices.serviceDropTarget").height())
+                .isGreaterThan(20);
     }
 
     @Test
@@ -118,6 +124,192 @@ class EventServicesTabTest {
         flushEvents();
         assertThat(host.eventBrief).isEqualTo(brief.getText());
         assertThat(host.selectedTab).isEqualTo("Customers & Orders");
+    }
+
+    @Test
+    @DisplayName("dragging selected filtered services builds an editable event brief")
+    void draggedSelectionBuildsEditableBrief() throws Exception {
+        EventServicesTab tab = new EventServicesTab(new Host());
+        JComponent root = tab.getUIComponent();
+        JTable table = (JTable) named(root, "eventServices.table");
+        JComboBox<?> occasion = (JComboBox<?>) named(root, "eventServices.occasionFilter");
+        JComboBox<?> category = (JComboBox<?>) named(root, "eventServices.categoryFilter");
+        JTextField eventName = (JTextField) named(root, "eventServices.eventName");
+        JTextArea brief = (JTextArea) named(root, "eventServices.brief");
+        JComponent target = (JComponent) named(root, "eventServices.serviceDropTarget");
+
+        SwingUtilities.invokeAndWait(() -> {
+            occasion.setSelectedItem("Wedding");
+            category.setSelectedItem("Floral design");
+            table.setRowSelectionInterval(0, 1);
+            eventName.setText("Rivera wedding");
+        });
+        assertThat(table.getRowCount()).isGreaterThanOrEqualTo(2);
+        String first = String.valueOf(table.getValueAt(0, 0));
+        String second = String.valueOf(table.getValueAt(1, 0));
+        Transferable dragged = dragPayload(table);
+        TransferHandler.TransferSupport drop =
+                new TransferHandler.TransferSupport(target, dragged);
+
+        SwingUtilities.invokeAndWait(() -> {
+            assertThat(target.getTransferHandler().canImport(drop)).isTrue();
+            assertThat(target.getTransferHandler().importData(drop)).isTrue();
+        });
+        assertThat(brief.getText()).contains("Rivera wedding", first, second,
+                "CONFIRM BEFORE APPROVAL");
+        assertThat(brief.isEditable()).isTrue();
+        assertThat(tab.applicationExitWarning()).contains("unfinished brief");
+        SwingUtilities.invokeAndWait(() -> brief.append("\nClient requested a blue ribbon."));
+        assertThat(brief.getText()).endsWith("Client requested a blue ribbon.");
+    }
+
+    @Test
+    @DisplayName("service drop rejects stale and foreign drags without overwriting draft text")
+    void serviceDropKeepsExistingBriefAndRejectsStalePayloads() throws Exception {
+        EventServicesTab tab = new EventServicesTab(new Host());
+        JComponent root = tab.getUIComponent();
+        JTable table = (JTable) named(root, "eventServices.table");
+        JComponent target = (JComponent) named(root, "eventServices.serviceDropTarget");
+        JTextArea brief = (JTextArea) named(root, "eventServices.brief");
+        JComboBox<?> occasion = (JComboBox<?>) named(root, "eventServices.occasionFilter");
+        Transferable initial = dragPayload(table);
+        TransferHandler.TransferSupport firstDrop =
+                new TransferHandler.TransferSupport(target, initial);
+
+        SwingUtilities.invokeAndWait(() -> {
+            brief.setText("Keep these exact client instructions.");
+            assertThat(target.getTransferHandler().canImport(firstDrop)).isFalse();
+            assertThat(target.getTransferHandler().importData(firstDrop)).isFalse();
+            assertThat(brief.getText()).isEqualTo("Keep these exact client instructions.");
+            brief.setText(" ");
+            assertThat(target.getTransferHandler().canImport(firstDrop)).isFalse();
+            brief.setText("");
+            table.setRowSelectionInterval(1, 1);
+            assertThat(target.getTransferHandler().canImport(firstDrop)).isFalse();
+            occasion.setSelectedItem("Memorial / funeral");
+        });
+        assertThat(target.getTransferHandler().canImport(firstDrop)).isFalse();
+        assertThat(brief.getText()).isEmpty();
+
+        EventServicesTab other = new EventServicesTab(new Host());
+        JComponent otherRoot = other.getUIComponent();
+        Transferable foreign = dragPayload(
+                (JTable) named(otherRoot, "eventServices.table"));
+        SwingUtilities.invokeAndWait(() -> {
+            assertThat(target.getTransferHandler().canImport(
+                    new TransferHandler.TransferSupport(target, foreign))).isFalse();
+            assertThat(target.getTransferHandler().canImport(
+                    new TransferHandler.TransferSupport(target,
+                            new StringSelection("Ceremony flowers")))).isFalse();
+            table.clearSelection();
+        });
+        assertThat(brief.getText()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("keeps unfinished event details when switching farm types")
+    void protectsEventDraftUntilClearedOrHandedOff() throws Exception {
+        Host host = new Host();
+        EventServicesTab tab = new EventServicesTab(host);
+        JComponent root = tab.getUIComponent();
+        JTextField eventName = (JTextField) named(root, "eventServices.eventName");
+        JTextArea brief = (JTextArea) named(root, "eventServices.brief");
+        JButton clear = (JButton) named(root, "eventServices.clearBrief");
+        JButton startCrm = (JButton) named(root, "eventServices.startCrmBrief");
+
+        assertThat(tab.applicationExitWarning()).isNull();
+        SwingUtilities.invokeAndWait(() -> eventName.setText("Rivera wedding"));
+        assertThat(tab.applicationExitWarning()).contains("unfinished brief");
+
+        SwingUtilities.invokeAndWait(clear::doClick);
+        assertThat(eventName.getText()).isBlank();
+        assertThat(tab.applicationExitWarning()).isNull();
+
+        SwingUtilities.invokeAndWait(() -> {
+            brief.setText("Reviewed wedding instructions");
+            startCrm.doClick();
+        });
+        assertThat(host.eventBrief).isEqualTo("Reviewed wedding instructions");
+        assertThat(tab.applicationExitWarning()).isNull();
+
+        SwingUtilities.invokeAndWait(() -> brief.append("; revised"));
+        assertThat(tab.applicationExitWarning()).contains("unfinished brief");
+        SwingUtilities.invokeAndWait(clear::doClick);
+        assertThat(tab.applicationExitWarning()).isNull();
+    }
+
+    @Test
+    @DisplayName("CRM handoff preserves reviewed edits and builds a blank brief")
+    void crmHandoffUsesReviewedBriefOrBuildsBlankBrief() throws Exception {
+        Host host = new Host();
+        JComponent root = new EventServicesTab(host).getUIComponent();
+        JButton build = (JButton) named(root, "eventServices.buildBrief");
+        JButton startCrm = (JButton) named(root, "eventServices.startCrmBrief");
+        JTextArea brief = (JTextArea) named(root, "eventServices.brief");
+        String reviewed = "EVENT BRIEF — Wedding\nUse the family entrance for setup.";
+
+        SwingUtilities.invokeAndWait(() -> {
+            build.doClick();
+            brief.setText(reviewed);
+            startCrm.doClick();
+        });
+        assertThat(brief.getText()).isEqualTo(reviewed);
+        assertThat(host.eventBrief).isEqualTo(reviewed);
+
+        SwingUtilities.invokeAndWait(() -> {
+            brief.setText("");
+            startCrm.doClick();
+        });
+        assertThat(brief.getText()).contains("EVENT BRIEF", "SELECTED SERVICES");
+        assertThat(host.eventBrief).isEqualTo(brief.getText());
+    }
+
+    @Test
+    @DisplayName("CRM handoff needs a selected service when the brief is blank")
+    void crmHandoffDoesNotSendMissingSelectionGuidance() throws Exception {
+        Host host = new Host();
+        JComponent root = new EventServicesTab(host).getUIComponent();
+        JTextField search = (JTextField) named(root, "eventServices.search");
+        JTable table = (JTable) named(root, "eventServices.table");
+        JTextArea brief = (JTextArea) named(root, "eventServices.brief");
+        JButton build = (JButton) named(root, "eventServices.buildBrief");
+        JButton startCrm = (JButton) named(root, "eventServices.startCrmBrief");
+        JLabel feedback = (JLabel) named(root, "eventServices.feedback");
+
+        SwingUtilities.invokeAndWait(() -> {
+            search.setText("zzzz-no-matching-service");
+            assertThat(table.getRowCount()).isZero();
+            assertThat(brief.getText()).isBlank();
+            startCrm.doClick();
+        });
+        assertThat(host.eventBrief).isNull();
+        assertThat(host.selectedTab).isNull();
+        assertThat(brief.getText()).isBlank();
+        assertThat(feedback.getText()).isEqualTo("Choose one or more service rows");
+
+        SwingUtilities.invokeAndWait(() -> {
+            build.doClick();
+            assertThat(brief.getText()).isBlank();
+            startCrm.doClick();
+        });
+        assertThat(host.eventBrief).isNull();
+        assertThat(host.selectedTab).isNull();
+
+        SwingUtilities.invokeAndWait(() -> {
+            search.setText("");
+            assertThat(table.getSelectedRow()).isNotNegative();
+            startCrm.doClick();
+        });
+        assertThat(host.eventBrief).startsWith("EVENT BRIEF");
+        assertThat(host.eventBrief).isEqualTo(brief.getText());
+
+        String reviewed = "Custom event instructions after the catalog search.";
+        SwingUtilities.invokeAndWait(() -> {
+            search.setText("zzzz-no-matching-service");
+            brief.setText(reviewed);
+            startCrm.doClick();
+        });
+        assertThat(host.eventBrief).isEqualTo(reviewed);
     }
 
     @Test
@@ -191,6 +383,17 @@ class EventServicesTabTest {
     private static void flushEvents() throws Exception {
         SwingUtilities.invokeAndWait(() -> {
         });
+    }
+
+    private static Transferable dragPayload(JTable table) throws Exception {
+        AtomicReference<Transferable> payload = new AtomicReference<>();
+        SwingUtilities.invokeAndWait(() -> {
+            Clipboard clipboard = new Clipboard("event-service-drag-test");
+            table.getTransferHandler().exportToClipboard(
+                    table, clipboard, TransferHandler.COPY);
+            payload.set(clipboard.getContents(null));
+        });
+        return payload.get();
     }
 
     private static final class Host implements TabHost {

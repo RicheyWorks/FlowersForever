@@ -24,9 +24,13 @@ class Element {
     for (const listener of this.listeners[event] || []) await listener({ preventDefault() {} });
   }
   setAttribute(name, value) { this.attributes[name] = value; }
-  focus() { this.focused = true; }
+  focus() { this.focused = true; this.onFocus?.(this); }
   scrollIntoView() {}
   querySelector(selector) {
+    if (this.selectorMap) {
+      assert.ok(this.selectorMap[selector], `Missing template control ${selector}`);
+      return this.selectorMap[selector];
+    }
     assert.equal(selector, "button[type=submit]");
     return this.submitButton;
   }
@@ -39,22 +43,28 @@ function attrs(source) {
 
 function buildDocument() {
   const elements = new Map();
+  let activeElement = null;
+  const makeElement = attributes => {
+    const element = new Element(attributes);
+    element.onFocus = focused => { activeElement = focused; };
+    return element;
+  };
   for (const tag of html.matchAll(/<[\w-]+\b([^>]*)>/g)) {
     const attributes = attrs(tag[1]);
-    if (attributes.id) elements.set(attributes.id, new Element(attributes));
+    if (attributes.id) elements.set(attributes.id, makeElement(attributes));
   }
   for (const form of html.matchAll(/<form\b([^>]*)>([\s\S]*?)<\/form>/g)) {
     const element = elements.get(attrs(form[1]).id);
     if (!element) continue; // Forms inside repeated task/order templates have no static id.
     element.elements = {};
-    element.submitButton = new Element();
+    element.submitButton = makeElement();
     Object.defineProperty(element.elements, Symbol.iterator, {
       value: function* () { yield* Object.values(this); yield element.submitButton; }
     });
     for (const control of form[2].matchAll(/<(input|textarea|select)\b([^>]*)(?:>([\s\S]*?)<\/\1>|>)/g)) {
       const attributes = attrs(control[2]);
       if (!attributes.name) continue;
-      const field = elements.get(attributes.id) || new Element(attributes);
+      const field = elements.get(attributes.id) || makeElement(attributes);
       field.value = attributes.value || (control[1] === "select"
         ? attrs((control[3] || "").match(/<option\b([^>]*)>/)?.[1] || "").value || "" : "");
       field.initialValue = field.value;
@@ -63,11 +73,42 @@ function buildDocument() {
     element.reset = () => Object.values(element.elements).forEach(field => { field.value = field.initialValue; });
   }
   const closeButtons = [...html.matchAll(/<button\b([^>]*data-close-capture[^>]*)>/g)].map(match => {
-    const element = new Element(attrs(match[1]));
+    const element = makeElement(attrs(match[1]));
     element.dataset.closeCapture = element.attributes["data-close-capture"];
     return element;
   });
+  function templateFragment(id) {
+    const fragment = makeElement();
+    const selectors = {
+      "task-template": [".task-card", ".task-date", ".task-type", ".task-title",
+        ".task-location", ".task-notes", ".complete-toggle", ".task-form", ".form-message"],
+      "order-template": [".order-card", ".order-date", ".order-type", ".order-customer",
+        ".order-contact", ".order-account-note", ".order-instructions", ".order-lines",
+        ".handoff-toggle", ".handoff-form", ".handoff-confirmation-text",
+        ".complete-handoff", ".discard-handoff", ".form-message"],
+      "inventory-template": [".inventory-card", ".inventory-category", ".inventory-name",
+        ".inventory-on-hand", ".inventory-quantity", ".inventory-form"]
+    }[id];
+    fragment.selectorMap = Object.fromEntries(selectors.map(selector => [selector, makeElement()]));
+    const formSelector = { "task-template": ".task-form", "order-template": ".handoff-form",
+      "inventory-template": ".inventory-form" }[id];
+    const form = fragment.querySelector(formSelector);
+    const fieldNames = { "task-template": ["actualMinutes", "inputCost", "fieldObservation", "photo", "photoCaption"],
+      "order-template": ["confirmedPhysicalHandoff"],
+      "inventory-template": ["countedQuantity"] }[id];
+    form.elements = Object.fromEntries(fieldNames.map(name => [name, makeElement()]));
+    form.selectorMap = { "button[type=submit]": makeElement(), "input": form.elements[fieldNames[0]] };
+    if (id === "inventory-template") {
+      form.selectorMap[".discard-count"] = makeElement();
+      form.selectorMap[".form-message"] = makeElement();
+    }
+    return fragment;
+  }
+  for (const id of ["task-template", "order-template", "inventory-template"]) {
+    elements.get(id).content = { cloneNode: () => templateFragment(id) };
+  }
   const document = {
+    get activeElement() { return activeElement; },
     querySelector(selector) {
       const [id, child] = selector.split(" ");
       assert.ok(id.startsWith("#"), `Unexpected selector ${selector}`);
@@ -83,7 +124,7 @@ function buildDocument() {
       assert.equal(selector, "[data-close-capture]");
       return closeButtons;
     },
-    createElement() { return new Element(); }
+    createElement() { return makeElement(); }
   };
   return { document, elements, closeButtons };
 }
@@ -106,12 +147,21 @@ async function boot({ storage = new Map(), backend = server(), denyQueueWrites =
       if (!replayed) backend.receipts.set(body.operationKey, { ...body, id: backend.receipts.size + 1, summary: body.observation });
       if (backend.mode === "response-lost") throw new TypeError("Response interrupted after commit");
       if (backend.mode === "invalid-json") return { ok: true, json: async () => { throw new SyntaxError("Truncated JSON"); } };
+      if (url.includes("/tasks/") && backend.today) {
+        backend.today.tasks = backend.today.tasks.filter(task => !url.includes(`/tasks/${task.id}/`));
+      }
+      if (url.includes("/orders/") && backend.orders) {
+        backend.orders.orders = backend.orders.orders.filter(order => !url.includes(`/orders/${order.id}/`));
+      }
       return response(replayed ? 200 : 201, { replayed, result: backend.receipts.get(body.operationKey) });
     }
     if (backend.mode === "offline") throw new TypeError("Connection unavailable");
-    if (url.startsWith("/api/worker/today")) return response(200, { date: farmDate, tasks: [], openTaskTotal: 0 });
-    if (url.startsWith("/api/worker/orders")) return response(200, { orders: [], dueOrderTotal: 0 });
-    if (url.startsWith("/api/worker/inventory")) return response(200, { items: [], matchingTotal: 0 });
+    if (url.startsWith("/api/worker/today")) return response(200,
+      backend.today || { date: farmDate, tasks: [], openTaskTotal: 0 });
+    if (url.startsWith("/api/worker/orders")) return response(200,
+      backend.orders || { orders: [], dueTotal: 0 });
+    if (url.startsWith("/api/worker/inventory")) return response(200,
+      backend.inventory || { items: [], matchingTotal: 0 });
     if (url.startsWith("/api/worker/field-notes")) return response(200, { notes: [...backend.receipts.values()] });
     throw new Error(`Unexpected request ${url}`);
   };
@@ -121,8 +171,9 @@ async function boot({ storage = new Map(), backend = server(), denyQueueWrites =
     get(name) { return this.values.get(name); }
     [Symbol.iterator]() { return this.values[Symbol.iterator](); }
   }
+  class File {}
   vm.runInNewContext(script, {
-    document: dom.document, navigator, window: new Element(), FormData, fetch, TypeError,
+    document: dom.document, navigator, window: new Element(), FormData, File, fetch, TypeError,
     crypto: { randomUUID: () => `test-operation-${backend.nextKey++}` },
     localStorage: {
       getItem: key => storage.get(key) ?? null,
@@ -231,6 +282,30 @@ test("failed queue replay remains visible and retryable without dropping a note"
   assert.equal(page.backend.receipts.size, 1);
 });
 
+test("retry shows sync progress only while a queued entry is in flight", async () => {
+  const page = await boot();
+  assert.equal(page.get("retry-sync").disabled, true);
+  assert.equal(page.get("retry-sync").attributes["data-syncing"], "false");
+  page.backend.mode = "offline";
+  await page.fillNote({ observation: "Check stems after rain" });
+  await page.get("field-note-form").fire("submit");
+  page.backend.mode = "online";
+  let releaseResponse;
+  page.backend.waitForResponse = new Promise(resolve => { releaseResponse = resolve; });
+  const syncing = page.get("retry-sync").fire("click");
+  assert.equal(page.get("retry-sync").disabled, true);
+  assert.equal(page.get("retry-sync").textContent, "Syncing…");
+  assert.equal(page.get("retry-sync").attributes["data-syncing"], "true");
+  assert.equal(page.get("retry-sync").attributes["aria-busy"], "true");
+  assert.match(page.get("sync-detail").textContent, /Syncing 1 entry/);
+  releaseResponse();
+  await syncing;
+  assert.equal(page.get("retry-sync").textContent, "Retry now");
+  assert.equal(page.get("retry-sync").attributes["data-syncing"], "false");
+  assert.equal(page.get("retry-sync").attributes["aria-busy"], "false");
+  assert.match(page.get("sync-detail").textContent, /No field entries/);
+});
+
 test("only the submitted capture form is locked until a delayed response settles", async () => {
   const page = await boot();
   await page.fillNote({ observation: "First observation" });
@@ -276,4 +351,88 @@ test("a draft cleanup failure recovers the previous receipt instead of duplicati
   assert.equal(page.backend.receipts.size, 1);
   assert.equal(reload.get("field-note-form").elements.observation.value, "");
   assert.equal(reload.pending().length, 0);
+});
+
+test("completed task keeps confirmation and focus after its card disappears", async () => {
+  const backend = server();
+  backend.today = { date: farmDate, openTaskTotal: 1, tasks: [{
+    id: 12, dueDate: farmDate, taskType: "HARVEST", cropName: "Dahlia", bedOrField: "Bed 4"
+  }] };
+  const page = await boot({ backend });
+  const form = page.get("task-list").children[0].querySelector(".task-form");
+  form.elements.actualMinutes.value = "20";
+  form.elements.inputCost.value = "0";
+  form.querySelector("button[type=submit]").focus();
+  await form.fire("submit");
+  assert.equal(page.get("task-list").children.length, 0);
+  assert.match(page.get("task-action-status").textContent, /Task · Dahlia: Saved to FlowersForever/);
+  assert.equal(page.get("task-action-status").hidden, false);
+  assert.match(page.get("task-action-status").className, /success/);
+  assert.equal(page.document.activeElement, page.get("task-action-status"));
+
+  page.get("refresh-work").focus();
+  await page.get("refresh-work").fire("click");
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(page.document.activeElement, page.get("refresh-work"),
+    "ordinary refresh must not steal keyboard focus");
+});
+
+test("handoff and inventory results remain in their section after list refresh", async () => {
+  const backend = server();
+  backend.orders = { throughDate: farmDate, dueTotal: 1, orders: [{
+    id: 8, orderDate: farmDate, handoffType: "PICKUP", customerName: "River Market",
+    lines: [], reviewToken: "review-8"
+  }] };
+  backend.inventory = { matchingTotal: 1, items: [{
+    id: 3, name: "Dahlia stems", category: "Flowers", quantity: 16, unit: "stems"
+  }] };
+  const page = await boot({ backend });
+  const handoff = page.get("order-list").children[0].querySelector(".handoff-form");
+  handoff.querySelector("button[type=submit]").focus();
+  await handoff.fire("submit");
+  assert.equal(page.get("order-list").children.length, 0);
+  assert.match(page.get("order-action-status").textContent, /Order #8 · River Market: Saved to FlowersForever/);
+  assert.equal(page.document.activeElement, page.get("order-action-status"));
+
+  const count = page.get("inventory-list").children[0].querySelector(".inventory-form");
+  count.elements.countedQuantity.value = "15";
+  count.querySelector("button[type=submit]").focus();
+  await count.fire("submit");
+  assert.match(page.get("inventory-action-status").textContent, /Stock · Dahlia stems: Saved to FlowersForever/);
+  assert.equal(page.document.activeElement, page.get("inventory-action-status"));
+  assert.equal(page.get("inventory-list").children.length, 1);
+});
+
+test("queued count feedback remains visible when the inventory refresh fails offline", async () => {
+  const backend = server();
+  backend.inventory = { matchingTotal: 1, items: [{
+    id: 4, name: "Rose stems", category: "Flowers", quantity: 10, unit: "stems"
+  }] };
+  const page = await boot({ backend });
+  const count = page.get("inventory-list").children[0].querySelector(".inventory-form");
+  count.elements.countedQuantity.value = "9";
+  backend.mode = "offline";
+  await count.fire("submit");
+  assert.equal(page.pending().length, 1);
+  assert.match(page.get("inventory-action-status").textContent,
+    /Stock · Rose stems: Saved on this device and waiting to sync/);
+  assert.match(page.get("inventory-action-status").className, /pending/);
+  assert.equal(page.document.activeElement, page.get("inventory-action-status"));
+});
+
+test("save rejection persists as an error without moving focus from the editable task", async () => {
+  const backend = server();
+  backend.today = { date: farmDate, openTaskTotal: 1, tasks: [{
+    id: 20, dueDate: farmDate, taskType: "HARVEST", cropName: "Rose"
+  }] };
+  const page = await boot({ backend, denyQueueWrites: true });
+  const form = page.get("task-list").children[0].querySelector(".task-form");
+  const save = form.querySelector("button[type=submit]");
+  save.focus();
+  await form.fire("submit");
+  assert.match(page.get("task-action-status").textContent, /restore browser storage/);
+  assert.match(page.get("task-action-status").className, /error/);
+  assert.equal(page.document.activeElement, save);
+  assert.equal(save.disabled, false);
+  assert.equal(backend.attempts.length, 0);
 });
