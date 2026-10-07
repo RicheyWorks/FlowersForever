@@ -1,5 +1,21 @@
 # Lessons learned for FlowersForever collaborators
 
+## Verify the combined catalog and decisions made across a modal dialog
+
+The individual farm workspaces passed their tests, but their allowed combined
+catalog exceeded the sidebar's 26-letter mnemonic allocation and threw during
+navigation construction. Exercise the real union of installed workflows,
+including keyboard navigation and Workspace links beyond the shortcut budget.
+Eight rendered light/dark cases also cover the full farm mix at compact widths.
+
+A Swing confirmation runs a nested event loop. In all 20 specialty notebooks,
+a completed refresh could replace saved rows while a discard question was open;
+the old answer then discarded the draft and loaded a captured obsolete row.
+`DraftDecisionGuard` binds that answer to the reviewed state and declines it
+with visible retry guidance if anything relevant changed. The parameterized
+regression suite covers every affected notebook, including ordinary cancellation,
+unchanged discard, and clean navigation with viewer access.
+
 ## Shared-tree integration: farm combinations
 
 The farm picker was updated to accept **Custom farm** in a mix while the launcher,

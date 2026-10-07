@@ -45,6 +45,9 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import javax.swing.JButton;
+import javax.swing.JComponent;
+import javax.swing.JTabbedPane;
+import javax.swing.SwingUtilities;
 import java.awt.Component;
 import java.awt.Container;
 
@@ -704,6 +707,62 @@ class FarmTabCatalogWorkspaceTest {
     }
 
     @Test
+    void allFarmTypesPopulateAndRemainReachableAfterLetterShortcutsRunOut() throws Exception {
+        SwingUtilities.invokeAndWait(() -> {
+            FarmOperationSettings settings = new FarmOperationSettings();
+            settings.setEnabledWorkspaces(new LinkedHashSet<>(
+                    java.util.Arrays.asList(FarmWorkspace.values())));
+            FarmTabNavigator[] navigator = new FarmTabNavigator[1];
+            TabHost host = new TabHost() {
+                @Override public void refreshAll() { }
+                @Override public void selectTab(String title) { navigator[0].select(title); }
+                @Override public void setStatus(String message) { }
+                @Override public void runTrendAnalysis() { }
+            };
+            FarmTabCatalog.Catalog combined = catalog().create(host,
+                    FarmWorkspace.ROSE_AND_EVENTS, settings);
+            JTabbedPane pane = new JTabbedPane(JTabbedPane.LEFT,
+                    JTabbedPane.SCROLL_TAB_LAYOUT);
+            navigator[0] = new FarmTabNavigator(pane, combined.tabs(),
+                    FarmWorkspace.ROSE_AND_EVENTS, true);
+
+            navigator[0].populate();
+
+            assertThat(pane.getTabCount()).isEqualTo(combined.tabs().size()).isGreaterThan(26);
+            assertThat(navigationGroups(pane)).contains("FARM TOOLS & STOCK")
+                    .doesNotContain("GROW & STOCK");
+            java.util.Set<Integer> used = new java.util.HashSet<>();
+            for (int index = 0; index < pane.getTabCount(); index++) {
+                int mnemonic = pane.getMnemonicAt(index);
+                if (index < 26) {
+                    assertThat(mnemonic).isBetween((int) 'A', (int) 'Z');
+                    assertThat(used.add(mnemonic)).as("Unique letter shortcut at " + index).isTrue();
+                } else {
+                    assertThat(mnemonic).as("No duplicate letter shortcut at " + index).isZero();
+                    assertThat(pane.getTabComponentAt(index).getAccessibleContext()
+                            .getAccessibleName()).doesNotContain("shortcut", "\u0000");
+                }
+                assertThat(navigator[0].select(pane.getTitleAt(index))).isTrue();
+                assertThat(pane.getSelectedIndex()).isEqualTo(index);
+            }
+
+            pane.setSelectedIndex(25);
+            javax.swing.Action next = pane.getActionMap().get("navigateNext");
+            assertThat(next).as("Standard keyboard traversal remains available").isNotNull();
+            next.actionPerformed(new java.awt.event.ActionEvent(pane,
+                    java.awt.event.ActionEvent.ACTION_PERFORMED, "navigateNext"));
+            assertThat(pane.getSelectedIndex()).isEqualTo(26);
+
+            JComponent home = combined.tabs().get(0).getUIComponent();
+            JButton activity = findButton(home, "workspace.open.activity-history");
+            assertThat(activity).isNotNull();
+            activity.doClick();
+            assertThat(pane.getTitleAt(pane.getSelectedIndex())).isEqualTo("Activity History");
+            assertThat(pane.getMnemonicAt(pane.getSelectedIndex())).isZero();
+        });
+    }
+
+    @Test
     void productionStudioMatchesTheGrowingOrRetailMix() {
         FarmOperationSettings retail = new FarmOperationSettings();
         retail.setWorkspace(FarmWorkspace.POTATO_FARM);
@@ -748,6 +807,20 @@ class FarmTabCatalogWorkspaceTest {
             }
         }
         return null;
+    }
+
+    private static List<String> navigationGroups(Component root) {
+        List<String> groups = new java.util.ArrayList<>();
+        if (root instanceof javax.swing.JLabel label
+                && "farm.navigationGroup".equals(label.getName())) {
+            groups.add(label.getText());
+        }
+        if (root instanceof Container container) {
+            for (Component child : container.getComponents()) {
+                groups.addAll(navigationGroups(child));
+            }
+        }
+        return groups;
     }
 
     private static FarmTabCatalog catalog() {

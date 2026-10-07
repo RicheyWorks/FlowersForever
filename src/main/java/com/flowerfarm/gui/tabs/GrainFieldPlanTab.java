@@ -484,12 +484,23 @@ public final class GrainFieldPlanTab implements FlowerFarmTab {
             return false;
         }
         if (!hasUnsavedDraft()) return true;
+        DraftDecisionGuard reviewed = new DraftDecisionGuard(editingId, formState(),
+                lastView, table.getSelectedRow(), canWrite, loading);
         Object[] options = {"Keep editing", "Discard draft"};
         int choice = dialogs.showOption(panel,
                 "This grain field plan has unsaved planning changes. Discard them?",
                 "Unsaved grain field plan draft", JOptionPane.DEFAULT_OPTION,
                 JOptionPane.WARNING_MESSAGE, null, options, options[0]);
-        return choice == 1;
+        if (choice != 1) {
+            return false;
+        }
+        if (!reviewed.stillCurrent(editingId, formState(), lastView,
+                table.getSelectedRow(), canWrite, loading, saving)) {
+            showFeedback("Draft kept because this notebook changed while the question was open. "
+                    + "Review it and choose again.", FarmUi.Tone.WARNING);
+            return false;
+        }
+        return true;
     }
 
     private void discardChanges() {

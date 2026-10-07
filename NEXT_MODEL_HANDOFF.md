@@ -1,4 +1,41 @@
-# Latest direction — September 26, 2026
+# Latest direction — October 7, 2026
+
+## Combined farm navigation and notebook draft decisions
+
+Work continues in the isolated `farm-shipping-polish/FlowersForever` worktree,
+on `codex/farm-shipping-polish-20261007`, based on the complete README/farm
+preview branch at `c948c16`. The original checkout's local work is preserved.
+
+The actual catalog for all 25 farm types exposed a startup exception after
+26 navigation mnemonics. Additional workflows now use ordinary keyboard
+navigation and Workspace links without claiming duplicate shortcuts. Mushroom,
+cranberry, and pumpkin tools join the correct combined-farm navigation group.
+Long farm-mix labels wrap in the launcher and Workspace home; home content
+tracks the viewport width and its guidance grows with the available width.
+
+All 20 specialty notebooks now bind a discard confirmation to the reviewed
+draft, record identity, saved-row snapshot, selection, permissions, and
+load/save state. A change during the modal question keeps the draft and asks
+the grower to review again. This prevents a completed refresh from loading an
+obsolete selected record after discarding another draft.
+
+Focused verification passed 201 cases, including 100 notebook decision cases,
+eight rendered light/dark cases at 850 and 1100 pixels, and the actual combined
+catalog's navigation beyond 26 tabs. Corresponding suite floors are recorded
+in `config/harness-test-floors.json`. Rendered examples are under
+`target/ui-previews/farm-entry`.
+
+The clean `python -B scripts/verify_harness.py --isolated` run passed 2,802
+tests and two packaged-JAR checks on Temurin 22.0.2 (Java 17 compilation target).
+Line coverage is 86.11%, branch coverage 69.39%; all coverage gates pass and
+Checkstyle/SpotBugs report zero findings. Source digest:
+`e60089066f0d5be41cc40dbe09ef3cf68964f452146890b31300f190f6ded947`.
+Evidence is `dist/harness-evidence/latest.json`, with the complete log at
+`dist/harness-evidence/farm-shipping-quality.log`. Native installers were not
+rebuilt. GitHub's upstream check was still unable to start because of account
+payment or spending-limit settings; do not treat that as a failed test.
+
+## Previous direction — September 26, 2026
 
 ## Entry and review dialog polish
 

@@ -450,12 +450,23 @@ public final class BerryBlockPlanTab implements FlowerFarmTab {
         if (!hasUnsavedDraft()) {
             return true;
         }
+        DraftDecisionGuard reviewed = new DraftDecisionGuard(editingId, formState(),
+                lastView, table.getSelectedRow(), canWrite, loading);
         Object[] options = {"Keep editing", "Discard draft"};
         int choice = dialogs.showOption(panel,
                 "This berry block has unsaved planning changes. Discard them?",
                 "Unsaved berry block draft", JOptionPane.DEFAULT_OPTION,
                 JOptionPane.WARNING_MESSAGE, null, options, options[0]);
-        return choice == 1;
+        if (choice != 1) {
+            return false;
+        }
+        if (!reviewed.stillCurrent(editingId, formState(), lastView,
+                table.getSelectedRow(), canWrite, loading, saving)) {
+            showFeedback("Draft kept because this notebook changed while the question was open. "
+                    + "Review it and choose again.", FarmUi.Tone.WARNING);
+            return false;
+        }
+        return true;
     }
 
     private void discardChanges() {

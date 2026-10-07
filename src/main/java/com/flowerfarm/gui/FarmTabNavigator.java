@@ -116,13 +116,13 @@ public final class FarmTabNavigator {
         row.setPreferredSize(new Dimension(205, 22));
         tab.add(row);
         tab.getAccessibleContext().setAccessibleName(
-                title + " navigation item, shortcut " + shortcut);
+                title + " navigation item" + (shortcut.isEmpty() ? "" : ", shortcut " + shortcut));
         return tab;
     }
 
     private static String shortcutLabel(int index, int mnemonic) {
         return index < 9 ? "Alt+" + (index + 1)
-                : "Alt+" + (char) mnemonic;
+                : mnemonic == 0 ? "" : "Alt+" + (char) mnemonic;
     }
 
     private String groupFor(String title) {
@@ -137,6 +137,9 @@ public final class FarmTabNavigator {
                 || "Aquatic cohorts".equals(title)
                 || "Tree blocks".equals(title)
                 || "Hive checks".equals(title)
+                || "Mushroom batches".equals(title)
+                || "Cranberry beds".equals(title)
+                || "Pumpkin patches".equals(title)
                 || "Growing batches".equals(title) || "Season Planner".equals(title)
                 || "Herd groups".equals(title) || "Egg collections".equals(title)
                 || "Milk collections".equals(title)
@@ -237,7 +240,10 @@ public final class FarmTabNavigator {
                 return letter;
             }
         }
-        throw new IllegalStateException("Too many navigation mnemonics.");
+        // A combined farm may expose more tools than there are letters. Those
+        // tabs retain normal keyboard traversal and Workspace buttons without
+        // claiming another tab's shortcut or preventing the saved mix from opening.
+        return 0;
     }
 
     public void refreshSelected(IntConsumer selectionListener) {
