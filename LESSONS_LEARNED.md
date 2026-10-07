@@ -73,3 +73,12 @@ The farm-type guide also points to `docs/FARM_TYPES.md`,
 integration and README preview changes in a coordinated merge order. A docs
 link scan on the integration branch will report those paths until PR #31 is
 present; the other guide screenshots were copied into the integration worktree.
+
+The integration commit was merged into the README preview branch before
+publishing the combined change, so the guide dependencies now resolve together.
+On the integration commit, `mvn -q -Pquality verify` passed 2,683 tests in 282
+suites, and the worker UI test script passed 15 tests. A local link scan of the
+combined README and five key guides found 108 references with no missing paths.
+The CSRBT `greenhouse.html` snapshot retains one upstream trailing space at
+line 3473. Leave that source byte intact: its manifest checksum and the
+provenance statement depend on the page matching the upstream commit.
