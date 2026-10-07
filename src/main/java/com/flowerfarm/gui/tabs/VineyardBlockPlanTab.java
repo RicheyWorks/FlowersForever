@@ -76,6 +76,7 @@ public final class VineyardBlockPlanTab implements FlowerFarmTab {
     private JButton refreshButton;
     private JLabel feedback;
     private JLabel accessBadge;
+    private final NotebookSaveRecovery saveRecovery = new NotebookSaveRecovery();
     private List<VineyardBlockPlan> lastView = List.of();
     private Long editingId;
     private FormState cleanForm;
@@ -131,14 +132,17 @@ public final class VineyardBlockPlanTab implements FlowerFarmTab {
                 try {
                     List<VineyardBlockPlan> plans = get();
                     showPlans(plans == null ? List.of() : plans);
+                    saveRecovery.refreshed();
                     showFeedback(hasUnsavedDraft()
                                     ? "Vineyard blocks refreshed; unsaved draft kept."
                                     : "Vineyard blocks refreshed.", FarmUi.Tone.SUCCESS);
                 } catch (InterruptedException exception) {
                     Thread.currentThread().interrupt();
+                    saveRecovery.refreshFailed();
                     showFeedback("Could not load blocks. Choose Refresh to retry.",
                             FarmUi.Tone.DANGER);
                 } catch (Exception exception) {
+                    saveRecovery.refreshFailed();
                     showFeedback("Could not load blocks. Choose Refresh to retry.",
                             FarmUi.Tone.DANGER);
                 } finally {
@@ -203,6 +207,7 @@ public final class VineyardBlockPlanTab implements FlowerFarmTab {
         scroll.setBorder(BorderFactory.createEmptyBorder());
         scroll.getVerticalScrollBar().setUnitIncrement(24);
         panel.add(scroll, BorderLayout.CENTER);
+        FarmUi.revealFocusedControls(scroll);
         clearForm();
         updateActions();
     }
@@ -317,8 +322,8 @@ public final class VineyardBlockPlanTab implements FlowerFarmTab {
         form.add(fields, BorderLayout.CENTER);
         JPanel footer = new JPanel(new BorderLayout());
         footer.setOpaque(false);
-        footer.add(FarmUi.toolbar(saveButton, discardButton), BorderLayout.NORTH);
-        footer.add(feedback, BorderLayout.SOUTH);
+        footer.add(FarmUi.toolbar(saveButton, discardButton), BorderLayout.SOUTH);
+        footer.add(feedback, BorderLayout.NORTH);
         form.add(footer, BorderLayout.SOUTH);
         return FarmUi.section("Plan details",
                 "Local planning fields. Save a new block or edit the selected one.", form);
@@ -502,16 +507,26 @@ public final class VineyardBlockPlanTab implements FlowerFarmTab {
                 boolean wrote = false;
                 try {
                     VineyardBlockPlan saved = get();
+                    wrote = true;
                     editingId = saved.getId();
+                    lastView = saveRecovery.remember(lastView, saved, VineyardBlockPlan::getId);
                     cleanForm = formState();
+                    showPlans(lastView);
                     showFeedback("Plan saved · " + saved.getBlockName(), FarmUi.Tone.SUCCESS);
                     host.setStatus("Vineyard block “" + saved.getBlockName() + "” saved.");
-                    wrote = true;
                 } catch (InterruptedException exception) {
                     Thread.currentThread().interrupt();
-                    showSaveFailure();
+                    if (wrote) {
+                        showSavedRefreshFailure();
+                    } else {
+                        showSaveFailure();
+                    }
                 } catch (Exception exception) {
-                    showSaveFailure();
+                    if (wrote) {
+                        showSavedRefreshFailure();
+                    } else {
+                        showSaveFailure();
+                    }
                 } finally {
                     saving = false;
                     updateActions();
@@ -629,17 +644,27 @@ public final class VineyardBlockPlanTab implements FlowerFarmTab {
                 boolean wrote = false;
                 try {
                     VineyardBlockPlan saved = get();
+                    wrote = true;
+                    lastView = saveRecovery.remember(lastView, saved, VineyardBlockPlan::getId);
                     if (Objects.equals(editingId, saved.getId())) loadPlan(saved);
+                    showPlans(lastView);
                     showFeedback(saved.getBlockName() + " moved to "
                             + enumLabel(saved.getStage()) + ".", FarmUi.Tone.SUCCESS);
                     host.setStatus("Vineyard block “" + saved.getBlockName()
                             + "” moved to " + enumLabel(saved.getStage()) + ".");
-                    wrote = true;
                 } catch (InterruptedException exception) {
                     Thread.currentThread().interrupt();
-                    showFeedback("Stage was not changed. Retry the move.", FarmUi.Tone.DANGER);
+                    if (wrote) {
+                        showSavedRefreshFailure();
+                    } else {
+                        showFeedback("Stage was not changed. Retry the move.", FarmUi.Tone.DANGER);
+                    }
                 } catch (Exception exception) {
-                    showFeedback("Stage was not changed. Retry the move.", FarmUi.Tone.DANGER);
+                    if (wrote) {
+                        showSavedRefreshFailure();
+                    } else {
+                        showFeedback("Stage was not changed. Retry the move.", FarmUi.Tone.DANGER);
+                    }
                 } finally {
                     saving = false;
                     updateActions();
@@ -712,6 +737,12 @@ public final class VineyardBlockPlanTab implements FlowerFarmTab {
         }
     }
 
+    private void showSavedRefreshFailure() {
+        saveRecovery.refreshFailed();
+        showFeedback("Save completed. Refresh the notebook to finish updating its display.",
+                FarmUi.Tone.WARNING);
+    }
+
     private void showSaveFailure() {
         showFeedback("Not saved · complete planning draft kept. "
                 + "Check the local data store and retry.", FarmUi.Tone.DANGER);
@@ -719,7 +750,9 @@ public final class VineyardBlockPlanTab implements FlowerFarmTab {
     }
 
     private void showFeedback(String text, FarmUi.Tone tone) {
-        if (feedback != null) FarmUi.updateStatusBadge(feedback, text, tone);
+        if (feedback != null) FarmUi.updateStatusBadge(feedback, saveRecovery.feedback(text),
+                    saveRecovery.needsRefresh() && tone != FarmUi.Tone.DANGER
+                            ? FarmUi.Tone.WARNING : tone);
     }
 
     private FormState formState() {

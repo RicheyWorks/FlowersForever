@@ -56,6 +56,7 @@ public final class EggCollectionTab implements FlowerFarmTab {
     private JButton refreshButton;
     private JLabel feedback;
     private JLabel accessBadge;
+    private final NotebookSaveRecovery saveRecovery = new NotebookSaveRecovery();
     private List<EggCollection> lastView = List.of();
     private Long editingId;
     private FormState cleanForm;
@@ -125,14 +126,17 @@ public final class EggCollectionTab implements FlowerFarmTab {
                 try {
                     List<EggCollection> collections = get();
                     showCollections(collections == null ? List.of() : collections);
+                    saveRecovery.refreshed();
                     showFeedback(hasUnsavedDraft()
                                     ? "Egg collections refreshed; unsaved draft kept."
                                     : "Egg collections refreshed.",
                             FarmUi.Tone.SUCCESS);
                 } catch (InterruptedException exception) {
                     Thread.currentThread().interrupt();
+                    saveRecovery.refreshFailed();
                     showLoadFailure();
                 } catch (Exception exception) {
+                    saveRecovery.refreshFailed();
                     showLoadFailure();
                 } finally {
                     loading = false;
@@ -198,6 +202,7 @@ public final class EggCollectionTab implements FlowerFarmTab {
         scroll.setBorder(BorderFactory.createEmptyBorder());
         scroll.getVerticalScrollBar().setUnitIncrement(24);
         panel.add(scroll, BorderLayout.CENTER);
+        FarmUi.revealFocusedControls(scroll);
         clearForm();
         updateActions();
     }
@@ -295,8 +300,8 @@ public final class EggCollectionTab implements FlowerFarmTab {
         form.add(fields, BorderLayout.CENTER);
         JPanel footer = new JPanel(new BorderLayout());
         footer.setOpaque(false);
-        footer.add(FarmUi.toolbar(saveButton, discardButton), BorderLayout.NORTH);
-        footer.add(feedback, BorderLayout.SOUTH);
+        footer.add(FarmUi.toolbar(saveButton, discardButton), BorderLayout.SOUTH);
+        footer.add(feedback, BorderLayout.NORTH);
         form.add(footer, BorderLayout.SOUTH);
         return FarmUi.section("Collection details",
                 "Save a collection or edit the selected entry. Counts remain separate from stock and orders.",
@@ -525,18 +530,28 @@ public final class EggCollectionTab implements FlowerFarmTab {
                 boolean wrote = false;
                 try {
                     EggCollection saved = get();
+                    wrote = true;
                     editingId = saved.getId();
+                    lastView = saveRecovery.remember(lastView, saved, EggCollection::getId);
                     cleanForm = formState();
+                    showCollections(lastView);
                     showFeedback("Collection saved · " + saved.getUsableCount()
                             + " usable eggs", FarmUi.Tone.SUCCESS);
                     host.setStatus("Egg collection for “" + saved.getFlockName()
                             + "” saved.");
-                    wrote = true;
                 } catch (InterruptedException exception) {
                     Thread.currentThread().interrupt();
-                    showSaveFailure();
+                    if (wrote) {
+                        showSavedRefreshFailure();
+                    } else {
+                        showSaveFailure();
+                    }
                 } catch (Exception exception) {
-                    showSaveFailure();
+                    if (wrote) {
+                        showSavedRefreshFailure();
+                    } else {
+                        showSaveFailure();
+                    }
                 } finally {
                     saving = false;
                     updateActions();
@@ -608,6 +623,12 @@ public final class EggCollectionTab implements FlowerFarmTab {
                 FarmUi.Tone.DANGER);
     }
 
+    private void showSavedRefreshFailure() {
+        saveRecovery.refreshFailed();
+        showFeedback("Save completed. Refresh the notebook to finish updating its display.",
+                FarmUi.Tone.WARNING);
+    }
+
     private void showSaveFailure() {
         showFeedback("Not saved · complete collection draft kept. "
                 + "Check the local data store and retry.", FarmUi.Tone.DANGER);
@@ -616,7 +637,9 @@ public final class EggCollectionTab implements FlowerFarmTab {
 
     private void showFeedback(String text, FarmUi.Tone tone) {
         if (feedback != null) {
-            FarmUi.updateStatusBadge(feedback, text, tone);
+            FarmUi.updateStatusBadge(feedback, saveRecovery.feedback(text),
+                    saveRecovery.needsRefresh() && tone != FarmUi.Tone.DANGER
+                            ? FarmUi.Tone.WARNING : tone);
         }
     }
 

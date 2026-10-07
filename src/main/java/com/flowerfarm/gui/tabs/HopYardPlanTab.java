@@ -75,6 +75,7 @@ public final class HopYardPlanTab implements FlowerFarmTab {
     private JButton refreshButton;
     private JLabel feedback;
     private JLabel accessBadge;
+    private final NotebookSaveRecovery saveRecovery = new NotebookSaveRecovery();
     private List<HopYardPlan> lastView = List.of();
     private Long editingId;
     private FormState cleanForm;
@@ -130,14 +131,17 @@ public final class HopYardPlanTab implements FlowerFarmTab {
                 try {
                     List<HopYardPlan> yards = get();
                     showYards(yards == null ? List.of() : yards);
+                    saveRecovery.refreshed();
                     showFeedback(hasUnsavedDraft()
                                     ? "Hop yards refreshed; unsaved draft kept."
                                     : "Hop yards refreshed.", FarmUi.Tone.SUCCESS);
                 } catch (InterruptedException exception) {
                     Thread.currentThread().interrupt();
+                    saveRecovery.refreshFailed();
                     showFeedback("Could not load yards. Choose Refresh to retry.",
                             FarmUi.Tone.DANGER);
                 } catch (Exception exception) {
+                    saveRecovery.refreshFailed();
                     showFeedback("Could not load yards. Choose Refresh to retry.",
                             FarmUi.Tone.DANGER);
                 } finally {
@@ -202,6 +206,7 @@ public final class HopYardPlanTab implements FlowerFarmTab {
         scroll.setBorder(BorderFactory.createEmptyBorder());
         scroll.getVerticalScrollBar().setUnitIncrement(24);
         panel.add(scroll, BorderLayout.CENTER);
+        FarmUi.revealFocusedControls(scroll);
         clearForm();
         updateActions();
     }
@@ -315,8 +320,8 @@ public final class HopYardPlanTab implements FlowerFarmTab {
         form.add(fields, BorderLayout.CENTER);
         JPanel footer = new JPanel(new BorderLayout());
         footer.setOpaque(false);
-        footer.add(FarmUi.toolbar(saveButton, discardButton), BorderLayout.NORTH);
-        footer.add(feedback, BorderLayout.SOUTH);
+        footer.add(FarmUi.toolbar(saveButton, discardButton), BorderLayout.SOUTH);
+        footer.add(feedback, BorderLayout.NORTH);
         form.add(footer, BorderLayout.SOUTH);
         return FarmUi.section("Season plan details",
                 "Save each season separately. A harvest start date is required for every plan.", form);
@@ -525,17 +530,27 @@ public final class HopYardPlanTab implements FlowerFarmTab {
                 boolean wrote = false;
                 try {
                     HopYardPlan saved = get();
+                    wrote = true;
                     editingId = saved.getId();
+                    lastView = saveRecovery.remember(lastView, saved, HopYardPlan::getId);
                     cleanForm = formState();
+                    showYards(lastView);
                     showFeedback("Yard plan saved · " + saved.getYardName(),
                             FarmUi.Tone.SUCCESS);
                     host.setStatus("Hop yard plan “" + saved.getYardName() + "” saved.");
-                    wrote = true;
                 } catch (InterruptedException exception) {
                     Thread.currentThread().interrupt();
-                    showSaveFailure();
+                    if (wrote) {
+                        showSavedRefreshFailure();
+                    } else {
+                        showSaveFailure();
+                    }
                 } catch (Exception exception) {
-                    showSaveFailure();
+                    if (wrote) {
+                        showSavedRefreshFailure();
+                    } else {
+                        showSaveFailure();
+                    }
                 } finally {
                     saving = false;
                     updateActions();
@@ -662,17 +677,27 @@ public final class HopYardPlanTab implements FlowerFarmTab {
                 boolean wrote = false;
                 try {
                     HopYardPlan saved = get();
+                    wrote = true;
+                    lastView = saveRecovery.remember(lastView, saved, HopYardPlan::getId);
                     if (Objects.equals(editingId, saved.getId())) loadYard(saved);
+                    showYards(lastView);
                     showFeedback(saved.getYardName() + " moved to "
                             + enumLabel(saved.getStage()) + ".", FarmUi.Tone.SUCCESS);
                     host.setStatus("Hop yard plan “" + saved.getYardName()
                             + "” moved to " + enumLabel(saved.getStage()) + ".");
-                    wrote = true;
                 } catch (InterruptedException exception) {
                     Thread.currentThread().interrupt();
-                    showFeedback("Stage was not changed. Retry the move.", FarmUi.Tone.DANGER);
+                    if (wrote) {
+                        showSavedRefreshFailure();
+                    } else {
+                        showFeedback("Stage was not changed. Retry the move.", FarmUi.Tone.DANGER);
+                    }
                 } catch (Exception exception) {
-                    showFeedback("Stage was not changed. Retry the move.", FarmUi.Tone.DANGER);
+                    if (wrote) {
+                        showSavedRefreshFailure();
+                    } else {
+                        showFeedback("Stage was not changed. Retry the move.", FarmUi.Tone.DANGER);
+                    }
                 } finally {
                     saving = false;
                     updateActions();
@@ -745,6 +770,12 @@ public final class HopYardPlanTab implements FlowerFarmTab {
         }
     }
 
+    private void showSavedRefreshFailure() {
+        saveRecovery.refreshFailed();
+        showFeedback("Save completed. Refresh the notebook to finish updating its display.",
+                FarmUi.Tone.WARNING);
+    }
+
     private void showSaveFailure() {
         showFeedback("Not saved · complete planning draft kept. "
                 + "Check the local data store and retry.", FarmUi.Tone.DANGER);
@@ -752,7 +783,9 @@ public final class HopYardPlanTab implements FlowerFarmTab {
     }
 
     private void showFeedback(String text, FarmUi.Tone tone) {
-        if (feedback != null) FarmUi.updateStatusBadge(feedback, text, tone);
+        if (feedback != null) FarmUi.updateStatusBadge(feedback, saveRecovery.feedback(text),
+                    saveRecovery.needsRefresh() && tone != FarmUi.Tone.DANGER
+                            ? FarmUi.Tone.WARNING : tone);
     }
 
     private FormState formState() {

@@ -1,15 +1,25 @@
 package com.flowerfarm.safety;
 
 import com.flowerfarm.backup.DatabaseIntegrityGuard;
+import com.flowerfarm.update.DataBackupService;
+import com.flowerfarm.update.UpdateVerificationException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
+import java.nio.channels.FileChannel;
+import java.nio.channels.FileLock;
+import java.io.IOException;
+import java.time.Duration;
 import java.util.TreeSet;
+import java.util.concurrent.TimeUnit;
+import org.awaitility.core.ConditionTimeoutException;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 
 /**
  * Release check 2: no saved records are lost when FlowersForever is forced closed in
@@ -38,13 +48,15 @@ class ForcedCloseDataSafetyTest {
         long[] pauses = {0, 0, 40, 40};
         for (long pause : pauses) {
             int lastConfirmed;
+            String stoppedChild;
             try (ChildJvm child = ChildJvm.start("records", url, String.valueOf(pause))) {
                 int target = confirmedSoFar + 25;
                 child.awaitLine(line -> line.startsWith("SAVED ") && DataSafetyTestSupport.parse(line) >= target);
                 child.kill();
                 lastConfirmed = DataSafetyTestSupport.parse(child.lastProgress());
+                stoppedChild = child.processStatus();
             }
-            assertThat(DatabaseIntegrityGuard.check(data)).isEqualTo(DatabaseIntegrityGuard.Health.HEALTHY);
+            assertHealthyAfterKill(data, pause, lastConfirmed, stoppedChild);
             TreeSet<Integer> ids = DataSafetyTestSupport.savedIds(url);
             for (int id = 1; id <= lastConfirmed; id++) {
                 assertThat(ids).as("confirmed save #%d after kill (pause %d ms)", id, pause).contains(id);
@@ -52,6 +64,66 @@ class ForcedCloseDataSafetyTest {
             confirmedSoFar = ids.last();
         }
         assertThat(confirmedSoFar).isGreaterThanOrEqualTo(100);
+    }
+
+    private static void assertHealthyAfterKill(Path data, long pause, int lastConfirmed,
+                                               String stoppedChild) throws IOException {
+        DatabaseIntegrityGuard.Health health = DatabaseIntegrityGuard.check(data);
+        long lockWaitMillis = 0;
+        if (health == DatabaseIntegrityGuard.Health.IN_USE) {
+            // kill() already observed process termination. Windows may still be
+            // releasing that dead process's file lock; never retry a damaged or
+            // unreadable database, nor any assertion about acknowledged records.
+            long started = System.nanoTime();
+            try {
+                await().alias("database file lock release after " + stoppedChild)
+                        .atMost(Duration.ofSeconds(5)).pollDelay(Duration.ZERO)
+                        .pollInterval(Duration.ofMillis(50)).until(() -> {
+                            try {
+                                DataBackupService.requireDatabaseClosed(data);
+                                return true;
+                            } catch (UpdateVerificationException stillLocked) {
+                                return false;
+                            }
+                        });
+                lockWaitMillis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started);
+                System.out.println("Database file lock released after " + lockWaitMillis
+                        + " ms following " + stoppedChild + ", pause=" + pause + " ms");
+                health = DatabaseIntegrityGuard.check(data);
+            } catch (ConditionTimeoutException stillLocked) {
+                lockWaitMillis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started);
+            }
+        }
+        if (health == DatabaseIntegrityGuard.Health.IN_USE) {
+            Throwable cause;
+            try {
+                DataBackupService.requireDatabaseClosed(data);
+                cause = new IllegalStateException("The lock check passed on the diagnostic retry; "
+                        + "the final IN_USE result still fails this test.");
+            } catch (UpdateVerificationException locked) {
+                cause = locked;
+            }
+            try (FileChannel channel = FileChannel.open(data.resolve(DataBackupService.DATABASE_FILE),
+                    StandardOpenOption.READ, StandardOpenOption.WRITE);
+                 FileLock lock = channel.tryLock()) {
+                cause.addSuppressed(new IllegalStateException(lock == null
+                        ? "Raw file-lock probe: another process still holds the database lock."
+                        : "Raw file-lock probe: the database lock is available now."));
+            } catch (IOException | RuntimeException lockFailure) {
+                cause.addSuppressed(lockFailure);
+            }
+            String files;
+            try (var children = Files.list(data)) {
+                files = children.map(path -> path.getFileName().toString()).sorted().toList().toString();
+            }
+            throw new AssertionError("Expected HEALTHY after completed hard kill; found IN_USE. "
+                    + stoppedChild + ", pause=" + pause + " ms, confirmed=" + lastConfirmed
+                    + ", waited for lock=" + lockWaitMillis + " ms (maximum 5000 ms)"
+                    + ", records=" + data + ", files=" + files, cause);
+        }
+        assertThat(health).as("database health after %s, pause %d ms, confirmed save %d, lock wait %d ms",
+                stoppedChild, pause, lastConfirmed, lockWaitMillis)
+                .isEqualTo(DatabaseIntegrityGuard.Health.HEALTHY);
     }
 
     @Test

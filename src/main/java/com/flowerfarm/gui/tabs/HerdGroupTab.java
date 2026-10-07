@@ -54,6 +54,7 @@ public final class HerdGroupTab implements FlowerFarmTab {
     private JButton refreshButton;
     private JLabel feedback;
     private JLabel accessBadge;
+    private final NotebookSaveRecovery saveRecovery = new NotebookSaveRecovery();
     private List<HerdGroup> lastView = List.of();
     private Long editingId;
     private FormState cleanForm;
@@ -122,14 +123,17 @@ public final class HerdGroupTab implements FlowerFarmTab {
                 try {
                     List<HerdGroup> groups = get();
                     showGroups(groups == null ? List.of() : groups);
+                    saveRecovery.refreshed();
                     showFeedback(hasUnsavedDraft()
                                     ? "Herd groups refreshed; unsaved draft kept."
                                     : "Herd groups refreshed.",
                             FarmUi.Tone.SUCCESS);
                 } catch (InterruptedException exception) {
                     Thread.currentThread().interrupt();
+                    saveRecovery.refreshFailed();
                     showLoadFailure();
                 } catch (Exception exception) {
+                    saveRecovery.refreshFailed();
                     showLoadFailure();
                 } finally {
                     loading = false;
@@ -196,6 +200,7 @@ public final class HerdGroupTab implements FlowerFarmTab {
         scroll.setBorder(BorderFactory.createEmptyBorder());
         scroll.getVerticalScrollBar().setUnitIncrement(24);
         panel.add(scroll, BorderLayout.CENTER);
+        FarmUi.revealFocusedControls(scroll);
         clearForm();
         updateActions();
     }
@@ -272,8 +277,8 @@ public final class HerdGroupTab implements FlowerFarmTab {
         form.add(fields, BorderLayout.CENTER);
         JPanel footer = new JPanel(new BorderLayout());
         footer.setOpaque(false);
-        footer.add(FarmUi.toolbar(saveButton, discardButton), BorderLayout.NORTH);
-        footer.add(feedback, BorderLayout.SOUTH);
+        footer.add(FarmUi.toolbar(saveButton, discardButton), BorderLayout.SOUTH);
+        footer.add(feedback, BorderLayout.NORTH);
         form.add(footer, BorderLayout.SOUTH);
         return FarmUi.section("Group details",
                 "Save a new group snapshot or edit the selected one.", form);
@@ -475,17 +480,27 @@ public final class HerdGroupTab implements FlowerFarmTab {
                 boolean wrote = false;
                 try {
                     HerdGroup saved = get();
+                    wrote = true;
                     editingId = saved.getId();
+                    lastView = saveRecovery.remember(lastView, saved, HerdGroup::getId);
                     cleanForm = formState();
+                    showGroups(lastView);
                     showFeedback("Group plan saved · " + saved.getGroupName(),
                             FarmUi.Tone.SUCCESS);
                     host.setStatus("Herd group “" + saved.getGroupName() + "” saved.");
-                    wrote = true;
                 } catch (InterruptedException exception) {
                     Thread.currentThread().interrupt();
-                    showSaveFailure();
+                    if (wrote) {
+                        showSavedRefreshFailure();
+                    } else {
+                        showSaveFailure();
+                    }
                 } catch (Exception exception) {
-                    showSaveFailure();
+                    if (wrote) {
+                        showSavedRefreshFailure();
+                    } else {
+                        showSaveFailure();
+                    }
                 } finally {
                     saving = false;
                     updateActions();
@@ -549,6 +564,12 @@ public final class HerdGroupTab implements FlowerFarmTab {
                 FarmUi.Tone.DANGER);
     }
 
+    private void showSavedRefreshFailure() {
+        saveRecovery.refreshFailed();
+        showFeedback("Save completed. Refresh the notebook to finish updating its display.",
+                FarmUi.Tone.WARNING);
+    }
+
     private void showSaveFailure() {
         showFeedback("Not saved · complete planning draft kept. "
                         + "Check the local data store and retry.",
@@ -558,7 +579,9 @@ public final class HerdGroupTab implements FlowerFarmTab {
 
     private void showFeedback(String text, FarmUi.Tone tone) {
         if (feedback != null) {
-            FarmUi.updateStatusBadge(feedback, text, tone);
+            FarmUi.updateStatusBadge(feedback, saveRecovery.feedback(text),
+                    saveRecovery.needsRefresh() && tone != FarmUi.Tone.DANGER
+                            ? FarmUi.Tone.WARNING : tone);
         }
     }
 

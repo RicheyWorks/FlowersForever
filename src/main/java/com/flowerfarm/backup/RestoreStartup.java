@@ -60,7 +60,7 @@ public final class RestoreStartup {
     /** Built from JVM properties; {@code AppDataBootstrap} must already have run. */
     public static RestoreStartup forThisProcess() {
         BackupSettings settings = BackupSettings.fromSystemProperties();
-        RestoreRecords records = new RestoreRecords(settings.stateDirectory());
+        RestoreRecords records = new RestoreRecords(settings.stateDirectory(), settings.dataDirectory());
         DataBackupService archives = new DataBackupService(Clock.systemDefaultZone());
         return new RestoreStartup(settings, records, archives, Clock.systemDefaultZone(), Duration.ofSeconds(60),
                 new DatabaseIntegrityGuard(settings, records, archives, Clock.systemDefaultZone()));
@@ -71,16 +71,33 @@ public final class RestoreStartup {
      *                cancelled (with a notice) rather than mixed into the update's own recovery
      */
     public <T> T start(Callable<T> startSpring, Runnable closeDatabase, boolean allowed) throws Exception {
+        records.requireStore(settings.dataDirectory());
         Optional<RestoreRecords.InProgress> unfinished = records.inProgress();
         if (unfinished.isPresent()) {
             putPreviousRecordsBack(unfinished.get(), "the restored records did not finish opening last time");
         }
         Optional<RestoreRecords.Request> request = records.request();
         if (request.isEmpty()) {
+            boolean recovered = false;
             if (allowed) {
-                checkIntegrity();
+                recovered = checkIntegrity();
             }
-            return startSpring.call();
+            try {
+                T started = startSpring.call();
+                if (recovered) {
+                    records.clear(RestoreRecords.IN_PROGRESS);
+                }
+                return started;
+            } catch (Exception startFailure) {
+                if (recovered) {
+                    closeDatabase.run();
+                    Optional<RestoreRecords.InProgress> progress = records.inProgress();
+                    if (progress.isPresent()) {
+                        putPreviousRecordsBack(progress.get(), reason(startFailure));
+                    }
+                }
+                throw startFailure;
+            }
         }
         records.clear(RestoreRecords.REQUEST);
         if (!allowed) {
@@ -127,13 +144,21 @@ public final class RestoreStartup {
                 request.safetyBackup(), request.madeAtText());
         records.saveInProgress(pending);
         try {
-            Path keptAside = archives.restore(request.archive(), data);
+            Path keptAside = archives.restore(request.archive(), data, previous ->
+                    records.saveInProgress(new RestoreRecords.InProgress(request.archive(),
+                            Optional.ofNullable(previous), request.safetyBackup(), request.madeAtText())));
             RestoreRecords.InProgress swapped = new RestoreRecords.InProgress(request.archive(),
                     Optional.ofNullable(keptAside), request.safetyBackup(), request.madeAtText());
             records.saveInProgress(swapped);
             return Optional.of(swapped);
         } catch (UpdateVerificationException notRestored) {
             // DataBackupService.restore puts the previous folder back if its own swap fails.
+            if (!Files.isRegularFile(data.resolve(DataBackupService.DATABASE_FILE))
+                    && records.inProgress().flatMap(RestoreRecords.InProgress::keptAside)
+                    .filter(Files::isDirectory).isPresent()) {
+                throw new IOException("Restore was interrupted. The previous records and restore instructions "
+                        + "have been kept; reopen FlowersForever to finish recovery.", notRestored);
+            }
             records.clear(RestoreRecords.IN_PROGRESS);
             notice(new RestoreRecords.Notice(BackupMessages.restoreSkipped(notRestored.getMessage()), false,
                     BackupActivityLog.RESTORE_SKIPPED));
@@ -144,11 +169,14 @@ public final class RestoreStartup {
     private void putPreviousRecordsBack(RestoreRecords.InProgress progress, String reason) throws IOException {
         Path data = settings.dataDirectory();
         Optional<Path> previous = progress.keptAside().filter(Files::isDirectory);
-        if (previous.isEmpty() && !Files.exists(data)) {
-            // Stopped between the two folder moves: the newest kept-aside folder is the farm's.
-            previous = newestKeptAside(data);
-        }
+        boolean databaseMissing = !Files.isRegularFile(data.resolve(DataBackupService.DATABASE_FILE));
         if (previous.isEmpty()) {
+            if (databaseMissing) {
+                throw new DamagedRecordsException("The restore could not identify the previous farm records"
+                        + progress.keptAside().map(path -> " at " + path).orElse("")
+                        + ". Restore instructions were kept; contact support and do not enter new records "
+                        + "until that folder is available again.");
+            }
             // The swap never happened (or there were no records before): the current folder is the farm's.
             records.clear(RestoreRecords.IN_PROGRESS);
             notice(new RestoreRecords.Notice(BackupMessages.restoreSkipped(reason), false,
@@ -173,19 +201,6 @@ public final class RestoreStartup {
         notice(new RestoreRecords.Notice(BackupMessages.restoreUndone(reason), false, BackupActivityLog.RESTORE_UNDONE));
     }
 
-    private static Optional<Path> newestKeptAside(Path data) throws IOException {
-        Path parent = data.getParent();
-        if (parent == null || !Files.isDirectory(parent)) {
-            return Optional.empty();
-        }
-        String prefix = data.getFileName() + ".before-restore-";
-        try (var siblings = Files.list(parent)) {
-            return siblings.filter(Files::isDirectory)
-                    .filter(path -> String.valueOf(path.getFileName()).startsWith(prefix))
-                    .max(java.util.Comparator.comparing(path -> String.valueOf(path.getFileName())));
-        }
-    }
-
     private boolean waitUntilReleased(Path data) {
         long deadline = System.nanoTime() + waitForRelease.toNanos();
         while (true) {
@@ -207,14 +222,15 @@ public final class RestoreStartup {
     }
 
     /** Damaged records are swapped for the newest healthy backup; with none, start-up stops plainly. */
-    private void checkIntegrity() throws IOException {
+    private boolean checkIntegrity() throws IOException {
         if (integrity == null) {
-            return;
+            return false;
         }
         DatabaseIntegrityGuard.Outcome outcome = integrity.ensureHealthy();
         if (outcome.health() == DatabaseIntegrityGuard.Health.DAMAGED && outcome.restored().isEmpty()) {
             throw new DamagedRecordsException(outcome.message());
         }
+        return outcome.restored().isPresent();
     }
 
     private void notice(RestoreRecords.Notice notice) throws IOException {

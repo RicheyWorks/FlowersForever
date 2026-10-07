@@ -19,6 +19,22 @@
 | Visual Feedback          | Basic table                   | Color-coded stock + KPI Dashboard            | At-a-glance operational awareness |
 | Extensibility            | Hard                          | Easy to add new tabs (Reports, Harvest Log, Customers, Suppliers) | Long-term maintainability |
 
+## Specialty notebook save recovery and keyboard navigation
+
+The 20 specialty notebooks retain the service's acknowledged record in their
+local row snapshot before rendering and requesting a fresh list. `NotebookSaveRecovery`
+keeps a persistent refresh warning until a successful list render; later review,
+draft, or validation messages retain that warning. Discard and stage actions use
+the acknowledged snapshot even when the next read fails. Exceptions after an
+acknowledged write report a completed save with display recovery guidance.
+
+Each notebook's outer scroll pane opts into `FarmUi.revealFocusedControls`.
+Keyboard focus reveals inputs, selectors, and Save; a passive refresh preserves
+the viewport and typing. Wrapping feedback sits above the Save/Discard row so
+revealing the actions also reveals recovery guidance. `NotebookKeyboardReachabilityTest`
+covers all 20 forms, and `NotebookSavedSnapshotSafetyTest` renders compact Egg
+collections and Vegetable plantings under `target/ui-previews/notebook-recovery`.
+
 ## Harvest entry state and layout
 
 Harvest quick entry tracks an immutable raw-field snapshot plus the saved edit

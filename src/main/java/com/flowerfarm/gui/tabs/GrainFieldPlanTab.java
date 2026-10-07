@@ -77,6 +77,7 @@ public final class GrainFieldPlanTab implements FlowerFarmTab {
     private JButton refreshButton;
     private JLabel feedback;
     private JLabel accessBadge;
+    private final NotebookSaveRecovery saveRecovery = new NotebookSaveRecovery();
     private List<GrainFieldPlan> lastView = List.of();
     private Long editingId;
     private FormState cleanForm;
@@ -132,14 +133,17 @@ public final class GrainFieldPlanTab implements FlowerFarmTab {
                 try {
                     List<GrainFieldPlan> fields = get();
                     showFields(fields == null ? List.of() : fields);
+                    saveRecovery.refreshed();
                     showFeedback(hasUnsavedDraft()
                                     ? "Grain fields refreshed; unsaved draft kept."
                                     : "Grain fields refreshed.", FarmUi.Tone.SUCCESS);
                 } catch (InterruptedException exception) {
                     Thread.currentThread().interrupt();
+                    saveRecovery.refreshFailed();
                     showFeedback("Could not load fields. Choose Refresh to retry.",
                             FarmUi.Tone.DANGER);
                 } catch (Exception exception) {
+                    saveRecovery.refreshFailed();
                     showFeedback("Could not load fields. Choose Refresh to retry.",
                             FarmUi.Tone.DANGER);
                 } finally {
@@ -204,6 +208,7 @@ public final class GrainFieldPlanTab implements FlowerFarmTab {
         scroll.setBorder(BorderFactory.createEmptyBorder());
         scroll.getVerticalScrollBar().setUnitIncrement(24);
         panel.add(scroll, BorderLayout.CENTER);
+        FarmUi.revealFocusedControls(scroll);
         clearForm();
         updateActions();
     }
@@ -322,8 +327,8 @@ public final class GrainFieldPlanTab implements FlowerFarmTab {
         form.add(fields, BorderLayout.CENTER);
         JPanel footer = new JPanel(new BorderLayout());
         footer.setOpaque(false);
-        footer.add(FarmUi.toolbar(saveButton, discardButton), BorderLayout.NORTH);
-        footer.add(feedback, BorderLayout.SOUTH);
+        footer.add(FarmUi.toolbar(saveButton, discardButton), BorderLayout.SOUTH);
+        footer.add(feedback, BorderLayout.NORTH);
         form.add(footer, BorderLayout.SOUTH);
         return FarmUi.section("Rotation plan details",
                 "Save each rotation separately. A harvest start date is required for every plan.", form);
@@ -535,17 +540,27 @@ public final class GrainFieldPlanTab implements FlowerFarmTab {
                 boolean wrote = false;
                 try {
                     GrainFieldPlan saved = get();
+                    wrote = true;
                     editingId = saved.getId();
+                    lastView = saveRecovery.remember(lastView, saved, GrainFieldPlan::getId);
                     cleanForm = formState();
+                    showFields(lastView);
                     showFeedback("Field plan saved · " + saved.getFieldName(),
                             FarmUi.Tone.SUCCESS);
                     host.setStatus("Grain field plan “" + saved.getFieldName() + "” saved.");
-                    wrote = true;
                 } catch (InterruptedException exception) {
                     Thread.currentThread().interrupt();
-                    showSaveFailure();
+                    if (wrote) {
+                        showSavedRefreshFailure();
+                    } else {
+                        showSaveFailure();
+                    }
                 } catch (Exception exception) {
-                    showSaveFailure();
+                    if (wrote) {
+                        showSavedRefreshFailure();
+                    } else {
+                        showSaveFailure();
+                    }
                 } finally {
                     saving = false;
                     updateActions();
@@ -673,17 +688,27 @@ public final class GrainFieldPlanTab implements FlowerFarmTab {
                 boolean wrote = false;
                 try {
                     GrainFieldPlan saved = get();
+                    wrote = true;
+                    lastView = saveRecovery.remember(lastView, saved, GrainFieldPlan::getId);
                     if (Objects.equals(editingId, saved.getId())) loadField(saved);
+                    showFields(lastView);
                     showFeedback(saved.getFieldName() + " moved to "
                             + enumLabel(saved.getStage()) + ".", FarmUi.Tone.SUCCESS);
                     host.setStatus("Grain field plan “" + saved.getFieldName()
                             + "” moved to " + enumLabel(saved.getStage()) + ".");
-                    wrote = true;
                 } catch (InterruptedException exception) {
                     Thread.currentThread().interrupt();
-                    showFeedback("Stage was not changed. Retry the move.", FarmUi.Tone.DANGER);
+                    if (wrote) {
+                        showSavedRefreshFailure();
+                    } else {
+                        showFeedback("Stage was not changed. Retry the move.", FarmUi.Tone.DANGER);
+                    }
                 } catch (Exception exception) {
-                    showFeedback("Stage was not changed. Retry the move.", FarmUi.Tone.DANGER);
+                    if (wrote) {
+                        showSavedRefreshFailure();
+                    } else {
+                        showFeedback("Stage was not changed. Retry the move.", FarmUi.Tone.DANGER);
+                    }
                 } finally {
                     saving = false;
                     updateActions();
@@ -756,6 +781,12 @@ public final class GrainFieldPlanTab implements FlowerFarmTab {
         }
     }
 
+    private void showSavedRefreshFailure() {
+        saveRecovery.refreshFailed();
+        showFeedback("Save completed. Refresh the notebook to finish updating its display.",
+                FarmUi.Tone.WARNING);
+    }
+
     private void showSaveFailure() {
         showFeedback("Not saved · complete planning draft kept. "
                 + "Check the local data store and retry.", FarmUi.Tone.DANGER);
@@ -763,7 +794,9 @@ public final class GrainFieldPlanTab implements FlowerFarmTab {
     }
 
     private void showFeedback(String text, FarmUi.Tone tone) {
-        if (feedback != null) FarmUi.updateStatusBadge(feedback, text, tone);
+        if (feedback != null) FarmUi.updateStatusBadge(feedback, saveRecovery.feedback(text),
+                    saveRecovery.needsRefresh() && tone != FarmUi.Tone.DANGER
+                            ? FarmUi.Tone.WARNING : tone);
     }
 
     private FormState formState() {

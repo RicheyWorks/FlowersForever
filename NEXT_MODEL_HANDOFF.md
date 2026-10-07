@@ -1,5 +1,41 @@
 # Latest direction — October 7, 2026
 
+## Notebook save recovery, keyboard reachability, and restore ownership
+
+Continue in `C:\Users\730ri\.codex\worktrees\farm-shipping-polish\FlowersForever`
+on `codex/farm-shipping-polish-20261007`. Draft PR #41 remains based on the
+README/farm preview branch (PR #31). The original checkout on
+`codex/recover-unpushed-work` still contains substantial local work: preserve it.
+Upstream data-safety PR #32 (`cc96266`) was merged here as `5ed463e`; unrelated
+`main` licensing changes were not pulled into this preview stack.
+
+All 20 specialty notebooks preserve the service's acknowledged save and record
+identity before rendering or refreshing. A failed list read no longer lets
+Discard, review, or stage actions revive stale values. Create, edit, stage,
+recovery, and host-notification failures are covered across the actual forms.
+Each form reveals keyboard targets while passive refresh preserves typing and
+scroll position. Recovery feedback wraps above Save/Discard and reassures the
+grower that the completed save is kept.
+
+Automatic and manual restore now journal the exact retained folder before either
+move and preserve recovery instructions until the restored application opens.
+Automatic candidates must pass database-version validation and have a local
+receipt binding their checksum to the original records directory. Live snapshots
+use the original farm identity. Foreign or ambiguous legacy restore journals stop
+startup without moving records. Older/PowerShell backups remain manually restorable;
+missing receipts do not authorize automatic recovery from a shared backup folder.
+See `docs/DATA_SAFETY.md` and `docs/BACKUP_RESTORE.md` for the user-facing limits.
+
+The forced-close regression reproduced an external Windows file lock after the
+child had exited. Its harness now waits at most five seconds for that lock only,
+then checks health once and still checks every acknowledged saved record. A
+damaged/unreadable result or missing record is never retried into a pass.
+
+Next UI candidate: the Seed Fields "Planning only" section description truncates
+at 850 pixels because the shared section description is a plain JLabel. Reproduce
+the compact layout before changing the shared component. Native installer and
+interactive acceptance remain separate from the headless Swing renders here.
+
 ## Combined farm navigation and notebook draft decisions
 
 Work continues in the isolated `farm-shipping-polish/FlowersForever` worktree,

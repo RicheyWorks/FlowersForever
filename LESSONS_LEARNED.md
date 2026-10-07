@@ -1,5 +1,33 @@
 # Lessons learned for FlowersForever collaborators
 
+## Separate an acknowledged save from the refresh that follows it
+
+All 20 specialty notebooks could commit an edit successfully and then retain the
+old row snapshot when the follow-up list read failed. Discard, review, and stage
+actions could consequently revive stale values. Remember the service's returned
+record and identity before rendering or notifying the host, then refresh the full
+list separately. A display or read failure after acknowledgement must say the
+save completed. Exercise create, edit, stage, discard, retry, and host-notification
+failure through the actual Swing actions.
+
+Keyboard reveal needs rendered verification too: scrolling Save into view left
+recovery feedback below the viewport. Placing the wrapping feedback above the
+actions keeps both visible. Passive refresh must preserve the grower's scroll
+position and typing; focus movement may reveal the focused control.
+
+## Recovery needs exact folder, archive, and store identity
+
+A valid checksum is not proof that an archive belongs to the current farm. Shared
+backup folders need a receipt binding the archive checksum to the original records
+directory; a live snapshot must use the original directory rather than its scratch
+copy. Unknown and legacy archives remain available for manual restore.
+
+Record the exact retained folder before either restore move, keep that journal
+until the restored application opens, and validate its records-directory identity
+before applying it. Bootstrap may recreate an empty directory after an interrupted
+swap. Do not mistake that directory for an untouched farm or guess among retained
+siblings. Reject incompatible Flyway history before selecting an automatic backup.
+
 ## Verify the combined catalog and decisions made across a modal dialog
 
 The individual farm workspaces passed their tests, but their allowed combined

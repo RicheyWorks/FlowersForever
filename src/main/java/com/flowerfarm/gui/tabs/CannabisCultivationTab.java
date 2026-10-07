@@ -18,6 +18,7 @@ import javax.swing.JTable;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
 import javax.swing.ListSelectionModel;
+import javax.swing.SwingUtilities;
 import javax.swing.SwingWorker;
 import javax.swing.TransferHandler;
 import javax.swing.table.DefaultTableModel;
@@ -78,6 +79,7 @@ public final class CannabisCultivationTab implements FlowerFarmTab {
             new EnumMap<>(CannabisCultivationStage.class);
     private JLabel feedback;
     private JLabel accessBadge;
+    private final NotebookSaveRecovery saveRecovery = new NotebookSaveRecovery();
     private List<CannabisCultivationBatch> lastView = List.of();
     private Long editingId;
     private FormState cleanForm;
@@ -129,7 +131,11 @@ public final class CannabisCultivationTab implements FlowerFarmTab {
         if (panel == null) {
             return;
         }
-        if (loading) {
+        if (!SwingUtilities.isEventDispatchThread()) {
+            SwingUtilities.invokeLater(this::refreshData);
+            return;
+        }
+        if (loading || saving) {
             refreshQueued = true;
             return;
         }
@@ -145,11 +151,20 @@ public final class CannabisCultivationTab implements FlowerFarmTab {
             protected void done() {
                 try {
                     List<CannabisCultivationBatch> batches = get();
+                    boolean recovering = saveRecovery.needsRefresh();
                     showBatches(batches == null ? List.of() : batches);
+                    saveRecovery.refreshed();
+                    if (recovering) {
+                        showFeedback(hasUnsavedDraft()
+                                        ? "Batches refreshed; unsaved draft kept."
+                                        : "Batches refreshed.", FarmUi.Tone.SUCCESS);
+                    }
                 } catch (InterruptedException exception) {
                     Thread.currentThread().interrupt();
+                    saveRecovery.refreshFailed();
                     showFeedback("Could not load batches. Try Refresh.", FarmUi.Tone.DANGER);
                 } catch (Exception exception) {
+                    saveRecovery.refreshFailed();
                     showFeedback("Could not load batches. Try Refresh.", FarmUi.Tone.DANGER);
                 } finally {
                     loading = false;
@@ -227,6 +242,7 @@ public final class CannabisCultivationTab implements FlowerFarmTab {
         scroll.setBorder(BorderFactory.createEmptyBorder());
         scroll.getVerticalScrollBar().setUnitIncrement(24);
         panel.add(scroll, BorderLayout.CENTER);
+        FarmUi.revealFocusedControls(scroll);
         clearForm();
         updateActions();
     }
@@ -352,8 +368,8 @@ public final class CannabisCultivationTab implements FlowerFarmTab {
         form.add(fields, BorderLayout.CENTER);
         JPanel footer = new JPanel(new BorderLayout());
         footer.setOpaque(false);
-        footer.add(FarmUi.toolbar(saveButton, discardButton), BorderLayout.NORTH);
-        footer.add(feedback, BorderLayout.SOUTH);
+        footer.add(FarmUi.toolbar(saveButton, discardButton), BorderLayout.SOUTH);
+        footer.add(feedback, BorderLayout.NORTH);
         form.add(footer, BorderLayout.SOUTH);
         installDraftTracking();
         return FarmUi.section("Batch details",
@@ -493,22 +509,33 @@ public final class CannabisCultivationTab implements FlowerFarmTab {
                 boolean wrote = false;
                 try {
                     CannabisCultivationBatch saved = get();
+                    wrote = true;
+                    lastView = saveRecovery.remember(lastView, saved, CannabisCultivationBatch::getId);
                     if (Objects.equals(editingId, saved.getId())) {
                         loadBatch(saved);
                     }
+                    preserveSaveFeedback = true;
+                    showBatches(lastView);
                     preserveSaveFeedback = true;
                     showFeedback(saved.getBatchName() + " moved to planning stage "
                             + saved.getStage() + ".", FarmUi.Tone.SUCCESS);
                     host.setStatus("Cultivation batch “" + saved.getBatchName()
                             + "” moved to planning stage " + saved.getStage() + ".");
-                    wrote = true;
                 } catch (InterruptedException exception) {
                     Thread.currentThread().interrupt();
-                    showFeedback("Planning stage was not changed. Retry the move.",
-                            FarmUi.Tone.DANGER);
+                    if (wrote) {
+                        showSavedRefreshFailure();
+                    } else {
+                        showFeedback("Planning stage was not changed. Retry the move.",
+                                FarmUi.Tone.DANGER);
+                    }
                 } catch (Exception exception) {
-                    showFeedback("Planning stage was not changed. Retry the move.",
-                            FarmUi.Tone.DANGER);
+                    if (wrote) {
+                        showSavedRefreshFailure();
+                    } else {
+                        showFeedback("Planning stage was not changed. Retry the move.",
+                                FarmUi.Tone.DANGER);
+                    }
                 } finally {
                     saving = false;
                     updateActions();
@@ -709,7 +736,7 @@ public final class CannabisCultivationTab implements FlowerFarmTab {
     }
 
     private void saveBatch() {
-        if (!canWrite || saving) {
+        if (!canWrite || saving || loading) {
             return;
         }
         CannabisCultivationBatch draft;
@@ -732,23 +759,39 @@ public final class CannabisCultivationTab implements FlowerFarmTab {
 
             @Override
             protected void done() {
+                boolean wrote = false;
                 try {
                     CannabisCultivationBatch saved = get();
+                    wrote = true;
                     editingId = saved.getId();
+                    lastView = saveRecovery.remember(lastView, saved, CannabisCultivationBatch::getId);
                     failedSave = false;
                     preserveSaveFeedback = true;
                     cleanForm = formState();
+                    showBatches(lastView);
+                    preserveSaveFeedback = true;
                     showFeedback("Batch saved · " + saved.getBatchName(), FarmUi.Tone.SUCCESS);
                     host.setStatus("Cultivation batch “" + saved.getBatchName() + "” saved.");
-                    refreshData();
                 } catch (InterruptedException exception) {
                     Thread.currentThread().interrupt();
-                    showSaveFailure();
+                    if (wrote) {
+                        showSavedRefreshFailure();
+                    } else {
+                        showSaveFailure();
+                    }
                 } catch (Exception exception) {
-                    showSaveFailure();
+                    if (wrote) {
+                        showSavedRefreshFailure();
+                    } else {
+                        showSaveFailure();
+                    }
                 } finally {
                     saving = false;
                     updateActions();
+                    if (wrote || refreshQueued) {
+                        refreshQueued = false;
+                        refreshData();
+                    }
                 }
             }
         }.execute();
@@ -797,6 +840,12 @@ public final class CannabisCultivationTab implements FlowerFarmTab {
         }
     }
 
+    private void showSavedRefreshFailure() {
+        saveRecovery.refreshFailed();
+        showFeedback("Save completed. Refresh the notebook to finish updating its display.",
+                FarmUi.Tone.WARNING);
+    }
+
     private void showSaveFailure() {
         failedSave = true;
         showFeedback("Not saved · complete planning draft kept. Check the local data store and retry.",
@@ -806,7 +855,9 @@ public final class CannabisCultivationTab implements FlowerFarmTab {
 
     private void showFeedback(String text, FarmUi.Tone tone) {
         if (feedback != null) {
-            FarmUi.updateStatusBadge(feedback, text, tone);
+            FarmUi.updateStatusBadge(feedback, saveRecovery.feedback(text),
+                    saveRecovery.needsRefresh() && tone != FarmUi.Tone.DANGER
+                            ? FarmUi.Tone.WARNING : tone);
         }
     }
 
@@ -831,7 +882,7 @@ public final class CannabisCultivationTab implements FlowerFarmTab {
             control.setEnabled(editable);
         }
         newButton.setEnabled(editable);
-        saveButton.setEnabled(editable);
+        saveButton.setEnabled(editable && !loading);
         discardButton.setEnabled(editable && hasUnsavedDraft());
         refreshButton.setEnabled(!loading && !saving);
         int selectedRow = table.getSelectedRow();

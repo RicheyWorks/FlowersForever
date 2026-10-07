@@ -12,6 +12,27 @@ The **File** menu has three backup commands:
 
 Backups from the app and from the scripts below use the same ZIP layout and `.sha256` check file, so either can restore the other's backups.
 
+## Recovery when records are damaged
+
+At startup, FlowersForever can recover damaged records from a verified backup made for the
+same records directory. App backups and Java updater backups write a small local receipt
+outside the records folder, under `backup-settings/backup-receipts` (or the configured backup
+settings location). The receipt binds the original directory to the archive's exact checksum.
+Keep these settings when moving or protecting your installation. A shared backup folder alone
+does not authorize using another farm's archive.
+
+Automatic recovery skips archives with missing receipts, changed contents, or incompatible
+database migrations. Older backups and backups made by the PowerShell script remain usable
+through manual restore. Moving your records directory may also require manual restore because
+the receipt identifies its original location.
+
+Before swapping folders, FlowersForever saves recovery instructions with the exact retained
+folder and records-directory identity. Interrupted recovery resumes before opening the farm;
+the previous folder remains available until the restored records successfully open. A recovery
+instruction belonging to another directory, or an older instruction without a known source,
+stops startup with guidance and preserves the files for review. See [Data safety](DATA_SAFETY.md)
+for the automated checks and remaining hardware acceptance work.
+
 ## Backup scripts
 
 Close the app before either operation. This is required for a transactionally consistent embedded-database copy.

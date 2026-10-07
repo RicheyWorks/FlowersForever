@@ -53,6 +53,13 @@ final class ChildJvm implements AutoCloseable {
         return last;
     }
 
+    /** Failure context after a hard kill; includes whether termination was observed. */
+    String processStatus() {
+        return "child pid=" + process.pid() + ", alive=" + process.isAlive()
+                + ", exit=" + (process.isAlive() ? "pending" : process.exitValue())
+                + ", last progress=" + last;
+    }
+
     /** Hard kill (TerminateProcess on Windows, SIGKILL elsewhere), then drain what was already printed. */
     void kill() throws Exception {
         process.destroyForcibly();

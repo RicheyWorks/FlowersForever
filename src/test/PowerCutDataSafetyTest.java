@@ -50,7 +50,7 @@ class PowerCutDataSafetyTest {
         Clock clock = Clock.fixed(Instant.parse("2026-10-07T15:00:00Z"), ZoneId.of("America/Los_Angeles"));
         archives = new DataBackupService(clock);
         settings = new BackupSettings(data, temp.resolve(BackupSettings.STATE_FOLDER), backups);
-        records = new RestoreRecords(settings.stateDirectory());
+        records = new RestoreRecords(settings.stateDirectory(), settings.dataDirectory());
         guard = new DatabaseIntegrityGuard(settings, records, archives, Clock.systemDefaultZone());
         DataSafetyTestSupport.saveRecords(url, 1, 50);
         shutdown();
@@ -90,7 +90,7 @@ class PowerCutDataSafetyTest {
         assertThat(DatabaseIntegrityGuard.check(data)).isEqualTo(DatabaseIntegrityGuard.Health.HEALTHY);
         assertThat(DataSafetyTestSupport.savedIds(url)).containsExactlyElementsOf(range(1, 50));
         assertThat(outcome.keptAside()).hasValueSatisfying(kept -> {
-            assertThat(kept.getFileName().toString()).startsWith("data.damaged-");
+            assertThat(kept.getFileName().toString()).startsWith("data.before-restore-");
             assertThat(kept.resolve(DataBackupService.DATABASE_FILE)).exists();
         });
         assertThat(records.takeNotice()).hasValueSatisfying(notice -> {
