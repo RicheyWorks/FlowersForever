@@ -177,6 +177,47 @@ class StemDemandServiceTest {
     }
 
     @Test
+    @DisplayName("by event: each order is one event with its date, recipe and stem lines together, cooler shared once")
+    void groupsByEvent() {
+        OrderLine centerpieces = line(1L, "Centerpiece", 12, "designs");
+        centerpieces.setRecipeId(5L);
+        order(30L, EVENT, "CONFIRMED", "Kitsap Weddings", centerpieces, line(2L, "Dahlia", 10, "stems"),
+                line(3L, "Greenery", 2, "buckets"));
+        order(31L, EVENT, "CONFIRMED", "Bloom Studio", line(4L, "Dahlia", 30, "stems"));
+        order(32L, EVENT.minusDays(2), "DRAFT", "Market", line(5L, "Bud vase", 6, "designs"));
+        when(inventory.getAllItems()).thenReturn(List.of(new Item("Dahlia", "Dahlias", 3, "Per Stem", 1, 80, "")));
+
+        StemDemand.Board board = service.build(FROM, 14, true);
+
+        assertThat(board.events()).extracting(StemDemand.Event::orderId).containsExactly(32L, 30L, 31L);
+        StemDemand.Event market = board.events().get(0);
+        assertThat(market.event()).isEqualTo("Order #32 Market (draft)");
+        assertThat(market.confirmed()).isFalse();
+        assertThat(market.lines()).isEmpty();
+        assertThat(market.notCounted()).singleElement().satisfies(row -> {
+            assertThat(row.product()).isEqualTo("Bud vase");
+            assertThat(row.confirmed()).isFalse();
+        });
+        StemDemand.Event wedding = board.events().get(1);
+        assertThat(wedding.event()).isEqualTo("Order #30 Kitsap Weddings");
+        assertThat(wedding.date()).isEqualTo(EVENT);
+        assertThat(wedding.lines()).extracting(StemDemand.EventLine::crop).containsExactly("Dahlia", "Eucalyptus");
+        StemDemand.EventLine weddingDahlias = wedding.lines().get(0);
+        assertThat(weddingDahlias.needed()).isEqualTo(76);              // 66 from the recipe + 10 stems
+        assertThat(weddingDahlias.fromCooler()).isEqualTo(76);
+        assertThat(weddingDahlias.madeFor()).isEqualTo("Centerpiece × 12; Stems ordered");
+        assertThat(wedding.notCounted()).extracting(StemDemand.NotCounted::product).containsExactly("Greenery");
+        StemDemand.EventLine studioDahlias = board.events().get(2).lines().get(0);
+        assertThat(studioDahlias.fromCooler()).isEqualTo(4);            // 80 in the cooler, used once
+        assertThat(studioDahlias.shortBy()).isEqualTo(26);
+        assertThat(board.lines()).filteredOn(row -> row.crop().equals("Dahlia"))
+                .singleElement().satisfies(row -> {
+                    assertThat(row.fromCooler()).isEqualTo(80);
+                    assertThat(row.shortBy()).isEqualTo(26);
+                });
+    }
+
+    @Test
     @DisplayName("window limits are enforced")
     void windowLimits() {
         assertThatThrownBy(() -> service.build(FROM, 0, false)).isInstanceOf(IllegalArgumentException.class);

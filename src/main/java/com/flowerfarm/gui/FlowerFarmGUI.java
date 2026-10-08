@@ -1615,6 +1615,10 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
                     "Total the stems upcoming orders need by crop and date, see what the cooler and "
                             + "planned harvest cover, and copy or save the buying list.",
                     e -> openStemDemandBoard()));
+            fileMenu.add(menuItem("Buying list by event…", KeyEvent.VK_Y,
+                    "For the same dates, see each event's stems: what comes from the cooler, what to "
+                            + "cut, and what to buy, with cooler stock shared once.",
+                    e -> openBuyingListByEvent()));
         }
         fileMenu.addSeparator();
         fileMenu.add(menuItem("Back up now…", KeyEvent.VK_B,
@@ -2639,6 +2643,16 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
             return;
         }
         stemDemandController.openBoard();
+    }
+
+    private void openBuyingListByEvent() {
+        if (stemDemandController == null) {
+            dialogs.showMessage(frame,
+                    "The buying list by event is not available in this session.",
+                    StemDemand.EVENTS_TITLE, javax.swing.JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+        stemDemandController.openBuyingList();
     }
 
     private void shareFloristAvailability() {

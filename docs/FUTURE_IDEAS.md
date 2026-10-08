@@ -46,7 +46,7 @@ Add a simple farm-owned row/bed map with dimensions, paths, irrigation zones, an
 
 ## 6. One buying list for a busy event week
 
-**First slice shipped** in the same [stem demand board](STEM_DEMAND_BOARD.md): order lines counted as saved recipes combine into one stem list across events, with stock shared once, plus copy and CSV export. Supplier and pack rounding, per-event grouping, substitutions, and printed workbench sheets remain later.
+**First slices shipped** in the same [stem demand board](STEM_DEMAND_BOARD.md): order lines counted as saved recipes combine into one stem list across events, with stock shared once, plus copy and CSV export; File → Buying list by event splits the same list by event (order and date) without counting stock twice. Supplier and pack rounding, substitutions, and printed workbench sheets remain later.
 
 **Grower moment:** three events use overlapping recipes and the grower needs one sensible wholesale order.
 

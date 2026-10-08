@@ -25,8 +25,8 @@ import java.util.Objects;
 import java.util.function.Consumer;
 
 /**
- * File → Stem demand board: stems by crop and date for upcoming orders, copy/CSV export,
- * and counting order lines as saved recipes.
+ * File → Stem demand board: stems by crop and date for upcoming orders, the same window
+ * as a buying list by event, copy/CSV export, and counting order lines as saved recipes.
  */
 @Component
 @Profile("!cli & !container & !mcp & !release-smoke")
@@ -51,6 +51,15 @@ public class DesktopStemDemandController {
     }
 
     public void openBoard() {
+        open(false);
+    }
+
+    /** File → Buying list by event: the same board, opened on the by-event list. */
+    public void openBuyingList() {
+        open(true);
+    }
+
+    private void open(boolean byEvent) {
         if (host == null) {
             return;
         }
@@ -58,6 +67,9 @@ public class DesktopStemDemandController {
         Runnable refresh = () -> refresh(panel);
         panel.onRefresh(refresh);
         refresh.run();
+        if (byEvent) {
+            panel.showByEvent();
+        }
 
         JButton copy = FarmUi.primaryButton("Copy list");
         copy.setName("stemDemand.copy");
@@ -65,6 +77,12 @@ public class DesktopStemDemandController {
         JButton csv = FarmUi.secondaryButton("Save CSV…");
         csv.setName("stemDemand.saveCsv");
         csv.addActionListener(event -> saveCsv(panel));
+        JButton copyEvents = FarmUi.secondaryButton("Copy by event");
+        copyEvents.setName("stemDemand.copyEvents");
+        copyEvents.addActionListener(event -> copyEvents(panel));
+        JButton eventsCsv = FarmUi.secondaryButton("Save by event CSV…");
+        eventsCsv.setName("stemDemand.saveEventsCsv");
+        eventsCsv.addActionListener(event -> saveEventsCsv(panel));
         JButton link = FarmUi.secondaryButton("Count line as recipe…");
         link.setName("stemDemand.linkRecipe");
         link.addActionListener(event -> linkRecipe(panel, refresh));
@@ -76,6 +94,8 @@ public class DesktopStemDemandController {
         actions.setOpaque(false);
         actions.add(copy);
         actions.add(csv);
+        actions.add(copyEvents);
+        actions.add(eventsCsv);
         actions.add(link);
         actions.add(unlink);
 
@@ -106,6 +126,13 @@ public class DesktopStemDemandController {
         });
     }
 
+    private void copyEvents(StemDemandPanel panel) {
+        panel.board().ifPresent(board -> {
+            host.clipboard().copyText(StemDemand.eventsShareText(board, demand.farmName()));
+            panel.announce(StemDemand.statusEventsCopied());
+        });
+    }
+
     private void saveCsv(StemDemandPanel panel) {
         StemDemand.Board board = panel.board().orElse(null);
         if (board == null) {
@@ -113,18 +140,31 @@ public class DesktopStemDemandController {
         }
         host.files().chooseSave(host.frame(), "Save stem demand CSV",
                         new File(StemDemand.suggestedCsvFileName(board)))
-                .ifPresent(file -> writeCsv(panel, board, file.toPath()));
+                .ifPresent(file -> writeCsv(panel, file.toPath(), StemDemand.csv(board), "stem demand CSV",
+                        StemDemand::statusSaved));
     }
 
-    private void writeCsv(StemDemandPanel panel, StemDemand.Board board, Path path) {
+    private void saveEventsCsv(StemDemandPanel panel) {
+        StemDemand.Board board = panel.board().orElse(null);
+        if (board == null) {
+            return;
+        }
+        host.files().chooseSave(host.frame(), "Save buying list by event CSV",
+                        new File(StemDemand.suggestedEventsCsvFileName(board)))
+                .ifPresent(file -> writeCsv(panel, file.toPath(), StemDemand.eventsCsv(board),
+                        "buying list by event CSV", StemDemand::statusEventsSaved));
+    }
+
+    private void writeCsv(StemDemandPanel panel, Path path, String csv, String what,
+                          java.util.function.UnaryOperator<String> saved) {
         try {
-            SafeFiles.writeString(path, StemDemand.csv(board));
+            SafeFiles.writeString(path, csv);
             Path name = path.getFileName();
-            panel.announce(StemDemand.statusSaved(name == null ? path.toString() : name.toString()));
+            panel.announce(saved.apply(name == null ? path.toString() : name.toString()));
         } catch (IOException | RuntimeException failed) {
-            host.dialogs().showMessage(host.frame(), FarmUi.actionableError("Saving the stem demand CSV", failed),
+            host.dialogs().showMessage(host.frame(), FarmUi.actionableError("Saving the " + what, failed),
                     StemDemand.TITLE, JOptionPane.WARNING_MESSAGE);
-            panel.announce("Could not save the stem demand CSV.");
+            panel.announce("Could not save the " + what + ".");
         }
     }
 
