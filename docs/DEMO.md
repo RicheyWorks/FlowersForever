@@ -19,7 +19,7 @@ cd FlowersForever
 mvn clean verify
 ```
 
-All tests green → development JAR under `target/flowerfarm-manager-1.2.0-SNAPSHOT.jar`.
+All tests green → development JAR under `target/flowerfarm-manager-1.3.0-SNAPSHOT.jar`.
 GitHub Actions runs the same command on every push to `main` (see CI badge in the README).  
 Approved stable tags publish only when the tag, POM, verified JAR, and both native installers agree on the exact version.
 
@@ -30,7 +30,7 @@ Approved stable tags publish only when the tag, POM, verified JAR, and both nati
 | Goal | Command |
 |------|---------|
 | Default GUI + REST + H2 | `mvn spring-boot:run` |
-| Same via JAR | `java -jar target/flowerfarm-manager-1.2.0-SNAPSHOT.jar` |
+| Same via JAR | `java -jar target/flowerfarm-manager-1.3.0-SNAPSHOT.jar` |
 | **Demo seed** (empty CRM/harvest/knowledge) | `java -jar … --spring.profiles.active=demo` |
 | SQLite file DB | `java -jar … --spring.profiles.active=sqlite` |
 | Barn multi-user | Set `FLOWERFARM_AUTH_USERS`, then use `--spring.profiles.active=auth` |
@@ -44,7 +44,7 @@ For a fresh portable-JAR demo from PowerShell in the repository root:
 
 ```powershell
 $env:FLOWERFARM_DATA_DIR = Join-Path $PWD ("demo-data-" + (Get-Date -Format 'yyyyMMdd-HHmmss'))
-java -jar target/flowerfarm-manager-1.2.0-SNAPSHOT.jar --spring.profiles.active=demo
+java -jar target/flowerfarm-manager-1.3.0-SNAPSHOT.jar --spring.profiles.active=demo
 ```
 
 App opens Swing GUI and Tomcat on **http://localhost:8080**.
@@ -309,7 +309,7 @@ Write-Host "owner password:  $ownerPassword"
 Write-Host "hand password:   $handPassword"
 Write-Host "viewer password: $viewerPassword"
 
-java -jar target/flowerfarm-manager-1.2.0-SNAPSHOT.jar `
+java -jar target/flowerfarm-manager-1.3.0-SNAPSHOT.jar `
   --spring.profiles.active=demo,auth `
   --server.address=127.0.0.1
 ```

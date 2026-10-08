@@ -180,16 +180,16 @@ mvn clean verify
 mvn spring-boot:run
 
 # Or run the packaged JAR
-java -jar target/flowerfarm-manager-1.2.0-SNAPSHOT.jar
+java -jar target/flowerfarm-manager-1.3.0-SNAPSHOT.jar
 
 # Interactive command-line mode
-java -jar target/flowerfarm-manager-1.2.0-SNAPSHOT.jar --cli
+java -jar target/flowerfarm-manager-1.3.0-SNAPSHOT.jar --cli
 
 # Local MCP server for an AI client (set token, sensitive-read, and mutation env vars)
-java -jar target/flowerfarm-manager-1.2.0-SNAPSHOT.jar --mcp
+java -jar target/flowerfarm-manager-1.3.0-SNAPSHOT.jar --mcp
 
 # Preflight the exact database, schema, plug-in, and enabled farm tools
-java -jar target/flowerfarm-manager-1.2.0-SNAPSHOT.jar --mcp-doctor
+java -jar target/flowerfarm-manager-1.3.0-SNAPSHOT.jar --mcp-doctor
 ```
 
 ### Verification
@@ -223,11 +223,11 @@ The optional provider-neutral harness exposes farm records and desktop actions t
 | `mcp` | Local stdio MCP server without Swing, Tomcat, or an HTTP listener |
 
 ```bash
-java -jar target/flowerfarm-manager-1.2.0-SNAPSHOT.jar --spring.profiles.active=sqlite
-java -jar target/flowerfarm-manager-1.2.0-SNAPSHOT.jar --spring.profiles.active=demo
+java -jar target/flowerfarm-manager-1.3.0-SNAPSHOT.jar --spring.profiles.active=sqlite
+java -jar target/flowerfarm-manager-1.3.0-SNAPSHOT.jar --spring.profiles.active=demo
 
 FLOWERFARM_AUTH_USERS='owner:replace-with-a-long-password:OWNER' \
-  java -jar target/flowerfarm-manager-1.2.0-SNAPSHOT.jar --spring.profiles.active=auth
+  java -jar target/flowerfarm-manager-1.3.0-SNAPSHOT.jar --spring.profiles.active=auth
 ```
 
 Empty databases seed from `farm_inventory.csv` when it is present, otherwise from sample PNW inventory. The portable JAR stores H2 data under `./data`; the packaged Windows app uses `%LOCALAPPDATA%\\FlowersForever\\data`. `FLOWERFARM_DATA_DIR` overrides the data directory.
