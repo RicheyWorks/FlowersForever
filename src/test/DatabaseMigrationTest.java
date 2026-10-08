@@ -28,7 +28,7 @@ class DatabaseMigrationTest {
 
         MigrateResult result = configuredFlyway(url).migrate();
 
-        assertThat(result.migrationsExecuted).isEqualTo(46);
+        assertThat(result.migrationsExecuted).isEqualTo(47);
         try (Connection connection = DriverManager.getConnection(url, "sa", "")) {
             assertFarmOperationDefaults(connection);
             assertThat(tableExists(connection, "INVENTORY_ITEMS")).isTrue();
@@ -82,6 +82,11 @@ class DatabaseMigrationTest {
             assertThat(tableExists(connection, "MUSHROOM_BATCH_PLANS")).isTrue();
             assertThat(tableExists(connection, "CRANBERRY_BED_PLANS")).isTrue();
             assertThat(tableExists(connection, "PUMPKIN_PATCH_PLANS")).isTrue();
+            assertThat(tableExists(connection, "SCOUTING_FINDINGS")).isTrue();
+            assertThat(tableExists(connection, "SCOUTING_FINDING_PHOTOS")).isTrue();
+            assertThat(tableExists(connection, "SCOUTING_LAB_SAMPLES")).isTrue();
+            assertThat(tableExists(connection, "SCOUTING_SETTINGS")).isTrue();
+            assertThat(columnExists(connection, "SCOUTING_SETTINGS", "JSON_IMPORTED_AT")).isTrue();
             assertThat(columnExists(connection, "HARVEST_LOG", "LOT_CODE")).isTrue();
             assertThat(columnExists(connection, "HARVEST_LOG", "HARVEST_GRADE")).isTrue();
             assertThat(columnExists(connection, "HARVEST_LOG", "LOSS_QUANTITY")).isTrue();
@@ -167,7 +172,7 @@ class DatabaseMigrationTest {
 
         MigrateResult result = configuredFlyway(url).migrate();
 
-        assertThat(result.migrationsExecuted).isEqualTo(45);
+        assertThat(result.migrationsExecuted).isEqualTo(46);
         try (Connection connection = DriverManager.getConnection(url, "sa", "");
              Statement statement = connection.createStatement();
              ResultSet rows = statement.executeQuery(
@@ -246,7 +251,7 @@ class DatabaseMigrationTest {
                     + "(settings_id, enterprise_code) VALUES (1, '" + enterprise + "')");
         }
 
-        assertThat(configuredFlyway(url).migrate().migrationsExecuted).isEqualTo(24);
+        assertThat(configuredFlyway(url).migrate().migrationsExecuted).isEqualTo(25);
         try (Connection connection = DriverManager.getConnection(url, "sa", "");
              Statement statement = connection.createStatement();
              ResultSet settings = statement.executeQuery("""
@@ -293,7 +298,7 @@ class DatabaseMigrationTest {
                     """);
         }
 
-        assertThat(configuredFlyway(url).migrate().migrationsExecuted).isEqualTo(19);
+        assertThat(configuredFlyway(url).migrate().migrationsExecuted).isEqualTo(20);
         try (Connection connection = DriverManager.getConnection(url, "sa", "");
              Statement statement = connection.createStatement();
              ResultSet workspaces = statement.executeQuery("""
@@ -584,7 +589,7 @@ class DatabaseMigrationTest {
                     """);
         }
 
-        assertThat(configuredFlyway(url).migrate().migrationsExecuted).isEqualTo(17);
+        assertThat(configuredFlyway(url).migrate().migrationsExecuted).isEqualTo(18);
         try (Connection connection = DriverManager.getConnection(url, "sa", "");
              Statement statement = connection.createStatement()) {
             try (ResultSet rows = statement.executeQuery("""
@@ -688,7 +693,7 @@ class DatabaseMigrationTest {
                     """);
         }
 
-        assertThat(configuredFlyway(url).migrate().migrationsExecuted).isEqualTo(16);
+        assertThat(configuredFlyway(url).migrate().migrationsExecuted).isEqualTo(17);
         try (Connection connection = DriverManager.getConnection(url, "sa", "");
              Statement statement = connection.createStatement()) {
             try (ResultSet rows = statement.executeQuery("""
@@ -1054,7 +1059,7 @@ class DatabaseMigrationTest {
                     """);
         }
 
-        assertThat(configuredFlyway(url).migrate().migrationsExecuted).isEqualTo(15);
+        assertThat(configuredFlyway(url).migrate().migrationsExecuted).isEqualTo(16);
         try (Connection connection = DriverManager.getConnection(url, "sa", "");
              Statement statement = connection.createStatement()) {
             try (ResultSet rows = statement.executeQuery("""
@@ -1164,7 +1169,7 @@ class DatabaseMigrationTest {
                     """);
         }
 
-        assertThat(configuredFlyway(url).migrate().migrationsExecuted).isEqualTo(14);
+        assertThat(configuredFlyway(url).migrate().migrationsExecuted).isEqualTo(15);
         try (Connection connection = DriverManager.getConnection(url, "sa", "");
              Statement statement = connection.createStatement()) {
             try (ResultSet rows = statement.executeQuery("""
@@ -1279,7 +1284,7 @@ class DatabaseMigrationTest {
                     """);
         }
 
-        assertThat(configuredFlyway(url).migrate().migrationsExecuted).isEqualTo(13);
+        assertThat(configuredFlyway(url).migrate().migrationsExecuted).isEqualTo(14);
         try (Connection connection = DriverManager.getConnection(url, "sa", "");
              Statement statement = connection.createStatement()) {
             try (ResultSet rows = statement.executeQuery("""
@@ -1399,7 +1404,7 @@ class DatabaseMigrationTest {
                     """);
         }
 
-        assertThat(configuredFlyway(url).migrate().migrationsExecuted).isEqualTo(12);
+        assertThat(configuredFlyway(url).migrate().migrationsExecuted).isEqualTo(13);
         try (Connection connection = DriverManager.getConnection(url, "sa", "");
              Statement statement = connection.createStatement()) {
             try (ResultSet rows = statement.executeQuery("""
@@ -1521,7 +1526,7 @@ class DatabaseMigrationTest {
                     """);
         }
 
-        assertThat(configuredFlyway(url).migrate().migrationsExecuted).isEqualTo(11);
+        assertThat(configuredFlyway(url).migrate().migrationsExecuted).isEqualTo(12);
         try (Connection connection = DriverManager.getConnection(url, "sa", "");
              Statement statement = connection.createStatement()) {
             try (ResultSet rows = statement.executeQuery("""
@@ -1647,7 +1652,7 @@ class DatabaseMigrationTest {
                     """);
         }
 
-        assertThat(configuredFlyway(url).migrate().migrationsExecuted).isEqualTo(10);
+        assertThat(configuredFlyway(url).migrate().migrationsExecuted).isEqualTo(11);
         try (Connection connection = DriverManager.getConnection(url, "sa", "");
              Statement statement = connection.createStatement()) {
             try (ResultSet rows = statement.executeQuery("""
@@ -1773,7 +1778,7 @@ class DatabaseMigrationTest {
                     """);
         }
 
-        assertThat(configuredFlyway(url).migrate().migrationsExecuted).isEqualTo(9);
+        assertThat(configuredFlyway(url).migrate().migrationsExecuted).isEqualTo(10);
         try (Connection connection = DriverManager.getConnection(url, "sa", "");
              Statement statement = connection.createStatement()) {
             try (ResultSet rows = statement.executeQuery("""
@@ -1908,7 +1913,7 @@ class DatabaseMigrationTest {
                     """);
         }
 
-        assertThat(configuredFlyway(url).migrate().migrationsExecuted).isEqualTo(8);
+        assertThat(configuredFlyway(url).migrate().migrationsExecuted).isEqualTo(9);
         try (Connection connection = DriverManager.getConnection(url, "sa", "");
              Statement statement = connection.createStatement()) {
             try (ResultSet rows = statement.executeQuery("""
@@ -2028,7 +2033,7 @@ class DatabaseMigrationTest {
                     """);
         }
 
-        assertThat(configuredFlyway(url).migrate().migrationsExecuted).isEqualTo(7);
+        assertThat(configuredFlyway(url).migrate().migrationsExecuted).isEqualTo(8);
         try (Connection connection = DriverManager.getConnection(url, "sa", "");
              Statement statement = connection.createStatement()) {
             try (ResultSet rows = statement.executeQuery("""
@@ -2152,7 +2157,7 @@ class DatabaseMigrationTest {
                     """);
         }
 
-        assertThat(configuredFlyway(url).migrate().migrationsExecuted).isEqualTo(6);
+        assertThat(configuredFlyway(url).migrate().migrationsExecuted).isEqualTo(7);
         try (Connection connection = DriverManager.getConnection(url, "sa", "");
              Statement statement = connection.createStatement()) {
             try (ResultSet rows = statement.executeQuery("""
@@ -2256,7 +2261,7 @@ class DatabaseMigrationTest {
                     """);
         }
 
-        assertThat(configuredFlyway(url).migrate().migrationsExecuted).isEqualTo(5);
+        assertThat(configuredFlyway(url).migrate().migrationsExecuted).isEqualTo(6);
         try (Connection connection = DriverManager.getConnection(url, "sa", "");
              Statement statement = connection.createStatement()) {
             try (ResultSet rows = statement.executeQuery("""
@@ -2364,7 +2369,7 @@ class DatabaseMigrationTest {
                     """);
         }
 
-        assertThat(configuredFlyway(url).migrate().migrationsExecuted).isEqualTo(4);
+        assertThat(configuredFlyway(url).migrate().migrationsExecuted).isEqualTo(5);
         try (Connection connection = DriverManager.getConnection(url, "sa", "");
              Statement statement = connection.createStatement()) {
             try (ResultSet rows = statement.executeQuery("""
@@ -2468,7 +2473,7 @@ class DatabaseMigrationTest {
                     """);
         }
 
-        assertThat(configuredFlyway(url).migrate().migrationsExecuted).isEqualTo(3);
+        assertThat(configuredFlyway(url).migrate().migrationsExecuted).isEqualTo(4);
         try (Connection connection = DriverManager.getConnection(url, "sa", "");
              Statement statement = connection.createStatement()) {
             try (ResultSet rows = statement.executeQuery("""
@@ -2580,7 +2585,7 @@ class DatabaseMigrationTest {
                     """);
         }
 
-        assertThat(configuredFlyway(url).migrate().migrationsExecuted).isEqualTo(1);
+        assertThat(configuredFlyway(url).migrate().migrationsExecuted).isEqualTo(2);
         try (Connection connection = DriverManager.getConnection(url, "sa", "");
              Statement statement = connection.createStatement()) {
             assertThat(columnExists(connection, "KNOWLEDGE_ENTRIES",
