@@ -112,6 +112,7 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
     private DesktopRemindersController remindersController;
     private DesktopFloristExportController floristExportController;
     private DesktopCoolerReviewController coolerReviewController;
+    private DesktopScoutingController scoutingController;
 
     private final Preferences prefs = Preferences.userNodeForPackage(FlowerFarmGUI.class);
     private boolean darkMode;
@@ -229,6 +230,12 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
         this.coolerReviewController = coolerReviewController;
     }
 
+    /** Scouting log, lab sample tracking, sample guides, and lab directory. */
+    @Autowired(required = false)
+    void setScoutingController(DesktopScoutingController scoutingController) {
+        this.scoutingController = scoutingController;
+    }
+
     // ── ApplicationRunner ─────────────────────────────────────────────────────
 
     @Override
@@ -344,7 +351,7 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
         }
         if (remindersController != null) {
             remindersController.attach(new DesktopRemindersController.Host(
-                    frame, dialogs, this::setStatus, this::selectTab,
+                    frame, dialogs, this::setStatus, this::openReminderTarget,
                     () -> showHarvestEntry(null, null)));
             if (dashboard != null) {
                 dashboard.bindReminders(remindersController::openReminder,
@@ -362,6 +369,10 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
         }
         if (coolerReviewController != null) {
             coolerReviewController.attach(new DesktopCoolerReviewController.Host(
+                    frame, dialogs, fileChooser, this::setStatus));
+        }
+        if (scoutingController != null) {
+            scoutingController.attach(new DesktopScoutingController.Host(
                     frame, dialogs, fileChooser, this::setStatus));
         }
         javax.swing.SwingUtilities.invokeLater(() -> {
@@ -569,6 +580,9 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
         helpMenu.add(menuItem("Cooler lot review…", KeyEvent.VK_O,
                 CoolerShelfLife.menuDescription(),
                 e -> openCoolerReview()));
+        helpMenu.add(menuItem("Scouting & lab samples…", KeyEvent.VK_L,
+                "Log pests and diseases by bed, track samples sent to labs, and see how to pack them.",
+                e -> openScouting()));
         helpMenu.add(menuItem("About FlowersForever", KeyEvent.VK_A,
                 "Show the farm profile, application purpose, and active session.",
                 e -> dialogs.showMessage(frame,
@@ -1008,6 +1022,25 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
         if (!chosen.equals(previous)) {
             setStatus(SupportGuide.statusSaved(chosen));
         }
+    }
+
+    /** Reminder targets are tab titles, except scouting reminders, which open their own window. */
+    private void openReminderTarget(String target) {
+        if (com.flowerfarm.scouting.Scouting.TITLE.equals(target)) {
+            openScouting();
+        } else {
+            selectTab(target);
+        }
+    }
+
+    private void openScouting() {
+        if (scoutingController == null) {
+            dialogs.showMessage(frame,
+                    "Scouting & lab samples is not available in this session.",
+                    com.flowerfarm.scouting.Scouting.TITLE, javax.swing.JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+        scoutingController.open();
     }
 
     private void openCoolerReview() {

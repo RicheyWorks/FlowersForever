@@ -54,6 +54,7 @@ public final class UpdateStateStore {
             Files.createDirectories(directory);
             Path temporary = Files.createTempFile(directory, ".update-state-", ".tmp");
             mapper.writeValue(temporary.toFile(), state);
+            com.flowerfarm.safety.SafeFiles.force(temporary);
             Files.move(temporary, directory.resolve(FILE),
                     StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
         } catch (IOException failure) {
