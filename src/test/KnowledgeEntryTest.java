@@ -47,6 +47,24 @@ class KnowledgeEntryTest {
 
         assertThatIllegalArgumentException().isThrownBy(() -> entry.setHarvestId(0L))
                 .withMessageContaining("positive");
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> entry.setFieldScienceExportId(0L))
+                .withMessageContaining("Field science export id");
+    }
+
+    @Test
+    @DisplayName("copies the optional saved field science export link when editing")
+    void copiesFieldScienceExportLink() {
+        KnowledgeEntry source = entry(List.of("field-science"));
+        source.setFieldScienceExportId(42L);
+        KnowledgeEntry edited = entry(List.of("field-science"));
+
+        edited.copyBusinessFieldsFrom(source);
+        assertThat(edited.getFieldScienceExportId()).isEqualTo(42L);
+
+        source.setFieldScienceExportId(null);
+        edited.copyBusinessFieldsFrom(source);
+        assertThat(edited.getFieldScienceExportId()).isNull();
     }
 
     private static KnowledgeEntry entry(List<String> tags) {

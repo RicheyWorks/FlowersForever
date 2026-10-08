@@ -4,6 +4,7 @@ import com.flowerfarm.model.FarmProfile;
 import com.flowerfarm.model.HarvestEntry;
 import com.flowerfarm.model.Item;
 import com.flowerfarm.repository.HarvestRepository;
+import com.flowerfarm.util.InventoryUnits;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -231,6 +232,7 @@ public class HarvestService {
     /**
      * Updates a harvest entry and corrects inventory for crop/qty changes.
      * Same crop → adjust by delta; crop rename → reverse old, apply new.
+     * A same-crop change to a different unit requires an explicit conversion.
      * Records {@code HARVEST_EDIT} in the audit trail.
      */
     @Transactional
@@ -251,6 +253,13 @@ public class HarvestService {
 
         if (newCrop.isBlank()) {
             throw new IllegalArgumentException("Crop name is required.");
+        }
+        if (oldCrop.equalsIgnoreCase(newCrop)
+                && !InventoryUnits.equivalent(existing.getUnit(), newUnit)) {
+            throw new IllegalArgumentException(
+                    "Cannot change the unit for an existing harvest of '" + oldCrop
+                            + "' from " + existing.getUnit() + " to " + newUnit
+                            + ". An explicit inventory conversion is required.");
         }
         if (incoming.getLotCode() == null || incoming.getLotCode().isBlank()) {
             assignLotCode(existing);

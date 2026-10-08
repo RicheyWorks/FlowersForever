@@ -101,6 +101,31 @@ class KnowledgeControllerIT {
     }
 
     @Test
+    @DisplayName("field science export id round trips through the knowledge API")
+    void acceptsOptionalFieldScienceExportLink() throws Exception {
+        when(knowledgeService.create(any())).thenAnswer(invocation -> {
+            KnowledgeEntry incoming = invocation.getArgument(0);
+            incoming.setId(7L);
+            return incoming;
+        });
+
+        mockMvc.perform(post("/api/knowledge")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "observedOn": "2026-08-20",
+                                  "summary": "Finding from Farm Scout",
+                                  "kind": "PRACTICE",
+                                  "observation": "Scouted the west block.",
+                                  "confidence": "NEEDS_REVIEW",
+                                  "fieldScienceExportId": 42
+                                }
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.fieldScienceExportId").value(42));
+    }
+
+    @Test
     @DisplayName("delete returns no content after removing the lesson")
     void deletes() throws Exception {
         mockMvc.perform(delete("/api/knowledge/7"))

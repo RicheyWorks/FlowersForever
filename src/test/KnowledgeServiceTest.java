@@ -5,6 +5,7 @@ import com.flowerfarm.model.KnowledgeEntry;
 import com.flowerfarm.model.KnowledgeKind;
 import com.flowerfarm.repository.CustomerOrderRepository;
 import com.flowerfarm.repository.CustomerRepository;
+import com.flowerfarm.repository.FieldScienceExportRepository;
 import com.flowerfarm.repository.HarvestRepository;
 import com.flowerfarm.repository.InventoryRepository;
 import com.flowerfarm.repository.KnowledgeRepository;
@@ -40,6 +41,7 @@ class KnowledgeServiceTest {
     @Mock InventoryRepository inventoryRepository;
     @Mock CustomerOrderRepository orderRepository;
     @Mock CustomerRepository customerRepository;
+    @Mock FieldScienceExportRepository fieldScienceExportRepository;
     @Mock SyncHistoryService syncHistoryService;
 
     KnowledgeService service;
@@ -47,7 +49,8 @@ class KnowledgeServiceTest {
     @BeforeEach
     void setUp() {
         service = new KnowledgeService(repository, harvestRepository, inventoryRepository,
-                orderRepository, customerRepository, syncHistoryService, CLOCK);
+                orderRepository, customerRepository, syncHistoryService,
+                fieldScienceExportRepository, CLOCK);
     }
 
     @Test
@@ -119,6 +122,56 @@ class KnowledgeServiceTest {
 
         assertThatIllegalArgumentException().isThrownBy(() -> service.create(entry))
                 .withMessageContaining("order #99");
+    }
+
+    @Test
+    @DisplayName("create accepts an existing reviewed field science export link")
+    void createsFindingLinkedToReviewedExport() {
+        KnowledgeEntry entry = mildewEntry(LocalDate.of(2026, 8, 18));
+        entry.setFieldScienceExportId(42L);
+        when(fieldScienceExportRepository.existsById(42L)).thenReturn(true);
+        when(repository.save(any())).thenAnswer(invocation -> {
+            KnowledgeEntry saved = invocation.getArgument(0);
+            saved.setId(7L);
+            return saved;
+        });
+
+        KnowledgeEntry saved = service.create(entry);
+
+        assertThat(saved.getFieldScienceExportId()).isEqualTo(42L);
+        verify(fieldScienceExportRepository).existsById(42L);
+    }
+
+    @Test
+    @DisplayName("create rejects a missing reviewed field science export")
+    void rejectsMissingFieldScienceExport() {
+        KnowledgeEntry entry = mildewEntry(LocalDate.of(2026, 8, 18));
+        entry.setFieldScienceExportId(99L);
+
+        assertThatIllegalArgumentException().isThrownBy(() -> service.create(entry))
+                .withMessageContaining("field science export #99");
+        verify(fieldScienceExportRepository).existsById(99L);
+    }
+
+    @Test
+    @DisplayName("editing retains a valid reviewed export link and rejects a stale one")
+    void updatesFieldScienceExportLinkOnlyWhenItExists() {
+        KnowledgeEntry existing = mildewEntry(LocalDate.of(2026, 8, 18));
+        existing.setId(7L);
+        KnowledgeEntry incoming = mildewEntry(LocalDate.of(2026, 8, 18));
+        incoming.setFieldScienceExportId(42L);
+        when(repository.findByIdForUpdate(7L)).thenReturn(Optional.of(existing));
+        when(fieldScienceExportRepository.existsById(42L)).thenReturn(true);
+        when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        KnowledgeEntry saved = service.update(7L, incoming);
+        assertThat(saved.getFieldScienceExportId()).isEqualTo(42L);
+
+        KnowledgeEntry stale = mildewEntry(LocalDate.of(2026, 8, 18));
+        stale.setFieldScienceExportId(99L);
+        assertThatIllegalArgumentException().isThrownBy(() -> service.update(7L, stale))
+                .withMessageContaining("field science export #99");
+        assertThat(existing.getFieldScienceExportId()).isEqualTo(42L);
     }
 
     @Test
