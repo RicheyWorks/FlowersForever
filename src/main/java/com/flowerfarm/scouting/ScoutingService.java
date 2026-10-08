@@ -5,7 +5,9 @@ import com.flowerfarm.model.SeasonPlanEntry;
 import com.flowerfarm.service.FieldAttachmentService;
 import com.flowerfarm.service.SeasonPlanService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -68,20 +70,24 @@ public class ScoutingService {
         }
     }
 
-    private final ScoutingStore store;
+    private final ScoutingLogStore store;
     private final IntFunction<List<SeasonPlanEntry>> plantings;
     private final FarmProfile farmProfile;
     private final Clock clock;
     private PhotoContent photoContent;
 
+    /** The log lives in the farm database; the old JSON file is imported once and kept as a backup. */
     @Autowired
-    public ScoutingService(SeasonPlanService seasonPlans, FarmProfile farmProfile) {
-        this(new ScoutingStore(Path.of(System.getProperty("flowerfarm.data-dir", "data")),
+    public ScoutingService(SeasonPlanService seasonPlans, FarmProfile farmProfile, JdbcTemplate jdbc,
+                           PlatformTransactionManager transactionManager) {
+        this(new DatabaseScoutingStore(jdbc, transactionManager,
+                        new ScoutingStore(Path.of(System.getProperty("flowerfarm.data-dir", "data")),
+                                Clock.system(farmProfile.zoneId())),
                         Clock.system(farmProfile.zoneId())),
                 seasonPlans::listForSeason, farmProfile, Clock.system(farmProfile.zoneId()));
     }
 
-    ScoutingService(ScoutingStore store, IntFunction<List<SeasonPlanEntry>> plantings, FarmProfile farmProfile,
+    ScoutingService(ScoutingLogStore store, IntFunction<List<SeasonPlanEntry>> plantings, FarmProfile farmProfile,
                     Clock clock) {
         this.store = Objects.requireNonNull(store, "store");
         this.plantings = Objects.requireNonNull(plantings, "plantings");

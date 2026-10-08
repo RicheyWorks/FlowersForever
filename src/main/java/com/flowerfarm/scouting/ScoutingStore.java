@@ -20,7 +20,9 @@ import java.util.Objects;
 import java.util.Optional;
 
 /**
- * Keeps the scouting log in {@code <records folder>/scouting/scouting-log.json}.
+ * The scouting log's original home, {@code <records folder>/scouting/scouting-log.json}. The app now keeps the
+ * log in the farm database ({@link DatabaseScoutingStore}), which reads this file once to import it and then
+ * leaves it untouched as a backup. This class still guards every read and write of the file:
  * <ul>
  *   <li>Every save goes through {@link SafeFiles}: written to a temporary file, flushed to
  *       disk, then swapped in, so a crash or power cut leaves the old or the new log.</li>
@@ -31,7 +33,7 @@ import java.util.Optional;
  * </ul>
  * Backups and restores include this folder because they copy the whole records folder.
  */
-public final class ScoutingStore {
+public final class ScoutingStore implements ScoutingLogStore {
 
     public static final String FOLDER = "scouting";
     public static final String FILE = "scouting-log.json";
@@ -93,13 +95,20 @@ public final class ScoutingStore {
         return file;
     }
 
+    /** True when the log file or its last good copy exists. */
+    public boolean exists() {
+        return Files.exists(file) || Files.exists(previous);
+    }
+
     /** A plain message about a recovery during the last load, or empty. Cleared when read. */
+    @Override
     public synchronized String takeNotice() {
         String message = notice;
         notice = "";
         return message;
     }
 
+    @Override
     public synchronized Log load() throws IOException {
         if (!Files.exists(file) && !Files.exists(previous)) {
             blocked = false;
@@ -133,6 +142,7 @@ public final class ScoutingStore {
     }
 
     /** Saves the whole log. The old version becomes the {@code .bak} copy. */
+    @Override
     public synchronized void save(Log log) throws IOException {
         if (blocked) {
             throw new DamagedLogException("Saving is paused because the scouting log could not be read. "
