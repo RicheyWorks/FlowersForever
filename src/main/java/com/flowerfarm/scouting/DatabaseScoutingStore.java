@@ -2,15 +2,12 @@ package com.flowerfarm.scouting;
 
 import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.jdbc.support.GeneratedKeyHolder;
-import org.springframework.jdbc.support.KeyHolder;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionException;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.io.IOException;
 import java.math.BigDecimal;
-import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.time.Clock;
 import java.time.LocalDate;
@@ -144,9 +141,9 @@ public final class DatabaseScoutingStore implements ScoutingLogStore {
     }
 
     private ScoutingStore.Log read() {
-        Map<String, Integer> settings = jdbc.queryForObject(
+        Settings settings = Objects.requireNonNull(jdbc.queryForObject(
                 "SELECT log_version, overdue_days FROM scouting_settings WHERE id = 1",
-                (rs, row) -> Map.of("version", rs.getInt(1), "overdue", rs.getInt(2)));
+                (rs, row) -> new Settings(rs.getInt(1), rs.getInt(2))), "scouting settings");
         Map<Long, List<Scouting.Photo>> photos = new HashMap<>();
         jdbc.query("SELECT finding_id, sha256, media_type, byte_size, filename, caption, added_on "
                 + "FROM scouting_finding_photos ORDER BY finding_id, position", (ResultSet rs) -> {
@@ -171,8 +168,7 @@ public final class DatabaseScoutingStore implements ScoutingLogStore {
                         rs.getString("tracking"), Scouting.SampleStatus.valueOf(rs.getString("status")),
                         money(rs.getBigDecimal("cost")), rs.getString("result_summary"),
                         rs.getString("report_path"), rs.getObject("results_on", LocalDate.class)));
-        Map<String, Integer> values = Objects.requireNonNull(settings, "scouting settings");
-        return new ScoutingStore.Log(values.get("version"), values.get("overdue"), findings, samples);
+        return new ScoutingStore.Log(settings.version(), settings.overdueDays(), findings, samples);
     }
 
     private void write(ScoutingStore.Log log) {
@@ -197,9 +193,11 @@ public final class DatabaseScoutingStore implements ScoutingLogStore {
                 finding.incidencePercent(), finding.photoPath(), finding.action()};
             Long id = existing.get(finding.id());
             if (id == null) {
-                id = insert("INSERT INTO scouting_findings (found_on, planting_id, bed, crop, variety, category, "
+                jdbc.update("INSERT INTO scouting_findings (found_on, planting_id, bed, crop, variety, category, "
                         + "organism, symptoms, severity, incidence_percent, photo_path, action_taken, code) "
                         + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", append(values, finding.id()));
+                id = jdbc.queryForObject("SELECT id FROM scouting_findings WHERE code = ?", Long.class,
+                        finding.id());
             } else {
                 jdbc.update("UPDATE scouting_findings SET found_on = ?, planting_id = ?, bed = ?, crop = ?, "
                         + "variety = ?, category = ?, organism = ?, symptoms = ?, severity = ?, "
@@ -253,18 +251,6 @@ public final class DatabaseScoutingStore implements ScoutingLogStore {
         return ids;
     }
 
-    private Long insert(String sql, Object[] values) {
-        KeyHolder keys = new GeneratedKeyHolder();
-        jdbc.update(connection -> {
-            PreparedStatement statement = connection.prepareStatement(sql, new String[] {"id"});
-            for (int index = 0; index < values.length; index++) {
-                statement.setObject(index + 1, values[index]);
-            }
-            return statement;
-        }, keys);
-        return Objects.requireNonNull(keys.getKey(), "generated id").longValue();
-    }
-
     private static Object[] append(Object[] values, Object last) {
         Object[] all = Arrays.copyOf(values, values.length + 1);
         all[values.length] = last;
@@ -278,6 +264,9 @@ public final class DatabaseScoutingStore implements ScoutingLogStore {
         }
         BigDecimal plain = value.stripTrailingZeros();
         return plain.scale() < 2 ? plain.setScale(2) : plain;
+    }
+
+    private record Settings(int version, int overdueDays) {
     }
 
     /** The log to import, with blank, overlong or repeated ids replaced so every row has its own code. */
