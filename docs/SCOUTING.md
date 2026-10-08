@@ -4,11 +4,11 @@
 
 | Tab | What it does |
 | --- | --- |
-| Findings | Your scouting log. Each finding has a date, a bed or block, the crop and variety (picked from this or last season's plan, or typed), a category (insect/mite, fungal or water mold, bacterial, viral, abiotic, unknown), the suspected pest or disease, symptoms, severity, % of plants affected, an optional photo file, and the action taken. |
+| Findings | Your scouting log. Each finding has a date, a bed or block, the crop and variety (picked from this or last season's plan, or typed), a category (insect/mite, fungal or water mold, bacterial, viral, abiotic, unknown), the suspected pest or disease, symptoms, severity, % of plants affected, photos (see below), and the action taken. A Photos column shows how many photos each finding has. |
 | Lab samples | Samples sent to a lab or clinic. Each sample links to a finding, or to a soil block or water source. It records the type, lab, collected and shipped dates, tracking number, status (collected, shipped, received, results in), cost, a result summary or report file, and the date results came back. |
 | Pest & disease guide | 13 common PNW cut-flower problems with what to look for and scouting tips. Each one links to the extension page it was taken from. |
 | Labs | Washington labs and clinics, with what they accept, address, phone, form link and listed fees. See [LAB-SAMPLES.md](LAB-SAMPLES.md). |
-| How to send a sample | Packing guides for diseased plants, tape lifts and swabs, insects, and soil, taken from the labs' own instructions. |
+| How to send a sample | Packing guides for diseased plants, tape lifts and swabs, insects, soil, and irrigation or well water, taken from the labs' own instructions. |
 
 ## Overdue results
 
@@ -16,6 +16,43 @@ A sample counts as **overdue** when there are no results N days after it was shi
 shipped yet). N defaults to 14 and can be set from 1 to 120 with **Overdue after…**. None of the labs publish a
 turnaround time, so this is a reminder for the farm, not a promise from the lab. Overdue samples sort to the top
 and the window headline counts them.
+
+## Today's reminders
+
+**Help → Today's reminders…** includes scouting items, listed after the harvest, task and cooler items:
+
+* **Lab results overdue · S-…** for each overdue sample (up to 3), with the lab, the shipped or collected date and
+  how many days ago, and a reminder to call or email the lab with the sample ID.
+* **Scouting · High/Severe … · bed** for each High or Severe finding from the last 7 days (up to 3), with the crop,
+  % affected, and the linked lab sample's status, or "No lab sample yet" with a pointer to the How to send a sample
+  tab.
+
+Opening one of these items opens the Scouting & lab samples window. If the scouting log can't be read, the list shows
+one "Scouting log needs attention" item instead of failing, and the log file is left untouched.
+
+## Photos
+
+Select a finding, then use **Attach photo…** to add a JPEG, PNG, WebP or HEIC/HEIF photo (up to 15 MB) with an optional
+caption. **Photos…** lists a finding's photos. From there you can:
+
+* **View** a photo, scaled down to fit. HEIC and WebP photos can't be previewed in the app; save a copy to view them.
+* **Save a copy…** somewhere else.
+* **Remove from finding**.
+
+Photos go through the app's existing attachments feature: the same image checks, the 15 MB limit, and the same
+`<records folder>/attachments/` folder, named by the photo's SHA-256. Every photo is checked against its SHA-256 and
+size when opened, so a missing or changed file is reported instead of shown. The finding keeps the photo's SHA-256,
+type, size, file name, caption and date in the scouting log. The original file stays where it was.
+
+* Attaching the same picture twice keeps one entry. A finding holds up to 12 photos.
+* Editing a finding never drops its photos.
+* Removing a photo only unlinks it. The stored copy stays in the attachments folder and in backups, so you can
+  attach it again.
+* Backups copy the whole records folder, so they include the photos.
+
+The attachments database table only accepts production tasks today. Linking photos to findings there would need a
+migration, which waits until the open migration pull requests land (see below). The older free-text "Photo file"
+field is still shown for findings that use it.
 
 ## Submission sheet
 
@@ -35,7 +72,7 @@ The log is saved to `<records folder>/scouting/scouting-log.json`:
   `scouting-log.damaged-<date-time>.json`, and says so. If neither copy can be read, it refuses to save, so nothing
   is overwritten.
 * Backups and restores (File → Back up now / Restore) copy the whole records folder, so they include the scouting
-  log.
+  log and the photos in `attachments/`.
 
 **Why a file and not database tables:** a stack of open pull requests adds database migrations V22–V46. Adding new
 tables now would collide with those migrations when they land. The log can move into the database later. The file

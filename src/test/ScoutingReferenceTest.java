@@ -52,7 +52,7 @@ class ScoutingReferenceTest {
                     url -> assertThat(url).containsIgnoringCase("check with"));
         }
         assertThat(ids).contains("wsu-puyallup", "wsda-entomology", "soiltest", "al-western", "pierce-mg",
-                "kitsap-mg");
+                "kitsap-mg", "ui-asl", "wml-tacoma", "spectra-kitsap");
     }
 
     @Test
@@ -67,6 +67,32 @@ class ScoutingReferenceTest {
     @Test
     void unverifiedDetailsAreMarkedCheckWithLab() {
         assertThat(LabDirectory.byId("al-western").orElseThrow().fees()).containsIgnoringCase("check with");
+        assertThat(LabDirectory.byId("wml-tacoma").orElseThrow().fees()).containsIgnoringCase("check with");
+        assertThat(LabDirectory.byId("spectra-kitsap").orElseThrow().formUrl()).containsIgnoringCase("check with");
+    }
+
+    @Test
+    void wsdaMailingAddressIsConfirmed() {
+        LabDirectory.Lab wsda = LabDirectory.byId("wsda-entomology").orElseThrow();
+        assertThat(wsda.address()).contains("P.O. Box 42560").contains("98504-2560")
+                .doesNotContainIgnoringCase("check with");
+        assertThat(wsda.phone()).contains("1-800-443-6684");
+    }
+
+    @Test
+    void universityOfIdahoTakesSoilAndWaterWithPublishedPrices() {
+        LabDirectory.Lab idaho = LabDirectory.byId("ui-asl").orElseThrow();
+        assertThat(idaho.accepts()).containsExactlyInAnyOrder(Scouting.SampleType.SOIL, Scouting.SampleType.WATER);
+        assertThat(idaho.fees()).contains("$35").contains("$7.50");
+        assertThat(idaho.address()).contains("875 Perimeter Drive").contains("Moscow, ID");
+        assertThat(idaho.notes()).contains("before sending water");
+    }
+
+    @Test
+    void waterLabsCoverIrrigationAndWellWater() {
+        assertThat(LabDirectory.accepting(Scouting.SampleType.WATER)).extracting(LabDirectory.Lab::id)
+                .contains("soiltest", "al-western", "ui-asl", "wml-tacoma", "spectra-kitsap");
+        assertThat(LabDirectory.byId("soiltest").orElseThrow().fees()).contains("$77");
     }
 
     @Test
@@ -80,7 +106,7 @@ class ScoutingReferenceTest {
     @Test
     void guidesCiteSourcesAndCarryTheKeyRules() {
         assertThat(SampleGuides.all()).extracting(SampleGuides.Guide::id)
-                .contains("plant-disease", "tape-lift", "insect", "soil");
+                .contains("plant-disease", "tape-lift", "insect", "soil", "water");
         for (SampleGuides.Guide guide : SampleGuides.all()) {
             assertThat(guide.steps()).as(guide.id()).isNotEmpty();
             assertThat(guide.sources()).as(guide.id()).isNotEmpty().allMatch(url -> url.startsWith("https://"));
@@ -94,5 +120,9 @@ class ScoutingReferenceTest {
         assertThat(plant).contains("dig").contains("refrigerator");
         assertThat(SampleGuides.forType(Scouting.SampleType.INSECT).id()).isEqualTo("insect");
         assertThat(SampleGuides.forType(Scouting.SampleType.SOIL).id()).isEqualTo("soil");
+        assertThat(SampleGuides.forType(Scouting.SampleType.WATER).id()).isEqualTo("water");
+        String water = SampleGuides.byId("water").orElseThrow().asText().toLowerCase();
+        assertThat(water).contains("do not rinse").contains("coliform").contains("24-36 hours")
+                .contains("don't freeze");
     }
 }

@@ -155,6 +155,17 @@ public final class ScoutingPanel extends JPanel {
         return row < 0 ? Optional.empty() : Optional.of(findings.rows.get(findingTable.convertRowIndexToModel(row)));
     }
 
+    /** Selects a finding by id (after a save), so follow-up actions apply to it. */
+    void selectFinding(String id) {
+        for (int row = 0; row < findings.rows.size(); row++) {
+            if (findings.rows.get(row).id().equals(id)) {
+                int view = findingTable.convertRowIndexToView(row);
+                findingTable.setRowSelectionInterval(view, view);
+                return;
+            }
+        }
+    }
+
     public Optional<Scouting.LabSample> selectedSample() {
         int row = sampleTable.getSelectedRow();
         return row < 0 ? Optional.empty() : Optional.of(samples.rows.get(sampleTable.convertRowIndexToModel(row)));
@@ -163,7 +174,7 @@ public final class ScoutingPanel extends JPanel {
     private static final class FindingModel extends AbstractTableModel {
         private static final long serialVersionUID = 1L;
         private static final String[] COLUMNS = {"ID", "Date", "Bed / block", "Crop", "Category",
-            "Suspected", "Severity", "% affected", "Action"};
+            "Suspected", "Severity", "% affected", "Photos", "Action"};
         private transient List<Scouting.Finding> rows = new ArrayList<>();
 
         void set(List<Scouting.Finding> list) {
@@ -198,6 +209,7 @@ public final class ScoutingPanel extends JPanel {
                 case 5 -> f.organism();
                 case 6 -> f.severity().label();
                 case 7 -> f.incidencePercent() == null ? "" : f.incidencePercent() + "%";
+                case 8 -> f.photos().isEmpty() ? "" : String.valueOf(f.photos().size());
                 default -> f.action();
             };
         }

@@ -21,6 +21,8 @@ public final class Scouting {
     public static final int DEFAULT_OVERDUE_DAYS = 14;
     public static final int MIN_OVERDUE_DAYS = 1;
     public static final int MAX_OVERDUE_DAYS = 120;
+    /** Most photos one finding keeps; more belong in a new finding. */
+    public static final int MAX_PHOTOS = 12;
     static final int MAX_TEXT = 2000;
     static final int MAX_SHORT = 200;
     private static final DateTimeFormatter ID_DAY = DateTimeFormatter.ofPattern("yyyyMMdd", Locale.ROOT);
@@ -123,9 +125,10 @@ public final class Scouting {
     /** One scouting observation in a bed or block. */
     public record Finding(String id, LocalDate date, Long plantingId, String bed, String crop, String variety,
                           Category category, String organism, String symptoms, Severity severity,
-                          Double incidencePercent, String photoPath, String action) {
+                          Double incidencePercent, String photoPath, String action, List<Photo> photos) {
 
         public Finding {
+            photos = photos == null ? List.of() : photos.stream().filter(Objects::nonNull).toList();
             bed = clean(bed);
             crop = clean(crop);
             variety = clean(variety);
@@ -137,9 +140,22 @@ public final class Scouting {
             severity = severity == null ? Severity.LOW : severity;
         }
 
+        /** A finding without attached photos (forms, older callers). */
+        public Finding(String id, LocalDate date, Long plantingId, String bed, String crop, String variety,
+                       Category category, String organism, String symptoms, Severity severity,
+                       Double incidencePercent, String photoPath, String action) {
+            this(id, date, plantingId, bed, crop, variety, category, organism, symptoms, severity, incidencePercent,
+                    photoPath, action, List.of());
+        }
+
         public Finding withId(String newId) {
             return new Finding(newId, date, plantingId, bed, crop, variety, category, organism, symptoms, severity,
-                    incidencePercent, photoPath, action);
+                    incidencePercent, photoPath, action, photos);
+        }
+
+        public Finding withPhotos(List<Photo> newPhotos) {
+            return new Finding(id, date, plantingId, bed, crop, variety, category, organism, symptoms, severity,
+                    incidencePercent, photoPath, action, newPhotos);
         }
 
         /** Short label for lists and sample links, e.g. "Oct 7 · Bed 4 · Dahlia · Thrips?". */
@@ -153,6 +169,43 @@ public final class Scouting {
             }
             text.append(" · ").append(organism.isEmpty() ? category.label() : organism);
             return text.toString();
+        }
+    }
+
+    /**
+     * A photo kept in the farm's attachment store (the backed-up {@code attachments} folder), referenced by
+     * its SHA-256 and size so a changed or missing file is detected when it is opened.
+     */
+    public record Photo(String sha256, String mediaType, long byteSize, String filename, String caption,
+                        LocalDate added) {
+
+        public Photo {
+            sha256 = clean(sha256);
+            mediaType = clean(mediaType);
+            filename = clean(filename);
+            caption = clean(caption);
+        }
+
+        /** "IMG_2041.jpg · leaf underside · 2026-10-07 · 1.2 MB". */
+        public String label() {
+            StringBuilder text = new StringBuilder(filename.isEmpty() ? "photo" : filename);
+            if (!caption.isEmpty()) {
+                text.append(" · ").append(caption);
+            }
+            if (added != null) {
+                text.append(" · ").append(added);
+            }
+            return text.append(" · ").append(size(byteSize)).toString();
+        }
+
+        static String size(long bytes) {
+            if (bytes < 1024) {
+                return bytes + " bytes";
+            }
+            if (bytes < 1024 * 1024) {
+                return Math.round(bytes / 1024.0) + " KB";
+            }
+            return String.format(Locale.ROOT, "%.1f MB", bytes / (1024.0 * 1024.0));
         }
     }
 
@@ -211,6 +264,12 @@ public final class Scouting {
         tooLong(problems, "Crop", finding.crop(), MAX_SHORT);
         tooLong(problems, "Variety", finding.variety(), MAX_SHORT);
         tooLong(problems, "Photo file", finding.photoPath(), 1000);
+        if (finding.photos().size() > MAX_PHOTOS) {
+            problems.add("A finding can keep at most " + MAX_PHOTOS + " photos; start a new finding for more.");
+        }
+        for (Photo photo : finding.photos()) {
+            tooLong(problems, "Photo caption", photo.caption(), MAX_SHORT);
+        }
         return problems;
     }
 

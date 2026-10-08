@@ -99,11 +99,48 @@ public final class SampleGuides {
                             + "of the labeled bags."),
                     List.of("https://extension.oregonstate.edu/catalog/ec-628-guide-collecting-soil-samples-farms"
                                     + "-gardens",
-                            "https://soiltestlab.com/residential/garden-lawn-testing/",
+                            "https://soiltestlab.com/info/residential/garden-lawn-testing/",
                             "https://www.umass.edu/agriculture-food-environment/services/soil-plant-nutrient"
                                     + "-testing-laboratory/ordering-information-forms",
                             "https://wpcdn.web.wsu.edu/wp-extension/uploads/sites/2093/2021/03/"
-                                    + "SoilTestingHomeGardeners.pdf")));
+                                    + "SoilTestingHomeGardeners.pdf")),
+            new Guide("water", "Testing irrigation and well water", Scouting.SampleType.WATER, List.of(
+                    "Decide what you are testing. Irrigation suitability (pH, salts/EC, alkalinity, sodium/SAR, "
+                            + "boron, chloride, nitrate) goes to an agricultural lab such as Soiltest, A&L Western or "
+                            + "the University of Idaho. Well water safety (coliform bacteria and nitrate) goes to a "
+                            + "Washington-accredited drinking water lab; the Department of Health recommends testing "
+                            + "a private well every year for both.",
+                    "Get the container from the lab, or use what it asks for: A&L wants a clean 16 oz plastic bottle "
+                            + "for an irrigation test, and Soiltest supplies containers. Bacteria tests need the "
+                            + "lab's own treated bottle. The University of Idaho asks you to call or email before "
+                            + "sending water.",
+                    "Check drop-off days and hold times before you sample. Soiltest takes water Monday-Thursday "
+                            + "only; A&L wants it at the lab within 24-36 hours; bacteria samples have the shortest "
+                            + "hold times (Lewis County's lab, for example, wants coliform samples the same day they "
+                            + "are collected).",
+                    "Run the water first: at least five minutes at the tap (Soiltest), or pump a well for at least "
+                            + "10 minutes (A&L). Sample straight from the source, before filters or injectors. To "
+                            + "check the system itself, sample before and after the injector and filter station, or at "
+                            + "the end of the line.",
+                    "From a pond or ditch, don't sample at the edge; it won't represent the whole water body.",
+                    "For chemistry, rinse the bottle and cap three times with the water, then fill it completely "
+                            + "with no air space and cap it tightly. For bacteria, do not rinse the bottle; just "
+                            + "fill it as the lab directs.",
+                    "Label each bottle with the well or source name (not just 1, 2, 3) and the date, and list the "
+                            + "tests you want on the lab's form.",
+                    "Keep the sample cool but don't freeze it. Pack the form (and payment, if you have no account) "
+                            + "in the same box; samples sent separately from their paperwork are delayed.",
+                    "Test irrigation water every year to spot trends; A&L notes the end of summer often shows the "
+                            + "worst quality."),
+                    List.of("https://soiltestlab.com/home/water-analysis/",
+                            "https://soiltestlab.com/wp-content/uploads/2026/09/WaterPL.pdf",
+                            "https://al-labs-west.com/water-analysis/",
+                            "https://www.uidaho.edu/idaho-ag-experiment-station/services/analytical-sciences",
+                            "https://doh.wa.gov/community-and-environment/drinking-water/contaminants/"
+                                    + "testing-your-water",
+                            "https://doh.wa.gov/sites/default/files/2026-03/331-798.pdf",
+                            "https://ecology.wa.gov/water-shorelines/water-supply/wells/testing-drinking-water",
+                            "https://lewiscountywa.gov/departments/environmental-health/water-laboratory/")));
 
     private SampleGuides() {
     }
@@ -116,9 +153,8 @@ public final class SampleGuides {
         return GUIDES.stream().filter(guide -> guide.id().equals(id)).findFirst();
     }
 
-    /** The first guide that fits a sample type (soil guide for water too, until a water guide exists). */
+    /** The first guide that fits a sample type. */
     public static Guide forType(Scouting.SampleType type) {
-        Scouting.SampleType wanted = type == Scouting.SampleType.WATER ? Scouting.SampleType.SOIL : type;
-        return GUIDES.stream().filter(guide -> guide.type() == wanted).findFirst().orElse(GUIDES.get(0));
+        return GUIDES.stream().filter(guide -> guide.type() == type).findFirst().orElse(GUIDES.get(0));
     }
 }

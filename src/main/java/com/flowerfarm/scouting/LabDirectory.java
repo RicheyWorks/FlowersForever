@@ -51,9 +51,9 @@ public final class LabDirectory {
                     Set.of(Scouting.SampleType.INSECT),
                     "Identification of insects, mites and other arthropods, with a focus on invasive and "
                             + "quarantine pests.",
-                    "WSDA, Attn: Entomology Lab, 1111 Washington St SE, PO Box 42560, Olympia, WA 98504 "
-                            + "(check with WSDA before mailing)",
-                    "360-902-2070", "pest@agr.wa.gov",
+                    "WSDA Pest Program, P.O. Box 42560, Olympia, WA 98504-2560 (Natural Resources Building, "
+                            + "1111 Washington St SE)",
+                    "1-800-443-6684 (Pest Program); Olympia entomology lab 360-902-2042", "pest@agr.wa.gov",
                     "https://cms.agr.wa.gov/WSDAKentico/Imported/PestAndDiseaseSampleForm.pdf",
                     "https://agr.wa.gov/departments/insects-pests-and-weeds/insects/exotic-pest-detection",
                     "No fee listed. " + CHECK_WITH_LAB + ".",
@@ -67,19 +67,26 @@ public final class LabDirectory {
                             + "soil lab resources.",
                     "2925 Driggs Dr., Moses Lake, WA 98837", "1-800-764-1622", "",
                     "https://soiltestlab.com/wp-content/uploads/2024/12/GardenReqForm.pdf",
-                    "https://soiltestlab.com/residential/garden-lawn-testing/",
+                    "https://soiltestlab.com/home/water-analysis/",
                     "Lawn/garden form: S-14 basic $34, S-1 complete garden $49, S-7 complete for acid soils $61. "
-                            + "Farm packages differ: " + CHECK_WITH_LAB + ".",
-                    "Free request forms and sample bags by calling the toll-free number. Water analyses can take up "
-                            + "to 14 days."),
+                            + "Irrigation water: Ag Water Quality package $77 (pH, EC, Ca, Mg, K, Na, nitrate, Cl, S, "
+                            + "B, SAR and Langelier index) plus a $16 water handling fee. Farm soil packages: "
+                            + CHECK_WITH_LAB + ".",
+                    "Water samples go in on the water form: "
+                            + "https://soiltestlab.com/wp-content/uploads/2019/02/water-sample-form.pdf . Water is "
+                            + "accepted Monday-Thursday only, as soon as possible after sampling; Soiltest supplies "
+                            + "sample containers. Free request forms and soil bags by calling the toll-free number. "
+                            + "Water analyses can take up to 14 days."),
             new Lab("al-western", "A&L Western Laboratories (Portland office)",
                     Set.of(Scouting.SampleType.SOIL, Scouting.SampleType.WATER),
                     "Soil, plant (nutrient), water, compost and manure analysis.",
                     "21830 SW Alexander Ln., Sherwood, OR 97140", "503-968-9225", "",
                     "https://al-labs-west.com/wp-content/uploads/2024/04/soil-al-form-4.5.24.pdf",
                     "https://al-labs-west.com/",
-                    CHECK_WITH_LAB + " (no fee list on the website).",
-                    "Choose a test package on the soil submission form."),
+                    CHECK_WITH_LAB + " (A&L publishes test codes but no prices online).",
+                    "Choose a test package on the soil submission form. Irrigation water uses the water form "
+                            + "(https://al-labs-west.com/wp-content/uploads/2024/04/water-al-form-4.5.24.pdf) and a "
+                            + "clean 16 oz plastic bottle; keep it cool and get it to the lab within 24-36 hours."),
             new Lab("umass-soil", "UMass Soil & Plant Nutrient Testing Lab",
                     Set.of(Scouting.SampleType.SOIL),
                     "Routine soil analysis with lime and nutrient recommendations. Named by WSU Extension as accurate "
@@ -92,6 +99,43 @@ public final class LabDirectory {
                     "Routine soil analysis $20 per sample; optional organic matter $6, soluble salts $6, nitrate $8 "
                             + "(home grounds form). Check payable to UMass.",
                     "Pick the commercial or home form on the ordering page. Send about one cup of dry soil."),
+            new Lab("ui-asl", "University of Idaho Analytical Sciences Laboratory",
+                    Set.of(Scouting.SampleType.SOIL, Scouting.SampleType.WATER),
+                    "Soil fertility, water chemistry and plant nutrient testing. Serves agricultural producers; WSU "
+                            + "Extension names it as accurate for western Washington soils. Does not interpret "
+                            + "results.",
+                    "Mail (USPS/UPS): Analytical Sciences Laboratory, University of Idaho, 875 Perimeter Drive MS "
+                            + "2203, Moscow, ID 83844-2203. FedEx: Holm Research Center, 2222 West 6th Street, "
+                            + "Moscow, ID 83844",
+                    "208-885-7466", "asl@uidaho.edu",
+                    "https://content-hub.uidaho.edu/api/public/content/4b998b5a3ba64b1796a050a598415fb2?v=121cf940",
+                    "https://www.uidaho.edu/idaho-ag-experiment-station/services/analytical-sciences",
+                    "Soil fertility T1 $35, T2 $45, T3 $55 (drying and milling included). Water: pH $7.50, "
+                            + "conductance $23, alkalinity $24, nitrate/nitrite + ammonia $20, anion screen $54. "
+                            + "10% off more than 5 samples.",
+                    "Call or email before sending water samples, and use containers and preservation the lab "
+                            + "approves. Payment (or a purchase order) must come with the samples. Samples are "
+                            + "discarded 30 days after the report."),
+            new Lab("wml-tacoma", "Water Management Laboratories (Tacoma)",
+                    Set.of(Scouting.SampleType.WATER),
+                    "Washington-certified drinking water lab for well water bacteria (coliform) and nitrate. On the "
+                            + "Department of Health list for Pierce County.",
+                    "1515 80th St E, Tacoma, WA 98404-3315", "253-531-3121", "",
+                    CHECK_WITH_LAB + " (ask the lab for its bottle and form)",
+                    "https://www.watermanagementlabs.com/",
+                    "Not listed online. The Department of Health says nitrate and coliform tests cost $21-$55 "
+                            + "depending on the lab. " + CHECK_WITH_LAB + ".",
+                    "Get the bottle from the lab first and ask how soon after sampling it must arrive."),
+            new Lab("spectra-kitsap", "Spectra Laboratories - Kitsap (Poulsbo)",
+                    Set.of(Scouting.SampleType.WATER),
+                    "Washington-certified drinking water lab for well water coliform and nitrate. On the Department "
+                            + "of Health list for Kitsap County.",
+                    "26276 Twelve Trees Ln. #C, Poulsbo, WA 98370", "360-779-5141", "",
+                    CHECK_WITH_LAB + " (ask the lab for its bottle and form)",
+                    "https://www.spectra-lab.com/",
+                    "Not listed online. The Department of Health says nitrate and coliform tests cost $21-$55 "
+                            + "depending on the lab. " + CHECK_WITH_LAB + ".",
+                    "Get the bottle from the lab first and ask how soon after sampling it must arrive."),
             new Lab("pierce-mg", "Pierce County Master Gardener Answer Clinics (WSU Extension)",
                     Set.of(Scouting.SampleType.PLANT_DISEASE, Scouting.SampleType.INSECT),
                     "Free help from trained volunteers; samples accepted at community clinics.",
