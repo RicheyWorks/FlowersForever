@@ -59,6 +59,20 @@ class CrmCustomerDraftSafetyTest {
             "  360-555-0191 ext 02  ", "Florist", "  Keep these exact delivery details  ");
 
     @Test
+    void configuredOrderUnitIsCleanUntilChangedAndCleanWhenRestored() throws Exception {
+        Fixture fixture = new Fixture("each");
+        fixture.user.selectTab("Orders");
+
+        assertThat(fixture.user.fieldValue("Order unit")).isEqualTo("each");
+        fixture.user.awaitText("Manage buyers and orders");
+        fixture.assertClean();
+        fixture.user.type("Order unit", "lbs");
+        assertThat(fixture.tab.applicationExitWarning()).contains("unfinished product entry");
+        fixture.user.type("Order unit", "each");
+        fixture.assertClean();
+    }
+
+    @Test
     void emptyAndUnchangedLoadedFormsNeitherWarnNorAskToDiscard() throws Exception {
         Fixture fixture = new Fixture();
         fixture.assertClean();
@@ -414,6 +428,10 @@ class CrmCustomerDraftSafetyTest {
         private IntConsumer duringReplacement = ignored -> { };
 
         private Fixture() throws Exception {
+            this("stems");
+        }
+
+        private Fixture(String defaultUnit) throws Exception {
             when(customers.search(anyString())).thenAnswer(invocation -> {
                 Gate gate = nextRead.getAndSet(null);
                 if (gate != null) {
@@ -445,6 +463,7 @@ class CrmCustomerDraftSafetyTest {
                         return JOptionPane.YES_OPTION;
                     });
             tab = new CrmTab(customers, orders, new Host(), dialogs);
+            tab.setDefaultUnit(defaultUnit);
             JComponent[] built = new JComponent[1];
             SwingUtilities.invokeAndWait(() -> {
                 built[0] = tab.getUIComponent();

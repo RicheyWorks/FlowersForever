@@ -21,16 +21,23 @@ import javax.swing.JTextField;
 import javax.swing.ListSelectionModel;
 import javax.swing.RowFilter;
 import javax.swing.Scrollable;
+import javax.swing.SwingConstants;
+import javax.swing.TransferHandler;
 import javax.swing.table.AbstractTableModel;
 import javax.swing.table.TableRowSorter;
 import java.awt.BorderLayout;
 import java.awt.Dimension;
+import java.awt.GraphicsEnvironment;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.HeadlessException;
 import java.awt.Insets;
 import java.awt.Rectangle;
+import java.awt.datatransfer.DataFlavor;
+import java.awt.datatransfer.Transferable;
+import java.awt.datatransfer.UnsupportedFlavorException;
 import java.awt.event.MouseEvent;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -42,6 +49,9 @@ public final class EventServicesTab implements FlowerFarmTab {
 
     private static final int MAX_BRIEF_LENGTH = 1950;
     private static final int MAX_BRIEF_SERVICES = 8;
+    private static final DataFlavor SERVICE_FLAVOR = new DataFlavor(
+            DataFlavor.javaJVMLocalObjectMimeType + ";class=" + ServiceDrag.class.getName(),
+            "Selected event services");
 
     private final TabHost host;
     private final FarmClipboard clipboard;
@@ -49,9 +59,13 @@ public final class EventServicesTab implements FlowerFarmTab {
     private JPanel panel;
     private JTable table;
     private JTextArea brief;
+    private List<JTextField> briefInputs = List.of();
+    private String handedOffBriefState;
     private JLabel feedback;
     private JButton startCrmButton;
     private boolean canWrite = true;
+    private long filterRevision;
+    private long selectionRevision;
 
     public EventServicesTab(TabHost host) {
         this(host, FarmClipboard.system());
@@ -91,6 +105,26 @@ public final class EventServicesTab implements FlowerFarmTab {
         }
     }
 
+    /** An unfinished event brief should survive a farm-type change or app exit. */
+    public String applicationExitWarning() {
+        if (brief == null) {
+            return null;
+        }
+        boolean hasContent = !brief.getText().isBlank()
+                || briefInputs.stream().anyMatch(field -> !field.getText().isBlank());
+        return !hasContent || briefState().equals(handedOffBriefState) ? null
+                : "Event Services has an unfinished brief. Send it to Customers & Orders "
+                        + "or clear it first.";
+    }
+
+    private String briefState() {
+        StringBuilder state = new StringBuilder(brief.getText());
+        for (JTextField field : briefInputs) {
+            state.append('\u0000').append(field.getText());
+        }
+        return state.toString();
+    }
+
     private void buildUi() {
         panel = FarmUi.page();
         panel.setName("eventServices.page");
@@ -127,6 +161,10 @@ public final class EventServicesTab implements FlowerFarmTab {
         table.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
         TableRowSorter<EventTableModel> sorter = new TableRowSorter<>(model);
         table.setRowSorter(sorter);
+        table.setTransferHandler(new ServiceDragHandler());
+        if (!GraphicsEnvironment.isHeadless()) {
+            table.setDragEnabled(true);
+        }
         table.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
         int[] columnWidths = {230, 115, 170, 150};
         for (int column = 0; column < columnWidths.length; column++) {
@@ -152,6 +190,7 @@ public final class EventServicesTab implements FlowerFarmTab {
         resultCount.setName("eventServices.results");
 
         Runnable applyFilters = () -> {
+            filterRevision++;
             String query = search.getText().trim().toLowerCase(Locale.ROOT);
             String selectedOccasion = String.valueOf(occasion.getSelectedItem());
             String selectedCategory = String.valueOf(category.getSelectedItem());
@@ -205,7 +244,7 @@ public final class EventServicesTab implements FlowerFarmTab {
         searchRow.setAlignmentX(JComponent.LEFT_ALIGNMENT);
         JPanel categoryRow = FarmUi.toolbar(
                 new JLabel("Category:"), category, clear, resultCount,
-                FarmUi.formHint("Ctrl/Cmd-click rows to combine services."));
+                FarmUi.formHint("Ctrl/Cmd-click rows to combine services; drag them into the brief."));
         categoryRow.setAlignmentX(JComponent.LEFT_ALIGNMENT);
         filters.add(searchRow);
         filters.add(Box.createVerticalStrut(FarmUi.CONTROL_GAP));
@@ -223,6 +262,7 @@ public final class EventServicesTab implements FlowerFarmTab {
         detailScroll.getVerticalScrollBar().setUnitIncrement(18);
         table.getSelectionModel().addListSelectionListener(event -> {
             if (!event.getValueIsAdjusting()) {
+                selectionRevision++;
                 showSelection(model, details);
             }
         });
@@ -386,6 +426,7 @@ public final class EventServicesTab implements FlowerFarmTab {
             FarmUi.entryControl(field, null, field.getAccessibleContext().getAccessibleName());
         }
         FarmUi.entryControl(eventDate, "YYYY-MM-DD", "Use YYYY-MM-DD when the date is known.");
+        briefInputs = List.of(eventName, eventDate, venue, guestCount);
 
         brief = FarmUi.displayArea(9, 70);
         brief.setName("eventServices.brief");
@@ -409,7 +450,13 @@ public final class EventServicesTab implements FlowerFarmTab {
         startCrmButton.setName("eventServices.startCrmBrief");
         startCrmButton.addActionListener(event -> {
             List<EventServiceProfile> selected = selectedProfiles();
-            buildBrief(selected, occasionFilter, eventName, eventDate, venue, guestCount);
+            if (brief.getText().isBlank()) {
+                if (selected.isEmpty()) {
+                    showFeedback("Choose one or more service rows", FarmUi.Tone.WARNING);
+                    return;
+                }
+                buildBrief(selected, occasionFilter, eventName, eventDate, venue, guestCount);
+            }
             if (host == null) {
                 showFeedback("CRM handoff is unavailable in this view", FarmUi.Tone.WARNING);
                 return;
@@ -424,13 +471,47 @@ public final class EventServicesTab implements FlowerFarmTab {
                             .reduce((left, right) -> left + " / " + right).orElse("Event");
             boolean prepared = host.showEventOrderDraft(
                     occasion, serviceNames, brief.getText());
+            if (prepared) {
+                handedOffBriefState = briefState();
+            }
             showFeedback(prepared
                             ? "Brief sent to Customers & Orders"
                             : "CRM opened · existing instructions kept; copy brief when ready",
                     prepared ? FarmUi.Tone.SUCCESS : FarmUi.Tone.WARNING);
         });
+        JButton clearBrief = FarmUi.secondaryButton("Clear brief");
+        clearBrief.setName("eventServices.clearBrief");
+        clearBrief.setToolTipText("Discard the event details and brief shown here.");
+        clearBrief.addActionListener(event -> {
+            briefInputs.forEach(field -> field.setText(""));
+            brief.setText("");
+            handedOffBriefState = null;
+            showFeedback("Event brief cleared", FarmUi.Tone.NEUTRAL);
+        });
         feedback = FarmUi.wrappingStatusBadge("Select services and build a brief", FarmUi.Tone.NEUTRAL);
         feedback.setName("eventServices.feedback");
+
+        JPanel serviceDropTarget = new JPanel(new BorderLayout());
+        serviceDropTarget.setName("eventServices.serviceDropTarget");
+        serviceDropTarget.setOpaque(false);
+        JLabel dropInstruction = new JLabel(
+                "↓ Drop selected services here to build an empty brief",
+                SwingConstants.CENTER);
+        dropInstruction.setName("eventServices.dropInstruction");
+        dropInstruction.setForeground(FarmUi.accentColor());
+        serviceDropTarget.add(dropInstruction, BorderLayout.CENTER);
+        serviceDropTarget.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createDashedBorder(FarmUi.accentColor(), 1.5f, 4f),
+                BorderFactory.createEmptyBorder(9, 10, 9, 10)));
+        serviceDropTarget.getAccessibleContext().setAccessibleName(
+                "Drop selected event services to build a brief");
+        serviceDropTarget.getAccessibleContext().setAccessibleDescription(
+                "Uses the selected catalog services to build an editable brief. "
+                        + "An existing brief is kept; use Clear brief before dropping again.");
+        TransferHandler serviceDropHandler = new ServiceDropHandler(
+                occasionFilter, eventName, eventDate, venue, guestCount);
+        serviceDropTarget.setTransferHandler(serviceDropHandler);
+        dropInstruction.setTransferHandler(serviceDropHandler);
 
         JPanel fields = new JPanel(new GridBagLayout());
         fields.setName("eventServices.briefFields");
@@ -439,11 +520,12 @@ public final class EventServicesTab implements FlowerFarmTab {
         addBriefField(fields, "Date:", eventDate);
         addBriefField(fields, "Venue:", venue);
         addBriefField(fields, "Guests:", guestCount);
-        JPanel actions = FarmUi.toolbar(build, copy, startCrmButton);
+        JPanel actions = FarmUi.toolbar(build, copy, clearBrief, startCrmButton);
         actions.setName("eventServices.briefActions");
         JPanel footer = new JPanel(new BorderLayout(0, FarmUi.CONTROL_GAP));
         footer.setOpaque(false);
-        footer.add(actions, BorderLayout.NORTH);
+        footer.add(serviceDropTarget, BorderLayout.NORTH);
+        footer.add(actions, BorderLayout.CENTER);
         footer.add(feedback, BorderLayout.SOUTH);
         JPanel content = new JPanel(new BorderLayout(0, FarmUi.CONTROL_GAP));
         content.setName("eventServices.briefBuilder");
@@ -480,7 +562,6 @@ public final class EventServicesTab implements FlowerFarmTab {
                             JTextField eventName, JTextField eventDate,
                             JTextField venue, JTextField guestCount) {
         if (selected.isEmpty()) {
-            brief.setText("Select at least one visible service before building the event brief.");
             showFeedback("Choose one or more service rows", FarmUi.Tone.WARNING);
             return;
         }
@@ -571,6 +652,103 @@ public final class EventServicesTab implements FlowerFarmTab {
             selected.add(services.get(modelRow));
         }
         return List.copyOf(selected);
+    }
+
+    private boolean canBuildDraggedBrief(ServiceDrag drag) {
+        if (drag == null || drag.source() != this
+                || drag.filterRevision() != filterRevision
+                || drag.selectionRevision() != selectionRevision
+                || drag.profiles().isEmpty() || brief == null
+                || !brief.getText().isEmpty()) {
+            return false;
+        }
+        List<EventServiceProfile> current = selectedProfiles();
+        if (current.size() != drag.profiles().size()) {
+            return false;
+        }
+        for (int index = 0; index < current.size(); index++) {
+            if (current.get(index) != drag.profiles().get(index)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private final class ServiceDragHandler extends TransferHandler {
+        @Override public int getSourceActions(JComponent component) { return COPY; }
+
+        @Override protected Transferable createTransferable(JComponent component) {
+            List<EventServiceProfile> selected = selectedProfiles();
+            return selected.isEmpty() ? null : new ServiceTransferable(
+                    new ServiceDrag(EventServicesTab.this, filterRevision,
+                            selectionRevision, selected));
+        }
+    }
+
+    private final class ServiceDropHandler extends TransferHandler {
+        private final JComboBox<String> occasionFilter;
+        private final JTextField eventName;
+        private final JTextField eventDate;
+        private final JTextField venue;
+        private final JTextField guestCount;
+
+        private ServiceDropHandler(JComboBox<String> occasionFilter,
+                                   JTextField eventName, JTextField eventDate,
+                                   JTextField venue, JTextField guestCount) {
+            this.occasionFilter = occasionFilter;
+            this.eventName = eventName;
+            this.eventDate = eventDate;
+            this.venue = venue;
+            this.guestCount = guestCount;
+        }
+
+        private ServiceDrag dragFrom(TransferSupport support) {
+            if (!support.isDataFlavorSupported(SERVICE_FLAVOR)) {
+                return null;
+            }
+            try {
+                Object value = support.getTransferable().getTransferData(SERVICE_FLAVOR);
+                return value instanceof ServiceDrag drag ? drag : null;
+            } catch (UnsupportedFlavorException | IOException | ClassCastException exception) {
+                return null;
+            }
+        }
+
+        @Override public boolean canImport(TransferSupport support) {
+            return canBuildDraggedBrief(dragFrom(support));
+        }
+
+        @Override public boolean importData(TransferSupport support) {
+            ServiceDrag drag = dragFrom(support);
+            if (!canBuildDraggedBrief(drag)) {
+                return false;
+            }
+            buildBrief(drag.profiles(), occasionFilter, eventName, eventDate,
+                    venue, guestCount);
+            return true;
+        }
+    }
+
+    private record ServiceDrag(EventServicesTab source, long filterRevision,
+                               long selectionRevision,
+                               List<EventServiceProfile> profiles) { }
+
+    private record ServiceTransferable(ServiceDrag drag) implements Transferable {
+        @Override public DataFlavor[] getTransferDataFlavors() {
+            return new DataFlavor[]{SERVICE_FLAVOR};
+        }
+
+        @Override public boolean isDataFlavorSupported(DataFlavor flavor) {
+            return SERVICE_FLAVOR.equals(flavor);
+        }
+
+        @Override public Object getTransferData(DataFlavor flavor)
+                throws UnsupportedFlavorException {
+            if (!isDataFlavorSupported(flavor)) {
+                throw new UnsupportedFlavorException(flavor);
+            }
+            return drag;
+        }
     }
 
     private void showFeedback(String message, FarmUi.Tone tone) {

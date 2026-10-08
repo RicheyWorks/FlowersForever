@@ -4,6 +4,7 @@ import com.flowerfarm.gui.FarmUi;
 import com.flowerfarm.gui.harness.SwingDialogHarness;
 import com.flowerfarm.gui.harness.SwingUserHarness;
 import com.flowerfarm.model.HarvestEntry;
+import com.flowerfarm.model.HarvestGrade;
 import com.flowerfarm.service.HarvestService;
 import com.formdev.flatlaf.FlatDarkLaf;
 import com.formdev.flatlaf.FlatLightLaf;
@@ -19,7 +20,9 @@ import javax.swing.JCheckBox;
 import javax.swing.JComboBox;
 import javax.swing.JComponent;
 import javax.swing.JLabel;
+import javax.swing.JList;
 import javax.swing.JScrollPane;
+import javax.swing.JSplitPane;
 import javax.swing.JTabbedPane;
 import javax.swing.JTable;
 import javax.swing.JTextArea;
@@ -86,7 +89,51 @@ class HarvestEntryVisualContractTest {
                 history.setRowSelectionInterval(0, 0);
                 workspace.setSelectedIndex(0);
                 settleLayout(root);
+                JLabel access = named(root, "harvest.accessStatus", JLabel.class);
+                assertThat(access.getText()).isEqualTo("Can log and edit harvests");
+                initializedTab.get().applyRolePermissions(false);
+                assertThat(access.getText()).isEqualTo("View and export harvests");
+                initializedTab.get().applyRolePermissions(true);
+                assertLabelFits(access, root, prefix + "-access");
+
+                @SuppressWarnings("unchecked")
+                JComboBox<HarvestGrade> grade = (JComboBox<HarvestGrade>) named(
+                        root, "harvest.grade", JComboBox.class);
+                assertThat(grade.getSelectedItem()).isEqualTo(HarvestGrade.UNGRADED);
+                List<String> gradeLabels = new ArrayList<>();
+                for (HarvestGrade value : HarvestGrade.values()) {
+                    JLabel rendered = (JLabel) grade.getRenderer().getListCellRendererComponent(
+                            new JList<>(), value, -1, false, false);
+                    gradeLabels.add(rendered.getText());
+                }
+                assertThat(gradeLabels).containsExactly(
+                        "Not graded", "Select", "Standard", "Processing");
+                assertThat(history.getColumnClass(8)).isEqualTo(HarvestGrade.class);
+                assertThat(history.getValueAt(0, 8)).isEqualTo(HarvestGrade.UNGRADED);
+                assertThat(((JLabel) history.prepareRenderer(history.getCellRenderer(0, 8), 0, 8))
+                        .getText()).isEqualTo("Not graded");
+                assertThat(history.getValueAt(1, 8)).isEqualTo(HarvestGrade.SELECT);
+                assertThat(((JLabel) history.prepareRenderer(history.getCellRenderer(1, 8), 1, 8))
+                        .getText()).isEqualTo("Select");
                 render(prefix + "-quick-entry", root);
+                assertInitiallyVisible(root, named(root, "harvest.crop", JTextField.class), prefix);
+                assertInitiallyVisible(root, named(root, "harvest.quantity", JTextField.class), prefix);
+                assertInitiallyVisible(root, named(root, "harvest.unit", JTextField.class), prefix);
+                assertInitiallyVisible(root, accessible(root, "Harvest date", JTextField.class), prefix);
+                assertInitiallyVisible(root, named(root, "harvest.add", JButton.class), prefix);
+                if (width == 1180) {
+                    assertInitiallyVisible(root, named(root, "harvest.bed", JTextField.class), prefix);
+                    assertInitiallyVisible(root, named(root, "harvest.notes", JTextField.class), prefix);
+                }
+                JSplitPane split = named(root, "harvest.entryHistorySplit", JSplitPane.class);
+                int initialDivider = split.getDividerLocation();
+                split.setDividerLocation(initialDivider + 10);
+                settleLayout(root);
+                assertThat(split.getDividerLocation())
+                        .as("manual entry/history divider position survives relayout in %s", prefix)
+                        .isEqualTo(initialDivider + 10);
+                split.setDividerLocation(initialDivider);
+                settleLayout(root);
                 assertReachable(history, new Rectangle(0, 0, 160, 48), root,
                         prefix + "-history-selection");
                 assertThat(history.getColumnModel().getColumn(1).getWidth())
@@ -286,6 +333,22 @@ class HarvestEntryVisualContractTest {
                 .isGreaterThanOrEqualTo(target.height);
     }
 
+    private static void assertInitiallyVisible(JComponent root, JComponent control, String view) {
+        Rectangle visible = SwingUtilities.convertRectangle(control,
+                new Rectangle(0, 0, control.getWidth(), control.getHeight()), root);
+        for (Container ancestor = control.getParent(); ancestor != null; ancestor = ancestor.getParent()) {
+            visible = visible.intersection(SwingUtilities.convertRectangle(ancestor,
+                    new Rectangle(0, 0, ancestor.getWidth(), ancestor.getHeight()), root));
+            if (ancestor == root) {
+                break;
+            }
+        }
+        assertThat(visible.width).as("initial width for %s in %s", control.getName(), view)
+                .isGreaterThanOrEqualTo(control.getWidth());
+        assertThat(visible.height).as("initial height for %s in %s", control.getName(), view)
+                .isGreaterThanOrEqualTo(control.getHeight());
+    }
+
     private static void revealThroughScrollPanes(JComponent control, Rectangle requested) {
         for (Container parent = control.getParent(); parent != null; parent = parent.getParent()) {
             if (parent instanceof JViewport viewport) {
@@ -421,7 +484,8 @@ class HarvestEntryVisualContractTest {
                 new HarvestEntry(31L, LocalDate.now(), "Nootka Rose", 72, "stems",
                         "North field · Bed A", "Cut before 8 AM"),
                 new HarvestEntry(32L, LocalDate.now(), "Dahlia Mix", 14, "bunches",
-                        "Tunnel 2", "Reserved for market bouquets"));
+                        "Tunnel 2", "Reserved for market bouquets", "LOT-32",
+                        HarvestGrade.SELECT, 0, ""));
         when(service.filter(anyString(), anyString(), anyString(),
                 nullable(LocalDate.class), nullable(LocalDate.class))).thenReturn(entries);
         Map<String, Double> totals = Map.of("Nootka Rose", 72.0, "Dahlia Mix", 14.0);

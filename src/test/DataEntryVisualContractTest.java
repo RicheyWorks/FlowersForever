@@ -44,6 +44,9 @@ import com.flowerfarm.service.TrendService;
 import com.flowerfarm.service.SeasonPlanService;
 import com.formdev.flatlaf.FlatDarkLaf;
 import com.formdev.flatlaf.FlatLightLaf;
+import org.jfree.chart.ChartPanel;
+import org.jfree.chart.axis.DateAxis;
+import org.jfree.chart.axis.DateTickUnitType;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -131,16 +134,18 @@ class DataEntryVisualContractTest {
                 "Nootka Rose", 72.0, "Dahlia Mix", 14.0, "Sweet Pea", 48.0));
 
         when(inventory.getAllItems()).thenReturn(List.of(
-                new Item("Nootka Rose", "Flowers/Plants", 4.50, "Per Stem", 1.10, 42,
+                new Item("Nootka Rose", "Flowers/Plants", 4.50, "Per Stem", 1.10, 96,
                         "Field A"),
-                new Item("Dahlia Mix", "Flowers/Plants", 3.25, "Per Stem", 0.80, 8,
+                new Item("Dahlia Mix", "Flowers/Plants", 18.00, "Per Bunch", 6.00, 20,
                         "Field B"),
                 new Item("Market Bouquet", "Flowers/Plants", 28.00, "Per Unit", 9.00, 14,
                         "Saturday market"),
                 new Item("Floral Snips", "Tools/Equipment", 18.00, "Per Unit", 8.00, 5,
+                        "Packing shed"),
+                new Item("Market Tags", "Tools/Equipment", 2.00, "Per Unit", 0.50, 8,
                         "Packing shed")));
         when(inventory.inventoryKpis(anyInt())).thenReturn(
-                new InventoryService.InventoryKpiSnapshot(4, 1043.00, 326.20, 2, 69, 10));
+                new InventoryService.InventoryKpiSnapshot(5, 1290.00, 395.60, 2, 143, 10));
         when(harvest.totalQuantityLast7Days()).thenReturn(386.0);
         when(harvest.totalQuantityPrior7Days()).thenReturn(312.0);
         when(harvest.dailyQuantitiesLast7Days())
@@ -154,13 +159,23 @@ class DataEntryVisualContractTest {
         LocalDate marketDate = LocalDate.now();
         MarketDayPackingService.MarketDayPlan marketPlan =
                 new MarketDayPackingService.MarketDayPlan(
-                        marketDate, marketDate, marketDate, "CONFIRMED", 2, 485.00,
+                        marketDate, marketDate, marketDate, "CONFIRMED", 2, 576.00,
                         List.of(new MarketDayPackingService.CustomerPack(
                                 10L, "Kitsap Blooms", "FLORIST", "CONFIRMED",
-                                marketDate, "AM pickup", List.of(), 285.00),
+                                marketDate, "AM pickup", List.of(
+                                        new MarketDayPackingService.PackLine(
+                                                "Nootka Rose", "stems", 40, 4.50, 180.00, 101L),
+                                        new MarketDayPackingService.PackLine(
+                                                "Dahlia Mix", "bunches", 6, 18.00, 108.00, 102L)),
+                                288.00),
                                 new MarketDayPackingService.CustomerPack(
                                         11L, "Saturday Stall", "MARKET", "CONFIRMED",
-                                        marketDate, "Load by 7", List.of(), 200.00)),
+                                        marketDate, "Load by 7", List.of(
+                                                new MarketDayPackingService.PackLine(
+                                                        "Nootka Rose", "stems", 40, 4.50, 180.00, 201L),
+                                                new MarketDayPackingService.PackLine(
+                                                        "Dahlia Mix", "bunches", 6, 18.00, 108.00, 202L)),
+                                        288.00)),
                         List.of(new MarketDayPackingService.ProductNeed(
                                 "Nootka Rose", "stems", 80, 96, false, 0),
                                 new MarketDayPackingService.ProductNeed(
@@ -170,7 +185,11 @@ class DataEntryVisualContractTest {
                                 + "Nootka Rose        80 stems      stock 96\n"
                                 + "Dahlia Mix         12 bunches    stock 20\n\n"
                                 + "CUSTOMER LOAD-OUT\nKitsap Blooms — AM pickup\n"
-                                + "Saturday Stall — Load by 7");
+                                + "  Nootka Rose       40 stems\n"
+                                + "  Dahlia Mix         6 bunches\n"
+                                + "Saturday Stall — Load by 7\n"
+                                + "  Nootka Rose       40 stems\n"
+                                + "  Dahlia Mix         6 bunches");
         when(marketDay.buildPlan(any(LocalDate.class), anyInt(), anyBoolean(), anyBoolean()))
                 .thenReturn(marketPlan);
         List<SyncHistoryEntry> activities = List.of(
@@ -258,12 +277,16 @@ class DataEntryVisualContractTest {
         KnowledgeLogTab knowledgeLog = new KnowledgeLogTab(knowledge, new Host());
         SeasonPlannerTab seasonPlanner = new SeasonPlannerTab(seasonPlan, new Host());
         TrendService trendService = mock(TrendService.class);
+        when(trendService.listSeries()).thenReturn(List.of(
+                new TrendService.TrendSeriesSummary(
+                        "Nootka Rose", "stems", 6, 6,
+                        LocalDate.now().minusWeeks(6), LocalDate.now().minusWeeks(1))));
         when(trendService.analyzeQuantityTrend()).thenReturn(new TrendService.TrendResult(
                 82.4,
                 "FORECAST READY\n\nProjected next-period quantity: 82 stems\n"
                         + "Direction: steady growth\nConfidence note: use alongside harvest plans.",
                 null, "Nootka Rose", "stems", 6, 78,
-                LocalDate.now().minusWeeks(1), LocalDate.now().plusWeeks(1),
+                LocalDate.now().minusWeeks(1), LocalDate.now(),
                 List.of(
                         new TrendService.TrendPoint(LocalDate.now().minusWeeks(6), 48, 50),
                         new TrendService.TrendPoint(LocalDate.now().minusWeeks(5), 55, 55),
@@ -376,6 +399,26 @@ class DataEntryVisualContractTest {
         assertThat(findNamed(harvestLog.getUIComponent(), "harvest.history.table").getHeight())
                 .as("visible harvest history rows at laptop height")
                 .isGreaterThanOrEqualTo(80);
+        JComponent harvestGallery = harvestLog.getUIComponent();
+        Dimension harvestGallerySize = new Dimension(1280, 1050);
+        render("harvest-log-gallery", harvestGallery, harvestGallerySize);
+        java.awt.Rectangle harvestGalleryFrame = new java.awt.Rectangle(harvestGallerySize);
+        for (Component control : List.of(
+                findNamed(harvestGallery, "harvest.add"),
+                findNamed(harvestGallery, "harvest.bed"),
+                findNamed(harvestGallery, "harvest.notes"),
+                button(harvestGallery, "Apply filters"))) {
+            java.awt.Rectangle bounds = SwingUtilities.convertRectangle(control,
+                    new java.awt.Rectangle(0, 0, control.getWidth(), control.getHeight()),
+                    harvestGallery);
+            assertThat(harvestGalleryFrame.contains(bounds))
+                    .as("harvest gallery fully shows %s", describe(control)).isTrue();
+        }
+        JTable galleryHistory = (JTable) findNamed(harvestGallery, "harvest.history.table");
+        java.awt.Rectangle firstHistoryRow = SwingUtilities.convertRectangle(galleryHistory,
+                galleryHistory.getCellRect(0, 0, true), harvestGallery);
+        assertThat(harvestGalleryFrame.contains(firstHistoryRow))
+                .as("harvest gallery shows the first saved history row").isTrue();
         render("harvest-log-compact", harvestLog.getUIComponent(), new Dimension(1050, 700));
         Component cropInput = findNamed(harvestLog.getUIComponent(), "harvest.crop");
         Component historyTable = findNamed(harvestLog.getUIComponent(), "harvest.history.table");
@@ -415,7 +458,7 @@ class DataEntryVisualContractTest {
         assertThat(SwingUtilities.getAncestorOfClass(javax.swing.JViewport.class,
                 textArea(harvestLog.getUIComponent(), "Batch harvest lines")).getHeight())
                 .as("batch lines stay visible at compact height").isGreaterThanOrEqualTo(36);
-        render("inventory", inventoryTab.getUIComponent(), new Dimension(1080, 720));
+        render("inventory", inventoryTab.getUIComponent(), new Dimension(1080, 800));
         render("inventory-compact", inventoryTab.getUIComponent(), new Dimension(1050, 700));
         render("market-day", marketDayTab.getUIComponent(), new Dimension(1050, 700));
         render("market-day-desktop", marketDayTab.getUIComponent(), new Dimension(1280, 1120));
@@ -482,7 +525,15 @@ class DataEntryVisualContractTest {
                 (JComponent) findNamed(trends.getUIComponent(), "trend.evidenceTabs"), "trend.scroll");
         render("trend-analysis-laptop-evidence", trends.getUIComponent(), new Dimension(850, 500),
                 (JComponent) findNamed(trends.getUIComponent(), "trend.weeklyTable"), "trend.scroll");
+        awaitNamedLabelPrefix(trends.getUIComponent(), "trend.seriesHint",
+                "1 recorded series · strongest history · all recorded history.");
         render("trend-analysis-desktop", trends.getUIComponent(), new Dimension(1280, 1050));
+        DateAxis trendDates = (DateAxis) ((ChartPanel) findNamed(
+                trends.getUIComponent(), "trend.chart")).getChart().getXYPlot().getDomainAxis();
+        assertThat(trendDates.getTickUnit().getUnitType()).isEqualTo(DateTickUnitType.DAY);
+        assertThat(trendDates.getTickUnit().getMultiple())
+                .as("six recorded weeks and next-week forecast use readable weekly ticks")
+                .isEqualTo(7);
         render("irrigation", irrigation.getUIComponent(), new Dimension(1050, 700));
         render("irrigation-desktop", irrigation.getUIComponent(), new Dimension(1280, 920));
         render("irrigation-laptop", irrigation.getUIComponent(), new Dimension(850, 500));
@@ -572,10 +623,15 @@ class DataEntryVisualContractTest {
         dashboard.initialize();
         awaitNamedLabelPrefix(dashboard.getUIComponent(),
                 "dashboard.overviewStatus", "Updated ");
+        JComboBox<?> dashboardPriorities = (JComboBox<?>) findNamed(
+                dashboard.getUIComponent(), "dashboard.priorityQueue");
+        assertThat(java.util.stream.IntStream.range(0, dashboardPriorities.getItemCount())
+                .mapToObj(index -> dashboardPriorities.getItemAt(index).toString()).toList())
+                .contains("4 confirmed order(s) to review for packing");
         JTabbedPane dashboardWorkspace = (JTabbedPane) findNamed(
                 dashboard.getUIComponent(), "dashboard.workspace");
         dashboardWorkspace.setSelectedIndex(0);
-        render("dashboard", dashboard.getUIComponent(), new Dimension(1500, 1000));
+        render("dashboard", dashboard.getUIComponent(), new Dimension(1500, 800));
         assertThat(button(dashboard.getUIComponent(), "Morning briefing").getHeight())
                 .as("dashboard action keeps a comfortable height on a large display")
                 .isBetween(36, 60);

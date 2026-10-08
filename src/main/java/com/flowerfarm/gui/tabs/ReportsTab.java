@@ -3,6 +3,7 @@ package com.flowerfarm.gui.tabs;
 import com.flowerfarm.gui.FarmUi;
 import com.flowerfarm.gui.FarmDialogs;
 import com.flowerfarm.gui.FarmFileChooser;
+import com.flowerfarm.model.FarmWorkspace;
 import com.flowerfarm.service.ReportService;
 
 import javax.swing.*;
@@ -29,6 +30,7 @@ public class ReportsTab implements FlowerFarmTab {
     private final TabHost host;
     private final FarmDialogs dialogs;
     private final FarmFileChooser files;
+    private FarmWorkspace workspace = FarmWorkspace.ROSE_AND_EVENTS;
 
     private JPanel panel;
     private JTextField fromField;
@@ -70,11 +72,26 @@ public class ReportsTab implements FlowerFarmTab {
         this.files = java.util.Objects.requireNonNull(files, "files");
     }
 
+    /** Select report copy for the workspace before building the tab UI. */
+    public void setWorkspace(FarmWorkspace workspace) {
+        if (panel != null) {
+            throw new IllegalStateException("Set the report workspace before building the tab.");
+        }
+        this.workspace = java.util.Objects.requireNonNull(workspace, "workspace");
+    }
+
+    private boolean flowerProductionWorkspace() {
+        return workspace == FarmWorkspace.ROSE_AND_EVENTS
+                || workspace == FarmWorkspace.WILDFLOWER_FARM;
+    }
+
     @Override public String getTabTitle() { return "Reports"; }
 
     @Override
     public String getDescription() {
-        return "Printable weekly harvest and sales reports";
+        return flowerProductionWorkspace()
+                ? "Printable weekly harvest and sales reports"
+                : "Printable weekly activity and sales reports";
     }
 
     @Override
@@ -89,12 +106,16 @@ public class ReportsTab implements FlowerFarmTab {
         panel = FarmUi.page();
 
         weeklyButton = FarmUi.primaryButton("Create 7-day report…");
-        weeklyButton.setToolTipText("Create the standard harvest and wholesale summary.");
+        weeklyButton.setToolTipText(flowerProductionWorkspace()
+                ? "Create the standard harvest and wholesale summary."
+                : "Create a summary of recorded activity and sales.");
         weeklyButton.addActionListener(event -> generateWeekly());
         reportStatus = FarmUi.statusBadge("Ready to create a report", FarmUi.Tone.NEUTRAL);
         panel.add(FarmUi.pageHeader(
                 "Farm reports",
-                "Save a printable harvest, production, and sales summary for your records.",
+                flowerProductionWorkspace()
+                        ? "Save a printable harvest, production, and sales summary for your records."
+                        : "Save a printable summary of recorded activity, orders, and sales.",
                 FarmUi.toolbar(reportStatus, weeklyButton)), BorderLayout.NORTH);
 
         fromField = FarmUi.entryControl(
@@ -185,12 +206,15 @@ public class ReportsTab implements FlowerFarmTab {
         statusArea = FarmUi.displayArea(5, 50);
         statusArea.setName("reports.summary");
         statusArea.getAccessibleContext().setAccessibleName("Report contents and export status");
-        statusArea.setText(
-                "Preview the selected range to verify activity and revenue before export.\n\n"
+        statusArea.setText(flowerProductionWorkspace()
+                ? "Preview the selected range to verify activity and revenue before export.\n\n"
                         + "Every PDF also includes harvest detail, season-to-date crop totals, "
                         + "bed / field production, product performance, customer performance, "
                         + "and order detail."
-        );
+                : "Preview recorded activity and revenue before export.\n\n"
+                        + "The PDF includes order detail, product and customer performance, "
+                        + "and any harvests in the shared log. Crop and field totals reflect "
+                        + "those logged harvests.");
         productPerformanceModel = readOnlyModel(new String[]{
                 "Product", "Quantity", "Unit", "Orders", "Avg price", "Committed", "Fulfilled"
         });
@@ -336,7 +360,9 @@ public class ReportsTab implements FlowerFarmTab {
         statusArea.setText(noActivity
                 ? "No harvest or order activity was recorded from " + preview.from()
                         + " through " + preview.to() + ".\n\n"
-                        + "Try another range, log the first harvest, or confirm a customer order. "
+                        + (flowerProductionWorkspace()
+                        ? "Try another range, log the first harvest, or confirm a customer order. "
+                        : "Try another range or add a customer order. ")
                         + "A zero-activity PDF can still be created for the farm record."
                 : "Preview ready for " + preview.from() + " through " + preview.to() + ".\n\n"
                         + "Committed revenue includes confirmed and fulfilled orders. "
@@ -423,7 +449,9 @@ public class ReportsTab implements FlowerFarmTab {
         LocalDate today = LocalDate.now();
         startGeneration(
                 "Creating 7-day report…",
-                "Preparing the last 7 days of harvest and sales activity…",
+                flowerProductionWorkspace()
+                        ? "Preparing the last 7 days of harvest and sales activity…"
+                        : "Preparing the last 7 days of recorded activity and sales…",
                 "Creating the 7-day farm report…",
                 "Creating the 7-day report",
                 () -> reportService.generateWeeklyReportPdf(),
@@ -578,7 +606,9 @@ public class ReportsTab implements FlowerFarmTab {
             long days = ChronoUnit.DAYS.between(range.from(), range.to()) + 1;
             String text = days + " day" + (days == 1 ? "" : "s") + " selected · "
                     + range.from() + " through " + range.to()
-                    + " · harvest, bed production, orders, and revenue";
+                    + (flowerProductionWorkspace()
+                    ? " · harvest, bed production, orders, and revenue"
+                    : " · recorded harvests, orders, and revenue");
             rangePreview.setText(text);
             rangePreview.getAccessibleContext().setAccessibleName(text);
             rangeButton.setEnabled(!generating && !previewing);

@@ -27,7 +27,16 @@
       Offline. New entries stay on this device and retry when the connection returns.
     </aside>
 
-    <nav class="capture-actions" aria-label="Add a farm record">
+    <nav class="jump-nav" aria-label="Jump to field work">
+      <a href="#capture-actions" aria-label="Add records">Add</a>
+      <a href="#tasks-section">Tasks</a>
+      <a href="#orders-section">Handoffs</a>
+      <a href="#inventory-section" aria-label="Count inventory">Stock</a>
+      <a href="#field-notes-section" aria-label="Recent field notes">Notes</a>
+      <a href="#sync-section" aria-label="Pending entries on this device">Pending</a>
+    </nav>
+
+    <nav id="capture-actions" class="capture-actions jump-target" aria-label="Add a farm record">
       <button id="add-harvest" class="capture-action" type="button"
               aria-controls="harvest-section" aria-expanded="false">
         <span class="capture-icon" aria-hidden="true">+</span>
@@ -103,7 +112,7 @@
       </div>
     </section>
 
-    <section aria-labelledby="tasks-heading">
+    <section id="tasks-section" class="jump-target" aria-labelledby="tasks-heading">
       <div class="section-heading">
         <div>
           <p class="eyebrow">Production</p>
@@ -112,10 +121,12 @@
         <span id="task-count" class="count-pill">—</span>
       </div>
       <div id="task-message" class="inline-message" aria-live="polite">Loading work…</div>
+      <p id="task-action-status" class="inline-message action-status" role="status"
+         aria-atomic="true" tabindex="-1" hidden></p>
       <div id="task-list" class="task-list"></div>
     </section>
 
-    <section class="order-section" aria-labelledby="orders-heading">
+    <section id="orders-section" class="order-section jump-target" aria-labelledby="orders-heading">
       <div class="section-heading">
         <div>
           <p class="eyebrow">Pickup, delivery, and market</p>
@@ -125,10 +136,12 @@
       </div>
       <p class="section-copy">Review the customer, instructions, and complete product load before recording a physical handoff.</p>
       <div id="order-message" class="inline-message" aria-live="polite">Loading handoffs…</div>
+      <p id="order-action-status" class="inline-message action-status" role="status"
+         aria-atomic="true" tabindex="-1" hidden></p>
       <div id="order-list" class="order-list"></div>
     </section>
 
-    <section class="inventory-section" aria-labelledby="inventory-heading">
+    <section id="inventory-section" class="inventory-section jump-target" aria-labelledby="inventory-heading">
       <div class="section-heading">
         <div>
           <p class="eyebrow">Cooler and shed</p>
@@ -146,6 +159,8 @@
         <button type="submit" class="secondary">Find stock</button>
       </form>
       <div id="inventory-message" class="inline-message" aria-live="polite">Loading inventory…</div>
+      <p id="inventory-action-status" class="inline-message action-status" role="status"
+         aria-atomic="true" tabindex="-1" hidden></p>
       <div id="inventory-list" class="inventory-list"></div>
     </section>
 
@@ -224,7 +239,7 @@
       </form>
     </section>
 
-    <section class="field-notes-section" aria-labelledby="field-notes-heading">
+    <section id="field-notes-section" class="field-notes-section jump-target" aria-labelledby="field-notes-heading">
       <div class="section-heading">
         <div><p class="eyebrow">Shared farm journal</p><h2 id="field-notes-heading">Recent field notes</h2></div>
         <button id="refresh-field-notes" type="button" class="secondary">Refresh notes</button>
@@ -234,11 +249,11 @@
       <div id="field-notes-list" class="field-notes-list"></div>
     </section>
 
-    <section class="sync-card" aria-labelledby="sync-heading">
+    <section id="sync-section" class="sync-card jump-target" aria-labelledby="sync-heading">
       <div>
         <p class="eyebrow">Reliable handoff</p>
         <h2 id="sync-heading">Pending on this device</h2>
-        <p id="sync-detail" class="section-copy">No field entries are waiting to sync.</p>
+        <p id="sync-detail" class="section-copy" role="status">No field entries are waiting to sync.</p>
         <div id="pending-list" class="pending-list"></div>
       </div>
       <button id="retry-sync" type="button" class="secondary">Retry now</button>

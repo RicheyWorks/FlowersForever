@@ -36,11 +36,41 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @DisplayName("Production Studio desktop")
 class ProductionStudioTabTest {
+
+    @Test
+    @DisplayName("retail view shows design and handoffs without growing panels")
+    void retailViewKeepsDesignWorkflowWithoutGrowingPanels() throws Exception {
+        ProductionStudioService service = mock(ProductionStudioService.class);
+        when(service.listRecipes()).thenReturn(List.of(recipe(10L, "Shop bouquet")));
+        ProductionStudioTab tab = new ProductionStudioTab(
+                service, new SwingDialogHarness().safelyCancelUnscripted());
+        tab.setRetailMode(true);
+        JComponent root = tab.getUIComponent();
+
+        JTabbedPane workspace = (JTabbedPane) named(root, "productionStudio.workspace");
+        assertThat(java.util.stream.IntStream.range(0, workspace.getTabCount())
+                .mapToObj(workspace::getTitleAt)).containsExactly(
+                        "Design recipes", "Economics & handoffs");
+        JTabbedPane economics = (JTabbedPane) named(root, "production.economicsWorkspace");
+        assertThat(java.util.stream.IntStream.range(0, economics.getTabCount())
+                .mapToObj(economics::getTitleAt)).containsExactly(
+                        "Recipe profitability", "External handoffs");
+        assertThat(named(root, "production.springFrost")).isNull();
+        assertThat(named(root, "production.plantingBed")).isNull();
+
+        SwingUtilities.invokeAndWait(tab::initialize);
+        awaitRefresh(root);
+        assertThat(((JTable) named(root, "production.recipeTable")).getRowCount()).isEqualTo(1);
+        verify(service, never()).listTemplates();
+        verify(service, never()).findSeasonSettings(anyInt());
+        verify(service, never()).productionCosts(anyInt(), any());
+    }
 
     @Test
     @DisplayName("keeps task filters, table, and every action reachable at compact desktop size")
@@ -208,14 +238,21 @@ class ProductionStudioTabTest {
 
         assertThat(table.getRowCount()).isEqualTo(1);
         assertThat(table.getValueAt(0, 2)).isEqualTo("Overdue");
+        assertThat(table.getValueAt(0, 3)).isEqualTo("Open");
+        assertThat(table.getValueAt(0, 4)).isEqualTo("Sow");
         SwingUtilities.invokeAndWait(() -> {
             table.setRowSelectionInterval(0, 0);
+            assertThat(((JLabel) named(root, "production.selectedTaskSummary")).getText())
+                    .contains("Task #19", "Sow", "Zinnia", "Bed A");
             assertThat(skip.isEnabled()).isTrue();
             assertThat(reopen.isEnabled()).isFalse();
             skip.doClick();
             filter.setSelectedItem("Skipped");
         });
         assertThat(table.getRowCount()).isEqualTo(1);
+        assertThat(table.getValueAt(0, 3)).isEqualTo("Skipped");
+        assertThat(((JLabel) named(root, "production.status")).getText())
+                .contains("Task “Sow” is now skipped");
         SwingUtilities.invokeAndWait(() -> {
             table.setRowSelectionInterval(0, 0);
             assertThat(skip.isEnabled()).isFalse();
@@ -225,11 +262,54 @@ class ProductionStudioTabTest {
         });
 
         assertThat(table.getRowCount()).isEqualTo(1);
+        assertThat(table.getValueAt(0, 3)).isEqualTo("Open");
         assertThat(task.getStatus()).isEqualTo(ProductionTaskStatus.TODO);
         assertThat(((JLabel) named(root, "production.status")).getText())
-                .contains("now todo");
+                .contains("Task “Sow” is now open");
         verify(service).updateTaskStatus(19L, ProductionTaskStatus.SKIPPED);
         verify(service).updateTaskStatus(19L, ProductionTaskStatus.TODO);
+    }
+
+    @Test
+    @DisplayName("friendly task labels keep the correct target when field work is sorted")
+    void sortedTaskLabelsKeepSelectedTaskIdentity() throws Exception {
+        ProductionStudioService service = mock(ProductionStudioService.class);
+        ProductionTask sow = new ProductionTask(4L, 2L, LocalDate.now(),
+                ProductionTaskType.SOW, ProductionTaskStatus.TODO, "Zinnia", "Bed A",
+                1, true, "Direct sow");
+        sow.setId(19L);
+        ProductionTask soil = new ProductionTask(5L, 3L, LocalDate.now(),
+                ProductionTaskType.SOIL_PREP, ProductionTaskStatus.TODO, "Sunflower", "Bed B",
+                1, true, "Prepare bed");
+        soil.setId(20L);
+        when(service.listTasks(any(LocalDate.class), any(LocalDate.class)))
+                .thenReturn(List.of(sow, soil));
+        when(service.updateTaskStatus(anyLong(), any())).thenAnswer(invocation -> {
+            ProductionTask task = invocation.getArgument(0, Long.class) == 19L ? sow : soil;
+            task.setStatus(invocation.getArgument(1));
+            return task;
+        });
+        ProductionStudioTab tab = new ProductionStudioTab(
+                service, new SwingDialogHarness().safelyCancelUnscripted());
+        JComponent root = tab.getUIComponent();
+        SwingUtilities.invokeAndWait(tab::initialize);
+        awaitRefresh(root);
+        JTable table = (JTable) named(root, "production.taskTable");
+        JButton skip = (JButton) named(root, "production.skipTask");
+
+        SwingUtilities.invokeAndWait(() -> {
+            table.getRowSorter().toggleSortOrder(4);
+            assertThat(table.getValueAt(0, 4)).isEqualTo("Soil prep");
+            assertThat(table.convertRowIndexToModel(0)).isEqualTo(1);
+            table.setRowSelectionInterval(0, 0);
+            assertThat(((JLabel) named(root, "production.selectedTaskSummary")).getText())
+                    .contains("Task #20", "Soil prep", "Sunflower", "Bed B");
+            skip.doClick();
+        });
+
+        verify(service).updateTaskStatus(20L, ProductionTaskStatus.SKIPPED);
+        assertThat(soil.getStatus()).isEqualTo(ProductionTaskStatus.SKIPPED);
+        assertThat(sow.getStatus()).isEqualTo(ProductionTaskStatus.TODO);
     }
 
     @Test
@@ -279,7 +359,7 @@ class ProductionStudioTabTest {
                 .isEqualTo("Added compost; irrigation pressure looked even");
         assertThat(task.getStatus()).isEqualTo(ProductionTaskStatus.DONE);
         assertThat(((JLabel) named(root, "production.status")).getText())
-                .contains("labor, input cost, and field result saved");
+                .contains("Task “Soil prep” completed", "labor, input cost, and field result saved");
     }
 
     @Test

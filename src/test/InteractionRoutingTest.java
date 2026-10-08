@@ -15,13 +15,17 @@ import javax.swing.JPanel;
 import javax.swing.JRootPane;
 import javax.swing.JTabbedPane;
 import javax.swing.JTextField;
+import javax.swing.KeyStroke;
 import javax.swing.SwingUtilities;
+import java.awt.event.InputEvent;
+import java.awt.event.KeyEvent;
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Scanner;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -65,6 +69,42 @@ class InteractionRoutingTest {
         flushEventQueue();
         assertThat(dashboard.focus.requests).isPositive();
         assertThat(pane.getMnemonicAt(0)).isEqualTo('D');
+    }
+
+    @Test
+    void changingWorkspaceRemovesShortcutsToHiddenTabs() {
+        JRootPane root = new JRootPane();
+        new FarmTabNavigator(new JTabbedPane(), List.of(
+                new TestTab("Dashboard"), new TestTab("Inventory"),
+                new TestTab("Reports"))).installShortcuts(root, () -> { });
+        assertThat(root.getActionMap().get("selectTab2")).isNotNull();
+
+        new FarmTabNavigator(new JTabbedPane(), List.of(new TestTab("Workspace")))
+                .installShortcuts(root, () -> { });
+
+        assertThat(root.getActionMap().get("selectTab0")).isNotNull();
+        assertThat(root.getActionMap().get("selectTab1")).isNull();
+        assertThat(root.getActionMap().get("selectTab2")).isNull();
+        assertThat(root.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).get(
+                KeyStroke.getKeyStroke(KeyEvent.VK_3, InputEvent.ALT_DOWN_MASK)))
+                .isNull();
+    }
+
+    @Test
+    void tabShortcutsWaitUntilTheFarmTypeLauncherIsClosed() {
+        JTabbedPane pane = new JTabbedPane();
+        FarmTabNavigator navigator = new FarmTabNavigator(pane, List.of(
+                new TestTab("Workspace"), new TestTab("Inventory")));
+        navigator.populate();
+        JRootPane root = new JRootPane();
+        AtomicBoolean insideFarm = new AtomicBoolean(false);
+        navigator.installShortcuts(root, () -> { }, insideFarm::get);
+
+        root.getActionMap().get("selectTab1").actionPerformed(null);
+        assertThat(pane.getSelectedIndex()).isZero();
+        insideFarm.set(true);
+        root.getActionMap().get("selectTab1").actionPerformed(null);
+        assertThat(pane.getSelectedIndex()).isEqualTo(1);
     }
 
     @Test
