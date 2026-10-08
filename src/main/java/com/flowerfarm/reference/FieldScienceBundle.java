@@ -27,6 +27,11 @@ public final class FieldScienceBundle {
     private static final String VERSION = SOURCE_COMMIT.substring(0, 12);
     private static final String RESOURCE_ROOT = "/csrbt-field-kit/";
     private static final String MANIFEST = "manifest.sha256";
+    /**
+     * Serializes extraction. A private lock rather than {@code static synchronized}, so code that
+     * happens to lock on {@code FieldScienceBundle.class} cannot stall or deadlock extraction.
+     */
+    private static final Object EXTRACTION_LOCK = new Object();
 
     private FieldScienceBundle() {
     }
@@ -39,7 +44,13 @@ public final class FieldScienceBundle {
      * @throws IllegalArgumentException if {@code fileName} is not in the bundle
      * @throws IOException if a resource is missing, corrupt, or cannot be written
      */
-    public static synchronized Path materialize(String fileName) throws IOException {
+    public static Path materialize(String fileName) throws IOException {
+        synchronized (EXTRACTION_LOCK) {
+            return materializeLocked(fileName);
+        }
+    }
+
+    private static Path materializeLocked(String fileName) throws IOException {
         List<Entry> entries = readManifest();
         if (fileName == null || entries.stream().noneMatch(entry -> entry.name().equals(fileName))) {
             throw new IllegalArgumentException("Unknown field-science bundle file: " + fileName);

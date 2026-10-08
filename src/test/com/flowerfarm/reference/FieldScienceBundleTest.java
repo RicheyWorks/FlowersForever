@@ -103,4 +103,49 @@ class FieldScienceBundleTest {
         assertThatThrownBy(() -> FieldScienceBundle.materialize("soil-recipes.html"))
                 .isInstanceOf(IOException.class);
     }
+
+    @Test
+    void extractionDoesNotWaitForCodeThatLocksTheClass() throws Exception {
+        java.util.concurrent.ExecutorService worker = java.util.concurrent.Executors.newSingleThreadExecutor();
+        try {
+            java.util.concurrent.Future<Path> extracted;
+            synchronized (FieldScienceBundle.class) {
+                extracted = worker.submit(() -> FieldScienceBundle.materialize("soil-recipes.html"));
+                // With a static synchronized method this would time out while the class monitor is held.
+                assertThat(extracted.get(30, java.util.concurrent.TimeUnit.SECONDS)).isRegularFile();
+            }
+        } finally {
+            worker.shutdownNow();
+        }
+    }
+
+    @Test
+    void concurrentExtractionsProduceOneCompleteBundle() throws Exception {
+        int threads = 4;
+        java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newFixedThreadPool(threads);
+        java.util.concurrent.CountDownLatch start = new java.util.concurrent.CountDownLatch(1);
+        try {
+            java.util.List<java.util.concurrent.Future<Path>> results = new java.util.ArrayList<>();
+            for (int i = 0; i < threads; i++) {
+                results.add(pool.submit(() -> {
+                    start.await();
+                    return FieldScienceBundle.materialize("soil-recipes.html");
+                }));
+            }
+            start.countDown();
+            Set<Path> paths = new HashSet<>();
+            for (java.util.concurrent.Future<Path> result : results) {
+                paths.add(result.get(60, java.util.concurrent.TimeUnit.SECONDS));
+            }
+            assertThat(paths).hasSize(1);
+            Path page = paths.iterator().next();
+            assertThat(Files.readString(page)).contains("Subcool's Super Soil");
+            try (var leftovers = Files.list(page.getParent())) {
+                assertThat(leftovers.map(path -> path.getFileName().toString()))
+                        .noneMatch(name -> name.endsWith(".tmp"));
+            }
+        } finally {
+            pool.shutdownNow();
+        }
+    }
 }
