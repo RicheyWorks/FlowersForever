@@ -25,7 +25,8 @@ import java.util.Set;
 /**
  * Builds the {@link StemDemand} board from saved records: confirmed (and optionally
  * draft) orders in a date window, saved floral recipes linked to order lines, live
- * inventory, and the season plan. Linking an order line to a recipe is the only write.
+ * inventory, and the season plan, totalled by crop and date and split by event (order).
+ * Linking an order line to a recipe is the only write.
  */
 @Service
 public class StemDemandService {
@@ -216,7 +217,7 @@ public class StemDemandService {
         if (line.getRecipeId() != null) {
             FloralRecipe recipe = recipes.get(line.getRecipeId());
             if (recipe == null) {
-                notCounted.add(notCounted(order, line, source,
+                notCounted.add(notCounted(order, line, confirmed, source,
                         "Its linked recipe no longer exists; link another recipe to count its stems."));
                 return;
             }
@@ -227,22 +228,24 @@ public class StemDemandService {
                 int stems = StemDemand.recipeStems(ingredient.getStemsPerDesign(), designs,
                         recipe.getWastePercent());
                 if (stems > 0) {
-                    needs.add(new StemDemand.Need(date, ingredient.getItemName(), stems, confirmed, detail));
+                    needs.add(new StemDemand.Need(date, ingredient.getItemName(), stems, confirmed, detail,
+                            order.getId(), source));
                     counted = true;
                 }
             }
             if (!counted) {
-                notCounted.add(notCounted(order, line, source,
+                notCounted.add(notCounted(order, line, confirmed, source,
                         "Recipe " + recipe.getName() + " has no ingredients yet."));
             }
             return;
         }
         if (StemDemand.isStemUnit(line.getUnit())) {
             int stems = (int) Math.min(Integer.MAX_VALUE, Math.ceil(line.getQuantity() - 1e-9));
-            needs.add(new StemDemand.Need(date, line.getProductName(), stems, confirmed, source));
+            needs.add(new StemDemand.Need(date, line.getProductName(), stems, confirmed, source, order.getId(),
+                    source));
             return;
         }
-        notCounted.add(notCounted(order, line, source, "Sold in " + line.getUnit()
+        notCounted.add(notCounted(order, line, confirmed, source, "Sold in " + line.getUnit()
                 + ", so its stems are unknown. Count it as a saved recipe to include it."));
     }
 
@@ -250,10 +253,10 @@ public class StemDemandService {
         return (int) Math.min(Integer.MAX_VALUE, Math.ceil(line.getQuantity() - 1e-9));
     }
 
-    private static StemDemand.NotCounted notCounted(CustomerOrder order, OrderLine line, String source,
-                                                    String reason) {
+    private static StemDemand.NotCounted notCounted(CustomerOrder order, OrderLine line, boolean confirmed,
+                                                    String source, String reason) {
         return new StemDemand.NotCounted(order.getOrderDate(), order.getId(), line.getId(), source,
-                line.getProductName(), line.getQuantity(), line.getUnit(), reason);
+                line.getProductName(), line.getQuantity(), line.getUnit(), reason, confirmed);
     }
 
     private static String source(CustomerOrder order, boolean confirmed) {

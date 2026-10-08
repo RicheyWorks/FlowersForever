@@ -16,8 +16,9 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
+import java.util.List;
 
-/** REST boundary for the stem demand board (read) and order-line recipe links (write). */
+/** REST boundary for the stem demand board and buying list by event (read) and order-line recipe links (write). */
 @RestController
 @RequestMapping("/api/production-studio/stem-demand")
 public class StemDemandController {
@@ -47,6 +48,28 @@ public class StemDemandController {
                 .header(HttpHeaders.CONTENT_DISPOSITION,
                         "attachment; filename=\"" + StemDemand.suggestedCsvFileName(board) + "\"")
                 .body(StemDemand.csv(board).getBytes(StandardCharsets.UTF_8));
+    }
+
+    /** The same window split by event: each order with its date and what it needs, crop by crop. */
+    @GetMapping("/events")
+    public ResponseEntity<List<StemDemand.Event>> events(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(defaultValue = "" + StemDemandService.DEFAULT_DAYS) int days,
+            @RequestParam(defaultValue = "false") boolean includeDrafts) {
+        return ResponseEntity.ok(service.build(from, days, includeDrafts).events());
+    }
+
+    @GetMapping("/events/csv")
+    public ResponseEntity<byte[]> eventsCsv(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(defaultValue = "" + StemDemandService.DEFAULT_DAYS) int days,
+            @RequestParam(defaultValue = "false") boolean includeDrafts) {
+        StemDemand.Board board = service.build(from, days, includeDrafts);
+        return ResponseEntity.ok()
+                .contentType(new MediaType("text", "csv", StandardCharsets.UTF_8))
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        "attachment; filename=\"" + StemDemand.suggestedEventsCsvFileName(board) + "\"")
+                .body(StemDemand.eventsCsv(board).getBytes(StandardCharsets.UTF_8));
     }
 
     /** Body {@code {"recipeId": 5}} counts the line as that recipe; {@code {"recipeId": null}} stops. */

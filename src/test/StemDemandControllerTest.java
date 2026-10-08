@@ -41,7 +41,8 @@ class StemDemandControllerTest {
                 .setControllerAdvice(new ApiExceptionHandler())
                 .build();
         StemDemand.Board board = StemDemand.plan(FROM, FROM.plusDays(13), false,
-                List.of(new StemDemand.Need(FROM.plusDays(5), "Nootka Rose", 40, true, "Order #1 Bloom Studio")),
+                List.of(new StemDemand.Need(FROM.plusDays(5), "Nootka Rose", 40, true, "Order #1 Bloom Studio", 1L,
+                        "Order #1 Bloom Studio")),
                 List.of(new StemDemand.Stock("Nootka Rose", 25)), List.of(), List.of(), List.of());
         when(service.build(any(), anyInt(), anyBoolean())).thenReturn(board);
     }
@@ -75,6 +76,35 @@ class StemDemandControllerTest {
                 .andExpect(header().string("Content-Disposition",
                         "attachment; filename=\"stem-demand-2026-10-12-to-2026-10-25.csv\""))
                 .andExpect(content().string(org.hamcrest.Matchers.startsWith("Date,Crop,Stems needed")));
+    }
+
+    @Test
+    @DisplayName("GET events returns each event with its crops, and the board JSON carries the same events")
+    void events() throws Exception {
+        mockMvc.perform(get("/api/production-studio/stem-demand/events")
+                        .param("from", "2026-10-12").param("days", "21").param("includeDrafts", "true"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].orderId").value(1))
+                .andExpect(jsonPath("$[0].event").value("Order #1 Bloom Studio"))
+                .andExpect(jsonPath("$[0].confirmed").value(true))
+                .andExpect(jsonPath("$[0].lines[0].crop").value("Nootka Rose"))
+                .andExpect(jsonPath("$[0].lines[0].fromCooler").value(25))
+                .andExpect(jsonPath("$[0].lines[0].shortBy").value(15));
+        verify(service).build(FROM, 21, true);
+        mockMvc.perform(get("/api/production-studio/stem-demand"))
+                .andExpect(jsonPath("$.events[0].lines[0].needed").value(40));
+    }
+
+    @Test
+    @DisplayName("events CSV download names the dates and uses the by-event columns")
+    void eventsCsv() throws Exception {
+        mockMvc.perform(get("/api/production-studio/stem-demand/events/csv"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Content-Disposition",
+                        "attachment; filename=\"buying-list-by-event-2026-10-12-to-2026-10-25.csv\""))
+                .andExpect(content().string(org.hamcrest.Matchers.startsWith("Date,Event,Status,Crop")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(
+                        "Order #1 Bloom Studio,Confirmed,Nootka Rose,40,25,0,15")));
     }
 
     @Test

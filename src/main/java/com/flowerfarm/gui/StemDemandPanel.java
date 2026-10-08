@@ -29,7 +29,8 @@ import java.util.function.Function;
 
 /**
  * Stem demand board: one list of stems by crop and date for orders in a window, with
- * what comes from the cooler, what to cut (forecast), and what is short.
+ * what comes from the cooler, what to cut (forecast), and what is short; the same
+ * window split by event as a buying list.
  */
 public final class StemDemandPanel extends JPanel {
 
@@ -46,14 +47,21 @@ public final class StemDemandPanel extends JPanel {
     private final RowsModel<StemDemand.Line> lines = new RowsModel<>(new String[]{
             "Date", "Crop", "Needed", "Draft", "From cooler", "To cut (forecast)", "Short", "Action",
             "Needed for"}, StemDemandPanel::lineCells);
+    private final RowsModel<EventRow> events = new RowsModel<>(new String[]{
+            "Date", "Event", "Crop", "Needed", "From cooler", "To cut (forecast)", "Short", "Action",
+            "For"}, StemDemandPanel::eventCells);
     private final RowsModel<StemDemand.NotCounted> notCounted = new RowsModel<>(new String[]{
             "Date", "Order", "Product", "Qty", "Why not counted"}, StemDemandPanel::notCountedCells);
     private final RowsModel<StemDemandService.LinkedLine> links = new RowsModel<>(new String[]{
             "Date", "Order", "Product", "Designs", "Counted as recipe"}, StemDemandPanel::linkCells);
     private final JTable lineTable = new JTable(lines);
+    private final JTable eventTable = new JTable(events);
     private final JTable notCountedTable = new JTable(notCounted);
     private final JTable linkTable = new JTable(links);
     private final JTabbedPane tabs = new JTabbedPane();
+    private final JScrollPane eventScroll;
+    private final JScrollPane notCountedScroll;
+    private final JScrollPane linkScroll;
     private final java.util.function.Consumer<String> status;
     private StemDemand.Board board;
 
@@ -82,12 +90,17 @@ public final class StemDemandPanel extends JPanel {
         notes.setOpaque(false);
 
         table(lineTable, "stemDemand.lines", "Stems needed by crop and date");
+        table(eventTable, "stemDemand.events", "Buying list by event");
         table(notCountedTable, "stemDemand.notCounted", "Order lines without a stem count");
         table(linkTable, "stemDemand.links", "Order lines counted as saved recipes");
+        eventScroll = scroll(eventTable, 260);
+        notCountedScroll = scroll(notCountedTable, 260);
+        linkScroll = scroll(linkTable, 260);
         tabs.setName("stemDemand.tabs");
         tabs.addTab("Stems by crop and date", scroll(lineTable, 260));
-        tabs.addTab("Not counted (0)", scroll(notCountedTable, 260));
-        tabs.addTab("Counted as recipes (0)", scroll(linkTable, 260));
+        tabs.addTab("By event (0)", eventScroll);
+        tabs.addTab("Not counted (0)", notCountedScroll);
+        tabs.addTab("Counted as recipes (0)", linkScroll);
 
         JPanel filters = new JPanel(new FlowLayout(FlowLayout.LEFT, FarmUi.CONTROL_GAP, 0));
         filters.setOpaque(false);
@@ -113,8 +126,8 @@ public final class StemDemandPanel extends JPanel {
         body.add(north, BorderLayout.NORTH);
         body.add(tabs, BorderLayout.CENTER);
         body.add(south, BorderLayout.SOUTH);
-        add(FarmUi.section(TITLE, "Stems that confirmed orders need, by crop and date. The cooler covers "
-                + "first, then the season plan's projected harvest; anything left is short.", body),
+        add(FarmUi.section(TITLE, "Stems that confirmed orders need, by crop and date or by event. The "
+                + "cooler covers first, then the season plan's projected harvest; anything left is short.", body),
                 BorderLayout.CENTER);
     }
 
@@ -151,10 +164,12 @@ public final class StemDemandPanel extends JPanel {
     public void showBoard(StemDemand.Board next, List<StemDemandService.LinkedLine> linked) {
         this.board = Objects.requireNonNull(next, "board");
         lines.setRows(next.lines());
+        events.setRows(eventRows(next));
         notCounted.setRows(next.notCounted());
         links.setRows(linked == null ? List.of() : linked);
-        tabs.setTitleAt(1, "Not counted (" + next.notCounted().size() + ")");
-        tabs.setTitleAt(2, "Counted as recipes (" + links.getRowCount() + ")");
+        tabs.setTitleAt(tabs.indexOfComponent(eventScroll), "By event (" + next.events().size() + ")");
+        tabs.setTitleAt(tabs.indexOfComponent(notCountedScroll), "Not counted (" + next.notCounted().size() + ")");
+        tabs.setTitleAt(tabs.indexOfComponent(linkScroll), "Counted as recipes (" + links.getRowCount() + ")");
         headline.setText(StemDemand.summary(next));
         notes.setText(String.join("\n", next.notes()));
         feedback.setText(" ");
@@ -164,8 +179,18 @@ public final class StemDemandPanel extends JPanel {
         return Optional.ofNullable(board);
     }
 
+    /** Opens on the buying list by event instead of the crop-and-date list. */
+    public void showByEvent() {
+        tabs.setSelectedComponent(eventScroll);
+    }
+
+    /** A not-counted line selected under "Not counted", or under "By event". */
     public Optional<StemDemand.NotCounted> selectedNotCounted() {
-        return selected(notCountedTable, notCounted);
+        Optional<StemDemand.NotCounted> line = selected(notCountedTable, notCounted);
+        if (line.isPresent()) {
+            return line;
+        }
+        return selected(eventTable, events).map(EventRow::notCounted);
     }
 
     public Optional<StemDemandService.LinkedLine> selectedLink() {
@@ -188,6 +213,31 @@ public final class StemDemandPanel extends JPanel {
     private static Object[] lineCells(StemDemand.Line line) {
         return new Object[]{line.date().toString(), line.crop(), line.needed(), line.draftStems(),
                 line.fromCooler(), line.toCut(), line.shortBy(), line.action().label(), line.neededFor()};
+    }
+
+    /** One row in the by-event table: a crop the event needs, or a line not counted. */
+    record EventRow(LocalDate date, String event, String crop, Integer needed, Integer fromCooler, Integer toCut,
+                    Integer shortBy, String action, String madeFor, StemDemand.NotCounted notCounted) {
+    }
+
+    static List<EventRow> eventRows(StemDemand.Board board) {
+        List<EventRow> rows = new ArrayList<>();
+        for (StemDemand.Event event : board.events()) {
+            for (StemDemand.EventLine line : event.lines()) {
+                rows.add(new EventRow(event.date(), event.event(), line.crop(), line.needed(), line.fromCooler(),
+                        line.toCut(), line.shortBy(), line.action().label(), line.madeFor(), null));
+            }
+            for (StemDemand.NotCounted line : event.notCounted()) {
+                rows.add(new EventRow(event.date(), event.event(), line.product(), null, null, null, null,
+                        "Not counted", trim(line.quantity()) + " " + line.unit() + " · " + line.reason(), line));
+            }
+        }
+        return rows;
+    }
+
+    private static Object[] eventCells(EventRow row) {
+        return new Object[]{row.date().toString(), row.event(), row.crop(), row.needed(), row.fromCooler(),
+                row.toCut(), row.shortBy(), row.action(), row.madeFor()};
     }
 
     private static Object[] notCountedCells(StemDemand.NotCounted line) {
@@ -241,8 +291,13 @@ public final class StemDemandPanel extends JPanel {
 
         @Override
         public Class<?> getColumnClass(int column) {
-            return !rows.isEmpty() && cells.apply(rows.get(0))[column] instanceof Integer
-                    ? Integer.class : Object.class;
+            for (T row : rows) {
+                Object cell = cells.apply(row)[column];
+                if (cell != null) {
+                    return cell instanceof Integer ? Integer.class : Object.class;
+                }
+            }
+            return Object.class;
         }
 
         @Override

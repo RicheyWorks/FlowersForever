@@ -15,6 +15,7 @@ import javax.swing.JCheckBox;
 import javax.swing.JComboBox;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
+import javax.swing.JTabbedPane;
 import javax.swing.JTable;
 import javax.swing.JTextField;
 import java.awt.Component;
@@ -85,7 +86,8 @@ class DesktopStemDemandControllerTest {
     @BeforeEach
     void setUp() {
         StemDemand.Board board = StemDemand.plan(TODAY, TODAY.plusDays(13), false,
-                List.of(new StemDemand.Need(EVENT, "Nootka Rose", 40, true, "Order #1 Bloom Studio")),
+                List.of(new StemDemand.Need(EVENT, "Nootka Rose", 40, true, "Order #1 Bloom Studio", 1L,
+                        "Order #1 Bloom Studio")),
                 List.of(new StemDemand.Stock("Nootka Rose", 25)), List.of(),
                 List.of(new StemDemand.NotCounted(EVENT, 2L, 7L, "Order #2 Kitsap Weddings", "Centerpiece",
                         12, "designs", "Sold in designs, so its stems are unknown.")),
@@ -233,9 +235,69 @@ class DesktopStemDemandControllerTest {
     }
 
     @Test
+    @DisplayName("Buying list by event opens on the by-event list; copy and CSV share it event by event")
+    void buyingListByEvent() throws Exception {
+        Path target = temp.resolve("by-event.csv");
+        saveTo = Optional.of(target.toFile());
+        script.add(message -> {
+            Container dialog = (Container) message;
+            JTabbedPane tabs = named(dialog, "stemDemand.tabs", JTabbedPane.class);
+            assertThat(tabs.getTitleAt(tabs.getSelectedIndex())).isEqualTo("By event (2)");
+            JTable events = named(dialog, "stemDemand.events", JTable.class);
+            assertThat(events.getRowCount()).isEqualTo(2);
+            assertThat(events.getModel().getValueAt(0, 1)).isEqualTo("Order #1 Bloom Studio");
+            assertThat(events.getModel().getValueAt(0, 2)).isEqualTo("Nootka Rose");
+            assertThat(events.getModel().getValueAt(0, 4)).isEqualTo(25);
+            assertThat(events.getModel().getValueAt(0, 6)).isEqualTo(15);
+            assertThat(events.getModel().getValueAt(1, 1)).isEqualTo("Order #2 Kitsap Weddings");
+            assertThat(events.getModel().getValueAt(1, 3)).isNull();
+            assertThat(events.getModel().getValueAt(1, 7)).isEqualTo("Not counted");
+            assertThat(events.getModel().getColumnClass(3)).isEqualTo(Integer.class);
+            named(dialog, "stemDemand.copyEvents", AbstractButton.class).doClick();
+            named(dialog, "stemDemand.saveEventsCsv", AbstractButton.class).doClick();
+            return 0;
+        });
+
+        controller.openBuyingList();
+
+        assertThat(copied).singleElement().asString().contains("Hood Canal Blooms — buying list by event",
+                "2026-10-17  Order #1 Bloom Studio", "Not counted: Centerpiece", StemDemand.SHARED_STOCK_NOTE);
+        assertThat(statuses).contains(StemDemand.statusEventsCopied(),
+                "suggested buying-list-by-event-2026-10-12-to-2026-10-25.csv",
+                StemDemand.statusEventsSaved("by-event.csv"));
+        assertThat(Files.readString(target, StandardCharsets.UTF_8))
+                .startsWith("Date,Event,Status,Crop").contains("Order #2 Kitsap Weddings,Confirmed,Centerpiece");
+        assertThat(messages).isEmpty();
+    }
+
+    @Test
+    @DisplayName("a not-counted line chosen in the by-event list can be counted as a recipe")
+    void linksFromByEvent() {
+        when(demand.linkRecipe(2L, 7L, 5L))
+                .thenReturn(new StemDemandService.RecipeLink(2L, 7L, "Centerpiece", 5L, "Centerpiece"));
+        script.add(message -> {
+            Container dialog = (Container) message;
+            JTable events = named(dialog, "stemDemand.events", JTable.class);
+            events.setRowSelectionInterval(0, 0);
+            named(dialog, "stemDemand.linkRecipe", AbstractButton.class).doClick();
+            events.setRowSelectionInterval(1, 1);
+            named(dialog, "stemDemand.linkRecipe", AbstractButton.class).doClick();
+            return 0;
+        });
+        script.add(message -> 0);
+
+        controller.openBuyingList();
+
+        verify(demand).linkRecipe(2L, 7L, 5L);
+        assertThat(statuses).contains("Select an order line under \"Not counted\" or \"Counted as recipes\" first.",
+                "Counting Centerpiece as Centerpiece.");
+    }
+
+    @Test
     @DisplayName("nothing opens before the window attaches the controller")
     void unattachedIsQuiet() {
         new DesktopStemDemandController(demand, studio).openBoard();
+        new DesktopStemDemandController(demand, studio).openBuyingList();
         verify(demand, never()).build(any(), anyInt(), anyBoolean());
     }
 
