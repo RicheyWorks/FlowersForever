@@ -2,6 +2,7 @@ package com.flowerfarm.lsystem;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
+import com.flowerfarm.util.PathNames;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -60,8 +61,8 @@ public class LSystemLibrary {
         }
         try (Stream<Path> stream = Files.list(directory)) {
             return stream
-                    .filter(p -> p.getFileName().toString().toLowerCase(Locale.ROOT).endsWith(".json"))
-                    .sorted(Comparator.comparing(p -> p.getFileName().toString().toLowerCase(Locale.ROOT)))
+                    .filter(p -> PathNames.fileName(p).toLowerCase(Locale.ROOT).endsWith(".json"))
+                    .sorted(Comparator.comparing(p -> PathNames.fileName(p).toLowerCase(Locale.ROOT)))
                     .toList();
         }
     }

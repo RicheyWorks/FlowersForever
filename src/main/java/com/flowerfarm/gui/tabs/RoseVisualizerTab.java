@@ -11,6 +11,7 @@ import com.flowerfarm.lsystem.RoseLSystemPresets;
 import com.flowerfarm.lsystem.SeasonPalette;
 import com.flowerfarm.model.Item;
 import com.flowerfarm.service.InventoryService;
+import com.flowerfarm.util.PathNames;
 
 import javax.imageio.ImageIO;
 import javax.swing.*;
@@ -686,7 +687,7 @@ public class RoseVisualizerTab implements FlowerFarmTab {
                         "Load", JOptionPane.INFORMATION_MESSAGE);
                 return;
             }
-            String[] names = files.stream().map(p -> p.getFileName().toString()).toArray(String[]::new);
+            String[] names = files.stream().map(PathNames::fileName).toArray(String[]::new);
             JComboBox<String> rulesetBox = new JComboBox<>(names);
             rulesetBox.getAccessibleContext().setAccessibleName("Saved ruleset to load");
             JScrollPane loadForm = rulesetLoadDialog(panel, rulesetBox);

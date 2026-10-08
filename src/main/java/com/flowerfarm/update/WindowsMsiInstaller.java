@@ -1,5 +1,7 @@
 package com.flowerfarm.update;
 
+import com.flowerfarm.util.PathNames;
+
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -40,8 +42,8 @@ public final class WindowsMsiInstaller implements PlatformInstaller {
 
     @Override
     public boolean canInstall() {
-        return launcher.map(path -> path.getFileName() != null
-                && path.getFileName().toString().toLowerCase(Locale.ROOT).endsWith(".exe")).orElse(false);
+        return launcher.map(path -> PathNames.fileName(path).toLowerCase(Locale.ROOT).endsWith(".exe"))
+                .orElse(false);
     }
 
     @Override
