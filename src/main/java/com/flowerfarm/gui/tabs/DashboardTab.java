@@ -86,6 +86,7 @@ public class DashboardTab implements FlowerFarmTab {
     private JButton morningBriefingButton;
     private JButton dayCloseoutButton;
     private JLabel dailySheetStatusLabel;
+    /** Event dispatch thread only: set and cleared by button handlers and SwingWorker.done(). */
     private boolean preparingDailySheet;
     private List<DashboardPriority> rankedPriorities = List.of();
     private boolean priorityQueueUpdating;
