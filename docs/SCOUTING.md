@@ -28,7 +28,7 @@ and the window headline counts them.
   tab.
 
 Opening one of these items opens the Scouting & lab samples window. If the scouting log can't be read, the list shows
-one "Scouting log needs attention" item instead of failing, and the log file is left untouched.
+one "Scouting log needs attention" item instead of failing, and nothing is changed.
 
 ## Photos
 
@@ -41,8 +41,9 @@ caption. **Photos…** lists a finding's photos. From there you can:
 
 Photos go through the app's existing attachments feature: the same image checks, the 15 MB limit, and the same
 `<records folder>/attachments/` folder, named by the photo's SHA-256. Every photo is checked against its SHA-256 and
-size when opened, so a missing or changed file is reported instead of shown. The finding keeps the photo's SHA-256,
-type, size, file name, caption and date in the scouting log. The original file stays where it was.
+size when opened, so a missing or changed file is reported instead of shown. The link from a finding to each photo
+(SHA-256, type, size, file name, caption, date and order) is a row in the farm database's `scouting_finding_photos`
+table. The original file stays where it was.
 
 * Attaching the same picture twice keeps one entry. A finding holds up to 12 photos.
 * Editing a finding never drops its photos.
@@ -50,9 +51,8 @@ type, size, file name, caption and date in the scouting log. The original file s
   attach it again.
 * Backups copy the whole records folder, so they include the photos.
 
-The attachments database table only accepts production tasks today. Linking photos to findings there would need a
-migration, which waits until the open migration pull requests land (see below). The older free-text "Photo file"
-field is still shown for findings that use it.
+Scouting photo links have their own table rather than sharing the attachments table, which belongs to production
+tasks. The older free-text "Photo file" field is still shown for findings that use it.
 
 ## Submission sheet
 
@@ -63,20 +63,36 @@ sample type. It goes in the box **with** the lab's own signed form. It does not 
 
 ## Where the data lives
 
-The log is saved to `<records folder>/scouting/scouting-log.json`:
+The log lives in the farm database (migration V47), next to the rest of the farm's records:
 
-* Every save writes a temporary file, flushes it to disk, then swaps it in (`SafeFiles`). A crash or power cut
-  leaves either the old log or the new one, never half of one.
-* The previous version is kept as `scouting-log.json.bak`.
-* If the log cannot be read, FlowersForever opens the `.bak` copy, keeps the damaged file aside as
-  `scouting-log.damaged-<date-time>.json`, and says so. If neither copy can be read, it refuses to save, so nothing
-  is overwritten.
-* Backups and restores (File → Back up now / Restore) copy the whole records folder, so they include the scouting
-  log and the photos in `attachments/`.
+| Table | Holds |
+| --- | --- |
+| `scouting_findings` | One row per finding, keyed by its ID (for example `F-20261007-001`). |
+| `scouting_finding_photos` | The photos linked to each finding, in order. Removing a finding removes its links. The photo files stay in `attachments/`. |
+| `scouting_lab_samples` | One row per lab sample, keyed by its ID. The link to a finding is the finding's ID, and the app still refuses to delete a finding that has samples. |
+| `scouting_settings` | One row: the overdue-results threshold, and when the old JSON log was imported. |
 
-**Why a file and not database tables:** a stack of open pull requests adds database migrations V22–V46. Adding new
-tables now would collide with those migrations when they land. The log can move into the database later. The file
-format has a `version` field, and unknown fields are ignored, so a newer file still opens.
+* Every save replaces the log in one database transaction, so a crash or power cut leaves the old log or the new
+  one, never half of one. If the database can't be read or written, the window says so and nothing is changed.
+* Backups and restores (File → Back up now / Restore) include the database and the photos in `attachments/`.
+
+### The one-time import from the JSON file
+
+Before V47 the log was kept in `<records folder>/scouting/scouting-log.json`. The first time the log is opened after
+the update, FlowersForever:
+
+1. Reads the JSON file. If it is damaged, it uses `scouting-log.json.bak` as before and keeps the damaged file aside as
+   `scouting-log.damaged-<date-time>.json`.
+2. Copies every finding, photo link and lab sample, plus the overdue threshold, into the database in one transaction,
+   and records the time and a short note in `scouting_settings`. A record with a missing or repeated ID gets a new ID
+   instead of being dropped, and a lab sample keeps its link to that finding.
+3. Says once that the log moved, and where the old file is.
+
+The JSON file and its `.bak` copy are **not changed or deleted**. They stay behind as a backup of the log as it was on
+the day of the update, and FlowersForever no longer writes to them. If neither copy can be read, nothing is imported or
+recorded, and the window explains how to restore a backup. The import runs the next time the log is opened after the
+file is fixed, so the database never starts a second log that disagrees with the file. If there was no JSON file, the
+log simply starts empty in the database.
 
 ## Pest & disease reference sources
 
