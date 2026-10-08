@@ -44,7 +44,7 @@ public class McpProtocolHandler {
     public static final String CURRENT_PROTOCOL_VERSION = "2026-07-28";
     public static final String LEGACY_PROTOCOL_VERSION = "2025-11-25";
     public static final String SERVER_NAME = "flowersforever-farm-harness";
-    public static final String SERVER_VERSION = "1.2.0";
+    public static final String SERVER_VERSION = "1.3.0";
 
     private static final int INVALID_REQUEST = -32600;
     private static final int METHOD_NOT_FOUND = -32601;
