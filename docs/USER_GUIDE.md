@@ -15,6 +15,724 @@ morning cut, prepare customer orders, pack for market, and close the day.
 Open **Account → My access** at any time to review the current role. In local
 mode the app provides full OWNER access.
 
+## Farm setup and farm types
+
+At desktop startup, choose one farm type or select **Combine farm types…** to
+enter a workspace with several specialties. A single choice is marked
+**Current type**; a combination marks its main card **Primary · in mix** and
+the others **In your mix**. Use **Find a farm type** to narrow the menu cards;
+if no cards match, **Clear search** shows all types again without changing the
+saved selection. Choose **Rose & events** for a rose grower selling
+stems, bouquets, or wedding work; **Wildflower farm** for cut-flower growing and
+market work; **Flower shop** for a floral retailer or designer; **Cannabis farm** for a
+cultivation planning notebook; **Potato farm** for field plans; **Apple orchard**
+for orchard block plans; **Berry farm** for berry blocks and picking windows;
+**Vineyard farm** for grape block and harvest-window plans;
+**Hay & forage** for field cutting plans;
+**Hops farm** for hop-yard and season plans;
+**Grains farm** for field and crop rotation plans;
+**Seed farm** for seed-crop field and season plans;
+**Tree nut orchard** for nut block and season plans;
+**Vegetable farm** for field or bed succession plans;
+**Aquaculture farm** for aquatic cohort plans;
+**Christmas tree farm** for tree block and replacement planting plans;
+**Apiary farm** for dated hive checks;
+**Mushroom farm** for growing batch plans;
+**Cranberry farm** for perennial bed and harvest-method plans;
+**Pumpkin patch** for planting, picking, and sales-mode plans;
+**Nursery farm** for live-plant growing batches; **Livestock farm** for herd
+group plans; **Poultry & eggs** for a dated egg collection log; **Dairy farm** for
+dated milk collections; or **Custom farm** for other
+operations. Any role can enter the saved workspace or open a type already in
+the mix. In a combination, an OWNER can use **Add to mix…** on any unselected
+type, including Custom farm, or edit the combination;
+**File → Choose or combine farm types…** returns to the menu later.
+
+Open **File → Farm setup…** to record the operation's state, primary enterprise,
+additional enterprises, specialties such as crops or breeds, and cut-flower
+offerings. A mixed farm can name all its enterprises and combine the specialty
+tools it uses. The selected farm types are saved separately from the broader
+enterprise list. A flower shop can select **Floral retail** as its
+enterprise without claiming to grow cut flowers or plan beds. OWNER can save
+these details. HAND and VIEWER can inspect them.
+
+Existing installations begin with **Washington · Cut flowers · Rose & events**
+selected so their current workflow remains available. Review and save Farm
+setup if the operation runs a shop, grows wildflowers, is in Oregon, or has
+other enterprises. Choosing a nonflower card from the original single **Cut
+flowers** starter profile replaces that default and clears flower offerings.
+Switching a farm that already records multiple enterprises keeps its additional
+lines and offerings. Review Farm setup after choosing a type to confirm the
+operation's actual mix.
+
+Changing a single selected type or saving a new combination changes the saved selection and opens
+its navigation. Finish unfinished drafts and pending saves first: the menu
+checks for them before changing the saved selection. Farm setup
+also checks unfinished work before allowing an OWNER to save changes that could
+rebuild navigation. **Rose & events** opens on the familiar **Dashboard** under **Today**;
+the other choices open a **Workspace** overview with links to their available
+tools. Switching does not move or split records. The setup is saved in the
+local database.
+
+### Combine several farm types
+
+Choose **Combine farm types…** from the farm-type menu. Select two or more
+types, choose the **Main farm type**, and save the combination. The
+combined **Workspace** overview opens first; the main type sets context and
+shared defaults. For example, select **Potato farm**, **Cannabis farm**, and
+**Apple orchard**. The workspace then offers **Field plans**, **Cultivation**,
+and **Orchard blocks**.
+Field plans and orchard blocks are independent planning notebooks; each keeps
+its own saved areas and edits. The shared **Harvest Log**, **Inventory**,
+**Customers & Orders**, and **Knowledge Log** appear once.
+
+In the combination dialog, drag a farm card by **↗ Drag this card** onto
+**Your mix** to include it, **Main focus** to include it as the main type, or
+**Remove from mix** to take it out of the current mix. The card checkboxes and
+**Main farm type** choice do the same work without dragging. These moves change
+only the dialog draft: choose **Save combination** to apply them, or **Cancel**
+to leave the saved mix as it was. Removing a type hides its tools but keeps its
+saved records.
+
+Search in the combination dialog to narrow the visible farm cards, then choose
+**Clear search** to show all types. Filtering does not remove selected types or
+change the main type, including when those cards are hidden by the search.
+The drag targets, card checkboxes, and **Main farm type** choice remain available
+while searching.
+
+Choose **Open in mix** on any included farm card to jump to its main tool without
+changing the saved combination. This is available to all roles. On an unselected
+card, **Add to mix…** opens the editor with that type and the current mix
+in a draft. **Save combination** applies it; **Cancel** keeps the saved mix.
+Custom farm can join a mix for an unlisted line of work while named specialty
+tools stay available. It can also be the main type. Name the other crops or
+products in **Farm setup…**; those names appear in the combined overview.
+Custom adds the shared Harvest Log and no separate production plan.
+
+Open **File → Choose or combine farm types…**, then **Edit combined farm…** to add or
+remove a specialty or change the main type. The action reads **Combine farm
+types…** when only one type remains. Removing a type hides that tool;
+its saved plans remain in the local database and become available when the type
+is added again. You can edit an existing combination down to one type if the
+operation no longer needs its other specialty tools. Finish any open draft or
+pending save before changing the combination. In Farm setup, edit the broader
+enterprise mix and specialty crop names; in the workspace, edit supported plan
+details and product records. These choices do not add arbitrary custom fields
+or connect a specialty plan to harvest, stock, or sales automatically.
+
+Today's deep season planning, floral recipes, and production calculations remain
+designed for cut flowers. The cannabis workspace adds a limited cultivation
+planning notebook. Potato farm, Apple orchard, Berry farm, Vineyard farm, Hay & forage, Hops farm, Grains farm, Seed farm, Tree nut orchard, and Vegetable farm add field and block
+planning notebooks. Aquaculture farm adds aquatic cohort plans; Christmas tree farm adds tree block and replacement planting plans; Mushroom farm adds growing batch plans; Cranberry farm adds perennial bed plans; Pumpkin patch adds seasonal patch plans. Nursery farm adds live-plant growing batch plans, and
+Livestock farm adds current herd group plans. Poultry & eggs and Dairy farm add
+editable, dated collection entries; Apiary farm adds dated hive observations.
+Those specialty records
+are separate from generic harvest, stock, and order records; they do not add
+grading, packout, storage, weight conversion, U-pick booking, nursery licensing,
+or food-safety traceability workflows.
+Custom farm does not add a crop-specific production model. For the current scope
+of potato, apple, berry, vineyard, hay, hops, grains, seed, tree nuts, vegetables, pumpkins, aquaculture, Christmas trees, mushrooms, cranberries, apiaries, nursery, livestock, poultry, dairy, cannabis, and other farm types, see [farm types and workflow
+scope](FARM_TYPES.md). Include the [database backup](BACKUP_RESTORE.md) when
+moving or restoring Farm setup.
+
+## Field science tools
+
+Open **Field science** after choosing a farm type. The tab shows CSRBT field-kit
+tools matched to the selected type; a combined farm shows the matching tools
+for its mix. Select **Open offline tool** on a card to launch its bundled page
+in the default browser. For example, Cannabis farm offers **Soil recipes ·
+Subcool’s Super Soil**; Mushroom farm offers wild fungal specimen references;
+Aquaculture farm offers Food Web Builder as an ecology study. Cards for a farm
+type are described in the [farm-to-tool map](CSRBT_FIELD_KIT_PORT.md).
+
+![Cannabis Field science archive and six tool cards, with Subcool's Super Soil first](images/app-field-science-cannabis.png)
+
+Enter data and use the browser page's copy, export, or print action to keep a
+result. To archive its text in FlowersForever, choose **Save an export…** on
+that instrument's card. Paste the copied text, browse for a `.eco`, `.txt`, or
+`.csv` file, or drop text or one such file into the draft. Files must be UTF-8
+text, and the saved text must be no more than **512 KiB** in UTF-8. Give the
+export a title, optionally add a note, inspect or edit the staged text, then
+choose **Save export**. Browsing and dropping do not save by themselves;
+**Cancel** leaves no archive entry. Select a row under **Saved field science
+exports** to read or copy its reviewed text and see the selected instrument,
+source URL, pinned CSRBT commit, and SHA-256 hash of that saved text. Search
+the full archive by title, instrument, filename, or note with **Search exports**
+or Enter; **Clear search** restores all entries. The saved text itself is not
+searched. **Previous** and **Next** browse matching entries, 200 at a time.
+The archive is available from Field science even when the selected farm type
+has no matching offline tool cards.
+
+To make a standalone file from an archived entry, select its row and choose
+**Save selected text…** after its text loads. The app checks the saved length
+and SHA-256 before writing. The file contains only the reviewed saved text in
+UTF-8, preserving its BOM, line endings, and trailing spaces. It does not
+include the archive title, source metadata, or the original browser file.
+Choose a `.eco`, `.txt`, or `.csv` destination; the app prompts before replacing
+an existing file, and canceling leaves that file in place. VIEWER can use this
+read-only export action.
+
+If a tool helps explain something you actually observed or tried on your farm,
+select **Record a finding** on its card. An editable Knowledge Log draft opens
+with the tool's title and source URL and a `field-science` tag. Describe your
+observation and follow-up, review it, and confirm to save. This is separate
+from **Save an export**: the card action does not copy the browser page or
+attach an archive entry. The tab's **Open Knowledge Log** button opens the log
+without preparing a sourced draft.
+
+To cite reviewed text already in the archive, select its row, wait for the
+saved body to load, and choose **Record finding from selected…**. In the
+editable draft, write your own farm observation and follow-up; no calculation
+or tool output is filled in as an observation. Confirming saves the finding
+with a link to the exact reviewed H2 export by ID. In the saved Knowledge Log
+detail, **Open linked export** opens that entry for reading. The link does not
+refer to the original browser file. VIEWER can open a linked export, but only
+OWNER and HAND can create a finding.
+
+Opening a browser tool never saves a farm record or changes a crop plan,
+inventory, or order. The saved export archive contains only the text you
+reviewed and confirmed, with catalog provenance for the card you selected; it
+does not verify the text's scientific accuracy or include the original file.
+OWNER and HAND can save reviewed exports and findings. VIEWER can open tools,
+search and read saved exports, save selected archive text to a file, and open
+an export linked from a saved finding, but cannot save farm records. The
+browser's own local drafts and downloaded originals remain outside desktop
+roles and H2 backups;
+keep those files separately. Reviewed archive entries and confirmed findings
+are in H2 and return with its [data-directory backup](BACKUP_RESTORE.md).
+
+## Cannabis cultivation planning
+
+Choose **Cannabis farm** from the farm-type menu or Farm setup and open
+**Cultivation**. Create a named batch with its growing area, plant count, start
+date, planned harvest date, and stage. A cultivar and notes are optional. Select
+a saved batch to review or edit
+those planning details. The available stages are Planned, Propagating,
+Vegetative, Flowering, Harvested, Complete, and Cancelled; the stage is a local
+planning label, not a state tracking event.
+
+To change a saved batch's planning stage, drag its row onto a stage under
+**Move planning stage**. You can also select the row and click a stage. The
+stage change saves immediately and changes no other batch details. Save or
+discard an open draft before moving a batch so the move cannot overwrite
+unsaved work. VIEWER access cannot change stages.
+
+Use **Inventory** for general products and **Customers & Orders** for customer
+sales records. A cultivation batch does not automatically create a harvest lot,
+change inventory, or link an order to its plants. These tools do not provide
+license identifiers, regulated plant counts, testing, transfers, manifests, or
+state reporting. Follow the farm's required state system separately; see
+[cannabis and hemp workflow scope](FARM_TYPES.md#cannabis-and-hemp-require-a-separate-track).
+
+## Potato field and apple orchard planning
+
+Choose **Potato farm** and open **Field plans**, or choose **Apple orchard** and
+open **Orchard blocks**. Select **New field plan** or **New orchard block**,
+enter a field or block name, and choose **Save plan**. Variety, acres, planting
+date, target harvest date, and notes are optional. Set a planning stage to show
+where the area stands. Select a saved row to review or edit it; **Discard changes**
+restores the saved details.
+
+To change a saved field or block's stage quickly, drag its row onto a stage in
+**Move by stage**. You can also select the row and click a stage, or use the
+**Planning stage** field and **Save plan**. A drop or stage click saves that stage
+change immediately. Finish or discard any open plan draft first; a drag cannot
+overwrite unsaved details. VIEWER access cannot change stages.
+
+These are local planning notebooks. Saving a field or block does not create a
+harvest lot, change inventory, or link an order to that area. Use the
+**Open Harvest Log**, **Open Inventory**, and **Open Customers & Orders** links for
+general records. The notebooks do not track potato grades or packout, apple
+bins or cold storage, or crop-specific traceability. [Farm types and workflow
+scope](FARM_TYPES.md#choose-a-workspace-for-the-days-work) lists the current
+boundaries.
+
+## Berry block planning
+
+Choose **Berry farm** and open **Berry blocks**. Create a plan with a block name
+and berry crop. Add a cultivar, acres, planting date, first and last planned
+pick, and notes when known. Set a planning stage and choose an intended channel:
+**Fresh**, **Processing**, **U-pick**, **Mixed**, or **Undecided**. Select a saved
+block to review or edit its plan.
+
+![Berry block planning form with sample crop, cultivar, picking window, and intended sales channel](images/app-berry-block-plan.png)
+
+The pick dates describe the planned window; they are not records of actual picks.
+Use **Harvest Log**, **Inventory**, and **Customers & Orders** for general records.
+A berry block does not create a harvest lot or stock, and those general records
+are not linked back to the block. This notebook does not manage packout, cold
+storage, U-pick bookings, weight conversion, or food-safety traceability. See
+[farm types and workflow scope](FARM_TYPES.md#choose-a-workspace-for-the-days-work)
+for the current boundaries.
+
+## Vineyard block planning
+
+Choose **Vineyard farm** and open **Vineyard blocks**. Save a named grape block
+with its variety. Add a location, acreage, first and last planned harvest
+dates, intended destination, planning stage, and notes as they become known.
+The dated window belongs to the season being planned; update the saved block
+when that plan changes. Select a saved row to review or edit its details.
+A farm growing grapes alongside other crops can add Vineyard farm to its
+combination while keeping shared customers, products, and notes.
+
+To change only a saved block's planning stage, drag its row onto a stage under
+**Move a saved block**. Selecting the row and clicking a stage does the same
+work. Both save the stage change immediately. Save or discard an open form
+draft first so the move cannot overwrite unsaved details. VIEWER access cannot
+change stages.
+
+![Vineyard block planning form with grape variety, location, acreage, planned harvest window, intended destination, and notes](images/app-vineyard-block-plan.png)
+
+The harvest window and destination describe intentions. They do not record
+picked grape weight or a delivery, and a vineyard block does not create a
+harvest lot, stock, or customer order. **Inventory** and **Customers & Orders**
+remain separate general tools. Grape quality, crush and
+wine production, contract fulfillment, plant-health events, and regulatory
+records need their own workflows. See [farm types and workflow
+scope](FARM_TYPES.md#choose-a-workspace-for-the-days-work).
+
+## Hay and forage cutting plans
+
+Choose **Hay & forage** and open **Hay cuttings**. Save a named field, forage
+crop, cutting number, and planned cut date. Add optional acreage, a planned
+bale date, stage, and notes as they become known. Select a saved cutting to
+review or edit its plan. A dairy or livestock operation can add Hay & forage
+to its farm mix and keep the other specialty tools and shared records together.
+
+To plan another pass through the same field, select a saved cutting and choose
+**Plan next cut**. The new draft carries over its field, forage crop, and acres,
+sets the cutting number one higher, and leaves both planned dates blank. Enter
+the next planned cut date before saving. Save or discard an open draft first;
+VIEWER access cannot use this action, and cutting 99 cannot be advanced.
+
+To change only a saved cutting's planning stage, drag its row onto a stage
+under **Move a saved cutting**. Select the row and click a stage for the same
+action. Both save the stage change immediately. Save or discard an open form
+draft first so the move cannot overwrite unsaved details. VIEWER access cannot
+change stages.
+
+![Hay cutting planning form with field, forage crop, cutting number, optional acreage, planned cut and bale dates, stage, and notes](images/app-hay-cutting-form.png)
+
+These dates and stages are plans. A cutting entry does not record harvested
+forage, bale counts or weights, feed rations, or forage quality. It does not
+create stock, update a Herd groups or Milk collections entry, link an order,
+or serve as a compliance record. **Inventory** and **Customers & Orders**
+remain separate general tools. See [farm types and workflow
+scope](FARM_TYPES.md#choose-a-workspace-for-the-days-work).
+
+## Hop yard season plans
+
+Choose **Hops farm** and open **Hop yards**. Save a yard, hop variety, and
+planned harvest start date. Add acreage, a planned stringing date and harvest
+end date, stage, and notes as the season plan becomes clear. Select a saved yard
+to review or edit it. A farm that also grows other crops can add Hops farm to its mix;
+the other selected tools and shared records remain available.
+
+Select a saved yard and choose **Plan next season** to begin another plan for
+the same yard and variety. The draft carries over its yard, variety, and acres
+and leaves the planned dates blank for the new season. Enter a new planned
+harvest start date before saving. Save or discard an open draft first; VIEWER
+access cannot create or edit plans.
+
+To change only a saved yard's planning stage, drag its row to a stage under
+**Move a saved yard**. Select the row and click a stage for the same action.
+Both save the stage change immediately. Save or discard an open form draft
+first so the move cannot overwrite unsaved details. VIEWER access cannot
+change stages.
+
+![Hop yard planning form with yard, variety, acreage, planned stringing date, harvest window, stage, and notes](images/app-hop-yard-form.png)
+
+These dates and stages are plans. A yard entry does not record picked yield,
+drying, pellets, product stock, contract commitments, or customer orders.
+**Inventory** and **Customers & Orders** remain separate general tools. The
+yard notebook is not a regulatory record. See [farm types and workflow
+scope](FARM_TYPES.md#choose-a-workspace-for-the-days-work).
+
+## Grain field rotation plans
+
+Choose **Grains farm** and open **Grain fields**. Save a named field and grain
+crop with a planned harvest start. Add a variety, acres, previous crop, planned
+seeding date, planned harvest end, stage, and notes when known. The seeding date
+must be on or before the harvest start, and the harvest end must be on or after
+the start. Select a saved field to review or edit its plan. In a mixed farm,
+Grain fields appears alongside the other selected specialty tools and shared
+records.
+
+Select a saved field and choose **Plan next rotation** to start another crop
+plan for that field. The new draft retains the field and acres, sets **Previous
+crop** to the saved grain crop, and clears the next grain crop, variety, dates,
+and notes. Its stage begins at Planned. Enter a new grain crop and planned
+harvest start before saving. Save or discard an open draft first; VIEWER access
+cannot create or edit plans.
+
+To change only a saved field's planning stage, drag its row onto a stage under
+**Move a saved field**. Select the row and click a stage for the same action.
+Both save the stage change immediately. Save or discard an open form draft
+first so the move cannot overwrite unsaved details. VIEWER access cannot
+change stages.
+
+![Grain field planning form with field, crop, variety, acreage, previous crop, planned seeding and harvest dates, stage, and notes](images/app-grain-field-form.png)
+
+These dates and stages are plans. A field entry does not record harvested
+grain yield, grade, moisture, storage, or contracts, and it does not create
+stock or link an order. **Inventory** and **Customers & Orders** remain
+separate general tools. See [farm types and workflow
+scope](FARM_TYPES.md#choose-a-workspace-for-the-days-work).
+
+## Seed field season plans
+
+Choose **Seed farm** and open **Seed fields**. Save a named field, seed species
+or crop, and planned harvest start. Add a variety, acres, previous crop, planned
+sowing and flowering dates, planned harvest end, intended use, manual isolation
+notes, stage, and general notes when known. Select a saved field to edit its
+plan. In a mixed farm, Seed fields appears beside the other selected specialty
+tools and shared records.
+
+Select a saved field and choose **Plan next season** to start another plan. The
+draft carries forward the field, crop, variety, and acres, clears its planned
+dates, and starts at Planned. Enter the new planned harvest start before saving.
+Save or discard an open draft first; VIEWER access cannot create or edit plans.
+
+To change only a saved field's planning stage, drag its row onto a stage under
+**Move a saved field**. Select the row and click a stage for the same action.
+Both save the stage change immediately. Save or discard an open form draft
+first so the move cannot overwrite unsaved details. VIEWER access cannot
+change stages.
+
+![Seed field planning form with field, species, variety, acreage, previous crop, intended use, sowing, flowering, and harvest dates, manual isolation notes, and stage](images/app-seed-field-form.png)
+
+Isolation notes are text supplied by the grower. The notebook does not
+calculate isolation distances, check nearby seed fields, determine eligibility,
+or certify seed. A field plan does not record actual yield, cleaned seed lots,
+test results, stock, or order links. **Inventory** and **Customers & Orders**
+remain separate general tools. See [farm types and workflow
+scope](FARM_TYPES.md#choose-a-workspace-for-the-days-work).
+
+## Tree nut block season plans
+
+Choose **Tree nut orchard** and open **Nut blocks**. Save a named block, nut
+crop, and planned harvest start. Add a variety, pollinizer variety, acres, tree
+count, planned bloom start, floor preparation date, planned harvest end,
+intended destination, stage, and notes when known. Select a saved block to edit
+its plan. In a mixed farm, Nut blocks appears beside the other selected
+specialty tools and shared records. Planned bloom and floor preparation dates
+must be on or before harvest start; harvest end must be on or after start.
+
+Select a saved block and choose **Plan next season** to start another plan.
+The draft carries forward its block, crop, variety, pollinizer variety, acres,
+tree count, and destination. Dates and notes are cleared, and the stage begins
+at Planned. Enter a new planned harvest start before saving. Save or discard
+an open draft first; VIEWER access cannot create or edit plans.
+
+To change only a saved block's planning stage, drag its row onto a stage under
+**Move a saved block**. Select the row and click a stage for the same action.
+Both save the stage change immediately. Save or discard an open form draft
+first so the move cannot overwrite unsaved details. VIEWER access cannot
+change stages.
+
+![Nut block planning form with crop, variety, pollinizer, acreage, tree count, bloom, floor preparation, harvest window, destination, and stage](images/app-nut-block-form.png)
+
+The pollinizer variety is a grower-entered field. The notebook does not check
+whether it is compatible with the crop variety. A nut block plan does not
+record actual harvested yield, cleaning, drying, or grading, and does not
+create stock or link orders. **Inventory** and **Customers & Orders** remain
+separate general tools. See [farm types and workflow
+scope](FARM_TYPES.md#choose-a-workspace-for-the-days-work).
+
+## Vegetable planting succession plans
+
+Choose **Vegetable farm** and open **Vegetable plantings**. Save a field or
+bed, crop, succession number, and planned harvest start. Add a variety,
+previous crop, acres, sowing and transplant dates, planned harvest end,
+intended channel, stage, and notes when known. All dates are entered by the
+grower. Select a saved planting to edit its plan. In a mixed farm, Vegetable
+plantings appears beside the other selected specialty tools and shared records.
+Sowing and transplant dates must be on or before planned harvest start; a
+planned harvest end must be on or after that start.
+
+Select a saved planting and choose **Plan next succession** to start another
+plan. The draft carries forward its field or bed, crop, variety, previous
+crop, acres, and intended channel, increases the succession number, clears its
+dates and notes, and starts at Planned. Enter a new planned harvest start
+before saving. Save or discard an open draft first; VIEWER access cannot
+create or edit plans.
+
+To change only a saved planting's planning stage, drag its row onto a stage
+under **Move a saved planting**. Select the row and click a stage for the same
+action. Both save the stage change immediately. Save or discard an open form
+draft first so the move cannot overwrite unsaved details. VIEWER access cannot
+change stages.
+
+![Vegetable planting form with field or bed, crop, variety, succession number, previous crop, acres, sowing and transplant dates, harvest window, channel, and stage](images/app-vegetable-plantings.png)
+
+These dates and stages are plans. The notebook does not forecast crop
+development or harvest readiness, record actual yield, grade, wash or pack
+produce, manage storage, certify food safety, create stock, or link orders.
+**Inventory** and **Customers & Orders** remain separate general tools. See
+[farm types and workflow scope](FARM_TYPES.md#choose-a-workspace-for-the-days-work).
+
+## Aquatic cohort plans
+
+Choose **Aquaculture farm** and open **Aquatic cohorts**. Save a cohort name,
+species, growing site, and planned harvest start. Add a culture method, planned
+stocking date, planned harvest end, intended destination, and notes when known.
+The app offers planning stages of Planned, Stocking window, Growing out, and
+Harvest window. Select a saved cohort to edit its plan. In a mixed farm,
+Aquatic cohorts appears beside the other selected specialty tools and shared
+records. A planned stocking date must be on or before planned harvest start;
+a planned harvest end must be on or after that start.
+
+Select a saved cohort and choose **Plan next cohort** to start another draft.
+It carries species, growing site, culture method, and intended destination;
+clears the cohort name, dates, and notes; and resets the stage to Planned.
+Enter a new name and planned harvest start before saving. To change only a
+saved cohort's planning stage, drag its row to a stage under **Move a saved
+cohort**, or select the row and click a stage. Both save the stage change
+immediately. Save or discard an open form draft first so the move cannot
+overwrite unsaved details. VIEWER access cannot create, edit, or move cohorts.
+
+![Aquatic cohort planning form with species, growing site, culture method, stocking date, planned harvest window, intended destination, and stage](images/app-aquatic-cohort-form.png)
+
+The dates and stages are grower-entered plans. They do not check whether a
+species, site, or culture method is approved, whether a shellfish area is open,
+or whether harvest is permitted. The notebook does not monitor water quality,
+issue shellfish tags, provide regulatory traceability, record actual harvest,
+create stock, or link orders. **Inventory** and **Customers & Orders** remain
+separate general tools. Consult the relevant state agencies for current
+requirements; [Oregon's commercial shellfish guidance](https://www.oregon.gov/oda/food-safety/fs-licensing/Pages/commercial-shellfish.aspx)
+describes why area classification and licensing matter. See [farm types and
+workflow scope](FARM_TYPES.md#choose-a-workspace-for-the-days-work).
+
+## Christmas tree block and replacement planting plans
+
+Choose **Christmas tree farm** and open **Tree blocks**. Save a block name,
+tree species, and target harvest year. Add a planting year, acres, planted
+tree count, target height in your own words, next shearing date, planned cut
+start and end, intended channel, stage, and notes when known. Planned cut
+dates belong to the target harvest year. Select a saved block to edit its
+plan. In a mixed farm, Tree blocks appears beside the other selected
+specialty tools and shared records. If entered, planting year cannot follow
+the target harvest year; planned cut end requires a cut start and cannot
+precede it; next shearing date cannot follow the planned cut start.
+
+Select a saved block and choose **Plan replacement planting** to draft the
+next planting for that block. It carries the block name, species, acres,
+target height, and intended channel; clears planting and target harvest
+years, planted tree count, dates, and notes; and resets the stage to Planned.
+Review and enter the new planting details and target harvest year before
+saving. To change only a saved block's planning stage, drag its row onto a
+stage under **Move a saved block**, or select the row and click a stage. Both
+save the stage change immediately. Save or discard an open form draft first
+so a move cannot overwrite unsaved details. VIEWER access cannot create,
+edit, or move tree blocks.
+
+![Christmas tree block planning form with species, target harvest year and height, planting details, next shearing date, planned cut window, channel, and stage](images/app-tree-block-form.png)
+
+Tree blocks hold plans, including the intended selling channel. They do not
+record actual cut counts, create stock, link customer orders, manage
+choose-and-cut bookings, or verify a grower's license, inspection, or export
+clearance. **Inventory** and **Customers & Orders** remain separate general
+tools. Washington's [Christmas tree program](https://agr.wa.gov/services/licenses-permits-and-certificates/plant-permits-and-certification-programs/christmas-trees)
+and Oregon's [nursery and Christmas tree licensing guidance](https://www.oregon.gov/oda/nursery-christmas-tree/Pages/nursery-licensing.aspx)
+describe separate state requirements. See [farm types and workflow
+scope](FARM_TYPES.md#choose-a-workspace-for-the-days-work).
+
+## Apiary hive checks
+
+Choose **Apiary farm** and open **Hive checks**. Save an apiary or site name,
+hive label, and check date. Add the hive's purpose, choose a status, and enter a
+next check date, observations, and actions when useful. Select a saved check
+to review or edit it. A hive can have multiple dated checks; the status is the
+beekeeper's entry for that check, not a diagnosis from the app. In a mixed
+farm, Hive checks appears beside the selected orchard, berry, or other tools
+and the shared Inventory and Customers & Orders records.
+
+Select a saved check and choose **Start next check**. The draft carries the
+apiary/site, hive label, and purpose forward and clears the check date, next
+check date, status, observations, and actions. Enter the new check date and
+review the draft before saving. To change only a saved check's status, drag
+its row to a status target or select it and click the target. The status
+change saves immediately; first save or discard an open form draft so the
+move cannot overwrite unsaved details. VIEWER access cannot create, edit, or
+move checks.
+
+![Hive checks form with apiary site, hive label, check and next-check dates, purpose, beekeeper-entered status, observations, and actions](images/app-hive-check-form.png)
+
+Hive checks do not diagnose colony health, recommend or verify treatments,
+verify registration, manage pollination contracts, record honey extraction,
+or post honey stock or sales. Use the shared Inventory and Customers & Orders
+tools for general products and orders separately. [Washington WSDA](https://agr.wa.gov/services/licenses-permits-and-certificates/summary-descriptions/apiary-registration)
+and [Oregon ODA](https://www.oregon.gov/oda/ippm/Pages/bees-apiaries.aspx)
+publish their own apiary registration guidance; this log does not apply or
+check those rules. See [farm types and workflow
+scope](FARM_TYPES.md#choose-a-workspace-for-the-days-work).
+
+## Mushroom batch plans
+
+Choose **Mushroom farm** and open **Mushroom batches**. Save a batch name and
+mushroom species. Add a growing method, substrate, growing area, planned
+inoculation date, planned fruiting start and end, intended channel, stage,
+and notes when known. These are grower-entered details; the notebook does
+not assume every species grows on logs or in an indoor room. Select a saved
+batch to edit its plan. In a mixed farm, Mushroom batches appears beside
+the other selected specialty tools and shared records. If entered, planned
+fruiting start cannot precede inoculation; fruiting end requires a start and
+cannot precede it.
+
+Select a saved batch and choose **Plan next batch** to start another draft.
+Species, growing method, substrate, growing area, and intended channel carry
+forward; batch name, dates, and notes clear; and stage returns to Planned.
+Enter a new batch name and this batch's own dates when known before saving.
+To change only a saved batch's planning stage, drag its row onto a stage
+under **Move a saved batch**, or select the row and click a stage. The stages
+are Planned, Inoculation window, Incubating, and Fruiting window. A stage
+move saves immediately. Save or discard an open form draft first so a move
+cannot overwrite unsaved details. VIEWER access cannot create, edit, or
+move batches.
+
+![Mushroom batch form with species, growing method, substrate, growing area, planned inoculation and fruiting dates, intended channel, and stage](images/app-mushroom-batch-form.png)
+
+The planned fruiting window is a grower's estimate, not a prediction. A
+batch plan does not record actual harvested weight, control temperature or
+humidity, certify food safety, create stock, or link customer orders.
+**Inventory** and **Customers & Orders** remain separate general tools.
+[WSU Extension describes log-grown shiitake in the Pacific Northwest](https://pubs.extension.wsu.edu/product/a-hobbyist-guide-to-growing-shiitake-mushrooms-on-logs-for-woodland-owners/),
+and [OSU Extension describes reishi on logs and fruiting blocks](https://extension.oregonstate.edu/catalog/pub/em-9364-nontimber-forest-products-small-woodland-owners-reishi-mushroom-growing-guide).
+See [farm types and workflow scope](FARM_TYPES.md#choose-a-workspace-for-the-days-work).
+
+## Cranberry bed plans
+
+Choose **Cranberry farm** and open **Cranberry beds**. A bed name is required.
+Optionally record variety, acres, a planned harvest method (Undecided, Wet,
+Dry, or Mixed), planned harvest start and end, intended channel, stage, and
+notes. Select a saved bed to edit its plan. In a mixed farm, Cranberry beds
+appears beside the other selected specialty tools and shared records.
+
+Select a saved bed and choose **Plan next season**. The new draft carries bed
+name, variety, acres, harvest method, and intended channel forward. Planned
+harvest dates and notes clear, and stage returns to Planned. Enter the next
+season's own dates before saving. To move only a saved bed's planning stage,
+drag its row onto a target under **Move a saved bed**, or select the row and
+click a stage. The stages are Planned, Growing, Harvest prep, and Harvest
+window. A stage move saves immediately after an open form draft is saved or
+discarded. VIEWER access cannot create, edit, or move beds.
+
+![Cranberry bed form with variety, acres, planned harvest method and dates, intended channel, and stage](images/app-cranberry-bed-form.png)
+
+These are grower-entered plans. A Wet or Dry label does not operate flood or
+water controls, record actual harvested fruit, grade it, provide food-safety
+traceability, or post stock or customer orders. [OSU Extension describes
+perennial cranberry beds and wet versus dry harvest](https://extension.oregonstate.edu/catalog/pub/em-9212-integrated-pest-management-strategic-plan-oregon-washington-cranberries),
+and [WSU Extension documents Washington cranberry production](https://extension.wsu.edu/graysharbor/ag/cranberry/).
+See [farm types and workflow scope](FARM_TYPES.md#choose-a-workspace-for-the-days-work).
+
+## Pumpkin patch plans
+
+Choose **Pumpkin patch** and open **Pumpkin patches**. A patch name is required.
+Optionally record variety, acres, planned planting date, planned picking start
+and end, a sales mode (Undecided, Pick your own, Farm stand, Wholesale, or
+Mixed), visitor-area notes, planning stage, and general notes. Select a saved
+patch to edit its plan. In a mixed farm, Pumpkin patches appears beside the
+other selected specialty tools and shared records.
+
+Select a saved patch and choose **Plan next season**. The new draft carries
+patch name, variety, acres, sales mode, and visitor-area notes forward.
+Planting and picking dates and general notes clear, and stage returns to
+Planned. Enter the next season's own dates before saving. To move only a
+saved patch's planning stage, drag its row onto a target under **Move a saved
+patch**, or select the row and click a stage. The stages are Planned,
+Planting window, Growing, and Picking window. A stage move saves immediately
+after an open form draft is saved or discarded. VIEWER access cannot create,
+edit, or move patches.
+
+![Pumpkin patch form with planting and picking dates, sales mode, visitor area notes, and planning stage](images/app-pumpkin-patch-form.png)
+
+The sales mode and visitor-area notes help plan how the farm might welcome
+pick-your-own visitors or sell from a farm stand or wholesale channel. The
+board does not issue tickets, take bookings, verify visitor arrangements,
+record actual harvest, or link the plan to inventory or sales. [OSU Extension
+describes U-pick planning](https://extension.oregonstate.edu/catalog/pub/em-9520-adding-u-pick-or-u-cut-options-your-farm)
+and [names pumpkin patches among agritourism activities](https://extension.oregonstate.edu/catalog/em-9909-adding-agritourism-developing-your-plan-working-your-county).
+See [farm types and workflow scope](FARM_TYPES.md#choose-a-workspace-for-the-days-work).
+
+## Nursery growing batches
+
+Choose **Nursery farm** and open **Growing batches**. Create a plan with a batch
+name and the living plant being grown. Add a cultivar, plant form (starts or
+plugs, potted, bare root, bulbs or cuttings, or other), growing area, start date,
+planned ready date, starting plant count, intended retail, wholesale, landscape,
+or mixed channel, stage, and notes when known. Select a saved batch to review or
+edit it. The count is a starting plan, not a running plant inventory.
+
+To change only a saved batch's stage, drag its row to a stage under **Move by
+stage**. Selecting the row and clicking a stage does the same work without
+dragging; both save the stage change immediately. Finish or discard an open
+draft first so the stage move does not overwrite unsaved details. VIEWER access
+cannot change stages.
+
+![Nursery growing batch form with plant form, starting count, planned ready date, and intended sales channel](images/app-nursery-growing-batch.png)
+
+Use **Inventory** and **Customers & Orders** for general stock and sales
+records. Saving a nursery batch does not create stock or an order, update
+inventory as plants grow, or reconcile plant losses. The notebook does not
+manage nursery licensing, inspections, quarantines, shipment certification, or
+purchasing. It is separate from cut-flower growing and bouquet work; see
+[farm types and workflow scope](FARM_TYPES.md#choose-a-workspace-for-the-days-work).
+
+## Livestock herd groups
+
+Choose **Livestock farm** and open **Herd groups**. Create a group with a name,
+species, and headcount. The count may be zero for a group still being planned.
+Add a current pasture or pen, purpose, next check date, and notes when useful.
+Select a saved group to edit those details as the plan changes. A farm can
+combine this workspace with crop types and keep its customer, stock, order, and
+knowledge records together.
+
+A herd group is a current planning snapshot. Editing its count or location does
+not record an animal movement or preserve a count history. The notebook does
+not identify individual animals, track health or breeding events, record milk
+or egg production, create inventory or livestock sales, or provide regulatory
+traceability. Use **Inventory** and **Customers & Orders** only for general
+products and orders; they are not linked to a herd group. See [farm types and
+workflow scope](FARM_TYPES.md#choose-a-workspace-for-the-days-work).
+
+## Poultry egg collections
+
+Choose **Poultry & eggs** and open **Egg collections**. Record the collection
+date, flock or coop name, collected count, and unusable count; location and notes
+are optional. The displayed usable count is collected minus unusable. You can
+save another collection for the same flock and date, and select a saved entry to
+correct its details. A farm with both poultry and crops or livestock can add
+Poultry & eggs to its combined farm and keep the other specialty tools available.
+
+![Egg collection form with editable flock and count fields and a calculated usable egg count](images/app-egg-collection-form.png)
+
+An egg collection entry is a dated record of counts. Its calculated usable count
+does not add eggs to Inventory, reserve them for an order, grade or pack them, or
+record flock health. Use **Inventory** and **Customers & Orders** for separate,
+general product and sales records. They are not linked to a collection entry.
+See [farm types and workflow scope](FARM_TYPES.md#choose-a-workspace-for-the-days-work).
+
+## Dairy milk collections
+
+Choose **Dairy farm** and open **Milk collections**. Record a collection date,
+herd or group name, session name such as Morning or Evening, amount, and unit.
+Choose lb, gal, or L to match the measurement entered. Tank or location and
+notes are optional. Save more than one session for the same group and day, and
+select a saved entry to correct its details. A mixed operation can add Dairy
+farm alongside Livestock farm, Poultry & eggs, or a crop type without changing
+its shared customer and product records.
+
+![Milk collections form with editable date, group, session, measured amount and unit, optional tank or location, and notes](images/app-milk-collection-form.png)
+
+Each amount keeps its selected unit; the app does not convert lb, gal, and L or
+combine them into a derived total. A Milk collections entry does not update a
+Herd groups plan, add milk to Inventory, or link to a customer order. Use the
+shared Inventory and Customers & Orders tools for separate general records.
+The collection log does not track milk quality, processor delivery, food
+safety, or compliance requirements. See [farm types and workflow
+scope](FARM_TYPES.md#choose-a-workspace-for-the-days-work).
+
 ## Phone/tablet field work
 
 An authenticated server deployment also serves a responsive field screen at
@@ -24,6 +742,8 @@ VIEWER accounts can review the screen but cannot submit changes.
 The two large actions at the top start new records: **Log a harvest** and
 **Add a field note**. They open the input form above the work lists so you can
 record what just happened without scrolling through the day's tasks first.
+The sticky **Add, Tasks, Handoffs, Stock, Notes, Pending** row jumps directly to
+each part of the field screen on a phone or tablet.
 
 For a field note, enter **What did you notice?** Crop and bed are optional.
 Expand **Date, type, and follow-up** when you need a different observation date,
@@ -93,7 +813,7 @@ New farm? Use **Help > Start here…** (or the Dashboard banner when Inventory a
    background. If another app-wide refresh arrives while it is loading, one
    newer snapshot is queued instead of running competing queries. A failed
    refresh keeps the last good values and leaves inline retry guidance.
-2. Read **Operations alerts** for low stock, orders ready to pack, beds needing
+2. Read **Operations alerts** for low stock, confirmed orders to review for packing, beds needing
    attention, and watering guidance.
 3. Review the ranked priority queue, then use **Open priority** to jump directly
    to the selected resolving workflow. The most urgent task is selected first;
@@ -308,6 +1028,9 @@ row opens it for editing.
 **Planned + live availability** is a sales planning view, not a reservation. It
 omits completed crop plans and empty inventory-only rows so stale supply does not
 inflate the sellable list. Review confirmed orders before promising those stems.
+A bouquet recipe estimates stems and costs; it does not reserve or consume stems
+or create bouquet stock. Record assembled bouquets as separate inventory products
+and counts before fulfilling bouquet orders.
 **External handoffs**
 records the provider, status, amount, related order/recipe, and external
 reference for contract, payment, or marketplace work. It deliberately stores
@@ -389,6 +1112,13 @@ line and review the live row count, totals, and rounded inventory impact before
 choosing **Log batch harvest**. After a successful save, the lines clear to
 prevent duplicate logging while the visible batch defaults remain ready for the
 next group; a failed save preserves the complete batch for retry.
+
+You can also drag text or one UTF-8 `.csv` or `.txt` harvest list onto the
+**Batch entry** lines area. The drop fills the unsaved lines using the same
+`Crop,Quantity[,Unit][,Bed]` format; it does not log a harvest. If lines are
+already entered, review the replace prompt before they change. Check the
+preview, date, and unit, then choose **Log batch harvest** as usual. Paste or
+type lines when dragging is inconvenient.
 
 Deleting a harvest also runs in the background because it reverses that cut's
 inventory quantity. The selected harvest, entry controls, and report actions
@@ -588,6 +1318,13 @@ directs the worker to select or add a customer before creating the first Draft.
 Product, quantity, unit, and price previews use that captured inventory snapshot,
 so typing never waits on the database. The preview still updates immediately to
 show the line total, exact product match, quantity on hand, or expected shortfall.
+In the order entry area, drag a product from **Stock items · drag or select** to
+**Drop inventory product here to fill this draft**. The drop fills the editable
+product, unit, and price fields; review the quantity and use **Create & select
+order** or **Add product to selected order** to save. A drop never saves a line
+by itself, and an unfinished product draft blocks a replacement drop. Select a
+stock item and choose **Use selected product**, or use the existing Inventory
+product chooser, for the same entry without dragging.
 Because Inventory stores whole units, each product line must round to at least one
 inventory unit. A matched SKU must also use the same unit shown in Inventory;
 the form names the required unit and keeps saving disabled until it is corrected.
@@ -604,17 +1341,20 @@ cannot remain hidden. The REST equivalent is
 Use **Ready to complete** for the complete, current fulfillment queue. CRM clears
 customer, date, and handoff limits, selects Confirmed, and shows only orders that
 have a specific Pickup, Delivery, or Market handoff, at least one saved product,
-quantities that round to valid inventory units, matching order and inventory
-units, and enough aggregate stock in the captured inventory snapshot. Ready work
+usable contact or saved instructions for Delivery, quantities that round to valid
+inventory units, matching order and inventory units, and enough stock after
+earlier confirmed orders in the captured inventory snapshot. Ready work
 is ordered by earliest pickup/delivery/market date, then order ID, and each ready
-order reserves its product quantities for the rest of that displayed queue. This
+order is counted against available stock for the rest of that displayed queue. This
 prevents two individually covered orders from both appearing ready when their
-combined demand exceeds stock. The result badge also counts confirmed orders that
+combined demand exceeds stock. This calculation does not change inventory. The
+result badge also counts confirmed orders that
 were excluded. Select **Needs attention**
 in the **Status** filter and apply it to review those excluded orders; its
-guidance points workers back to handoff, products, quantities, units, and stock.
+guidance points workers back to handoff, delivery context, products, quantities,
+units, and stock.
 Selecting an otherwise-valid order that lost coverage to earlier work shows a
-**queue stock gap**, names the quantity short after earlier reservations, and
+**queue stock gap**, names the quantity short after earlier orders, and
 advises completing the earlier ready orders first or replenishing Inventory.
 The readiness choice survives background refreshes. Use **Show all**, an exact
 order handoff, a lifecycle queue, or **Needs handoff review** to leave the readiness
@@ -784,12 +1524,12 @@ check before changing inventory.
    While adding another product, the line preview includes matching quantities
    already saved on the selected order. For example, `6 already saved + 4 entered`
    is checked as `10 required`, so a repeated product cannot appear covered when
-   only the new line fits. The preview also subtracts inventory reserved by earlier
-   completion-ready Confirmed orders in the complete fulfillment queue, following
-   handoff date and then order number. This reservation snapshot is deliberately
-   separate from the visible CRM filters: an earlier commitment still reserves its
-   stock when a customer, date, handoff, or status filter hides its row. The preview
-   names the reserved inventory units beside the resulting
+   only the new line fits. The preview also subtracts inventory counted toward
+   earlier completion-ready Confirmed orders in the complete fulfillment queue,
+   following handoff date and then order number. This review calculation uses the
+   complete queue even when a customer, date, handoff, or status filter hides an
+   earlier commitment. The preview names the units counted toward those orders
+   beside the resulting
    coverage or shortfall, so a line cannot appear available merely because another
    customer load has not yet deducted its committed stock. The product can still be
    saved as a future commitment, but resolve the named shortfall before completion.
@@ -918,7 +1658,7 @@ check before changing inventory.
    that inventory was not changed. If the refreshed filters hide the order, the receipt
    still confirms the one committed operation; use **Show all** or adjust the filters
    before reviewing it.
-7. Confirm a draft when it is ready for packing. The confirmation review names
+7. Confirm a draft after reviewing the customer commitment. The confirmation review names
    the exact order, customer, pickup or delivery date, customer contact, account
    delivery note, and every
    saved product's quantity, unit, unit price, and line total, plus the order
@@ -935,8 +1675,10 @@ check before changing inventory.
    another worker changes any reviewed detail while the confirmation is open,
    the order stays Draft and the badge requires a CRM refresh and fresh review;
    unseen changes are never confirmed.
-   A successful confirmation produces a durable **confirmed once · ready to pack**
+   A successful confirmation produces a durable **confirmed once · review packing**
    receipt. If the refreshed Confirmed order remains visible, CRM keeps it selected.
+   Review the current handoff, products, delivery context, and stock before
+   completing the order.
    If a Draft-only queue correctly hides it, the receipt directs workers to **Show
    all** or the Confirmed filter. If the exact-order reload fails, retry **Refresh
    CRM** only. Confirmation never deducts inventory, and the saved status has already
@@ -1138,7 +1880,8 @@ pick list, but a Draft-only shortage is labeled as preview demand and never lock
 completion of covered confirmed orders. **Include completed orders** is historical
 reference only: completed products are not counted again as active pipeline or
 stock demand. The status line separately reports visible orders, active pipeline,
-and the confirmed count and value actually ready to complete.
+and the confirmed count and value entering packing review. The completion badge
+reports readiness after handoff, product, stock, and load checks.
 
 Packing-list builds run in the background, so a slow order or inventory query
 does not freeze data entry. If another build is requested while one is loading,
@@ -1408,16 +2151,25 @@ Ctrl/Cmd-click several rows. The right panel keeps deliverables, discovery
 questions, an operations checklist, privacy/safety guidance, and the official
 workflow source visible.
 
-Use **Build selected-service brief** after entering any known event/family,
-date, venue, and guest-count context. The editable brief combines the chosen
+Enter any known event/family, date, venue, and guest-count context, then drag
+selected catalog rows to **↓ Drop selected services here to build an empty
+brief** in the Event brief builder. **Build selected-service brief** offers the
+same action by click or keyboard. The editable brief combines the chosen
 scope with final confirmation prompts for contacts, approvals, catering,
-photos, setup, strike, rentals, and privacy. **Copy brief** leaves it on the
-clipboard. **Start CRM order brief** opens new-order mode and places the brief
-in order instructions only when that field is blank; an unrelated unfinished
-brief is never overwritten. Add flowers and other physical goods as ordinary
-CRM product lines. Catering, photography, coordination, and other non-stock
+photos, setup, strike, rentals, and privacy. Review or edit the text before
+handoff. If you change the selected services or event details, build the brief
+again to include those changes. Dragging onto the builder does not replace a
+brief that already contains text, including whitespace. Choose **Clear brief**
+first when starting over. **Copy brief** places the current text on the
+clipboard. **Start CRM order brief** uses the brief exactly as shown, opens
+new-order mode, and places it in order instructions only when that field is blank;
+an unrelated unfinished brief is never overwritten. Add flowers and other
+physical goods as ordinary CRM product lines. Catering, photography,
+coordination, and other non-stock
 vendor responsibilities remain in the instructions so completing the order
 cannot deduct imaginary service inventory.
+
+![Event brief builder with an empty editable brief, selected-service drop target, and button fallback](images/app-event-services-drag-brief.png)
 
 Memorial photography and tribute-media starters default to private, require a
 named family decision maker and venue/funeral-home approval, and never assume

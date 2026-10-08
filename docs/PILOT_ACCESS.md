@@ -1,10 +1,25 @@
 # Private pilot access
 
-FlowersForever is private, proprietary RicheyWorks software. It is distributed
-only to approved pilot farms and customers under a separate written agreement.
-Repository access alone does not grant a license to use or redistribute it.
+FlowersForever helps a small cut-flower team connect planting plans, harvests,
+stock, customer orders, market packing, and the lessons behind the work. A
+sample-farm walkthrough lets a team judge the workflow before entering its own
+records. While the signed release is pending, ask your established RicheyWorks
+contact for a guided walkthrough. The [five-minute sample-farm tour](../README.md#take-a-five-minute-tour)
+previews what you will see. RicheyWorks presenters can use the
+[presenter runbook](DEMO.md#2-five-minute-sample-farm-tour). Also review the
+[current limitations](KNOWN_LIMITATIONS.md).
 
-## What an approved pilot receives
+FlowersForever is private, proprietary RicheyWorks software. External pilot
+distribution awaits an approved signed release. Once that release is ready,
+distribution is limited to approved farms and customers under a separate
+written agreement. Repository access alone does not grant a license to use or
+redistribute it.
+
+Current unsigned preview installers are reserved for controlled maintainer
+validation. They are not approved for external farm distribution. The
+[release signing gate](SIGNING_SETUP.md) must pass before pilot delivery.
+
+## What an approved pilot receives after release approval
 
 - the correct Windows or macOS installer for the approved release;
 - the release `SHA256SUMS.txt` file and verification instructions;
@@ -18,8 +33,9 @@ Repository access alone does not grant a license to use or redistribute it.
 
 ## Safe delivery and installation
 
-1. Obtain the installer from the RicheyWorks contact already working with your
-   farm. Do not accept forwarded copies or links from another farm.
+1. After RicheyWorks confirms the signed release is approved, obtain the
+   installer from the contact already working with your farm. Do not accept
+   forwarded copies or links from another farm.
 2. Confirm the installer filename and version match the onboarding message.
 3. Verify its SHA-256 value against `SHA256SUMS.txt`:
 
@@ -31,10 +47,10 @@ Repository access alone does not grant a license to use or redistribute it.
    shasum -a 256 FlowersForever-1.2.0.dmg
    ```
 
-4. Because pilot installers are not yet code-signed, the operating system or
-   antivirus software may block them or show an unknown-publisher warning. Do
-   not disable protection or create a broad exclusion. Stop and contact
-   RicheyWorks if the checksum differs or security software reports a threat.
+4. Confirm the installer has the expected verified publisher using the
+   onboarding instructions. Do not install an unsigned candidate or disable
+   protection to bypass a warning. Stop and contact RicheyWorks if the checksum
+   differs or security software blocks the installer.
 5. Before upgrading an existing farm, close FlowersForever and make a verified
    off-device backup.
 
