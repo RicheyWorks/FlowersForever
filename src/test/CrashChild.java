@@ -17,6 +17,8 @@ import java.util.Arrays;
  *   <li>{@code file <target> <megabytes>}: replaces a file over and over with SafeFiles,
  *       alternating between all-'A' and all-'B' content, printing {@code WROTE x}.</li>
  *   <li>{@code hold <jdbcUrl>}: opens the records, prints {@code OPEN}, and keeps them open.</li>
+ *   <li>{@code scouting <dataDir>}: saves a growing scouting log forever, printing
+ *       {@code SAVED n} after each save of n findings returned.</li>
  * </ul>
  */
 public final class CrashChild {
@@ -29,6 +31,7 @@ public final class CrashChild {
             case "records" -> records(args[1], Long.parseLong(args[2]));
             case "file" -> file(Path.of(args[1]), Integer.parseInt(args[2]));
             case "hold" -> hold(args[1]);
+            case "scouting" -> scouting(Path.of(args[1]));
             default -> throw new IllegalArgumentException(args[0]);
         }
     }
@@ -73,6 +76,29 @@ public final class CrashChild {
             System.out.println("WROTE " + (useA ? 'A' : 'B'));
             System.out.flush();
         }
+    }
+
+    private static void scouting(Path data) throws Exception {
+        com.flowerfarm.scouting.ScoutingStore store = new com.flowerfarm.scouting.ScoutingStore(data,
+                java.time.Clock.systemUTC());
+        for (int count = 1; ; count++) {
+            store.save(scoutingLog(count));
+            System.out.println("SAVED " + count);
+            System.out.flush();
+        }
+    }
+
+    /** A scouting log with {@code count} findings, each with plenty of text. */
+    static com.flowerfarm.scouting.ScoutingStore.Log scoutingLog(int count) {
+        java.util.List<com.flowerfarm.scouting.Scouting.Finding> findings = new java.util.ArrayList<>();
+        java.time.LocalDate day = java.time.LocalDate.of(2026, 10, 7);
+        for (int i = 1; i <= count; i++) {
+            findings.add(new com.flowerfarm.scouting.Scouting.Finding("F-20261007-" + i, day, null, "Bed " + i,
+                    "Dahlia", "Cafe au Lait", com.flowerfarm.scouting.Scouting.Category.INSECT_MITE, "Thrips",
+                    "Silvery streaks on petals and black specks. ".repeat(20),
+                    com.flowerfarm.scouting.Scouting.Severity.MODERATE, 10.0, "", "Removed blooms"));
+        }
+        return new com.flowerfarm.scouting.ScoutingStore.Log(1, 14, findings, java.util.List.of());
     }
 
     private static void hold(String url) throws Exception {
