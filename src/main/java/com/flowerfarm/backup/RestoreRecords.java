@@ -125,6 +125,7 @@ public final class RestoreRecords {
         try (Writer writer = Files.newBufferedWriter(temporary, StandardCharsets.UTF_8)) {
             properties.store(writer, "FlowersForever restore (see docs/BACKUP_RESTORE.md)");
         }
+        com.flowerfarm.safety.SafeFiles.force(temporary);
         try {
             Files.move(temporary, file, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
         } catch (AtomicMoveNotSupportedException notAtomic) {

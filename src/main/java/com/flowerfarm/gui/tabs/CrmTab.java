@@ -21,7 +21,6 @@ import java.awt.*;
 import java.awt.event.InputEvent;
 import java.awt.event.KeyEvent;
 import java.io.File;
-import java.nio.file.Files;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -5434,7 +5433,7 @@ public class CrmTab implements FlowerFarmTab {
                     && beginDocumentWork("Creating statement PDF…",
                     "The reviewed customer statement is being rendered in the background.")) {
                 startDocumentFileExport(file,
-                        () -> Files.write(file.toPath(), presenter.statementPdf(statement)),
+                        () -> com.flowerfarm.safety.SafeFiles.write(file.toPath(), presenter.statementPdf(statement)),
                         "Statement PDF saved · " + statement.orderCount() + " orders",
                         "Statement PDF → " + file.getName()
                                 + " (" + statement.orderCount() + " orders)",
@@ -8244,7 +8243,7 @@ public class CrmTab implements FlowerFarmTab {
             return;
         }
         startDocumentFileExport(file,
-                () -> Files.write(file.toPath(), presenter.invoicePdf(orderId)),
+                () -> com.flowerfarm.safety.SafeFiles.write(file.toPath(), presenter.invoicePdf(orderId)),
                 "Invoice saved · order #" + orderId,
                 "Invoice saved as “" + file.getName() + "”.",
                 "Saving invoice for order #" + orderId);
