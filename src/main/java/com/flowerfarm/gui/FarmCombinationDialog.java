@@ -33,6 +33,7 @@ import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.GridLayout;
 import java.awt.Insets;
+import java.awt.LayoutManager;
 import java.awt.Rectangle;
 import java.awt.datatransfer.DataFlavor;
 import java.awt.datatransfer.Transferable;
@@ -206,7 +207,7 @@ final class FarmCombinationDialog {
 
             CardScrollContent scrollContent = new CardScrollContent();
 
-            JPanel cards = new JPanel(new GridLayout(0, 2, 12, 12));
+            JPanel cards = new JPanel(new CardRows(2, 12, 12));
             cards.setName("farmCombination.cards");
             cards.setOpaque(false);
             for (FarmWorkspace workspace : FarmWorkspace.values()) {
@@ -334,7 +335,7 @@ final class FarmCombinationDialog {
                     matches++;
                 }
             }
-            cards.setLayout(new GridLayout(0, matches == 1 ? 1 : 2, 12, 12));
+            cards.setLayout(new CardRows(matches == 1 ? 1 : 2, 12, 12));
             matchCount.setText(matches + (matches == 1 ? " farm type" : " farm types"));
             clearSearch.setEnabled(!query.isEmpty());
             resultLayout.show(cardResults, matches == 0 ? "empty" : "matches");
@@ -562,6 +563,76 @@ final class FarmCombinationDialog {
     }
 
     /** Keeps the two-column card grid within the modal width without horizontal scrolling. */
+    /**
+     * Farm cards in equal-width columns where each row is only as tall as its own cards.
+     * A uniform grid made every row as tall as the longest description, which pushed the
+     * first drag handles below the visible card area when fonts render taller (Linux).
+     */
+    private static final class CardRows implements LayoutManager {
+        private final int columns;
+        private final int hgap;
+        private final int vgap;
+
+        private CardRows(int columns, int hgap, int vgap) {
+            this.columns = Math.max(1, columns);
+            this.hgap = hgap;
+            this.vgap = vgap;
+        }
+
+        @Override public void addLayoutComponent(String name, Component component) {
+        }
+
+        @Override public void removeLayoutComponent(Component component) {
+        }
+
+        @Override public Dimension preferredLayoutSize(java.awt.Container parent) {
+            return size(parent, true);
+        }
+
+        @Override public Dimension minimumLayoutSize(java.awt.Container parent) {
+            return size(parent, false);
+        }
+
+        private Dimension size(java.awt.Container parent, boolean preferred) {
+            Insets insets = parent.getInsets();
+            int count = parent.getComponentCount();
+            int width = 0;
+            int height = 0;
+            for (int start = 0; start < count; start += columns) {
+                int rowHeight = 0;
+                for (int index = start; index < Math.min(count, start + columns); index++) {
+                    Component component = parent.getComponent(index);
+                    Dimension size = preferred ? component.getPreferredSize() : component.getMinimumSize();
+                    width = Math.max(width, size.width);
+                    rowHeight = Math.max(rowHeight, size.height);
+                }
+                height += rowHeight + (start == 0 ? 0 : vgap);
+            }
+            return new Dimension(insets.left + insets.right + columns * width + (columns - 1) * hgap,
+                    insets.top + insets.bottom + height);
+        }
+
+        @Override public void layoutContainer(java.awt.Container parent) {
+            Insets insets = parent.getInsets();
+            int count = parent.getComponentCount();
+            int available = parent.getWidth() - insets.left - insets.right - (columns - 1) * hgap;
+            int cellWidth = Math.max(0, available / columns);
+            int y = insets.top;
+            for (int start = 0; start < count; start += columns) {
+                int end = Math.min(count, start + columns);
+                int rowHeight = 0;
+                for (int index = start; index < end; index++) {
+                    rowHeight = Math.max(rowHeight, parent.getComponent(index).getPreferredSize().height);
+                }
+                for (int index = start; index < end; index++) {
+                    int x = insets.left + (index - start) * (cellWidth + hgap);
+                    parent.getComponent(index).setBounds(x, y, cellWidth, rowHeight);
+                }
+                y += rowHeight + vgap;
+            }
+        }
+    }
+
     private static final class CardScrollContent extends JPanel implements Scrollable {
         private int nextRow;
 

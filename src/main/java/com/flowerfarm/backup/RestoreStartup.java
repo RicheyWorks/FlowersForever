@@ -39,9 +39,17 @@ public final class RestoreStartup {
     private final DataBackupService archives;
     private final Clock clock;
     private final Duration waitForRelease;
+    private final DatabaseIntegrityGuard integrity;
 
     public RestoreStartup(BackupSettings settings, RestoreRecords records, DataBackupService archives, Clock clock,
                           Duration waitForRelease) {
+        this(settings, records, archives, clock, waitForRelease, null);
+    }
+
+    /** @param integrity checks the records before a normal start; {@code null} skips the check */
+    public RestoreStartup(BackupSettings settings, RestoreRecords records, DataBackupService archives, Clock clock,
+                          Duration waitForRelease, DatabaseIntegrityGuard integrity) {
+        this.integrity = integrity;
         this.settings = settings;
         this.records = records;
         this.archives = archives;
@@ -52,8 +60,10 @@ public final class RestoreStartup {
     /** Built from JVM properties; {@code AppDataBootstrap} must already have run. */
     public static RestoreStartup forThisProcess() {
         BackupSettings settings = BackupSettings.fromSystemProperties();
-        return new RestoreStartup(settings, new RestoreRecords(settings.stateDirectory()),
-                new DataBackupService(Clock.systemDefaultZone()), Clock.systemDefaultZone(), Duration.ofSeconds(60));
+        RestoreRecords records = new RestoreRecords(settings.stateDirectory());
+        DataBackupService archives = new DataBackupService(Clock.systemDefaultZone());
+        return new RestoreStartup(settings, records, archives, Clock.systemDefaultZone(), Duration.ofSeconds(60),
+                new DatabaseIntegrityGuard(settings, records, archives, Clock.systemDefaultZone()));
     }
 
     /**
@@ -67,6 +77,9 @@ public final class RestoreStartup {
         }
         Optional<RestoreRecords.Request> request = records.request();
         if (request.isEmpty()) {
+            if (allowed) {
+                checkIntegrity();
+            }
             return startSpring.call();
         }
         records.clear(RestoreRecords.REQUEST);
@@ -190,6 +203,17 @@ public final class RestoreStartup {
                     return false;
                 }
             }
+        }
+    }
+
+    /** Damaged records are swapped for the newest healthy backup; with none, start-up stops plainly. */
+    private void checkIntegrity() throws IOException {
+        if (integrity == null) {
+            return;
+        }
+        DatabaseIntegrityGuard.Outcome outcome = integrity.ensureHealthy();
+        if (outcome.health() == DatabaseIntegrityGuard.Health.DAMAGED && outcome.restored().isEmpty()) {
+            throw new DamagedRecordsException(outcome.message());
         }
     }
 
