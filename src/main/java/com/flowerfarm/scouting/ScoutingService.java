@@ -69,14 +69,31 @@ public class ScoutingService {
     }
 
     public Board board() throws IOException {
+        return board(today());
+    }
+
+    /** The board as of {@code day} (used by Today's reminders). */
+    public Board board(LocalDate day) throws IOException {
         ScoutingStore.Log log = store.load();
-        LocalDate today = today();
+        LocalDate today = day == null ? today() : day;
         List<Scouting.Finding> findings = new ArrayList<>(log.findings());
         findings.sort(Scouting.NEWEST_FINDING_FIRST);
         List<Scouting.LabSample> samples = new ArrayList<>(log.samples());
         samples.sort(Scouting.sampleOrder(today, log.overdueDays()));
         long overdue = samples.stream().filter(sample -> Scouting.overdue(sample, today, log.overdueDays())).count();
         return new Board(List.copyOf(findings), List.copyOf(samples), log.overdueDays(), overdue, today);
+    }
+
+    /**
+     * Today's-reminder items: overdue lab results and serious findings from the last week. Never throws;
+     * an unreadable log becomes a single "needs attention" reminder.
+     */
+    public List<com.flowerfarm.service.GrowerReminder> reminders(LocalDate day) {
+        try {
+            return ScoutingReminders.from(board(day));
+        } catch (IOException | RuntimeException unreadable) {
+            return List.of(ScoutingReminders.unreadable());
+        }
     }
 
     /** Recovery message from the last load (e.g. damaged file replaced by the last good copy), or empty. */

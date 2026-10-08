@@ -351,7 +351,7 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
         }
         if (remindersController != null) {
             remindersController.attach(new DesktopRemindersController.Host(
-                    frame, dialogs, this::setStatus, this::selectTab,
+                    frame, dialogs, this::setStatus, this::openReminderTarget,
                     () -> showHarvestEntry(null, null)));
             if (dashboard != null) {
                 dashboard.bindReminders(remindersController::openReminder,
@@ -1021,6 +1021,15 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
         prefs.put(PREF_SUPPORT_EMAIL, chosen);
         if (!chosen.equals(previous)) {
             setStatus(SupportGuide.statusSaved(chosen));
+        }
+    }
+
+    /** Reminder targets are tab titles, except scouting reminders, which open their own window. */
+    private void openReminderTarget(String target) {
+        if (com.flowerfarm.scouting.Scouting.TITLE.equals(target)) {
+            openScouting();
+        } else {
+            selectTab(target);
         }
     }
 
