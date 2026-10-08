@@ -260,7 +260,7 @@ beside the data folder) as `time  mode  STEP  message`, ending with
 | 64 | REFUSED | Not enabled, bad arguments, a non-local feed or installer address with a test key, a release key or private key given as the test key. |
 | 65 | NO_UPDATE | The feed offers nothing newer (or only a version that already failed). |
 | 66 | REJECTED | Bad signature, wrong installer size or checksum, or a non-local installer address. Nothing installed. |
-| 67 | NOT_INSTALLED | Not running from an installed copy, no installer for the current version, records still open, or the backup failed. Nothing installed. |
+| 67 | NOT_INSTALLED | Not running from an installed copy, no supported installer type on this computer, no installer for the current version, records still open, or the backup failed. Nothing installed. |
 | 68 | OFFLINE | The local feed did not answer. |
 | 70 | START_FAILED | Verify: the app could not start at all. |
 

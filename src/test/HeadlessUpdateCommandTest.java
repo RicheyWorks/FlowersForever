@@ -154,6 +154,19 @@ class HeadlessUpdateCommandTest {
     }
 
     @Test
+    @DisplayName("a computer with no supported installer type stops before contacting the feed")
+    void refusesWithoutInstallerPlatform() throws Exception {
+        publish(testKey, true);
+
+        int exit = command(true, "1.3.0", TrustedKeys.none(), Optional.empty())
+                .apply(apply(server.uri("/latest.json")));
+
+        assertThat(exit).isEqualTo(67);
+        assertThat(networkCalls).hasValue(0);
+        assertThat(log()).contains("no supported installer type", "exit=67 NOT_INSTALLED");
+    }
+
+    @Test
     @DisplayName("a built-in release key passed as the test key is refused")
     void refusesReleaseKeyAsTestKey() throws Exception {
         publish(testKey, true);
@@ -383,10 +396,15 @@ class HeadlessUpdateCommandTest {
     }
 
     private HeadlessUpdateCommand command(boolean enabled, String installedVersion, TrustedKeys releaseKeys) {
+        return command(enabled, installedVersion, releaseKeys, Optional.of(UpdatePlatform.WINDOWS_MSI));
+    }
+
+    private HeadlessUpdateCommand command(boolean enabled, String installedVersion, TrustedKeys releaseKeys,
+                                          Optional<UpdatePlatform> platform) {
         UpdateSettings settings = UpdateTestSupport.settings(root, installedVersion, null);
         HeadlessUpdateLog log = new HeadlessUpdateLog(Optional.of(logFile),
                 new PrintStream(console, true, StandardCharsets.UTF_8), Clock.systemUTC(), "TEST");
-        return new HeadlessUpdateCommand(enabled, settings, releaseKeys, Optional.of(UpdatePlatform.WINDOWS_MSI),
+        return new HeadlessUpdateCommand(enabled, settings, releaseKeys, platform,
                 testSettings -> new CountingTransport(new HttpUpdateTransport(Duration.ofSeconds(2),
                         Duration.ofSeconds(5), true, "headless-test")),
                 arguments -> {

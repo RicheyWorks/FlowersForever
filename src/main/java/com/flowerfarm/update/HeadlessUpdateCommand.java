@@ -242,6 +242,10 @@ public final class HeadlessUpdateCommand {
                     + "A release check must use a throwaway test key; nothing was changed.");
         }
         log.line("TRUST", "test key id " + keyId + "; the built-in release keys are not trusted in this run");
+        if (platform.isEmpty()) {
+            return log.finish(Exit.NOT_INSTALLED, "This computer has no supported installer type (Windows MSI "
+                    + "or macOS DMG), so there is nothing to update; nothing was changed.");
+        }
         UpdateSettings testSettings = settings.forTestFeed(feed, request.backupDirectory());
         UpdateTransport transport = new LoopbackOnlyTransport(transports.apply(testSettings));
         PlatformInstaller installer = installers.apply(relaunchArguments());
