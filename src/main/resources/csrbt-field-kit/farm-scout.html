@@ -1,0 +1,2215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Farm Scout — field science for growers</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<!-- Webfonts load without blocking first paint: a stylesheet request that
+     hangs (one bar of signal) otherwise holds the page blank indefinitely,
+     which breaks the offline constraint in ADR-031. See tools/audit_offline.py. -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Nunito+Sans:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" media="print" data-webfont>
+<noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Nunito+Sans:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap"></noscript>
+<script>(function(){var l=document.querySelector('link[data-webfont]');if(!l)return;
+  var on=function(){l.media="all";};
+  if(l.sheet){on();}else{l.addEventListener("load",on);l.addEventListener("error",function(){});}
+})();</script>
+<style>
+  :root {
+    color-scheme: light;
+    --page:#F5F1E6; --surface:#FFFDF7; --surface-2:#F3EEE0; --ink:#23281F; --ink-2:#4B5344;
+    --muted:#6B6B5E; --border:#E3DCC9; --s1:#2C784C; --s1-deep:#236240; --s2:#A94F26; --s3:#2B6C8F;
+    --soft:#E9F0E7; --warn-bg:#F6EAD8; --danger:#B23A32; --danger-bg:#F6E7E5;
+    --shadow:0 1px 2px rgba(35,40,31,.06),0 10px 28px rgba(35,40,31,.08);
+    --head:"Fraunces",Georgia,serif;
+    --body:"Nunito Sans",system-ui,-apple-system,sans-serif;
+    --mono:"JetBrains Mono",ui-monospace,Menlo,monospace;
+  }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { margin:0; background:var(--page); color:var(--ink); font:16px/1.5 var(--body);
+    -webkit-font-smoothing:antialiased; overscroll-behavior-y:contain; }
+  .app { max-width:860px; margin:0 auto; padding:14px 16px calc(96px + env(safe-area-inset-bottom)); }
+
+  .top { display:flex; align-items:baseline; justify-content:space-between; gap:10px; padding:6px 2px 12px; }
+  .brand { font-family:var(--head); font-weight:700; font-size:22px; letter-spacing:-0.01em; }
+  .brand span { color:var(--s2); }
+  .top a { font-family:var(--mono); font-size:11.5px; color:var(--muted); text-decoration:none;
+    display:inline-flex; align-items:center; min-height:44px; padding:0 6px; margin:-10px -6px;
+    touch-action:manipulation; }
+  .top a:hover { color:var(--s1); }
+
+  .tabbar { position:fixed; left:0; right:0; bottom:0; z-index:20;
+    background:color-mix(in srgb, var(--surface) 94%, transparent); backdrop-filter:blur(10px);
+    border-top:1px solid var(--border); padding:8px max(10px, env(safe-area-inset-left)) calc(8px + env(safe-area-inset-bottom)); }
+  .tabbar .row { max-width:860px; margin:0 auto; display:grid; grid-template-columns:repeat(4,1fr); gap:6px; }
+  .tab { display:flex; flex-direction:column; align-items:center; gap:2px; border:0; background:none;
+    font:700 12px var(--body); color:var(--muted); padding:8px 4px; border-radius:12px; cursor:pointer;
+    min-height:54px; touch-action:manipulation; transition:background .15s ease, color .15s ease; }
+  .tab .ico { font-size:22px; line-height:1; }
+  .tab.on { color:var(--s1); background:var(--soft); }
+  .tab:active { transform:scale(.96); }
+
+  .pane { display:none; animation:fade .18s ease; }
+  .pane.on { display:block; }
+  @keyframes fade { from{opacity:0;transform:translateY(4px);} to{opacity:1;transform:none;} }
+  @media (prefers-reduced-motion: reduce){ .pane{animation:none;} }
+
+  h2 { font-family:var(--head); font-weight:600; font-size:20px; margin:6px 0 2px; }
+  .hint { color:var(--muted); font-size:14px; margin:0 0 12px; }
+  .card { background:var(--surface); border:1px solid var(--border); border-radius:16px;
+    padding:16px; box-shadow:var(--shadow); margin-bottom:14px; }
+
+  input[type=text], input[type=number], input[type=date], select {
+    background:var(--surface); color:var(--ink); border:1.5px solid var(--border); border-radius:12px;
+    padding:11px 14px; font:16px var(--body); min-height:48px; }
+  input:focus, select:focus { outline:none; border-color:var(--s1); box-shadow:0 0 0 3px rgba(44,120,76,.18); }
+  input[type=number] { width:110px; }
+  label.f { display:flex; flex-direction:column; gap:5px; font-size:13.5px; font-weight:700; color:var(--ink-2); }
+  .sess { display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:10px; }
+  .sess input { width:100%; }
+
+  .btn { border:0; border-radius:12px; padding:12px 20px; font:800 15px var(--body); cursor:pointer;
+    min-height:48px; touch-action:manipulation; transition:transform .1s ease, background .15s ease; }
+  .btn:active { transform:scale(.97); }
+  .btn-go { background:var(--s1); color:#fff; } .btn-go:hover { background:var(--s1-deep); }
+  .btn-soft { background:var(--soft); color:var(--s1); }
+  .btn-ghost { background:none; border:1.5px solid var(--border); color:var(--ink-2); }
+  .btn-ghost:hover { border-color:var(--s1); color:var(--s1); }
+  .btn-row { display:flex; gap:8px; flex-wrap:wrap; margin-top:12px; align-items:center; }
+
+  .quads { display:grid; grid-template-columns:repeat(auto-fill,minmax(120px,1fr)); gap:10px; }
+  .quad { background:var(--surface); border:1.5px solid var(--border); border-radius:14px; padding:10px; text-align:center; box-shadow:var(--shadow); }
+  .quad .ql { font-family:var(--mono); font-size:11px; color:var(--muted); }
+  .quad .qv { font-family:var(--head); font-weight:700; font-size:26px; font-variant-numeric:tabular-nums; margin:2px 0 6px; }
+  .quad .qb { display:flex; gap:6px; justify-content:center; }
+  .step { width:44px; height:44px; border-radius:12px; border:1.5px solid var(--border); background:var(--surface);
+    font:800 20px var(--body); color:var(--s1); cursor:pointer; touch-action:manipulation; }
+  .step:active { transform:scale(.94); background:var(--soft); }
+
+  .tiles { display:flex; flex-wrap:wrap; gap:8px; margin:12px 0 2px; }
+  .tile { background:var(--surface-2); border:1px solid var(--border); border-radius:12px; padding:9px 14px; min-width:96px; }
+  .tile .v { font-family:var(--head); font-weight:700; font-size:22px; font-variant-numeric:tabular-nums; }
+  .tile .l { font-size:11.5px; color:var(--muted); }
+
+  .verdict { border-radius:12px; padding:13px 16px; margin:12px 0 2px; font-size:15.5px; line-height:1.5;
+    border-left:4px solid var(--s1); background:var(--soft); color:var(--ink-2); }
+  .verdict b { color:var(--ink); }
+  .verdict.warn { border-left-color:var(--s2); background:var(--warn-bg); }
+  .verdict.act  { border-left-color:var(--danger); background:var(--danger-bg); }
+
+  .tally-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:10px; }
+  .tally { position:relative; border:1.5px solid var(--border); background:var(--surface); border-radius:16px;
+    min-height:88px; padding:12px 12px 10px; cursor:pointer; text-align:left; touch-action:manipulation;
+    font-family:var(--body); transition:transform .08s ease, background .12s ease, border-color .12s ease; box-shadow:var(--shadow); }
+  .tally:active { transform:scale(.97); background:var(--soft); border-color:var(--s1); }
+  .tally .name { font-weight:800; font-size:16px; word-break:break-word; }
+  .tally .count { font-family:var(--head); font-weight:700; font-size:30px; color:var(--s1); font-variant-numeric:tabular-nums; margin-top:4px; }
+  .tally .x { position:absolute; top:6px; right:8px; border:0; background:none; color:var(--muted); font-size:15px; padding:6px; cursor:pointer; }
+  .tally .x:hover { color:var(--danger); }
+  .tally.bump .count { animation:pop .25s ease; }
+  @keyframes pop { 40%{transform:scale(1.25);} }
+  .addrow { display:flex; gap:8px; margin-top:12px; flex-wrap:wrap; }
+  .addrow input[type=text] { flex:1; min-width:150px; }
+
+  .bars { display:grid; gap:6px; margin-top:10px; }
+  .bar { display:grid; grid-template-columns:110px 1fr 52px; gap:8px; align-items:center; font-size:13.5px; }
+  .bar .nm { font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .bar .tr { display:block; background:var(--surface-2); border:1px solid var(--border); border-radius:8px; height:20px; overflow:hidden; }
+  .bar .fl { display:block; height:100%; background:var(--s1); border-radius:7px 0 0 7px; transition:width .4s ease; }
+  .bar .pc { text-align:right; font-variant-numeric:tabular-nums; color:var(--ink-2); }
+
+  .beds { display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:10px; }
+  .bed { background:var(--surface); border:1.5px solid var(--border); border-radius:14px; padding:12px; box-shadow:var(--shadow); }
+  .bed .bh { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; }
+  .bed .bn { font-family:var(--head); font-weight:700; font-size:16px; }
+  .bed .x { border:0; background:none; color:var(--muted); cursor:pointer; padding:4px 6px; font-size:14px;
+    min-height:44px; min-width:44px; }
+  .bed .x:hover { color:var(--danger); }
+  .bed label { display:block; font-size:12px; font-weight:700; color:var(--muted); margin:6px 0 3px; }
+  .bed select { width:100%; min-height:44px; font-size:15px; }
+  .flag { margin-top:8px; font-size:13.5px; border-radius:9px; padding:8px 10px; line-height:1.4; }
+  .flag.ok { background:var(--soft); color:var(--s1-deep); }
+  .flag.bad { background:var(--danger-bg); color:var(--danger); font-weight:700; }
+
+  pre.export { font-family:var(--mono); font-size:13px; line-height:1.6; background:var(--surface);
+    border:1px solid var(--border); border-radius:12px; padding:13px 14px; overflow-x:auto; white-space:pre-wrap; word-break:break-word; }
+  .toast { position:fixed; left:50%; bottom:calc(104px + env(safe-area-inset-bottom)); transform:translateX(-50%) translateY(8px);
+    background:var(--ink); color:#F5F1E6; font-weight:700; font-size:14px; border-radius:999px; padding:10px 18px;
+    opacity:0; pointer-events:none; transition:opacity .2s ease, transform .2s ease; z-index:30; }
+  .toast.on { opacity:1; transform:translateX(-50%); }
+
+  .fine { font-size:12.5px; color:var(--muted); margin-top:10px; line-height:1.5; }
+
+  @media print { .tabbar, .btn, .addrow, .top a { display:none !important; } body{background:#fff;} .pane{display:block !important;} }
+
+  /* shared tool rail — every app one tap from its siblings */
+  .rail { margin:26px 0 4px; }
+  .rail .rl { font-family:var(--mono); font-size:11px; letter-spacing:.14em; text-transform:uppercase;
+    color:var(--muted); margin:0 2px 8px; }
+  .rail .chips { display:flex; flex-wrap:wrap; gap:8px; }
+  .rail a { display:inline-flex; align-items:center; gap:7px; text-decoration:none; font:700 13.5px var(--body);
+    color:var(--ink-2); background:var(--surface); border:1px solid var(--border); border-radius:999px;
+    padding:9px 15px; min-height:44px; box-shadow:var(--shadow); touch-action:manipulation; }
+  .rail a:hover { border-color:var(--s1); color:var(--s1); }
+  .rail a[aria-current="page"] { background:var(--soft); border-color:var(--s1); color:var(--s1); }
+  .rail a.ref { font-weight:600; color:var(--muted); background:none; box-shadow:none; }
+  .rail a.ref:hover { color:var(--s1); }
+  @media print { .rail { display:none !important; } }
+
+  /* ============ Field Entry Kit v1.8.0 ============
+     Large-target, high-contrast entry controls. Sizing is driven by --tap
+     rather than per-component numbers so one token retunes the whole kit for
+     gloves, cold hands or a wall-mounted tablet. */
+  :root {
+    --tap: 60px;            /* primary control height  */
+    --tap-sm: 48px;         /* secondary control height */
+    --fek-r: 16px;
+    /* These three moved for WCAG AA and the move was made in the pages, by
+       hand, and never came back here -- because the CSS half of fek_emit was
+       dead code and nobody could tell. Source and pages agreed only by
+       ramp-1 moved here too: at its old teal, white label text on a selected
+       button measured 3.94:1 and the .92-white sub-line 3.59:1, both under AA.
+       No page had caught it because none defaulted to a ramp-1 option until the
+       deployment log did. Every ramp is now checked against both, in
+       verify_contrast_slice.
+       The pre-fix ramp values are named in verify_contrast_slice,
+       which greps for them literally across every page -- so they are not
+       repeated here, because a comment naming them is itself a page carrying
+       them, and the suite is right not to care why. */
+    --ramp-0:#2B6C8F; --ramp-1:#2F7373; --ramp-2:#2C784C;
+    --ramp-3:#8A6408; --ramp-4:#A94F26; --ramp-5:#B23A32;
+    --fek-line:#C7C0AC;
+    /* v1.8.0 (ADR-254): the edge of a box you write in. --fek-line is a
+       decorative line (a drop zone's dash, a card's rule) and reads 1.79:1;
+       a control's edge carries the WCAG 1.4.11 floor of 3:1, and this is the
+       colour every page's own rule already gives its inputs. */
+    --fek-edge:#8E8160;
+  }
+  .fek-lab { display:block; font:800 15px var(--body); color:var(--ink-2);
+    letter-spacing:.01em; margin:0 0 6px; }
+  .fek-lab .u { font:600 12.5px var(--mono); color:var(--muted); margin-left:6px; }
+  .fek-help { font-size:13.5px; color:var(--muted); line-height:1.5; margin:6px 0 0; }
+  .fek-row { margin:0 0 20px; }
+
+  /* --- stepper: the workhorse numeric entry --- */
+  .fek-step { display:flex; align-items:stretch; gap:0; border:2px solid var(--border);
+    border-radius:var(--fek-r); overflow:hidden; background:var(--surface); max-width:340px; }
+  .fek-step button { border:0; background:var(--surface-2); color:var(--ink);
+    font:800 30px var(--body); line-height:1; width:calc(var(--tap) + 8px); min-height:var(--tap);
+    cursor:pointer; touch-action:manipulation; transition:background .12s; }
+  .fek-step button:hover { background:var(--soft); color:var(--s1); }
+  .fek-step button:active { background:var(--s1); color:#fff; }
+  .fek-step .val { flex:1; min-width:0; text-align:center; border:0; background:none;
+    font:800 30px var(--head); color:var(--ink); font-variant-numeric:tabular-nums;
+    -moz-appearance:textfield; padding:0 4px; }
+  .fek-step .val::-webkit-outer-spin-button,
+  .fek-step .val::-webkit-inner-spin-button { -webkit-appearance:none; margin:0; }
+  .fek-step .val:focus { outline:none; background:var(--soft); }
+
+  /* --- segmented ordinal dial with a colour ramp --- */
+  .fek-dial { display:flex; flex-wrap:wrap; gap:8px; }
+  .fek-dial button { flex:1 1 auto; min-width:72px; min-height:var(--tap);
+    border:2px solid var(--border); border-radius:var(--fek-r); background:var(--surface);
+    font:800 17px var(--body); color:var(--ink-2); cursor:pointer; touch-action:manipulation;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px;
+    padding:6px 8px; transition:transform .08s, border-color .12s, background .12s; }
+  .fek-dial button small { font:600 11px var(--mono); color:var(--muted); letter-spacing:.02em; }
+  .fek-dial button:active { transform:scale(.96); }
+  .fek-dial button.on { color:#fff; border-color:transparent; }
+  .fek-dial button.on small { color:rgba(255,255,255,.92); }
+  .fek-dial button.on[data-r="0"]{background:var(--ramp-0);}
+  .fek-dial button.on[data-r="1"]{background:var(--ramp-1);}
+  .fek-dial button.on[data-r="2"]{background:var(--ramp-2);}
+  .fek-dial button.on[data-r="3"]{background:var(--ramp-3);}
+  .fek-dial button.on[data-r="4"]{background:var(--ramp-4);}
+  .fek-dial button.on[data-r="5"]{background:var(--ramp-5);}
+
+  /* --- field: a typed value from an instrument readout ---
+     A stepper is the wrong control for a number you READ off a machine to three
+     decimals: you would tap two thousand times to reach 1.842. This is a plain
+     numeric entry sized like the rest of the kit, with the unit shown and the
+     decimal keypad requested, and nothing that pretends the value is scrollable. */
+  .fek-field { display:flex; align-items:stretch; gap:0; border:2px solid var(--border);
+    border-radius:var(--fek-r); overflow:hidden; background:var(--surface); max-width:340px; }
+  .fek-field input { flex:1; min-width:0; border:0; background:none; text-align:right;
+    font:800 26px var(--head); color:var(--ink); font-variant-numeric:tabular-nums;
+    -moz-appearance:textfield; padding:0 12px; min-height:var(--tap); }
+  .fek-field input::-webkit-outer-spin-button,
+  .fek-field input::-webkit-inner-spin-button { -webkit-appearance:none; margin:0; }
+  .fek-field input:focus { outline:none; background:var(--soft); }
+  .fek-field input::placeholder { color:var(--muted); font-weight:600; font-size:20px; }
+  .fek-field .u { display:flex; align-items:center; padding:0 14px; background:var(--surface-2);
+    font:700 13px var(--mono); color:var(--muted); border-left:2px solid var(--border); white-space:nowrap; }
+  .fek-field.empty { border-style:dashed; }
+
+  /* --- a box the browser could not parse (v1.4.0, ADR-151) ---
+     Not the same state as empty, and it must not look like it. An empty box is
+     "not recorded yet"; this one holds the reader's own characters and hands
+     the page back the empty string, so without a state of its own the two are
+     one thing on screen as well as in the value. */
+  .fek-step.bad, .fek-field.bad { border-color:var(--ramp-5); border-style:solid; }
+  .fek-bad { font:700 13.5px var(--body); color:var(--ramp-5); margin:6px 0 0; }
+  input[type="number"].fek-badbox { border-color:var(--ramp-5) !important; }
+
+  /* --- big toggle chips --- */
+  .fek-chips { display:flex; flex-wrap:wrap; gap:9px; }
+  .fek-chip { min-height:var(--tap-sm); border:2px solid var(--border); border-radius:999px;
+    background:var(--surface); font:800 15.5px var(--body); color:var(--ink-2);
+    padding:0 20px; cursor:pointer; touch-action:manipulation; display:inline-flex;
+    align-items:center; gap:8px; transition:transform .08s, border-color .12s, background .12s; }
+  .fek-chip:active { transform:scale(.96); }
+  .fek-chip.on { border-color:var(--s1); background:var(--soft); color:var(--s1-deep); }
+  .fek-chip.on::before { content:"\2713"; font-size:17px; }
+
+  /* --- slider with a live bubble --- */
+  .fek-slide { display:flex; align-items:center; gap:14px; }
+  .fek-slide input[type=range] { flex:1; min-width:0; height:var(--tap-sm); -webkit-appearance:none;
+    background:transparent; cursor:pointer; touch-action:manipulation; }
+  .fek-slide input[type=range]::-webkit-slider-runnable-track { height:14px; border-radius:8px;
+    background:linear-gradient(90deg,var(--ramp-0),var(--ramp-2),var(--ramp-3),var(--ramp-5)); }
+  .fek-slide input[type=range]::-moz-range-track { height:14px; border-radius:8px;
+    background:linear-gradient(90deg,var(--ramp-0),var(--ramp-2),var(--ramp-3),var(--ramp-5)); }
+  .fek-slide input[type=range]::-webkit-slider-thumb { -webkit-appearance:none; width:34px; height:34px;
+    border-radius:50%; background:#fff; border:3px solid var(--ink); margin-top:-10px;
+    box-shadow:0 2px 6px rgba(35,40,31,.3); }
+  .fek-slide input[type=range]::-moz-range-thumb { width:34px; height:34px; border-radius:50%;
+    background:#fff; border:3px solid var(--ink); box-shadow:0 2px 6px rgba(35,40,31,.3); }
+  .fek-slide .bub { font:800 26px var(--head); font-variant-numeric:tabular-nums; color:var(--ink);
+    min-width:86px; text-align:right; }
+  .fek-slide .bub span { font:600 13px var(--mono); color:var(--muted); margin-left:3px; }
+
+  /* --- big picker: replaces <select> for long lists --- */
+  .fek-pick { border:2px solid var(--border); border-radius:var(--fek-r); background:var(--surface);
+    overflow:hidden; }
+  .fek-pick .search { width:100%; border:0; border-bottom:2px solid var(--border);
+    font:700 17px var(--body); padding:0 16px; min-height:var(--tap); background:var(--surface-2); }
+  .fek-pick .search:focus { outline:none; background:var(--soft); }
+  .fek-pick .opts { max-height:264px; overflow-y:auto; -webkit-overflow-scrolling:touch; }
+  .fek-pick .opt { display:block; width:100%; text-align:left; border:0; border-bottom:1px solid var(--border);
+    background:none; font:700 16.5px var(--body); color:var(--ink); min-height:var(--tap-sm);
+    padding:10px 16px; cursor:pointer; touch-action:manipulation; }
+  .fek-pick .opt small { display:block; font:400 12.5px var(--mono); color:var(--muted); margin-top:2px; }
+  .fek-pick .opt:hover { background:var(--soft); }
+  .fek-pick .opt.on { background:var(--s1); color:#fff; }
+  .fek-pick .opt.on small { color:rgba(255,255,255,.92); }
+  .fek-pick .none { padding:16px; color:var(--muted); font-size:14px; }
+
+  /* --- readout tiles, sized to be read at arm's length --- */
+  .fek-tiles { display:grid; grid-template-columns:repeat(auto-fit,minmax(148px,1fr)); gap:11px; margin:14px 0 2px; }
+  .fek-tile { border:2px solid var(--border); border-radius:var(--fek-r); padding:13px 15px; background:var(--surface); }
+  .fek-tile .v { font:800 30px var(--head); font-variant-numeric:tabular-nums; line-height:1.05; color:var(--ink); }
+  .fek-tile .l { font:700 12px var(--body); color:var(--muted); margin-top:4px; letter-spacing:.02em; }
+  .fek-tile.good { border-color:var(--ramp-2); } .fek-tile.good .v { color:var(--ramp-2); }
+  .fek-tile.warn { border-color:var(--ramp-3); } .fek-tile.warn .v { color:#8a6508; }
+  .fek-tile.bad  { border-color:var(--ramp-5); } .fek-tile.bad  .v { color:var(--ramp-5); }
+  .fek-tile.cold { border-color:var(--ramp-0); } .fek-tile.cold .v { color:var(--ramp-0); }
+
+  /* --- banner: the verdict, big --- */
+  .fek-banner { border-radius:var(--fek-r); padding:16px 19px; margin:14px 0; font-size:16px;
+    line-height:1.55; border-left:7px solid var(--ramp-2); background:var(--soft); color:var(--ink-2); }
+  .fek-banner b { font-family:var(--head); color:var(--ink); font-size:17.5px; display:block; margin-bottom:4px; }
+  .fek-banner.warn { border-left-color:var(--ramp-3); background:var(--warn-bg); }
+  .fek-banner.bad  { border-left-color:var(--ramp-5); background:var(--danger-bg); }
+  .fek-banner.cold { border-left-color:var(--ramp-0); background:#E6EEF3; }
+
+  /* --- photographs: the record carries the reference, not the image ---
+     (v1.5.0, ADR-201). Sized for a gloved thumb like the rest of the kit, and
+     the thumbnail is large enough to tell two bark shots apart at arm's
+     length, which is the only reason it is on screen at all. */
+  .fek-drop { border:2.5px dashed var(--fek-line); border-radius:var(--fek-r);
+    background:var(--surface); padding:18px 16px; text-align:center;
+    transition:border-color .12s, background .12s; }
+  .fek-drop.on { border-color:var(--ramp-2); background:var(--soft); border-style:solid; }
+  .fek-drop p { margin:0 0 10px; font-size:15px; color:var(--ink-2); }
+  .fek-drop button { min-height:var(--tap); border:0; border-radius:var(--fek-r);
+    background:var(--ramp-2); color:#fff; font:800 16px var(--body); padding:0 22px;
+    cursor:pointer; touch-action:manipulation; }
+  .fek-drop button:active { transform:scale(.97); }
+  .fek-photos { display:grid; grid-template-columns:repeat(auto-fill,minmax(210px,1fr));
+    gap:12px; margin-top:14px; }
+  .fek-photo { border:2px solid var(--border); border-radius:var(--fek-r);
+    background:var(--surface); overflow:hidden; }
+  .fek-photo img { display:block; width:100%; height:150px; object-fit:cover; background:var(--surface-2); }
+  .fek-photo .m { padding:10px 12px 12px; }
+  .fek-photo .m code { display:block; font:500 11.5px var(--mono); color:var(--muted);
+    word-break:break-all; line-height:1.45; }
+  .fek-photo .m input, .fek-photo .m textarea { width:100%; margin-top:8px; border:1.5px solid var(--fek-edge);
+    border-radius:10px; padding:9px 10px; font:15px var(--body); background:var(--surface);
+    color:var(--ink); min-height:44px; }
+  .fek-photo .m textarea { min-height:62px; resize:vertical; }
+  .fek-photo .rm, .fek-photo .act { margin-top:8px; min-height:44px; width:100%; border:1.5px solid var(--fek-line);
+    border-radius:10px; background:none; color:var(--ink-2); font:700 14px var(--body); cursor:pointer; }
+  .fek-photo .rm:hover { border-color:var(--ramp-5); color:var(--ramp-5); }
+  .fek-photo .act:hover { border-color:var(--ramp-2); color:var(--ramp-2); }
+  .fek-await { margin:8px 0 0; padding:9px 11px; border:1.5px dashed var(--accent, #7A6A3A);
+    border-radius:10px; background:var(--surface-2, #F3EEE0); }
+  .fek-await b { color:var(--accent, #7A6A3A); }
+  .fek-await ul { margin:6px 0 0; padding:0 0 0 18px; font-family:var(--mono, monospace);
+    font-size:11.5px; color:var(--ink-2, #4B5344); line-height:1.6; }
+  .fek-await .cap { color:var(--muted, #6B6B5E); }
+  .fek-shot { font:700 13.5px var(--body); color:var(--ink-2); margin:10px 0 0; min-height:1.2em; }
+  .fek-shot.bad { color:var(--ramp-5); }
+  @media print { .fek-drop, .fek-photo .rm, .fek-photo .act { display:none !important; }
+                 .fek-photo img { height:auto; } }
+
+  @media (max-width:420px){ :root { --tap:56px; --tap-sm:46px; } .fek-step .val { font-size:26px; } }
+  @media print { .fek-step button, .fek-pick .search { display:none; } }
+  /* ============ Keep (local autosave) v1.4.0 ============ */
+  .keep { display:flex; flex-wrap:wrap; align-items:center; gap:10px;
+    background:var(--surface-2, #F3EEE0); border:1px solid var(--border, #E3DCC9);
+    border-radius:12px; padding:10px 13px; margin:12px 0 2px; }
+  .keep .st { font-family:var(--mono, monospace); font-size:11.5px; color:var(--muted, #6B6B5E);
+    line-height:1.5; flex:1 1 220px; min-width:0; }
+  .keep .st b { color:var(--ink, #23281F); }
+  .keep.bad { border-color:var(--danger, #B23A32); background:var(--danger-bg, #F6E7E5); }
+  .keep.bad .st b { color:var(--danger, #B23A32); }
+  .keep button { border:1.5px solid var(--border, #E3DCC9); background:none; border-radius:10px;
+    padding:0 14px; min-height:var(--tap, 44px); font:700 13px var(--body, sans-serif);
+    color:var(--ink-2, #4B5344); cursor:pointer; touch-action:manipulation; }
+  .keep button:hover { border-color:var(--danger, #B23A32); color:var(--danger, #B23A32); }
+  .keep .note { flex:1 1 100%; font-size:12px; color:var(--muted, #6B6B5E); line-height:1.5; }
+  @media print { .keep { display:none !important; } }
+  /* ============ Outbox (what has not left this device) v1.0.0 ============ */
+  .outbox { background:var(--surface-2, #F3EEE0); border:1px solid var(--border, #E3DCC9);
+    border-radius:12px; padding:10px 13px; margin:4px 0 2px; }
+  .outbox .st { font-family:var(--mono, monospace); font-size:11.5px; color:var(--muted, #6B6B5E);
+    line-height:1.5; margin:0; }
+  .outbox .st b { color:var(--ink, #23281F); }
+  .outbox ul.pend { margin:7px 0 0; padding:0 0 0 18px; font-family:var(--mono, monospace);
+    font-size:11.5px; color:var(--ink-2, #4B5344); line-height:1.6; }
+  .outbox ul.pend li::marker { color:var(--muted, #6B6B5E); }
+  .outbox ul.pend .why { color:var(--muted, #6B6B5E); }
+  .outbox .note { margin:7px 0 0; font-size:12px; color:var(--muted, #6B6B5E); line-height:1.5; }
+  .outbox.hot { border-color:var(--accent, #7A6A3A); }
+  .outbox.hot .st b { color:var(--accent, #7A6A3A); }
+  .outbox.bad { border-color:var(--danger, #B23A32); background:var(--danger-bg, #F6E7E5); }
+  .outbox.bad .st b { color:var(--danger, #B23A32); }
+  @media print { .outbox { display:none !important; } }
+
+
+  /* WCAG 1.4.11 non-text contrast: the visible edge of a control you are meant
+     to write in is the only thing telling you where to write, so it carries the
+     3:1 floor. Decorative card borders are not controls and stay quiet. */
+  input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]),
+  select, textarea { border-color: #8E8160; }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <div class="top">
+    <div class="brand">Farm <span>Scout</span></div>
+    <a href="ecology.html">part of the ecology kit →</a>
+  </div>
+
+  <!-- SCOUT -->
+  <section class="pane on" id="p-scout">
+    <h2>Pest scouting — walk the W</h2>
+    <p class="hint">Walk your field in a W pattern, stop at 10+ points, and count pests on one plant (or
+      leaf) per stop. Tap + at each point. The verdict compares your average to your action threshold —
+      and the spread tells you whether to spot-treat or treat the whole block.</p>
+
+    <div class="card">
+      <div class="btn-row" style="margin-top:0">
+        <label class="f">crop / pest
+          <input type="text" id="scPest" value="aphids on kale" style="width:210px"></label>
+      </div>
+      <div id="thrEntry"></div>
+      <input type="hidden" id="scThresh" value="5">
+      <p class="fine">Thresholds vary by crop, pest, and region — use the number from your local extension
+        service or agronomist. The default is only a placeholder.</p>
+    </div>
+
+    <div class="card">
+      <div class="quads" id="scGrid"></div>
+      <div class="btn-row">
+        <button class="btn btn-soft" id="scAdd" type="button">+ Add sample point</button>
+        <button class="btn btn-ghost" id="scClear" type="button">Clear</button>
+      </div>
+    </div>
+
+    <div class="card" id="scResults"></div>
+  </section>
+
+  <!-- POLLINATORS -->
+  <section class="pane" id="p-poll">
+    <h2>Pollinator count — ten minutes by the blossoms</h2>
+    <p class="hint">Stand by a flowering patch for a set time and tap each visit by type. Diversity — not
+      just the total — is the health signal: a patch worked only by one species is fragile.
+      <b>Hold a card to rename it.</b></p>
+    <div class="card">
+      <div class="tally-grid" id="poGrid"></div>
+      <div class="addrow">
+        <input type="text" id="poNew" placeholder="add a visitor type (e.g. hoverfly)" autocomplete="off">
+        <button class="btn btn-soft" id="poAdd" type="button">Add</button>
+        <button class="btn btn-ghost" id="poUndo" type="button">↩ Undo</button>
+      </div>
+    </div>
+    <div class="card" id="poResults"></div>
+  </section>
+
+  <!-- GERMINATION -->
+  <section class="pane" id="p-germ">
+    <h2>Germination test — know your seed lot</h2>
+    <p class="hint">Sow a counted sample on damp paper towel, wait the packet's days, count sprouts.
+      The tester gives the lot's rate and how much to over-sow for the stand you want.</p>
+    <div class="card">
+      <div class="btn-row" style="margin-top:0">
+      </div>
+      <div id="germEntry"></div>
+      <input type="hidden" id="gSown" value="40"><input type="hidden" id="gUp" value="33">
+      <input type="hidden" id="gWant" value="120">
+      <div class="card" style="margin:12px 0 0" id="gOut"></div>
+      <p class="fine">Rule of thumb: below ~70%, sow thick or buy fresh seed; below ~50%, the lot is
+        usually not worth the bed space. Old seed of onions, parsnip, and lettuce fades fastest.</p>
+    </div>
+  </section>
+
+  <!-- ROTATION -->
+  <section class="pane" id="p-rot">
+    <h2>Rotation check — don't feed last year's problems</h2>
+    <p class="hint">Soil pests and diseases follow plant <b>families</b>, not crop names. Set what each bed
+      grew the last two seasons and what you're planning — the checker flags any family returning within
+      the 3-year rule and suggests what's safe.</p>
+    <div class="card">
+      <div class="beds" id="bedGrid"></div>
+      <div class="btn-row">
+        <button class="btn btn-soft" id="bedAdd" type="button">+ Add bed</button>
+      </div>
+      <p class="fine">The classic guidance is 3–4 years before a family repeats in the same soil — longest
+        for potatoes/tomatoes (Solanaceae) and the cabbage tribe (Brassicaceae). Legumes (Fabaceae) are the
+        classic soil-builders to slot between heavy feeders.</p>
+    </div>
+
+    <h2 style="margin-top:18px">Field day</h2>
+    <p class="hint">Which field, who walked it, when — stamped onto the export so the record stands on its own.</p>
+    <div class="card">
+      <div class="sess">
+        <label class="f">field / block<input type="text" id="sSite" placeholder="e.g. north block" autocomplete="off"></label>
+        <label class="f">scouted by<input type="text" id="sObs" placeholder="your name" autocomplete="off"></label>
+        <label class="f">date<input type="date" id="sDate"></label>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2 style="margin-top:0;font-size:17px">What the entry layer records</h2>
+      <p class="fine" style="margin-top:0">The controls are the shared <b>Field Entry Kit</b>, and the split
+        is the same one the benches use: <b>a stepper for a number you set, a field for a number you
+        counted</b>. The action threshold and the stand you are aiming for are choices, so they step. Seeds
+        tested and seeds germinated are tallies you already made off the towel, so they are typed.</p>
+      <p class="fine">Rotation history is a <b>picker per season</b> rather than a dropdown, and each family
+        option carries its crops underneath &mdash; because the mistake this tab exists to catch is not
+        forgetting a name, it is not realising that kale and radish are the same family as last year's
+        cabbage. The families are on the option, where the decision happens.</p>
+    </div>
+
+    <h2 style="margin-top:18px">Photographs</h2>
+    <div class="card">
+      <p class="fine" style="margin-top:0">A pest count is a number somebody has to take on trust. The photograph is what turns &ldquo;aphids on kale&rdquo; into an identification an agronomist can second-guess &mdash; and a hotspot shot with the row in it is how you find the same spot next week.</p>
+      <div id="photoEntry"></div>
+      <p class="fine"><b>The export carries the reference, not the image.</b> The frames stay in this tab and are never uploaded; closing it discards them, and the originals are in your camera roll. What travels is the filename, a CRC-32 and when the file was taken &mdash; enough to put a row and a frame back together later. The CRC is an integrity check, not a cryptographic one.</p>
+    </div>
+
+    <h2 style="margin-top:18px">Take it home</h2>
+    <div class="card">
+      <div id="keepBox"></div>
+      <div id="sendBox"></div>
+      <pre class="export" id="ecoOut"># scout something first — your field-day export appears here</pre>
+      <div class="btn-row">
+        <button class="btn btn-go" id="ecoCopy" type="button">Copy field-day export</button>
+        <button class="btn btn-soft" id="csvCopy" type="button">Copy CSV (for Excel/R)</button>
+        <button class="btn btn-ghost" onclick="window.print()" type="button">Print / save PDF</button>
+      </div>
+      <p class="fine">The export is <code>.eco</code>-compatible <code>data:</code> lines plus notes — drop it
+        into the <a href="ecology-lab.html">Interactive Lab</a> or a protocol file and the same instruments
+        that grade the science labs read your farm day.</p>
+    </div>
+  </section>
+
+<div class="rail">
+  <p class="rl">Record it — in the field</p>
+  <div class="chips">
+    <a href="field-notebook.html"><span>📓</span>Field Notebook</a>
+    <a href="ethogram.html"><span>🐾</span>Ethogram</a>
+    <a href="selection-log.html"><span>📏</span>Selection Log</a>
+    <a href="stand-sheet.html"><span>🌲</span>Stand Sheet</a>
+    <a href="releve.html"><span>🌾</span>Relevé</a>
+    <a href="collection-sheet.html"><span>🍄</span>Collection Sheet</a>
+    <a href="farm-scout.html" aria-current="page"><span>🧑‍🌾</span>Farm Scout</a>
+    <a href="pheno-tracker.html"><span>🌱</span>Pheno Tracker</a>
+    <a href="deployment-log.html"><span>🎙️</span>Deployment Log</a>
+  </div>
+  <p class="rl" style="margin-top:16px">At the bench</p>
+  <div class="chips">
+    <a href="cp-bench.html"><span>🫙</span>CP Bench</a>
+    <a href="soil-bench.html"><span>🪱</span>Soil Bench</a>
+    <a href="breeding-bench.html"><span>🥕</span>Breeding Bench</a>
+    <a href="cell-bench.html"><span>🔬</span>Cell Bench</a>
+    <a href="micro-bench.html"><span>🧫</span>Micro Bench</a>
+    <a href="soil-recipes.html"><span>🧱</span>Soil Recipes</a>
+    <a href="greenhouse.html"><span>🌡️</span>Greenhouse</a>
+  </div>
+  <p class="rl" style="margin-top:16px">Analyse it</p>
+  <div class="chips">
+    <a href="survey-design.html"><span>🧭</span>Survey Design</a>
+    <a href="ordination.html"><span>📉</span>Ordination</a>
+    <a href="food-web.html"><span>🕸️</span>Food Web Builder</a>
+    <a href="field-season.html"><span>🎯</span>Field Season</a>
+  </div>
+  <p class="rl" style="margin-top:16px">Print it</p>
+  <div class="chips">
+    <a href="plant-characters.html"><span>🌱</span>Plant Characters</a>
+    <a href="fungal-characters.html"><span>🔬</span>Fungal Characters</a>
+    <a href="cp-characters.html"><span>🪤</span>CP Characters</a>
+  </div>
+  <div class="chips" style="margin-top:16px">
+    <a class="ref" href="ecology.html">← kit hub</a>
+    <a class="ref" href="ecology-field-card.html">field card</a>
+    <a class="ref" href="ecology-glossary.html">glossary</a>
+  </div>
+</div>
+</div>
+</div>
+
+<div class="tabbar"><div class="row">
+  <button class="tab on" data-pane="p-scout" type="button"><span class="ico">🐛</span>Scout</button>
+  <button class="tab" data-pane="p-poll" type="button"><span class="ico">🐝</span>Pollinators</button>
+  <button class="tab" data-pane="p-germ" type="button"><span class="ico">🌱</span>Germination</button>
+  <button class="tab" data-pane="p-rot" type="button"><span class="ico">🧑‍🌾</span>Rotation</button>
+</div></div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+
+/* ---- Field Entry Kit v1.8.0 : constructors return {el, get, set} ---- */
+var FEK = (function(){
+  function el(t,c,h){ var e=document.createElement(t); if(c) e.className=c;
+    if(h!=null) e.innerHTML=h; return e; }
+  /* Where the line falls, and why it falls there.
+     A component's OWN label is written by whoever built the page and often
+     carries deliberate markup -- "Pod parent <span class="u">seed bearer</span>".
+     That stays HTML. The label on an OPTION, a chip or a tile is data: a
+     species you typed, a cross you recorded, a source you named. v1.1 passed
+     those straight into innerHTML, so a plant named with a < became markup.
+     Escaped here rather than at each call site, because a component whose
+     safety depends on every caller remembering is a component that will bite
+     somebody. Verified against the whole kit first: no option, chip or tile
+     label anywhere passes markup on purpose. */
+  /* No object literal here on purpose: the map form needs an escaped double
+     quote as a key, and this file is a Python string emitting JavaScript, so
+     that quote has to survive two layers of escaping. It did not, and every
+     consumer got a syntax error that took FEK down with it. A chain of
+     comparisons has nothing to escape. */
+  function escv(s){ return String(s==null?"":s).replace(/[&<>"']/g,function(c){
+    return c==="&"?"&amp;":c==="<"?"&lt;":c===">"?"&gt;":c==='"'?"&quot;":"&#39;"; }); }
+  function buzz(m){ try{ if(navigator.vibrate) navigator.vibrate(m||8);}catch(e){} }
+
+  /* ---- a rejected keystroke buffer is not an empty one (v1.4.0, ADR-151) ----
+     `<input type=number>` has a value the page reads and a raw buffer the page
+     cannot see, and when the browser cannot parse the buffer the value it
+     hands over is the EMPTY STRING -- the same string a box nobody touched
+     hands over. Both numeric components here treated that as "not recorded":
+     the stepper and the field each reported null, the row went dashed-empty,
+     and the reader's characters sat in a box the sheet had decided was blank.
+     `validity.badInput` is the only thing that separates them, because it is
+     about the buffer rather than the value. Fixed once, here, rather than in
+     the seven pages that mount these components -- which is what this file is
+     for. */
+  function badBuffer(inp){ return !!(inp && inp.validity && inp.validity.badInput); }
+  function badMark(wrap, box, inp, label, on){
+    var line = wrap.__fekBad;
+    if(on && !line){ line = wrap.__fekBad = el("p","fek-bad"); wrap.appendChild(line); }
+    if(line) line.textContent = on
+      ? ((label||"this box") + " holds something that is not a number")
+      : "";
+    if(box) box.classList.toggle("bad", !!on);
+    if(on) inp.setAttribute("aria-invalid","true"); else inp.removeAttribute("aria-invalid");
+    return on;
+  }
+
+  /* ---- field registry (v1.4.0) ----
+     A component writes through to a hidden field via the page's own onchange.
+     That is fine going out and useless coming back: nothing could put a
+     restored value INTO the widget, so an autosaved session showed default
+     dials over correct data -- a lie on screen, which is worse than no
+     autosave. A component that declares `field:"sElev"` is registered here,
+     and FEK.setField puts a value back through the widget's own set(). Purely
+     additive: a component with no `field` behaves exactly as before. */
+  var REG = {};
+  function reg(o, h){ if(o && o.field) REG[o.field] = h; return h; }
+  function setField(id, v){
+    var h = REG[id];
+    if(!h) return false;
+    try { h.set(v); } catch(e){ return false; }
+    return true;
+  }
+  function fields(){ var out=[]; for(var k in REG) if(REG.hasOwnProperty(k)) out.push(k); return out; }
+  /* v1.7.0 (ADR-210). What every registered widget is holding, read through its
+     own get(). The registry existed so a restored value could go back IN; there
+     was no way to get one OUT except through a hidden input the page had to
+     remember to write to -- so a control that declared a field but had no
+     element behind it was invisible to the autosave, and a control that
+     declared nothing was invisible twice over. A page's typed numbers came back
+     as defaults over correct data, which is the lie ADR-160 introduced the
+     registry to stop. */
+  function values(){
+    var out = {}, k;
+    for (k in REG) if (REG.hasOwnProperty(k)) {
+      try { out[k] = REG[k].get(); } catch (e) { }
+    }
+    return out;
+  }
+
+  function step(o){
+    o=o||{}; var min=(o.min==null?-Infinity:o.min), max=(o.max==null?Infinity:o.max);
+    var stepv=o.step||1, dec=o.dec==null?(String(stepv).split(".")[1]||"").length:o.dec;
+    var v=o.value==null?0:o.value;
+    var wrap=el("div","fek-row"), lab=el("label","fek-lab",
+      (o.label||"")+(o.unit?'<span class="u">'+o.unit+'</span>':""));
+    var box=el("div","fek-step");
+    var minus=el("button",null,"&minus;"), inp=el("input"), plus=el("button",null,"+");
+    minus.type="button"; plus.type="button"; inp.type="number"; inp.className="val";
+    inp.setAttribute("inputmode","decimal");
+    if(o.label) inp.setAttribute("aria-label",o.label);
+    /* nullable: the control can hold "not recorded", which is not the same as
+       zero. Aspect 0 is north; a duff depth of 0 cm is an observation. An empty
+       nullable stepper reports null and the first bump starts from o.start. */
+    var nullable = !!o.nullable;
+    if(nullable && o.value==null) v=null;
+    function clamp(x){ return Math.min(max,Math.max(min,x)); }
+    function render(){
+      if(v==null){ inp.value=""; wrap.classList.add("is-empty"); box.classList.add("empty"); return; }
+      wrap.classList.remove("is-empty"); box.classList.remove("empty");
+      inp.value=(dec?v.toFixed(dec):String(v));
+    }
+    function set(x,quiet){
+      if(nullable && (x==null || x==="" || (typeof x==="number" && !isFinite(x)))) v=null;
+      else v=clamp(isFinite(x)?x:0);
+      render(); if(!quiet&&o.onchange) o.onchange(v);
+    }
+    function bump(d){
+      if(v==null) set(clamp(o.start==null?0:o.start));
+      else set(+(v+d*stepv).toFixed(6));
+      buzz();
+    }
+    function clear(){ if(nullable) set(null); }
+    minus.addEventListener("click",function(){ bump(-1); });
+    plus.addEventListener("click",function(){ bump(1); });
+    var hold;
+    function holdOn(d){ return function(){ clearInterval(hold);
+      hold=setInterval(function(){ bump(d); },110); }; }
+    function holdOff(){ clearInterval(hold); }
+    minus.addEventListener("pointerdown",holdOn(-1)); plus.addEventListener("pointerdown",holdOn(1));
+    ["pointerup","pointerleave","pointercancel"].forEach(function(ev){
+      minus.addEventListener(ev,holdOff); plus.addEventListener(ev,holdOff); });
+    inp.addEventListener("input",function(){
+      if(badMark(wrap, box, inp, o.label, badBuffer(inp))){
+        // A nullable stepper goes to "not recorded", the same as a cleared box,
+        // because there is no number to hold either way -- what changes is that
+        // the row now SAYS which of the two happened. A fixed stepper keeps the
+        // value it had, and says so, rather than silently reading as unchanged.
+        if(nullable && v!==null){ v=null; box.classList.add("empty"); if(o.onchange) o.onchange(null); }
+        return; }
+      if(nullable && inp.value===""){ v=null; box.classList.add("empty");
+        if(o.onchange) o.onchange(null); return; }
+      var x=parseFloat(inp.value);
+      if(isFinite(x)){ v=clamp(x); box.classList.remove("empty"); if(o.onchange) o.onchange(v); } });
+    // BLUR MUST NOT ERASE THE EVIDENCE. render() writes v back into the box, so
+    // a blur over bad input would replace the reader's characters with the old
+    // number and take the message down with them -- the page quietly deciding
+    // it knew better. The buffer is still bad; leave it, and leave the line up.
+    inp.addEventListener("blur",function(){ if(!badBuffer(inp)) render(); });
+    box.appendChild(minus); box.appendChild(inp); box.appendChild(plus);
+    wrap.appendChild(lab); wrap.appendChild(box);
+    if(o.help) wrap.appendChild(el("p","fek-help",o.help));
+    render();
+    return reg(o, { el:wrap, get:function(){return v;}, set:function(x){set(x,true);},
+             clear:clear, nullable:nullable });
+  }
+
+  /* field: a value typed from an instrument readout. No steppers — see the CSS note. */
+  function field(o){
+    o=o||{};
+    var min=(o.min==null?-Infinity:o.min), max=(o.max==null?Infinity:o.max);
+    var dec=(o.dec==null?3:o.dec), v=(o.value==null?null:o.value);
+    var wrap=el("div","fek-row"), lab=el("label","fek-lab",
+      (o.label||"")+(o.unit?'<span class="u">'+o.unit+'</span>':""));
+    var box=el("div","fek-field"), inp=el("input");
+    inp.type="number"; inp.setAttribute("inputmode","decimal");
+    if(o.step!=null) inp.step=o.step;
+    inp.placeholder = o.placeholder==null ? "—" : o.placeholder;
+    if(o.label) inp.setAttribute("aria-label",o.label);
+    function paint(){ box.classList.toggle("empty", v==null); }
+    function set(x,quiet){
+      if(x==null || x===""){ v=null; inp.value=""; }
+      else { var n=parseFloat(x);
+        v = isFinite(n) ? Math.min(max,Math.max(min,n)) : null;
+        inp.value = (v==null?"":String(v)); }
+      paint(); if(!quiet&&o.onchange) o.onchange(v);
+    }
+    inp.addEventListener("input",function(){
+      if(badMark(wrap, box, inp, o.label, badBuffer(inp))){
+        if(v!==null){ v=null; paint(); if(o.onchange) o.onchange(null); }
+        return; }
+      if(inp.value===""){ v=null; paint(); if(o.onchange) o.onchange(null); return; }
+      var n=parseFloat(inp.value);
+      if(isFinite(n)){ v=Math.min(max,Math.max(min,n)); paint(); if(o.onchange) o.onchange(v); } });
+    inp.addEventListener("blur",function(){
+      if(badBuffer(inp)) return;
+      if(v!=null && isFinite(v)) inp.value = (dec==null?String(v):String(+v.toFixed(dec)));
+      paint(); });
+    box.appendChild(inp);
+    if(o.unitBox!==false && o.unit) box.appendChild(el("div","u",o.unit));
+    wrap.appendChild(lab); wrap.appendChild(box);
+    if(o.help) wrap.appendChild(el("p","fek-help",o.help));
+    set(v,true);
+    return reg(o, { el:wrap, get:function(){return v;}, set:function(x){set(x,true);},
+             clear:function(){ set(null,true); }, nullable:true });
+  }
+
+  function dial(o){
+    o=o||{}; var opts=o.options||[], cur=o.value==null?null:o.value;
+    var wrap=el("div","fek-row"), lab=el("label","fek-lab",o.label||"");
+    var box=el("div","fek-dial"), btns=[];
+    opts.forEach(function(op,i){
+      var b=el("button",null,'<span>'+escv(op.label)+'</span>'+(op.sub?'<small>'+escv(op.sub)+'</small>':""));
+      b.type="button";
+      b.setAttribute("data-r", op.ramp==null ? String(Math.min(5,Math.round(i*5/Math.max(1,opts.length-1)))) : String(op.ramp));
+      b.addEventListener("click",function(){
+        cur = (cur===op.value && o.clearable!==false) ? null : op.value;
+        paint(); buzz(); if(o.onchange) o.onchange(cur);
+      });
+      btns.push(b); box.appendChild(b);
+    });
+    function paint(){ btns.forEach(function(b,i){ b.classList.toggle("on", opts[i].value===cur); }); }
+    paint();
+    wrap.appendChild(lab); wrap.appendChild(box);
+    if(o.help) wrap.appendChild(el("p","fek-help",o.help));
+    return reg(o, { el:wrap, get:function(){return cur;},
+             set:function(x){ cur=x; paint(); } });
+  }
+
+  function chips(o){
+    o=o||{}; var opts=o.options||[], sel={};
+    (o.value||[]).forEach(function(v){ sel[v]=1; });
+    var wrap=el("div","fek-row"), lab=el("label","fek-lab",o.label||"");
+    var box=el("div","fek-chips"), btns=[];
+    opts.forEach(function(op){
+      var b=el("button","fek-chip",escv(op.label)); b.type="button";
+      b.addEventListener("click",function(){
+        if(o.single){ sel={}; sel[op.value]=1; }
+        else if(sel[op.value]) delete sel[op.value]; else sel[op.value]=1;
+        paint(); buzz(); if(o.onchange) o.onchange(Object.keys(sel));
+      });
+      btns.push(b); box.appendChild(b);
+    });
+    function paint(){ btns.forEach(function(b,i){ b.classList.toggle("on",!!sel[opts[i].value]); }); }
+    paint();
+    wrap.appendChild(lab); wrap.appendChild(box);
+    if(o.help) wrap.appendChild(el("p","fek-help",o.help));
+    return reg(o, { el:wrap, get:function(){return Object.keys(sel);},
+             set:function(a){ sel={}; (a||[]).forEach(function(v){sel[v]=1;}); paint(); } });
+  }
+
+  function slider(o){
+    o=o||{};
+    var nullable=!!o.nullable;
+    var v = (nullable && o.value==null) ? null : (o.value==null?(o.min||0):o.value);
+    var wrap=el("div","fek-row"), lab=el("label","fek-lab",o.label||"");
+    var box=el("div","fek-slide"), r=el("input"), bub=el("div","bub");
+    r.type="range"; r.min=o.min==null?0:o.min; r.max=o.max==null?100:o.max;
+    r.step=o.step||1; r.value=v;
+    if(o.label) r.setAttribute("aria-label",o.label);
+    function paint(){
+      if(v==null){ bub.innerHTML='<span style="opacity:.6">not recorded</span>'; return; }
+      bub.innerHTML=(o.fmt?o.fmt(v):v)+(o.unit?'<span>'+o.unit+'</span>':"");
+    }
+    r.addEventListener("input",function(){ v=parseFloat(r.value); paint(); if(o.onchange) o.onchange(v); });
+    if(nullable && v==null) r.value = (o.min==null?0:o.min);
+    paint();
+    box.appendChild(r); box.appendChild(bub);
+    wrap.appendChild(lab); wrap.appendChild(box);
+    if(o.help) wrap.appendChild(el("p","fek-help",o.help));
+    return reg(o, { el:wrap, get:function(){return v;},
+             set:function(x){ v=(nullable&&x==null)?null:x; if(x!=null) r.value=x; paint(); },
+             clear:function(){ if(nullable){ v=null; paint(); } }, nullable:nullable });
+  }
+
+  function picker(o){
+    o=o||{}; var opts=o.options||[], cur=o.value==null?null:o.value, q="";
+    var wrap=el("div","fek-row"), lab=el("label","fek-lab",o.label||"");
+    var box=el("div","fek-pick"), s=el("input","search"), list=el("div","opts");
+    s.type="text"; s.placeholder=o.placeholder||"type to filter…";
+    s.setAttribute("autocomplete","off");
+    if(o.label) s.setAttribute("aria-label",o.label+" filter");
+    function paint(){
+      list.innerHTML="";
+      var qq=q.toLowerCase();
+      var shown=opts.filter(function(op){
+        return !qq || (op.label+" "+(op.sub||"")).toLowerCase().indexOf(qq)>=0; });
+      if(!shown.length){ list.appendChild(el("div","none","No match. Clear the filter to see all "+opts.length+".")); return; }
+      shown.slice(0,200).forEach(function(op){
+        var b=el("button","opt"+(op.value===cur?" on":""),
+          escv(op.label)+(op.sub?'<small>'+escv(op.sub)+'</small>':""));
+        b.type="button";
+        b.addEventListener("click",function(){ cur=op.value; paint(); buzz(); if(o.onchange) o.onchange(cur); });
+        list.appendChild(b);
+      });
+    }
+    s.addEventListener("input",function(){ q=s.value; paint(); });
+    box.appendChild(s); box.appendChild(list);
+    wrap.appendChild(lab); wrap.appendChild(box);
+    if(o.help) wrap.appendChild(el("p","fek-help",o.help));
+    paint();
+    return reg(o, { el:wrap, get:function(){return cur;}, set:function(x){ cur=x; paint(); } });
+  }
+
+  function tiles(list){
+    var box=el("div","fek-tiles");
+    (list||[]).forEach(function(t){
+      box.appendChild(el("div","fek-tile"+(t.tone?" "+t.tone:""),
+        '<div class="v">'+escv(t.v)+'</div><div class="l">'+escv(t.l)+'</div>'));
+    });
+    return box;
+  }
+  function banner(title,body,tone){
+    return el("div","fek-banner"+(tone?" "+tone:""),"<b>"+title+"</b>"+body);
+  }
+
+  /* ==================== PHOTOGRAPHS (v1.5.0, ADR-201) ====================
+     THE RECORD CARRIES THE REFERENCE, NOT THE IMAGE.
+
+     One page in this kit took a photograph and twenty did not, on a kit that
+     emits Darwin Core with `associatedMedia` left empty everywhere. A field
+     record whose voucher is a sentence is a weaker record than one that names
+     the frame.
+
+     The image itself does not go into the record, for three reasons that all
+     point the same way. A CSV cell cannot hold a JPEG. A base64 photograph
+     inside a .eco export turns a 40 kB record into a 4 MB one, and the export
+     is a thing people paste into a message. And a photograph's home is the
+     camera roll or the card, where it already is -- Darwin Core asks
+     `associatedMedia` for an IDENTIFIER of the media, not the media.
+
+     So what the record carries is what lets a person -- or a script -- put the
+     row and the file back together six months later:
+
+         filename | bytes | captured | crc32
+
+     CRC-32 AND NOT SHA-256, deliberately. `crypto.subtle` does not exist on a
+     `file://` page, because a file URL is not a secure context, and this kit
+     is opened off a card in the field as often as it is served over https as
+     an artifact. A digest that is only available in one of those two is worse
+     than a weaker one that is the same in both: the whole point is that the
+     number written on the sheet in the field still matches the number computed
+     back at the desk. This is an INTEGRITY check -- has this file changed, is
+     this the same file -- and it is not, and must not be described as,
+     cryptographic.
+
+     CAPTURED IS THE FILE'S MTIME, NOT EXIF. `File.lastModified` is what a
+     browser will give a page without parsing the JPEG, and for a frame straight
+     off a camera it is the shutter. For a file that has been copied between
+     cards, or round-tripped through a messaging app, it is the copy's time.
+     The field is named `captured` because that is what it usually means, and
+     the page says plainly that a copy carries the copy's time.
+
+     THE IMAGES ARE NEVER UPLOADED and never leave the tab. They are object
+     URLs revoked the moment a photograph is removed, so a session that adds and
+     drops a hundred frames does not hold a hundred blobs. Closing the tab
+     discards them, which is correct: the originals are where they belong. */
+  var CRCT = (function(){
+    var t = new Array(256), c, n, k;
+    for (n = 0; n < 256; n++) {
+      c = n;
+      for (k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+      t[n] = c >>> 0;
+    }
+    return t;
+  })();
+  function crc32(bytes){
+    var c = 0xFFFFFFFF, i;
+    for (i = 0; i < bytes.length; i++) c = CRCT[(c ^ bytes[i]) & 0xFF] ^ (c >>> 8);
+    c = (c ^ 0xFFFFFFFF) >>> 0;
+    /* eight hex digits always: a crc of 0x0000A1B2 written as "a1b2" is a
+       different string from the one the next reader computes, and a checksum
+       you have to remember to pad is a checksum that will be compared wrong. */
+    return ("0000000" + c.toString(16)).slice(-8);
+  }
+  function iso(ms){
+    /* Local minutes, not UTC, because a field sheet is read where it was
+       written. ISO-shaped so it sorts. */
+    if (!ms) return "";
+    var d = new Date(ms), p = function(n){ return (n < 10 ? "0" : "") + n; };
+    return d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate())
+         + " " + p(d.getHours()) + ":" + p(d.getMinutes());
+  }
+  function photos(o){
+    o = o || {};
+    var list = [], max = (o.max == null ? 40 : o.max);
+    var wrap = el("div", "fek-row"), lab = el("label", "fek-lab", o.label || "Photographs");
+    var zone = el("div", "fek-drop");
+    /* THE ZONE NEEDS A NAME OF ITS OWN. A drop listener leaves no mark a
+       selector can find, and the control the page's own snapshot offers under
+       this component's label is the hidden FILE INPUT -- so a task that says
+       "drop these on the photographs" landed on the input and was refused as
+       not a drop zone. The id is the address; a page that mounts this without
+       one can still be driven through the file input, and cannot be driven by
+       a drop. */
+    zone.id = o.dropId || (o.field ? o.field + "Drop" : "");
+    if (!zone.id) zone.removeAttribute("id");
+    var inp = el("input");
+    inp.type = "file"; inp.accept = o.accept || "image/*"; inp.multiple = true;
+    inp.style.display = "none";
+    if (o.label) inp.setAttribute("aria-label", o.label);
+    var btn = el("button", null, "📷 Add photos");
+    btn.type = "button";
+    zone.appendChild(el("p", null, o.prompt ||
+      "<b>Shoot the character, not the specimen.</b> Camera or gallery, or drop files here."));
+    zone.appendChild(inp); zone.appendChild(btn);
+    var grid = el("div", "fek-photos");
+    /* Its own live region, by the rule ADR-199 put on every other message in
+       this kit: an addition that is refused -- a PDF dropped on a photo zone,
+       a frame too many -- is announced rather than silently ignored. */
+    var shot = el("p", "fek-shot");
+    shot.setAttribute("role", "status"); shot.setAttribute("aria-live", "polite");
+
+    /* FRAMES THIS SHEET KNOWS ABOUT AND DOES NOT HOLD (v1.6.0, ADR-206).
+       A page can restore what you typed. It cannot restore a photograph: a
+       page cannot hand a File back to a file input, and this component has
+       always refused to pretend otherwise. But a restored sheet that came back
+       quietly WITHOUT its frames is worse than one that admits it, because the
+       reader believes their morning is back. So the record survives the
+       restore even though the bytes do not, the component says which frames
+       are missing and names them, and it takes them back BY CHECKSUM: drop the
+       same files in again and the label and note you typed -- the expensive
+       part -- come back with them. */
+    var await_ = [];
+    var awaitBox = el("div", "fek-await");
+    awaitBox.style.display = "none";
+
+    /* NAMED FOR WHOEVER READS THE PAGE (v1.8.0, ADR-254). The cards are what
+       the page says it holds -- each frame's name, size, checksum and time --
+       and the grid had no id, so no report reader could see a card: a task
+       could attach a photograph and hold everything it exported and nothing
+       it showed. The zone's id names all three: <id>List the cards, <id>Msg
+       what the last addition said, <id>AwaitList the frames on the record and
+       not on this device. */
+    if (zone.id) {
+      grid.id = zone.id + "List"; shot.id = zone.id + "Msg"; awaitBox.id = zone.id + "AwaitList";
+    }
+
+    function say(t, bad){ shot.textContent = t || ""; shot.classList.toggle("bad", !!bad); }
+    function changed(){
+      if (o.onchange) o.onchange(records());
+      /* A REAL EVENT, BECAUSE A PHOTOGRAPH IS AN EDIT (v1.6.0, ADR-206).
+         Adding a frame fires no input and no change -- the file input is
+         hidden and a drop is neither -- so every autosave in this kit sat
+         still while a reader photographed four stations, and a session that
+         was ONLY photographs was saved by nothing. One bubbling event, so the
+         page does not have to remember to wire it and a page added tomorrow
+         is covered on the day it mounts the component. */
+      try { wrap.dispatchEvent(new CustomEvent("fek-change", { bubbles: true })); }
+      catch (e) {}
+    }
+    function records(){
+      /* The awaited frames are IN the record. A photograph that was taken has
+         an identifier whether or not this browser still holds the bytes, and
+         an export that dropped it would lose the only link between the row and
+         a file sitting on a camera. `have` says which is which. */
+      return list.map(function(p){
+        return { name: p.name, bytes: p.bytes, captured: p.captured, crc: p.crc,
+                 label: p.label, note: p.note, have: true };
+      }).concat(await_.map(function(p){
+        return { name: p.name, bytes: p.bytes, captured: p.captured, crc: p.crc,
+                 label: p.label, note: p.note, have: false };
+      }));
+    }
+    function renderAwait(){
+      if (!await_.length) { awaitBox.style.display = "none"; awaitBox.innerHTML = ""; return; }
+      awaitBox.style.display = "";
+      awaitBox.innerHTML = "<b>" + await_.length + " photograph"
+        + (await_.length === 1 ? " is" : "s are") + " on this record and not on this device.</b> "
+        + "A saved sheet keeps what you typed; it cannot keep an image. Add the same file"
+        + (await_.length === 1 ? "" : "s") + " again and the caption you wrote comes back with "
+        + (await_.length === 1 ? "it" : "them") + " \u2014 matched by checksum, so it has to be "
+        + "the same frame."
+        + "<ul>" + await_.map(function(p){
+            return "<li>" + escv(p.name) + " <span class=\"cap\">" + p.bytes + " bytes \u00b7 crc "
+                 + p.crc + (p.label ? " · " + escv(p.label) : "") + "</span></li>";
+          }).join("") + "</ul>";
+    }
+    function render(){
+      grid.innerHTML = "";
+      list.forEach(function(p, i){
+        var d = el("div", "fek-photo");
+        var im = el("img"); im.src = p.url;
+        im.alt = p.label || ("photograph " + (i + 1) + " — " + p.name);
+        var m = el("div", "m");
+        /* a space before each break (v1.8.0): the lines are one run of
+           text to anything that reads the card rather than looks at it --
+           "IMG_0431.jpg160 bytes" -- the ADR-253 run cell's defect again */
+        m.appendChild(el("code", null,
+          escv(p.name) + " <br>" + p.bytes + " bytes · crc " + p.crc
+          + (p.captured ? " <br>" + escv(p.captured) : "")));
+        var lv = el("input"); lv.type = "text"; lv.value = p.label;
+        lv.placeholder = o.labelPlaceholder || "voucher / specimen №";
+        lv.setAttribute("aria-label", "voucher for " + p.name);
+        var nt = el("textarea"); nt.value = p.note;
+        nt.placeholder = o.notePlaceholder || "What does this show?";
+        nt.setAttribute("aria-label", "note on " + p.name);
+        var rm = el("button", "rm", "Remove"); rm.type = "button";
+        lv.addEventListener("input", function(){ p.label = lv.value; changed(); });
+        nt.addEventListener("input", function(){ p.note = nt.value; changed(); });
+        rm.addEventListener("click", function(){
+          try { URL.revokeObjectURL(p.url); } catch (e) {}
+          list.splice(list.indexOf(p), 1);
+          render(); say("Removed " + p.name); changed(); buzz();
+        });
+        m.appendChild(lv); m.appendChild(nt);
+        /* A PAGE'S OWN ACTIONS ON A FRAME (v1.8.0, ADR-254). The stand sheet
+           kept a pane of its own for one button -- link this frame to the
+           species picked on the tally -- and with it lost every caption on a
+           reload, because only this component keeps a frame's record. An
+           action is {label, run(record)}: run returns a string to refuse with
+           (nothing changes) or {label?, note?, say?} to write back. */
+        (o.actions || []).forEach(function(a){
+          var ab = el("button", "act", escv(a.label)); ab.type = "button";
+          ab.addEventListener("click", function(){
+            var r = a.run({ name: p.name, bytes: p.bytes, captured: p.captured, crc: p.crc,
+                            label: p.label, note: p.note });
+            if (typeof r === "string") { say(r, true); return; }
+            if (!r) return;
+            if (r.label != null) p.label = String(r.label);
+            if (r.note != null) p.note = String(r.note);
+            render(); say(r.say || ""); changed();
+          });
+          m.appendChild(ab);
+        });
+        m.appendChild(rm);
+        d.appendChild(im); d.appendChild(m);
+        grid.appendChild(d);
+      });
+    }
+    function add(files){
+      var fs = Array.prototype.slice.call(files || []);
+      if (!fs.length) return;
+      var notImages = fs.filter(function(f){ return !/^image\//.test(f.type || ""); });
+      fs = fs.filter(function(f){ return /^image\//.test(f.type || ""); });
+      var room = Math.max(0, max - list.length), over = fs.length - room;
+      if (over > 0) fs = fs.slice(0, room);
+      var pending = fs.length, added = 0, back = 0;
+      /* A refusal is SAID, not swallowed: the reader who dropped six files and
+         got four has to be able to find out which two, and why. */
+      function done(){
+        if (pending) return;
+        var parts = [];
+        if (added) parts.push(added + " photograph" + (added === 1 ? "" : "s") + " added");
+        if (back) parts.push(back + " matched by checksum, caption restored");
+        if (notImages.length)
+          parts.push(notImages.length + " not an image: "
+                     + notImages.map(function(f){ return f.name; }).slice(0, 3).join(", "));
+        if (over > 0) parts.push(over + " over the limit of " + max);
+        say(parts.join(" — ") || "Nothing added", !added);
+        if (added) { render(); renderAwait(); changed(); buzz(12); }
+      }
+      if (!pending) { done(); return; }
+      fs.forEach(function(f){
+        var rd = new FileReader();
+        rd.onload = function(){
+          var bytes = new Uint8Array(rd.result);
+          var sum = crc32(bytes), lab = "", note = "", i;
+          /* BY CHECKSUM, NOT BY NAME. A camera roll renames on export and two
+             cards both start at DSC_0001; the checksum is the only thing that
+             says this is the frame the caption was written about. */
+          for (i = 0; i < await_.length; i++) {
+            if (await_[i].crc === sum && await_[i].bytes === bytes.length) {
+              lab = await_[i].label || ""; note = await_[i].note || "";
+              await_.splice(i, 1); back++;
+              break;
+            }
+          }
+          list.push({ name: f.name || ("photo-" + (list.length + 1) + ".jpg"),
+                      bytes: bytes.length, captured: iso(f.lastModified),
+                      crc: sum, label: lab, note: note,
+                      url: URL.createObjectURL(f) });
+          added++; pending--; done();
+        };
+        rd.onerror = function(){ pending--; done(); };
+        rd.readAsArrayBuffer(f);
+      });
+    }
+    btn.addEventListener("click", function(){ inp.click(); });
+    inp.addEventListener("change", function(){ add(inp.files); inp.value = ""; });
+    ["dragenter", "dragover"].forEach(function(ev){
+      zone.addEventListener(ev, function(e){ e.preventDefault(); zone.classList.add("on"); }); });
+    ["dragleave", "dragend"].forEach(function(ev){
+      zone.addEventListener(ev, function(){ zone.classList.remove("on"); }); });
+    /* The harness stamps data-h-drop on anything that registers a drop
+       listener, so this zone is drivable by the door with no page markup. */
+    zone.addEventListener("drop", function(e){
+      e.preventDefault(); zone.classList.remove("on");
+      if (e.dataTransfer && e.dataTransfer.files) add(e.dataTransfer.files);
+    });
+    wrap.appendChild(lab); wrap.appendChild(zone); wrap.appendChild(shot);
+    wrap.appendChild(awaitBox); wrap.appendChild(grid);
+    if (o.help) wrap.appendChild(el("p", "fek-help", o.help));
+    render();
+    return reg(o, {
+      el: wrap, get: records, count: function(){ return list.length; },
+      /* set() is deliberately not a way to put images back: a page cannot
+         hand a File to a file input, and a component that pretended to
+         restore a photograph from a record would be restoring a caption. */
+      set: function(){ return false; },
+      /* ...and THIS is what an autosave gets instead (v1.6.0, ADR-206). The
+         records come back, the bytes do not, and the component says so where
+         the reader will see it rather than coming back quietly one frame
+         short. Frames the sheet already holds are left alone -- a restore that
+         listed a photograph you are looking at would be noise. */
+      restore: function(recs){
+        if (!recs || !recs.length) return 0;
+        var held = {}, i;
+        for (i = 0; i < list.length; i++) held[list[i].crc] = 1;
+        await_ = recs.filter(function(r){
+          return r && r.crc && !held[r.crc];
+        }).map(function(r){
+          return { name: r.name, bytes: r.bytes, captured: r.captured, crc: r.crc,
+                   label: r.label || "", note: r.note || "" };
+        });
+        renderAwait();
+        /* ...AND THE PAGE IS TOLD (v1.8.0, ADR-254). A page draws its sheet
+           from get(), which lists the awaited frames, but a restore fired no
+           onchange -- so a page that restored its photographs after it had
+           drawn its sheet came back with the frames on the card and not in
+           the sheet: the collection sheet and the relevé, whose restores ran
+           in that order, lost the photographs section until the next edit.
+           Not a fek-change: a restore is not an edit to save. */
+        if (await_.length && o.onchange) o.onchange(records());
+        return await_.length;
+      },
+      awaiting: function(){ return await_.slice(); },
+      clear: function(){
+        list.forEach(function(p){ try { URL.revokeObjectURL(p.url); } catch (e) {} });
+        list = []; await_ = []; render(); renderAwait(); say(""); changed();
+      },
+      /* `associatedMedia` the way Darwin Core asks for it: identifiers,
+         concatenated and separated. The separator is " | " because a filename
+         may hold a comma and a record that splits wrong is worse than one that
+         is hard to read. */
+      media: function(){
+        /* Awaited frames are named too. A photograph that was taken has an
+           identifier whether or not this browser still holds it, and a deposit
+           that dropped it would break the only link between the row and a file
+           on a camera. */
+        return list.concat(await_).map(function(p){
+          return p.name + " (crc32 " + p.crc + (p.captured ? ", " + p.captured : "") + ")";
+        }).join(" | ");
+      }
+    });
+  }
+  /* ---- the same rule for a box FEK did not build (v1.4.0, ADR-151) ----
+     The components above now say when a box holds something the browser could
+     not read as a number. Every page that mounts them also carries number
+     boxes of its OWN -- an elevation, an effort value, five camera settings --
+     and those had the same silence for the same reason: `.value` comes back ""
+     and the page reads a blank. One delegated listener rather than a wrapper
+     per box, because the boxes a page builds LATER -- a row added, a pane
+     rendered, a measurement grid opened -- have to be covered too, and a guard
+     that only knew about the boxes present at load would go quiet exactly when
+     the sheet gets long. Capture phase, so the note is up before the page's own
+     handler decides what the box now means. */
+  function boxName(inp){
+    var a=inp.getAttribute("aria-label"); if(a && a.trim()) return a.trim();
+    var l=inp.closest?inp.closest("label"):null;
+    if(l){ var t="",i; for(i=0;i<l.childNodes.length;i++){ var n=l.childNodes[i];
+             if(n.nodeType===3) t+=n.nodeValue; }
+           t=t.replace(/\s+/g," ").trim(); if(t) return t; }
+    if(inp.id){ var lb=document.querySelector('label[for="'+inp.id+'"]');
+                if(lb) return lb.textContent.replace(/\s+/g," ").trim(); }
+    var ph=inp.getAttribute("placeholder");
+    return (ph && ph.trim()) ? ph.trim() : "this box";
+  }
+  function guardBox(inp){
+    var bad = !!(inp.validity && inp.validity.badInput);
+    var note = inp.__fekBadNote;
+    if(bad && !note){
+      note = inp.__fekBadNote = el("p","fek-bad");
+      var after = (inp.closest ? inp.closest("label") : null) || inp;
+      if(after.parentNode) after.parentNode.insertBefore(note, after.nextSibling);
+    }
+    if(note) note.textContent = bad ? (boxName(inp)+" holds something that is not a number") : "";
+    inp.classList.toggle("fek-badbox", bad);
+    if(bad) inp.setAttribute("aria-invalid","true"); else inp.removeAttribute("aria-invalid");
+  }
+  function guard(){
+    document.addEventListener("input",function(ev){
+      var inp=ev.target;
+      if(!inp || inp.tagName!=="INPUT" || inp.type!=="number") return;
+      // a component built here already says it, in its own row
+      if(inp.closest && inp.closest(".fek-step, .fek-field")) return;
+      guardBox(inp);
+    }, true);
+  }
+  if(document.readyState==="loading")
+    document.addEventListener("DOMContentLoaded",guard);
+  else guard();
+
+  function mount(host,parts){
+    var h=typeof host==="string"?document.getElementById(host):host;
+    h.innerHTML=""; parts.forEach(function(p){ h.appendChild(p.el||p); }); return h;
+  }
+  /* Exported because a page building a component LABEL -- which stays HTML by
+     design -- still has to escape the data inside it. A private copy of an
+     escaper in one page was how the last one got lost when the kit was
+     re-emitted over it. */
+  return { version:"1.8.0", esc:escv, setField:setField, fields:fields, values:values, step:step, field:field, dial:dial, chips:chips, slider:slider,
+           picker:picker, photos:photos, crc32:crc32, tiles:tiles, banner:banner, mount:mount, buzz:buzz, guard:guard };
+})();
+/* ---- Keep v1.4.0 : local autosave, and honesty about what that is ---- */
+var KEEP = (function(){
+  /* The handle the last wire() returned, so a reader outside the page's closure
+     can ask the page what it is holding (v1.3.0, ADR-209). */
+  var LIVE = null;
+  function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g,function(c){
+    return c==="&"?"&amp;":c==="<"?"&lt;":c===">"?"&gt;":c==='"'?"&quot;":"&#39;"; }); }
+
+  /* Probe rather than assume. Safari in private mode used to throw on the
+     first write; storage can also be disabled by enterprise policy or by the
+     user, and in a sandboxed frame the accessor itself throws. All three look
+     identical to a page that only wraps setItem in a try. */
+  function usable(){
+    try {
+      var k = "__keep_probe__";
+      window.localStorage.setItem(k, "1");
+      window.localStorage.removeItem(k);
+      return true;
+    } catch(e){ return false; }
+  }
+
+  function when(ts){
+    if(!ts) return "";
+    try {
+      var d = new Date(ts), now = new Date();
+      var same = d.toDateString() === now.toDateString();
+      var hm = ("0"+d.getHours()).slice(-2) + ":" + ("0"+d.getMinutes()).slice(-2);
+      return same ? ("today " + hm) : (d.toISOString().slice(0,10) + " " + hm);
+    } catch(e){ return ""; }
+  }
+
+  function wire(o){
+    o = o || {};
+    var key = o.key, host = typeof o.mount === "string" ? document.getElementById(o.mount) : o.mount;
+    var fmt = o.format == null ? 1 : o.format;
+    var ok = usable(), lastErr = null, savedAt = null, restoredFrom = null, timer = null;
+    var noun = o.noun || "your work";
+
+    function read(){
+      if(!ok) return null;
+      try {
+        var raw = window.localStorage.getItem(key);
+        if(!raw) return null;
+        var p = JSON.parse(raw);
+        /* A format stamp, so a page that changes its state shape does not
+           restore a shape it can no longer read and fail in a way the user
+           reads as data loss. */
+        if(!p || p.format !== fmt) return null;
+        return p;
+      } catch(e){ return null; }
+    }
+
+    function write(){
+      timer = null;
+      if(!ok) return;
+      var body;
+      try { body = o.snapshot(); } catch(e){ lastErr = "could not read the page state"; paint(); return; }
+      if(body == null){
+        try { window.localStorage.removeItem(key); }catch(e){}
+        savedAt = null; lastErr = null; paint(); return;
+      }
+      try {
+        window.localStorage.setItem(key, JSON.stringify({ format:fmt, at:Date.now(), body:body }));
+        savedAt = Date.now(); lastErr = null;
+      } catch(e){
+        /* Do not swallow this. A quota failure that says nothing is worse than
+           no autosave at all, because it teaches the user to trust it. */
+        lastErr = (e && e.name === "QuotaExceededError")
+          ? "this browser's storage is full" : "this browser refused the write";
+      }
+      paint();
+    }
+
+    function touch(){
+      if(!ok) return;
+      if(timer) clearTimeout(timer);
+      timer = setTimeout(write, o.debounce == null ? 500 : o.debounce);
+    }
+
+    function flush(){ if(timer){ clearTimeout(timer); } write(); }
+
+    function forget(){
+      /* Cancel the pending write first. Without this the debounced save from
+         the edit that preceded the click -- or from the click itself, on a
+         page that listens for clicks -- lands a few hundred milliseconds later
+         and puts the copy straight back, which makes the button look like it
+         did nothing. */
+      if(timer){ clearTimeout(timer); timer = null; }
+      try { window.localStorage.removeItem(key); }catch(e){}
+      savedAt = null; restoredFrom = null; lastErr = null; paint();
+      if(o.onforget) o.onforget();
+    }
+
+    function paint(){
+      if(!host) return;
+      /* noprint: this is screen chrome -- a status line about a browser and a
+         button -- and the print audit is right to count anything else that
+         vanishes on paper as content lost. */
+      host.className = "keep noprint" + ((!ok || lastErr) ? " bad" : "");
+      var msg;
+      if(!ok){
+        msg = "<b>This browser is not keeping anything.</b> Storage is unavailable here &mdash; a "
+            + "private window, or site data switched off. Nothing is being saved, so export before "
+            + "you close the tab.";
+      } else if(lastErr){
+        msg = "<b>Autosave failed &mdash; " + esc(lastErr) + ".</b> What is on screen is not saved. "
+            + "Export it now.";
+      } else if(savedAt){
+        msg = "Saved on this device <b>" + esc(when(savedAt)) + "</b>"
+            + (restoredFrom ? " &middot; restored from " + esc(when(restoredFrom)) : "") + ".";
+      } else if(restoredFrom){
+        msg = "Restored " + esc(noun) + " from <b>" + esc(when(restoredFrom)) + "</b> on this device.";
+      } else {
+        msg = "Autosave is on. " + esc(noun.charAt(0).toUpperCase() + noun.slice(1))
+            + " will still be here if you close the tab.";
+      }
+      /* THE BUTTON IS BUILT ONCE (v1.2.0, ADR-207).
+         This wrote the whole strip with innerHTML on every repaint, so the
+         forget button was DESTROYED AND RE-CREATED whenever the autosave
+         changed state -- and the autosave changes state on every save. A
+         control that does not survive a repaint cannot be stamped, addressed
+         or kept in focus across one: audit_focus reported it as "mounted after
+         the last stamp and could not be measured", intermittently, on whichever
+         page happened to save while the sweep was looking. Only the words
+         change now. */
+      if(!host.firstChild){
+        var st = document.createElement("p"); st.className = "st";
+        var btn = document.createElement("button");
+        btn.type = "button"; btn.setAttribute("data-keep-forget", "");
+        btn.textContent = "Forget this device's copy";
+        btn.addEventListener("click", function(){
+          forget();
+          if(o.ontoast) o.ontoast("Saved copy removed from this device");
+        });
+        var note = document.createElement("p"); note.className = "note";
+        note.innerHTML = '<b>This is not a backup.</b> It is one browser on one device, and it goes '
+          + 'when site data is cleared, in a private window, or on any other machine. It exists so a '
+          + 'phone call does not cost you a morning. The exports are the durable copy.';
+        host.appendChild(st); host.appendChild(btn); host.appendChild(note);
+      }
+      host.firstChild.innerHTML = msg;
+    }
+
+    var got = read();
+    if(got){
+      var accepted = false;
+      try { accepted = o.restore(got.body) !== false; } catch(e){ accepted = false; }
+      if(accepted){ restoredFrom = got.at; }
+    }
+    paint();
+    /* A PHOTOGRAPH IS AN EDIT (v1.1.0, ADR-206). FEK.photos fires `fek-change`
+       when frames are added, removed or captioned; nothing else does, because
+       a hidden file input and a drop produce neither `input` nor `change`. A
+       page that had to remember to wire this is a page that would forget. */
+    try {
+      document.addEventListener("fek-change", function(){ touch(); }, true);
+    } catch(e){}
+    /* A tab closing mid-debounce is exactly the case this exists for. */
+    try {
+      window.addEventListener("pagehide", function(){ if(timer) flush(); });
+      document.addEventListener("visibilitychange", function(){
+        if(document.visibilityState === "hidden" && timer) flush(); });
+    } catch(e){}
+
+    var h = { touch:touch, flush:flush, forget:forget, usable:function(){ return ok; },
+             restored:function(){ return restoredFrom; }, savedAt:function(){ return savedAt; },
+             error:function(){ return lastErr; },
+             /* v1.1.0 (ADR-203). The page already describes its own state once,
+                here, for the autosave. The outbox needs the same description to
+                say whether it has left the device -- and a SECOND description
+                would be a second thing to keep in step, so the one that is
+                already exercised by every restore is the one it gets. Read
+                through this handle rather than by the page passing its snapshot
+                twice, because two references can be wired to two functions and
+                only one of them would ever be tested. */
+             snapshot:function(){ return o.snapshot(); } };
+    /* v1.3.0 (ADR-209). The live handle, reachable from outside the page's own
+       closure. A page wires KEEP inside an IIFE and keeps the handle in a local,
+       so the description of its state that the autosave and the outbox both
+       already read was reachable from nowhere else -- and an audit asking "how
+       much did that tap take" had to count rows on the screen instead. Rows on
+       the screen are not records: a plate shown once in a list and once in a
+       results table is one record counted twice, and a rule built on that cries
+       wolf on a row remover while under-reading a delete that cascades.
+       One description, read by everything that needs it (ADR-141). */
+    LIVE = h;
+    return h;
+  }
+
+  /* ---- generic form capture ----
+     Every page in the kit keeps its typed state in elements with ids -- real
+     inputs for text and dates, hidden write-through fields for the FEK
+     widgets. Capturing them by walking the DOM means a page that gains a field
+     does not also have to remember to add it to a list, which is how a
+     hand-maintained list of fields quietly stops covering the newest one. */
+  function formSnapshot(){
+    var out = {}, i, els = document.querySelectorAll("input[id], textarea[id]");
+    for(i=0;i<els.length;i++){
+      var e = els[i];
+      if(e.type === "file" || e.type === "button" || e.type === "submit") continue;
+      out[e.id] = (e.type === "checkbox" || e.type === "radio") ? (e.checked ? "1" : "") : e.value;
+    }
+    /* v1.4.0 (ADR-210). ...AND EVERY FEK CONTROL THAT DECLARES A FIELD BUT HAS
+       NO ELEMENT BEHIND IT. Walking the DOM finds a page's typed state only
+       where the page also remembered to write it into a hidden input; a
+       component that declared `field:"selN"` and nothing else was invisible
+       here, and its value came back as the widget's default over correct data.
+       Only the ones the DOM walk did not already find, so every page that has
+       been keeping its state through hidden inputs keeps writing exactly the
+       blob it wrote yesterday. */
+    try {
+      if (typeof FEK !== "undefined" && FEK && typeof FEK.values === "function") {
+        var fv = FEK.values(), fk;
+        for (fk in fv) if (fv.hasOwnProperty(fk) && !out.hasOwnProperty(fk)
+                           && fv[fk] != null && fv[fk] !== "") out[fk] = fv[fk];
+      }
+    } catch (e) { }
+    return out;
+  }
+  /* Restoring the hidden field is only half the job: the widget above it still
+     shows its construction default, and a correct value under a wrong-looking
+     dial is worse than no restore at all. FEK.setField (v1.3.0) puts the value
+     back through the widget for every component that declared its field. */
+  function formRestore(map){
+    if(!map) return 0;
+    var n = 0, id;
+    for(id in map){
+      if(!map.hasOwnProperty(id)) continue;
+      var e = document.getElementById(id);
+      if(!e){
+        /* v1.4.0: a field with no element behind it is a FEK control that
+           declared one; put the value back through the widget's own set(). */
+        if(typeof FEK !== "undefined" && FEK.setField && FEK.setField(id, map[id])) n++;
+        continue;
+      }
+      if(e.type === "checkbox" || e.type === "radio") e.checked = !!map[id];
+      else e.value = map[id];
+      if(typeof FEK !== "undefined" && FEK.setField){
+        var v = map[id];
+        if(e.type === "number" || /^-?\d+(\.\d+)?$/.test(String(v))) {
+          FEK.setField(id, v === "" ? null : parseFloat(v));
+        } else {
+          FEK.setField(id, v === "" ? null : v);
+        }
+      }
+      n++;
+    }
+    return n;
+  }
+
+  return { version:"1.4.0", wire:wire, usable:usable, live:function(){ return LIVE; },
+           formSnapshot:formSnapshot, formRestore:formRestore };
+})();
+/* ---- Outbox v1.0.0 : what has not left this device ---- */
+var OUT = (function(){
+  function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g,function(c){
+    return c==="&"?"&amp;":c==="<"?"&lt;":c===">"?"&gt;":c==='"'?"&quot;":"&#39;"; }); }
+
+  /* UTF-8 by hand rather than TextEncoder, because the two would be two code
+     paths and only one of them would ever be exercised -- and because what is
+     hashed has to be the same bytes on the phone in the field as on the laptop
+     that checks it. Surrogate pairs are joined: a filename or a note holding an
+     emoji must hash as the character it is, not as two halves. */
+  function utf8(s){
+    var out = [], i, c, c2, u;
+    for (i = 0; i < s.length; i++) {
+      c = s.charCodeAt(i);
+      if (c < 0x80) { out.push(c); continue; }
+      if (c < 0x800) { out.push(0xC0 | (c >> 6), 0x80 | (c & 63)); continue; }
+      if (c >= 0xD800 && c <= 0xDBFF && i + 1 < s.length
+          && (c2 = s.charCodeAt(i + 1)) >= 0xDC00 && c2 <= 0xDFFF) {
+        u = 0x10000 + ((c - 0xD800) << 10) + (c2 - 0xDC00); i++;
+        out.push(0xF0 | (u >> 18), 0x80 | ((u >> 12) & 63),
+                 0x80 | ((u >> 6) & 63), 0x80 | (u & 63));
+        continue;
+      }
+      out.push(0xE0 | (c >> 12), 0x80 | ((c >> 6) & 63), 0x80 | (c & 63));
+    }
+    return out;
+  }
+
+  /* ONE hash for the kit. FEK's, because the photographs already carry CRC-32
+     and a sheet whose two checksums disagreed would be a sheet nobody could
+     reconcile. No fallback: a second implementation here would drift silently,
+     and an outbox that hashed with something nothing else uses would report
+     "unchanged" for the wrong reason. */
+  function hash(o){
+    if (typeof FEK === "undefined" || !FEK || typeof FEK.crc32 !== "function") return null;
+    return FEK.crc32(utf8(JSON.stringify(o)));
+  }
+
+  function usable(){
+    try {
+      var k = "__out_probe__";
+      window.localStorage.setItem(k, "1");
+      window.localStorage.removeItem(k);
+      return true;
+    } catch(e){ return false; }
+  }
+
+  function when(ts){
+    if(!ts) return "";
+    try {
+      var d = new Date(ts), now = new Date();
+      var same = d.toDateString() === now.toDateString();
+      var hm = ("0"+d.getHours()).slice(-2) + ":" + ("0"+d.getMinutes()).slice(-2);
+      return same ? ("today " + hm) : (d.toISOString().slice(0,10) + " " + hm);
+    } catch(e){ return ""; }
+  }
+
+  function kb(n){
+    if(!n) return "0 bytes";
+    return n < 1024 ? (n + " bytes") : ((n/1024).toFixed(n < 10240 ? 1 : 0) + " kB");
+  }
+
+  /* One outbox per page, and the module-level sent() finds it. A page's copy
+     helper is defined long before the outbox is wired, so it cannot close over
+     a handle; guarding the call with `typeof` is exactly how ADR-201 lost an
+     export writer for a season. Instead a send that arrives before wiring is
+     REMEMBERED and reported by wire(), which turns a wiring-order mistake into
+     a red line instead of a silence. */
+  var LIVE = null, EARLY = [];
+
+  function wire(o){
+    o = o || {};
+    var key = o.key, host = typeof o.mount === "string" ? document.getElementById(o.mount) : o.mount;
+    var keep = o.keep, defs = o.exports || [], fmt = o.format == null ? 1 : o.format;
+    var ok = usable(), lastErr = null, sends = {}, timer = null;
+
+    function def(id){ var i; for(i=0;i<defs.length;i++) if(defs[i].id === id) return defs[i]; return null; }
+
+    /* The sheet's state comes from KEEP's snapshot and from nowhere else. Two
+       descriptions of "what is on this page" would be two things to keep in
+       step, and the one the outbox used would be the one nobody tested. */
+    function state(){
+      if(!keep || typeof keep.snapshot !== "function") return undefined;
+      try { return keep.snapshot(); } catch(e){ return undefined; }
+    }
+    function nowCrc(){
+      var st = state();
+      if(st === undefined) return null;
+      if(st === null) return "";
+      return hash(st);
+    }
+
+    function load(){
+      if(!ok) return;
+      try {
+        var raw = window.localStorage.getItem(key);
+        if(!raw) return;
+        var p = JSON.parse(raw);
+        if(!p || p.format !== fmt || !p.sends) return;
+        var id;
+        /* Only ids this sheet still declares. An export that was renamed or
+           removed leaves a stamp that can never go stale and would sit in the
+           ledger claiming a copy of something that no longer exists. */
+        for(id in p.sends) if(p.sends.hasOwnProperty(id) && def(id)) sends[id] = p.sends[id];
+      } catch(e){}
+    }
+    function save(){
+      if(!ok) return;
+      try { window.localStorage.setItem(key, JSON.stringify({format:fmt, sends:sends})); }
+      catch(e){
+        lastErr = (e && e.name === "QuotaExceededError")
+          ? "this browser's storage is full, so the outbox will forget what has gone when the tab closes"
+          : "this browser refused to keep the outbox, so it will forget what has gone when the tab closes";
+      }
+    }
+
+    /* THE SHEET AS IT CAME OUT OF THE BOX IS NOT WORK.
+       Three of these pages fill a date in for you, so "the snapshot is not
+       null" is not the same question as "is there anything here to send", and
+       an outbox that opened saying four exports were overdue on a sheet nobody
+       had touched would be ignored by the second morning. So the baseline is
+       the state at wire time -- UNLESS the autosave just restored something,
+       in which case every export is genuinely outstanding and saying so is the
+       entire point. */
+    var base = null;
+
+    function status(){
+      var crc = nowCrc(), rows = [], i, d, s;
+      for(i=0;i<defs.length;i++){
+        d = defs[i]; s = sends[d.id];
+        rows.push({ id:d.id, label:d.label, records:(d.records !== false),
+                    sent:!!s, at:(s?s.at:0), bytes:(s?s.bytes:0),
+                    stale: !!s && crc !== null && crc !== "" && s.crc !== crc });
+      }
+      var never = [], stale = [], last = 0, lastLabel = "", carry = [];
+      var blank = (crc === "") || (base !== null && crc === base);
+      for(i=0;i<rows.length;i++){
+        if(rows[i].at > last){ last = rows[i].at; lastLabel = rows[i].label; }
+        /* A copy that does not carry the sheet's records is DECLARED -- so that
+           no call site can hand out bytes this ledger has never heard of -- but
+           it is not counted. An outbox that nagged you to re-copy an AI prompt
+           every time you added a stem would be an outbox nobody reads, and an
+           outbox nobody reads is worse than none, because the page still looks
+           like it is keeping track. */
+        if(!rows[i].records) continue;
+        carry.push(rows[i]);
+        if(blank) continue;
+        if(!rows[i].sent) never.push(rows[i]);
+        else if(rows[i].stale) stale.push(rows[i]);
+      }
+      return { crc:crc, empty:blank, unreadable:(crc === null), rows:rows,
+               carry:carry, never:never, stale:stale, pending:never.length + stale.length,
+               last:last, lastLabel:lastLabel, err:lastErr, storing:ok };
+    }
+
+    function sent(id, bytes){
+      var d = def(id);
+      if(!d){
+        lastErr = 'an export this sheet does not declare: "' + String(id) + '". '
+                + 'Something left this device and the outbox cannot tell you what';
+        paint(); return false;
+      }
+      var crc = nowCrc();
+      if(crc === null){
+        lastErr = "the outbox could not read this sheet, so it has NOT marked "
+                + d.label + " as gone";
+        paint(); return false;
+      }
+      sends[id] = { crc:crc, at:Date.now(), bytes:(bytes|0) };
+      lastErr = null;
+      save(); paint();
+      return true;
+    }
+
+    function paint(){
+      if(!host) return;
+      var st = status(), msg, tone = "";
+      if(st.unreadable){
+        tone = " bad";
+        msg = "<b>The outbox cannot read this sheet.</b> It is not tracking what has left, so "
+            + "treat nothing here as sent.";
+      } else if(st.err){
+        tone = " bad";
+        msg = "<b>" + esc(st.err) + ".</b>";
+      } else if(st.empty){
+        msg = "Nothing on this sheet yet. The outbox starts counting when you do.";
+      } else if(st.pending === 0){
+        msg = "<b>Everything here has left this device.</b> Last export "
+            + esc(when(st.last)) + (st.lastLabel ? " \u2014 " + esc(st.lastLabel) : "") + ".";
+      } else {
+        tone = " hot";
+        msg = "<b>" + st.pending + " of " + st.carry.length + " export"
+            + (st.carry.length === 1 ? "" : "s") + " on this sheet " + (st.pending === 1 ? "has" : "have")
+            + " not left this device</b>"
+            + (st.last ? " \u2014 last export " + esc(when(st.last)) + "." : " at all.");
+      }
+      var li = "", i, r;
+      for(i=0;i<st.carry.length;i++){
+        r = st.carry[i];
+        if(!r.sent) li += "<li>" + esc(r.label) + " <span class=\"why\">never</span></li>";
+        else if(r.stale) li += "<li>" + esc(r.label) + " <span class=\"why\">changed since "
+                             + esc(when(r.at)) + "</span></li>";
+      }
+      host.className = "outbox noprint" + tone;
+      host.innerHTML =
+        '<p class="st" role="status" aria-live="polite">' + msg + '</p>'
+        + (li ? '<ul class="pend">' + li + '</ul>' : '')
+        + '<p class="note"><b>This is a ledger, not a transport.</b> A page opened from a card '
+        + 'cannot send anything by itself \u2014 what it can do is tell you exactly what is on '
+        + 'this device and nowhere else, so a few minutes of signal go on the right bytes.'
+        + (st.storing ? "" : " Storage is unavailable here, so this list starts again when the tab closes.")
+        + '</p>';
+    }
+
+    /* Repaint on anything that could have changed the sheet, debounced. No page
+       wiring: a page that gained a control would otherwise have to remember to
+       tell the outbox, and the one it forgot would be the one that went stale
+       quietly. */
+    function touch(){
+      if(timer) clearTimeout(timer);
+      timer = setTimeout(function(){ timer = null; paint(); }, o.debounce == null ? 400 : o.debounce);
+    }
+    try {
+      ["input", "change", "click"].forEach(function(ev){
+        document.addEventListener(ev, touch, true); });
+    } catch(e){}
+
+    load();
+    base = (keep && typeof keep.restored === "function" && keep.restored()) ? null : nowCrc();
+    var h = { sent:sent, status:status, paint:paint, touch:touch,
+              usable:function(){ return ok; }, error:function(){ return lastErr; } };
+    LIVE = h;
+    if(EARLY.length){
+      /* An export that happened before the outbox existed is a wiring-order
+         fault, and it is reported rather than replayed: the stamp it would have
+         taken is the state at a moment that has already gone. */
+      lastErr = "an export left this device before the outbox was wired ("
+              + EARLY.map(function(e){ return String(e[0]); }).join(", ") + ")";
+      EARLY = [];
+    }
+    paint();
+    return h;
+  }
+
+  return { version:"1.0.0", wire:wire, utf8:utf8, hash:hash,
+           sent:function(id, bytes){
+             if(!LIVE){ EARLY.push([id, bytes]); return false; }
+             return LIVE.sent(id, bytes);
+           },
+           status:function(){ return LIVE ? LIVE.status() : null; } };
+})();
+
+</script>
+<script>
+(function(){
+  "use strict";
+  var $=function(id){return document.getElementById(id);};
+  function buzz(){ try{ navigator.vibrate&&navigator.vibrate(8);}catch(e){} }
+  /* hold a stepper to count fast: 350 ms then every 90 ms; trailing click swallowed. */
+  function holdable(btn, fire){
+    var t=null, iv=null, repeated=false;
+    function stop(){ clearTimeout(t); clearInterval(iv); t=iv=null; }
+    btn.addEventListener("pointerdown", function(){ repeated=false;
+      t=setTimeout(function(){ iv=setInterval(function(){ repeated=true; fire(); },90); },350); });
+    ["pointerup","pointerleave","pointercancel"].forEach(function(ev){ btn.addEventListener(ev,stop); });
+    btn.addEventListener("click", function(e){
+      if(repeated){ repeated=false; e.stopImmediatePropagation(); e.preventDefault(); return; }
+      fire(); });
+  }
+  /* long-press a tally card to rename it (the release click is swallowed) */
+  function renameable(card, nameEl, current, commit){
+    var t=null, renamed=false;
+    card.addEventListener("pointerdown", function(){
+      renamed=false;
+      t=setTimeout(function(){
+        renamed=true; buzz();
+        var inp=document.createElement("input");
+        inp.type="text"; inp.value=current();
+        inp.style.cssText="width:100%;font:800 15px inherit;border:1.5px solid var(--s1);border-radius:8px;padding:6px 8px;background:var(--surface);color:var(--ink)";
+        nameEl.textContent=""; nameEl.appendChild(inp);
+        inp.focus(); inp.select();
+        function done(){ var v=inp.value.trim().toLowerCase().replace(/\s+/g,"-"); commit(v||current()); }
+        inp.addEventListener("blur", done);
+        inp.addEventListener("keydown", function(e){
+          if(e.key==="Enter"){ e.preventDefault(); inp.blur(); }
+          if(e.key==="Escape"){ inp.value=current(); inp.blur(); } });
+        inp.addEventListener("pointerdown", function(e){ e.stopPropagation(); });
+        inp.addEventListener("click", function(e){ e.stopPropagation(); });
+      }, 550);
+    });
+    ["pointerup","pointerleave","pointercancel"].forEach(function(ev){
+      card.addEventListener(ev, function(){ clearTimeout(t); }); });
+    card.addEventListener("click", function(e){
+      if(renamed){ renamed=false; e.stopImmediatePropagation(); e.preventDefault(); }
+    }, true);
+  }
+  function toast(m){ var t=$("toast"); t.textContent=m; t.classList.add("on");
+    clearTimeout(t._h); t._h=setTimeout(function(){t.classList.remove("on");},1500); }
+  function esc(s){ return s.replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c];}); }
+
+  document.querySelectorAll(".tab").forEach(function(tb){
+    tb.addEventListener("click",function(){
+      document.querySelectorAll(".tab").forEach(function(x){x.classList.remove("on");});
+      document.querySelectorAll(".pane").forEach(function(x){x.classList.remove("on");});
+      tb.classList.add("on"); $(tb.dataset.pane).classList.add("on"); buzz();
+    });
+  });
+
+  /* shared math */
+  function shannon(c){ var N=0,i; for(i=0;i<c.length;i++)N+=c[i]; if(!N)return 0;
+    var H=0; for(i=0;i<c.length;i++){ if(c[i]>0){var p=c[i]/N; H-=p*Math.log(p);} } return H; }
+  function evenness(c){ var S=c.filter(function(x){return x>0;}).length; return S>1?shannon(c)/Math.log(S):1; }
+  function disp(c){ var n=c.length; if(n<2)return null;
+    var m=c.reduce(function(a,b){return a+b;},0)/n; if(!m)return null;
+    var v=0,i; for(i=0;i<n;i++)v+=(c[i]-m)*(c[i]-m); v/=(n-1); return {mean:m,vmr:v/m}; }
+
+  /* ---------- SCOUT ---------- */
+  var pts=[0,0,0,0,0,0,0,0,0,0];
+  function scRender(){
+    var g=$("scGrid"); g.innerHTML="";
+    pts.forEach(function(q,i){
+      var d=document.createElement("div"); d.className="quad";
+      d.innerHTML='<div class="ql">stop '+(i+1)+'</div><div class="qv">'+q+'</div>'
+        +'<div class="qb"><button class="step" data-i="'+i+'" data-d="-1" type="button">−</button>'
+        +'<button class="step" data-i="'+i+'" data-d="1" type="button">+</button></div>';
+      g.appendChild(d);
+    });
+    g.querySelectorAll(".step").forEach(function(b){
+      holdable(b, function(){
+        var i=+b.dataset.i,d=+b.dataset.d; pts[i]=Math.max(0,pts[i]+d); buzz();
+        b.parentNode.parentNode.querySelector(".qv").textContent=pts[i];   // inline: no re-render mid-hold
+        scOut();
+      });
+    });
+  }
+  function scOut(){
+    var box=$("scResults"), tot=pts.reduce(function(a,b){return a+b;},0);
+    var th=parseFloat($("scThresh").value)||0;
+    if(pts.length<2||!tot){ box.innerHTML='<p class="hint" style="margin:0">Count at least a few stops — the verdict appears here.</p>'; ecoOut(); return; }
+    var d=disp(pts);
+    var html='<div class="tiles">'
+      +'<div class="tile"><div class="v">'+pts.length+'</div><div class="l">stops</div></div>'
+      +'<div class="tile"><div class="v">'+tot+'</div><div class="l">pests counted</div></div>'
+      +'<div class="tile"><div class="v">'+d.mean.toFixed(1)+'</div><div class="l">avg / plant</div></div>'
+      +'<div class="tile"><div class="v">'+d.vmr.toFixed(2)+'</div><div class="l">spread (var/mean)</div></div></div>';
+    var over=th>0&&d.mean>=th;
+    var clumped=d.vmr>1.4, regular=d.vmr<0.7;
+    var patt = clumped ? "the infestation is <b>patchy</b> — hotspots, not a blanket"
+             : regular ? "counts are strikingly <b>uniform</b> across stops"
+             : "the infestation is spread fairly <b>evenly</b>";
+    if(th>0){
+      if(over&&clumped) html+='<div class="verdict warn"><b>At threshold, but patchy.</b> Average '+d.mean.toFixed(1)+' ≥ '+th+', and '+patt+'. Walk back to the hot stops first — <b>spot treatment</b> may be all this needs. Re-scout in a few days.</div>';
+      else if(over) html+='<div class="verdict act"><b>Action threshold reached.</b> Average '+d.mean.toFixed(1)+' ≥ '+th+' and '+patt+' — a whole-block response is justified. Check beneficials before you spray.</div>';
+      else if(clumped) html+='<div class="verdict warn"><b>Below threshold, but clumped.</b> Average '+d.mean.toFixed(1)+' &lt; '+th+', yet '+patt+'. Mark the hotspots and re-scout them sooner than the rest.</div>';
+      else html+='<div class="verdict"><b>Below threshold.</b> Average '+d.mean.toFixed(1)+' &lt; '+th+' and '+patt+'. Keep scouting on your regular walk — no action indicated.</div>';
+    } else {
+      html+='<div class="verdict">'+ (clumped?'<b>Patchy.</b> ':regular?'<b>Uniform.</b> ':'<b>Even.</b> ') + patt +'. Set an action threshold above to get a treat/don\'t-treat read.</div>';
+    }
+    box.innerHTML=html; ecoOut();
+  }
+  $("scAdd").addEventListener("click",function(){ pts.push(0); scRender(); scOut(); buzz(); });
+  $("scClear").addEventListener("click",function(){ pts=[0,0,0,0,0,0,0,0,0,0]; scRender(); scOut(); });
+  $("scThresh").addEventListener("input",scOut); $("scPest").addEventListener("input",ecoOutSoon);
+  scRender(); scOut();
+
+  /* ---------- POLLINATORS ---------- */
+  var po=[{name:"honeybee",n:0},{name:"bumblebee",n:0},{name:"hoverfly",n:0},{name:"butterfly",n:0}], poHist=[];
+  function poRender(){
+    var g=$("poGrid"); g.innerHTML="";
+    po.forEach(function(it,idx){
+      var b=document.createElement("button"); b.type="button"; b.className="tally";
+      /* ADR-239: the card's name is the visitor, not the visitor and its
+         count run together ("honeybee0", then "honeybee1" -- an address that
+         lasted one press). The .nm is what a reader takes as the name. */
+      b.innerHTML='<span class="x" data-x="1">✕</span><div class="name nm">'+esc(it.name)+'</div><div class="count">'+it.n+'</div>';
+      renameable(b, b.querySelector(".name"),
+        function(){ return it.name; },
+        function(v){
+          if(v!==it.name){
+            var dup=po.find(function(o){ return o!==it && o.name===v; });
+            if(dup){ dup.n+=it.n; po.splice(po.indexOf(it),1);
+              poHist=poHist.map(function(h){ return h===it? dup : h; }); }
+            else it.name=v;
+          }
+          poRender(); poOut();
+        });
+      b.addEventListener("click",function(ev){
+        if(ev.target&&ev.target.dataset&&ev.target.dataset.x){ po.splice(idx,1); poHist=poHist.filter(function(h){return h!==it;}); poRender(); poOut(); return; }
+        it.n++; poHist.push(it); buzz();
+        b.classList.remove("bump"); void b.offsetWidth; b.classList.add("bump");
+        b.querySelector(".count").textContent=it.n; poOut();
+      });
+      g.appendChild(b);
+    });
+  }
+  function poOut(){
+    var live=po.filter(function(i){return i.n>0;}), c=live.map(function(i){return i.n;});
+    var N=c.reduce(function(a,b){return a+b;},0), box=$("poResults");
+    if(!N){ box.innerHTML='<p class="hint" style="margin:0">Tap each visit — the reading appears here.</p>'; ecoOut(); return; }
+    var H=shannon(c), J=evenness(c), eff=Math.exp(H);
+    var read = live.length===1 ? '<b>One visitor type only.</b> All the work is on one species — great to have, fragile to rely on. Diversify bloom to spread the risk.'
+      : J>=0.7 ? '<b>Healthy spread.</b> Visits are shared across types — a resilient pollination service.'
+      : '<b>Dominated.</b> One type is doing most of the work; the others are occasional. More variety of flower shapes and bloom times usually broadens the crew.';
+    var html='<div class="tiles">'
+      +'<div class="tile"><div class="v">'+N+'</div><div class="l">visits</div></div>'
+      +'<div class="tile"><div class="v">'+live.length+'</div><div class="l">visitor types</div></div>'
+      +'<div class="tile"><div class="v">'+eff.toFixed(1)+'</div><div class="l">effective types</div></div>'
+      +'<div class="tile"><div class="v">'+J.toFixed(2)+'</div><div class="l">evenness</div></div></div>'
+      +'<div class="verdict">'+read+'</div><div class="bars">';
+    live.slice().sort(function(a,b){return b.n-a.n;}).forEach(function(it){
+      var pc=100*it.n/N;
+      html+='<div class="bar"><span class="nm">'+esc(it.name)+'</span><span class="tr"><span class="fl" style="width:'+pc.toFixed(1)+'%"></span></span><span class="pc">'+pc.toFixed(0)+'%</span></div>';
+    });
+    box.innerHTML=html+'</div>'; ecoOut();
+  }
+  function poAdd(){
+    var v=$("poNew").value.trim().toLowerCase().replace(/\s+/g,"-"); if(!v){ $("poNew").focus(); return; }
+    if(!po.some(function(i){return i.name===v;})) po.push({name:v,n:0});
+    $("poNew").value=""; poRender(); poOut();
+    $("poNew").focus();                                  // keep the keyboard up
+  }
+  $("poAdd").addEventListener("click",poAdd);
+  $("poNew").addEventListener("keydown",function(e){ if(e.key==="Enter")poAdd(); });
+  $("poUndo").addEventListener("click",function(){ var l=poHist.pop(); if(l&&l.n>0){l.n--; poRender(); poOut(); buzz();} });
+  poRender(); poOut();
+
+  /* ---------- GERMINATION ---------- */
+  function gOut(){
+    var sown=parseInt($("gSown").value,10)||0, up=parseInt($("gUp").value,10)||0, want=parseInt($("gWant").value,10)||0;
+    up=Math.min(up,sown);
+    var box=$("gOut");
+    if(!sown){ box.innerHTML='<p class="hint" style="margin:0">Enter your test counts.</p>'; ecoOut(); return; }
+    var r=up/sown, pct=(100*r);
+    var sow = (r>0&&want>0) ? Math.ceil(want/r) : null;
+    var read = r>=0.85 ? '<b>Strong lot.</b> Sow at normal spacing.'
+      : r>=0.7 ? '<b>Decent lot.</b> Sow a touch thick and thin to stand.'
+      : r>=0.5 ? '<b>Weak lot.</b> Sow heavily, or use it for cut-and-come-again where stand doesn\'t matter.'
+      : '<b>Poor lot.</b> Usually not worth the bed space — buy fresh seed.';
+    box.innerHTML='<div class="tiles">'
+      +'<div class="tile"><div class="v">'+pct.toFixed(0)+'%</div><div class="l">germination</div></div>'
+      +(sow!==null?'<div class="tile"><div class="v">'+sow+'</div><div class="l">seeds to sow for '+want+' plants</div></div>':'')
+      +'</div><div class="verdict'+(r<0.5?' act':r<0.7?' warn':'')+'">'+read+'</div>';
+    ecoOut();
+  }
+  ["gSown","gUp","gWant"].forEach(function(id){ $(id).addEventListener("input",gOut); });
+  gOut();
+
+  /* ---------- ROTATION ---------- */
+  var FAMS=[
+    ["","— family —"],
+    ["solanaceae","Solanaceae — tomato, pepper, potato, eggplant"],
+    ["brassicaceae","Brassicaceae — cabbage, broccoli, kale, radish"],
+    ["cucurbitaceae","Cucurbitaceae — squash, cucumber, melon"],
+    ["fabaceae","Fabaceae — beans, peas (soil builders)"],
+    ["alliaceae","Alliaceae — onion, garlic, leek"],
+    ["apiaceae","Apiaceae — carrot, parsnip, celery"],
+    ["asteraceae","Asteraceae — lettuce, sunflower"],
+    ["amaranthaceae","Amaranthaceae — beet, chard, spinach"],
+    ["poaceae","Poaceae — corn (heavy feeder)"],
+    ["cover","Cover crop / rest"]
+  ];
+  var beds=[{name:"Bed 1",y2:"",y1:"",plan:""},{name:"Bed 2",y2:"",y1:"",plan:""}];
+  /* ------------------------------- Field Entry Kit -------------------
+     A threshold and a target are numbers you SET, so they get steppers. Seeds
+     sown and seeds up are numbers you COUNTED, so they get typed fields. Bed
+     history is a pick from a fixed list, so it gets a picker per season. */
+  function push(id,v){
+    var e=$(id); if(!e) return;
+    e.value=(v==null?"":String(v));
+    e.dispatchEvent(new Event("input",{bubbles:true}));
+    e.dispatchEvent(new Event("change",{bubbles:true}));
+  }
+  var SCTHRESH=FEK.step({ field:"scThresh", label:"action threshold", unit:"avg per plant", value:5, min:0, max:500, step:0.5, dec:1,
+    onchange:function(v){ push("scThresh",v); },
+    help:"Thresholds vary by crop, pest and region. Use the number from your local extension service or agronomist — the default here is a placeholder, not a recommendation." });
+  FEK.mount("thrEntry",[SCTHRESH]);
+
+  var GSOWN=FEK.field({ field:"gSown", label:"seeds tested", value:40, dec:0, step:1, min:1,
+    onchange:function(v){ push("gSown",v); } });
+  var GUP=FEK.field({ field:"gUp", label:"germinated", value:33, dec:0, step:1, min:0,
+    onchange:function(v){ push("gUp",v); },
+    help:"Counted off the towel. Both are counts you made, so both are typed rather than dialled." });
+  var GWANT=FEK.step({ field:"gWant", label:"plants you want", value:120, min:1, max:100000, step:10, dec:0,
+    onchange:function(v){ push("gWant",v); },
+    help:"The stand you are aiming for — a target you choose, so it steps." });
+  FEK.mount("germEntry",[GSOWN,GUP,GWANT]);
+
+  function famOptions(){
+    return FAMS.filter(function(f){ return f[0]; }).map(function(f){
+      var parts=f[1].split(" — ");
+      return { value:f[0], label:parts[0], sub:parts[1]||"" }; });
+  }
+
+  function famLabel(k){ for(var i=0;i<FAMS.length;i++) if(FAMS[i][0]===k) return FAMS[i][1].split(" — ")[0]; return k; }
+  function bedRender(){
+    var g=$("bedGrid"); g.innerHTML="";
+    beds.forEach(function(b,idx){
+      var d=document.createElement("div"); d.className="bed";
+      var conflict = b.plan && b.plan!=="cover" && (b.plan===b.y1 || b.plan===b.y2);
+      var okAlt = FAMS.filter(function(f){ return f[0]&&f[0]!==b.y1&&f[0]!==b.y2; }).slice(0,3)
+        .map(function(f){return famLabel(f[0]);}).join(", ");
+      d.innerHTML='<div class="bh"><span class="bn">'+esc(b.name)+'</span><button class="x" data-x="'+idx+'" type="button">✕</button></div>';
+      var host=document.createElement("div"); host.className="bedpick"; d.appendChild(host);
+      var opts=famOptions();
+      var picks=[["two seasons ago","y2"],["last season","y1"],["planned now","plan"]]
+        .map(function(pair){
+          return FEK.picker({ label:pair[0], options:opts, value:b[pair[1]]||null,
+            placeholder:"type a family or crop…",
+            onchange:(function(key){ return function(v){
+              b[key]=v||""; bedRender(); ecoOut(); }; })(pair[1]) });
+        });
+      FEK.mount(host, picks);
+      if(b.plan){
+        var flag=document.createElement("div");
+        flag.className = conflict ? "flag bad" : "flag ok";
+        flag.innerHTML = conflict
+          ? '⚠ '+famLabel(b.plan)+' again within 3 years — soil pests &amp; disease carry over. Try: '+okAlt+'.'
+          : '✓ Clean rotation for this bed.'+ (b.plan==="fabaceae" ? " Legumes will feed the soil for the next heavy feeder." : "");
+        d.appendChild(flag);
+      }
+      d.querySelector(".x").addEventListener("click",function(){ beds.splice(idx,1); bedRender(); ecoOut(); });
+      g.appendChild(d);
+    });
+  }
+  $("bedAdd").addEventListener("click",function(){ beds.push({name:"Bed "+(beds.length+1),y2:"",y1:"",plan:""}); bedRender(); buzz(); });
+  bedRender();
+
+  /* ---------- field-day metadata ---------- */
+  try{ $("sDate").value = new Date().toISOString().slice(0,10); }catch(e){}
+  function sess(){
+    return { site:$("sSite").value.trim(), obs:$("sObs").value.trim(), date:$("sDate").value };
+  }
+  ["sSite","sObs","sDate"].forEach(function(id){ $(id).addEventListener("input",function(){ ecoOut(); }); });
+
+  /* ---------- export ---------- */
+  var ecoTimer=null;
+
+  /* ADR-201: every record carries its photographs. */
+  var PHOTOS = FEK.photos({ dropId:"fsPhotos", label:"Photographs",
+    prompt:"<b>The pest, the damage, and the hotspot with the row in it.</b> Camera or gallery, or drop files here.",
+    labelPlaceholder:"which stop / bed?",
+    notePlaceholder:"What does this frame show? Pest, damage, beneficial?",
+    onchange:function(){ ecoOut(); } });
+  FEK.mount("photoEntry",[PHOTOS]);
+  function ecoOutSoon(){ clearTimeout(ecoTimer); ecoTimer=setTimeout(ecoOut,300); }
+  function ecoOut(){
+    var lines=[];
+    var tot=pts.reduce(function(a,b){return a+b;},0);
+    if(tot){ lines.push("# pest scouting — "+($("scPest").value||"unnamed")+" — counts per stop:");
+      lines.push("#   "+pts.join(" "));
+      /* ADR-211: the stop count and the total go with the per-stop counts, and
+         the pollinator indices go with the pollinator tallies. The export
+         carried the raw numbers and none of the seven figures this page works
+         out from them. */
+      lines.push("note: "+pts.length+" stops, "+tot+" pests counted");
+      var d=disp(pts); if(d) lines.push("note: scouting avg "+d.mean.toFixed(1)+"/plant, spread "+d.vmr.toFixed(2)); }
+    var live=(po||[]).filter(function(i){return i.n>0;});
+    if(live.length){
+      lines.push("data: pollinators "+live.map(function(i){return i.name+"="+i.n;}).join(" "));
+      var _c=live.map(function(i){return i.n;});
+      var _N=_c.reduce(function(a,b){return a+b;},0);
+      lines.push("note: pollinators "+_N+" visits across "+live.length+" types"
+        +", effective "+Math.exp(shannon(_c)).toFixed(1)
+        +", evenness "+evenness(_c).toFixed(2));
+    }
+    var sown=parseInt($("gSown").value,10)||0, up=parseInt($("gUp").value,10)||0;
+    if(sown){
+      lines.push("note: germination test "+up+"/"+sown+" = "+Math.round(100*Math.min(up,sown)/sown)+"%");
+      var _r=Math.min(up,sown)/sown, _want=parseInt($("gWant").value,10)||0;
+      if(_r>0&&_want>0) lines.push("note: sow "+Math.ceil(_want/_r)+" seeds for "+_want+" plants at that rate");
+    }
+    (beds||[]).forEach(function(b){ if(b.plan) lines.push("note: "+b.name.toLowerCase()+" planned "+famLabel(b.plan)
+      +((b.plan!=="cover"&&(b.plan===b.y1||b.plan===b.y2))?" (ROTATION CONFLICT)":"")); });
+    if(lines.length){
+      var m=sess(), meta=[];
+      if(m.site) meta.push("field "+m.site);
+      if(m.obs) meta.push("scouted by "+m.obs);
+      if(m.date) meta.push(m.date);
+      if(meta.length) lines.unshift("# "+meta.join(" — "));
+      lines.unshift("# Farm Scout export — .eco-compatible");
+    }
+    /* ADR-201: the frames go out with the rest of the record. A session that
+       is only photographs is still a session, so this counts toward whether
+       there is anything to print. */
+    var _shots = (typeof PHOTOS === "undefined") ? [] : PHOTOS.get();
+    if(_shots.length){
+      lines.push("");
+      lines.push("# photographs \u2014 " + _shots.length + " frame" + (_shots.length===1?"":"s"));
+      _shots.forEach(function(ph){
+        lines.push("  " + ph.name + "   crc32 " + ph.crc
+               + (ph.captured ? "   " + ph.captured : "")
+               + (ph.label ? "   [" + ph.label + "]" : "")
+               + (ph.note ? "   " + ph.note : ""));
+      });
+    }
+    $("ecoOut").textContent = lines.length?lines.join("\n"):"# scout something first — your field-day export appears here";
+  }
+  function csvCell(s){ s=String(s); return /[",\n]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s; }
+  /* ADR-206. This page carried the clipboard dance twice, inline, once per
+     export -- two places to hook and one to forget, which is exactly how an
+     export goes unrecorded. One helper, and the mark lives in the SUCCESS
+     path: execCommand reports failure by RETURNING FALSE and throws in only
+     some of the ways it can fail, so the return value is what decides whether
+     this copy happened. */
+  function copyText(text,msg,id){
+    function done(){ toast(msg); buzz(); OUT.sent(id, text.length); }
+    function fb(){ var ta=document.createElement("textarea"); ta.value=text;
+      ta.style.position="fixed"; ta.style.opacity="0"; document.body.appendChild(ta); ta.select();
+      var okc=false; try{ okc=document.execCommand("copy"); }catch(e){}
+      document.body.removeChild(ta);
+      if(okc) done(); else toast("Select & copy manually"); }
+    try{ if(navigator.clipboard&&navigator.clipboard.writeText)
+      navigator.clipboard.writeText(text).then(done,fb); else fb(); }catch(e){ fb(); }
+  }
+  $("csvCopy").addEventListener("click",function(){
+    var rows=[["section","item","value"]];
+    var m=sess();
+    if(m.site) rows.push(["session","field", m.site]);
+    if(m.obs) rows.push(["session","scouted-by", m.obs]);
+    if(m.date) rows.push(["session","date", m.date]);
+    rows.push(["scouting","crop-pest", $("scPest").value||""]);
+    pts.forEach(function(p,i){ rows.push(["scouting","stop-"+(i+1), p]); });
+    po.filter(function(i){return i.n>0;}).forEach(function(i){ rows.push(["pollinators", i.name, i.n]); });
+    var sown=parseInt($("gSown").value,10)||0, up=parseInt($("gUp").value,10)||0;
+    if(sown){ rows.push(["germination","sown",sown]); rows.push(["germination","germinated",Math.min(up,sown)]); }
+    beds.forEach(function(b){ if(b.plan) rows.push(["rotation", b.name, famLabel(b.plan)]); });
+    copyText(rows.map(function(r){ return r.map(csvCell).join(","); }).join("\n"),
+      "CSV copied — paste into Excel, Sheets, or R", "csv");
+  });
+  $("ecoCopy").addEventListener("click",function(){
+    copyText($("ecoOut").textContent, "Copied — your field day, on the record", "sheet");
+  });
+
+  ecoOut();
+  /* ---- ADR-206: this sheet takes photographs and kept nothing ----
+     Four sheets in this kit mounted FEK.photos and had no autosave at all. A
+     reader could photograph four stations, score an hour of behaviour, take a
+     phone call, and lose the lot.
+
+     THE FRAMES CANNOT COME BACK, AND THE SHEET SAYS SO. A page cannot hand a
+     File back to a file input, so what survives a restore is the RECORD of each
+     photograph -- name, bytes, capture time, checksum, and the caption the
+     reader wrote. FEK.photos.restore() lists them as missing and takes them
+     back BY CHECKSUM when the same files are dropped in again, so the caption
+     survives even though the bytes did not. A restore that came back quietly
+     one frame short would leave the reader believing their morning is whole,
+     which is the more expensive of the two failures. */
+  var KEPT = KEEP.wire({
+    key: "csrbtFarmScout",
+    format: 1,
+    mount: "keepBox",
+    noun: "this field day",
+    ontoast: toast,
+    snapshot: function(){
+      var st = { pts:pts, po:po, poHist:poHist, beds:beds, photos:PHOTOS.get() };
+      var any = pts.some(function(v){ return v > 0; })
+                || po.some(function(i){ return i.n > 0; })
+                || beds.some(function(b2){ return b2.plan || b2.y1 || b2.y2; })
+                || (PHOTOS.get() || []).length;
+      var f = KEEP.formSnapshot(), k;
+      if(!any) for(k in f) if(f.hasOwnProperty(k) && String(f[k]).trim() !== "") { any = true; break; }
+      return any ? { fields: f, state: st } : null;
+    },
+    restore: function(b){
+      if(!b || !b.state) return false;
+      KEEP.formRestore(b.fields);
+      var st = b.state;
+      if(st.pts && st.pts.length){ pts.length=0; st.pts.forEach(function(x){ pts.push(+x||0); }); }
+      if(st.po && st.po.length){ po.length=0; st.po.forEach(function(x){ po.push(x); }); }
+      poHist.length=0; (st.poHist||[]).forEach(function(x){ poHist.push(x); });
+      if(st.beds && st.beds.length){ beds.length=0; st.beds.forEach(function(x){ beds.push(x); }); }
+      PHOTOS.restore(st.photos);
+      scRender(); scOut(); poRender(); poOut(); gOut(); bedRender(); ecoOut();
+      return true;
+    }
+  });
+  var SENT = OUT.wire({
+    key: "csrbtFarmScoutOut",
+    format: 1,
+    mount: "sendBox",
+    keep: KEPT,
+    exports: [
+      { id:"sheet", label:"the field-day export" },
+      { id:"csv", label:"the field-day CSV" },
+    ]
+  });
+  /* Every entry touches the autosave; the outbox repaints itself. */
+  ["input", "change", "click"].forEach(function(ev){
+    document.addEventListener(ev, function(){ KEPT.touch(); }, true); });
+
+})();
+</script>
+</body>
+</html>

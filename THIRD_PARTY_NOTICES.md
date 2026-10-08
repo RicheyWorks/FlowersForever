@@ -4,6 +4,11 @@ FlowersForever is proprietary software owned by RicheyWorks. It includes
 third-party libraries that remain subject to their own licenses; the
 FlowersForever proprietary license does not replace or restrict those rights.
 
+The bundled CSRBT field-science kit is separate MIT-licensed work by the same
+owner, RicheyWorks. Its 41 offline pages, source provenance, checksum manifest,
+and MIT license are in `src/main/resources/csrbt-field-kit/`. The bundle is
+extracted with its license into the farm data directory when a page is opened.
+
 The release build generates the complete, version-specific inventory at:
 
 `target/generated-resources/licenses/THIRD-PARTY.txt`
