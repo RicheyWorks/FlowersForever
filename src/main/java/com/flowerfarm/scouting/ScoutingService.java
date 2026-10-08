@@ -2,11 +2,13 @@ package com.flowerfarm.scouting;
 
 import com.flowerfarm.model.FarmProfile;
 import com.flowerfarm.model.SeasonPlanEntry;
+import com.flowerfarm.service.FieldAttachmentService;
 import com.flowerfarm.service.SeasonPlanService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Clock;
 import java.time.LocalDate;
@@ -44,10 +46,33 @@ public class ScoutingService {
         }
     }
 
+    /** Where photo bytes live: the farm's attachment store, so photos are deduplicated and backed up. */
+    public interface PhotoContent {
+        FieldAttachmentService.StoredContent store(String filename, byte[] bytes);
+
+        byte[] read(String sha256, long byteSize);
+
+        static PhotoContent of(FieldAttachmentService attachments) {
+            Objects.requireNonNull(attachments, "attachments");
+            return new PhotoContent() {
+                @Override
+                public FieldAttachmentService.StoredContent store(String filename, byte[] bytes) {
+                    return attachments.storeContent(filename, null, bytes);
+                }
+
+                @Override
+                public byte[] read(String sha256, long byteSize) {
+                    return attachments.readContent(sha256, byteSize);
+                }
+            };
+        }
+    }
+
     private final ScoutingStore store;
     private final IntFunction<List<SeasonPlanEntry>> plantings;
     private final FarmProfile farmProfile;
     private final Clock clock;
+    private PhotoContent photoContent;
 
     @Autowired
     public ScoutingService(SeasonPlanService seasonPlans, FarmProfile farmProfile) {
@@ -62,6 +87,16 @@ public class ScoutingService {
         this.plantings = Objects.requireNonNull(plantings, "plantings");
         this.farmProfile = Objects.requireNonNull(farmProfile, "farmProfile");
         this.clock = Objects.requireNonNull(clock, "clock");
+    }
+
+    /** Photos go through the existing attachments feature; without it, attaching explains why it can't. */
+    @Autowired(required = false)
+    public void setAttachments(FieldAttachmentService attachments) {
+        this.photoContent = attachments == null ? null : PhotoContent.of(attachments);
+    }
+
+    void setPhotoContent(PhotoContent content) {
+        this.photoContent = content;
     }
 
     public LocalDate today() {
@@ -122,10 +157,12 @@ public class ScoutingService {
             throw new IllegalArgumentException(String.join(" ", problems));
         }
         ScoutingStore.Log log = store.load();
+        Optional<Scouting.Finding> stored = finding.id() == null ? Optional.empty() : log.finding(finding.id());
         Scouting.Finding saved = finding.id() == null || finding.id().isBlank()
                 ? finding.withId(Scouting.nextId("F", finding.date(),
                         log.findings().stream().map(Scouting.Finding::id).toList()))
-                : finding;
+                // Photos change only through attachPhoto/removePhoto, so an edit never drops them.
+                : stored.map(previous -> finding.withPhotos(previous.photos())).orElse(finding);
         List<Scouting.Finding> findings = ScoutingStore.replace(log.findings(),
                 existing -> existing.id().equals(saved.id()), saved);
         store.save(new ScoutingStore.Log(log.version(), log.overdueDays(), findings, log.samples()));
@@ -177,6 +214,73 @@ public class ScoutingService {
 
     public Optional<Scouting.Finding> finding(String id) throws IOException {
         return store.load().finding(id);
+    }
+
+    /**
+     * Copies a photo into the attachment store and adds it to the finding. Attaching the same picture twice
+     * keeps one entry. The original file is left where it is.
+     */
+    public Scouting.Photo attachPhoto(String findingId, Path file, String caption) throws IOException {
+        Objects.requireNonNull(file, "file");
+        PhotoContent content = requirePhotoContent();
+        ScoutingStore.Log log = store.load();
+        Scouting.Finding finding = log.finding(findingId)
+                .orElseThrow(() -> new IllegalArgumentException("That finding no longer exists."));
+        if (!Files.isRegularFile(file)) {
+            throw new IllegalArgumentException("Choose a photo file (JPEG, PNG, WebP, or HEIC).");
+        }
+        if (Files.size(file) > FieldAttachmentService.MAX_ATTACHMENT_BYTES) {
+            throw new IllegalArgumentException("That photo is larger than 15 MB. Use a smaller copy.");
+        }
+        Path name = file.getFileName();
+        FieldAttachmentService.StoredContent stored = content.store(name == null ? "" : name.toString(),
+                Files.readAllBytes(file));
+        Optional<Scouting.Photo> already = finding.photos().stream()
+                .filter(photo -> photo.sha256().equals(stored.sha256())).findFirst();
+        if (already.isPresent()) {
+            return already.get();
+        }
+        Scouting.Photo photo = new Scouting.Photo(stored.sha256(), stored.mediaType(), stored.byteSize(),
+                stored.originalFilename(), caption, today());
+        List<Scouting.Photo> photos = new ArrayList<>(finding.photos());
+        photos.add(photo);
+        Scouting.Finding updated = finding.withPhotos(photos);
+        List<String> problems = Scouting.problems(updated, today());
+        if (!problems.isEmpty()) {
+            throw new IllegalArgumentException(String.join(" ", problems));
+        }
+        store.save(new ScoutingStore.Log(log.version(), log.overdueDays(),
+                ScoutingStore.replace(log.findings(), existing -> existing.id().equals(finding.id()), updated),
+                log.samples()));
+        return photo;
+    }
+
+    /** Verified photo bytes; fails clearly if the stored file is missing or changed. */
+    public byte[] photoBytes(Scouting.Photo photo) {
+        Objects.requireNonNull(photo, "photo");
+        return requirePhotoContent().read(photo.sha256(), photo.byteSize());
+    }
+
+    /**
+     * Removes a photo from a finding. The stored copy stays in the attachment store (other records may share
+     * it, and backups keep it), so this is reversible by attaching the same file again.
+     */
+    public void removePhoto(String findingId, String sha256) throws IOException {
+        ScoutingStore.Log log = store.load();
+        Scouting.Finding finding = log.finding(findingId)
+                .orElseThrow(() -> new IllegalArgumentException("That finding no longer exists."));
+        Scouting.Finding updated = finding.withPhotos(finding.photos().stream()
+                .filter(photo -> !photo.sha256().equals(sha256)).toList());
+        store.save(new ScoutingStore.Log(log.version(), log.overdueDays(),
+                ScoutingStore.replace(log.findings(), existing -> existing.id().equals(finding.id()), updated),
+                log.samples()));
+    }
+
+    private PhotoContent requirePhotoContent() {
+        if (photoContent == null) {
+            throw new IllegalStateException("Photo storage is not available in this mode of the app.");
+        }
+        return photoContent;
     }
 
     /** Printable HTML to send in the box with the sample. */

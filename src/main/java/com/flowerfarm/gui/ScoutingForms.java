@@ -103,7 +103,7 @@ final class ScoutingForms {
                     plantingId, bed.getText(), crop.getText(), variety.getText(),
                     (Scouting.Category) category.getSelectedItem(), organism.getText(), symptoms.getText(),
                     (Scouting.Severity) severity.getSelectedItem(), percent(incidence.getText()), photo.getText(),
-                    action.getText());
+                    action.getText(), original == null ? List.of() : original.photos());
         }
     }
 
