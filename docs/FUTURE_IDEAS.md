@@ -12,6 +12,8 @@ Start from the field-note capture and device queue now in the app. Add optional 
 
 ## 2. Next week's stem promise
 
+**First slice shipped** in File → [Stem demand board](STEM_DEMAND_BOARD.md): stems by crop and date from confirmed (optionally draft) orders, with live cooler stock, projected harvest, and shortages shown separately. Explicit crop/lot allocations and reservations remain later.
+
 **Grower moment:** a florist wants forty bouquets next Friday. What is already promised, what is in the cooler, and what might be ready?
 
 Join the existing availability outlook, order lines, and recipe requirements into a weekly demand board. Show three separate amounts: live uncommitted stock, existing commitments, and projected harvest. Add explicit crop/lot allocations before reserving supply; never treat a forecast as a confirmed stem.
@@ -43,6 +45,8 @@ Add a simple farm-owned row/bed map with dimensions, paths, irrigation zones, an
 **Prove it:** moving a proposed planting explains capacity and timing conflicts before saving, and the same saved planting appears on both map and timeline.
 
 ## 6. One buying list for a busy event week
+
+**First slice shipped** in the same [stem demand board](STEM_DEMAND_BOARD.md): order lines counted as saved recipes combine into one stem list across events, with stock shared once, plus copy and CSV export. Supplier and pack rounding, per-event grouping, substitutions, and printed workbench sheets remain later.
 
 **Grower moment:** three events use overlapping recipes and the grower needs one sensible wholesale order.
 

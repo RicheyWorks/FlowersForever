@@ -15,3 +15,6 @@ spreadsheet import; map columns in the marketplace if names differ.
 
 Season Planner → Availability outlook still copies a **planning-only** TSV for
 buyer conversations about future weeks.
+
+For your own buying and cutting list across upcoming orders, see the
+[stem demand board](STEM_DEMAND_BOARD.md).
