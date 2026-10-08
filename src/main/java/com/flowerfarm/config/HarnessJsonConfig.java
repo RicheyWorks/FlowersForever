@@ -15,7 +15,7 @@ import com.fasterxml.jackson.databind.type.LogicalType;
 import com.flowerfarm.automation.HarnessCommand;
 import com.flowerfarm.service.FieldAttachmentService;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.boot.autoconfigure.jackson.Jackson2ObjectMapperBuilderCustomizer;
+import org.springframework.boot.jackson2.autoconfigure.Jackson2ObjectMapperBuilderCustomizer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Profile;

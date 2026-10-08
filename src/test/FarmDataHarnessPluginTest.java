@@ -45,6 +45,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
 
 import java.time.LocalDate;
 import java.time.Instant;
@@ -654,7 +655,11 @@ class FarmDataHarnessPluginTest {
         properties.setAllowSensitiveRead(true);
         properties.setAllowMutations(true);
         HarnessGateway gateway = new HarnessGateway(new HarnessRegistry(List.of(plugin)), properties, mapper);
-        var mvc = standaloneSetup(new HarnessController(gateway)).build();
+        // Standalone MockMvc skips Boot's converters, and Spring Framework 7 would pick Jackson 3 by
+        // default. Use the Jackson 2 converter the app configures (preferred-json-mapper=jackson2).
+        var mvc = standaloneSetup(new HarnessController(gateway))
+                .setMessageConverters(new MappingJackson2HttpMessageConverter(mapper))
+                .build();
         McpProtocolHandler mcp = new McpProtocolHandler(gateway, properties, mapper);
         when(attachmentService.readChunk(id, 0, 2)).thenReturn(
                 new FieldAttachmentService.AttachmentContentChunk(attachmentRecord(id), 0, new byte[]{1, 2}, -1));

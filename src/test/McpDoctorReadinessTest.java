@@ -79,7 +79,10 @@ class McpDoctorReadinessTest {
         }
 
         assertThat(runner.getExitCode()).isEqualTo(2);
-        var report = mapper.readTree(output.toString(StandardCharsets.UTF_8));
+        // The runner prints one JSON line. In production the mcp profile sends logs to stderr; this
+        // test has no mcp profile, so console log lines (Flyway 12 logs each info() call) can come first.
+        String[] lines = output.toString(StandardCharsets.UTF_8).strip().split("\\R");
+        var report = mapper.readTree(lines[lines.length - 1]);
         assertThat(report.path("status").asText()).isEqualTo("ACTION_REQUIRED");
         assertThat(report.path("dataDirectoryReady").asBoolean()).isFalse();
         assertThat(report.toString()).doesNotContain(properties.getToken());
