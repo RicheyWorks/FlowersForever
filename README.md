@@ -149,6 +149,7 @@ FlowersForever is a **private preview**. External farm distribution awaits an ap
 | If you want to… | Start here |
 |---|---|
 | See all 25 farm types and their current scope | [Farm-type guide](docs/FARM_TYPES.md) |
+| Get a new grower going in one page | [Getting started guide](docs/GETTING_STARTED.md), also in the app under Help |
 | Learn the desktop app | [Grower guide](docs/USER_GUIDE.md) |
 | Preview a guided farm day | [Five-minute tour](#take-a-five-minute-tour) and [presenter runbook](docs/DEMO.md) |
 | Protect your farm records | [Backup and restore](docs/BACKUP_RESTORE.md) |
