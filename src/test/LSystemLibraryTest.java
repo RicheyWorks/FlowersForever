@@ -32,4 +32,23 @@ class LSystemLibraryTest {
         assertThat(loaded.toLSystem().expand(2)).isNotBlank();
         assertThat(lib.listFiles()).hasSize(1);
     }
+
+    @Test
+    @DisplayName("listFiles keeps only .json rulesets, sorted by name without regard to case")
+    void listFilesFiltersAndSorts() throws Exception {
+        java.nio.file.Files.writeString(temp.resolve("b-rose.json"), "{}");
+        java.nio.file.Files.writeString(temp.resolve("A-Rose.JSON"), "{}");
+        java.nio.file.Files.writeString(temp.resolve("notes.txt"), "not a ruleset");
+        java.nio.file.Files.createDirectories(temp.resolve("folder"));
+
+        assertThat(new LSystemLibrary(temp).listFiles())
+                .extracting(p -> p.getFileName().toString())
+                .containsExactly("A-Rose.JSON", "b-rose.json");
+    }
+
+    @Test
+    @DisplayName("listFiles on a missing directory is empty")
+    void listFilesMissingDirectory() throws Exception {
+        assertThat(new LSystemLibrary(temp.resolve("missing")).listFiles()).isEmpty();
+    }
 }

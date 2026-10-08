@@ -25,4 +25,16 @@
     <Match>
         <Bug pattern="DM_EXIT"/>
     </Match>
+
+    <!-- AT_STALE_THREAD_WRITE_OF_PRIMITIVE on DashboardTab.preparingDailySheet is a false positive.
+         The flag is confined to the Swing event dispatch thread: it is read and written only by
+         button action listeners, SwingWorker.done() (which Swing runs on that thread) and the
+         helpers they call. The doInBackground() methods never touch it. SpotBugs cannot see EDT
+         confinement, so this one field and pattern are excluded; any other stale-write finding
+         still fails the gate. -->
+    <Match>
+        <Class name="com.flowerfarm.gui.tabs.DashboardTab"/>
+        <Field name="preparingDailySheet"/>
+        <Bug pattern="AT_STALE_THREAD_WRITE_OF_PRIMITIVE"/>
+    </Match>
 </FindBugsFilter>

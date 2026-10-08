@@ -1,5 +1,7 @@
 package com.flowerfarm.config;
 
+import com.flowerfarm.util.PathNames;
+
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -132,7 +134,7 @@ public final class AppDataBootstrap {
     private static boolean directoryHasUserData(Path directory) throws IOException {
         try (var paths = Files.list(directory)) {
             return paths.anyMatch(path -> !Files.isDirectory(path)
-                    && !path.getFileName().toString().startsWith(".write-check-"));
+                    && !PathNames.fileName(path).startsWith(".write-check-"));
         }
     }
 

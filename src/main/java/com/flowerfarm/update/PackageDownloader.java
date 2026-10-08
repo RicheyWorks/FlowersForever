@@ -2,6 +2,7 @@ package com.flowerfarm.update;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.flowerfarm.util.PathNames;
 
 import java.io.IOException;
 import java.net.URI;
@@ -106,7 +107,7 @@ public final class PackageDownloader {
             return Optional.empty();
         }
         try (var files = Files.list(directory)) {
-            for (Path sidecar : files.filter(path -> path.getFileName().toString().endsWith(SIDECAR)).toList()) {
+            for (Path sidecar : files.filter(path -> PathNames.fileName(path).endsWith(SIDECAR)).toList()) {
                 Optional<UpdateManifest.PackageInfo> info = readSidecar(sidecar);
                 if (info.isEmpty() || !platform.key().equals(info.get().platformKey())) {
                     continue;

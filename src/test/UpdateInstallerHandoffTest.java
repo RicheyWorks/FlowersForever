@@ -49,6 +49,13 @@ class UpdateInstallerHandoffTest {
     @DisplayName("Windows: no launcher (developer run) means no install, and unsafe paths are refused")
     void windowsRefusals() throws IOException {
         assertThat(new WindowsMsiInstaller(Optional.empty(), (c, d) -> started.add(c), 1, temp).canInstall()).isFalse();
+        Path root = temp.toAbsolutePath().getRoot();
+        assertThat(new WindowsMsiInstaller(Optional.of(root), (c, d) -> started.add(c), 1, temp).canInstall())
+                .as("a launcher path with no file name").isFalse();
+        assertThat(new WindowsMsiInstaller(Optional.of(temp.resolve("flowerfarm.jar")), (c, d) -> started.add(c), 1,
+                temp).canInstall()).as("a launcher that is not an .exe").isFalse();
+        assertThat(new WindowsMsiInstaller(Optional.of(temp.resolve("FLOWERSFOREVER.EXE")), (c, d) -> started.add(c),
+                1, temp).canInstall()).as("the .exe check ignores case").isTrue();
         WindowsMsiInstaller installer = new WindowsMsiInstaller(Optional.of(temp.resolve("FlowersForever.exe")),
                 (c, d) -> started.add(c), 1, temp);
         Path odd = UpdateTestSupport.fakeInstaller(temp.resolve("100%"), "FlowersForever-1.2.1.msi", "msi");

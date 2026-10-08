@@ -96,4 +96,25 @@ class AppDataBootstrapTest {
         assertThat(target.resolve(".legacy-data-imported")).isRegularFile();
         assertThat(legacy.resolve("flowerfarm.mv.db")).hasContent("legacy database");
     }
+
+    @Test
+    @DisplayName("a leftover write-check probe does not count as user data, but a real file blocks the copy")
+    void writeCheckProbesAreNotUserData() throws Exception {
+        Path legacy = temporaryDirectory.resolve("legacy-probe");
+        Files.createDirectories(legacy);
+        Files.writeString(legacy.resolve("flowerfarm.mv.db"), "legacy database");
+
+        Path probed = temporaryDirectory.resolve("packaged-probe");
+        Files.createDirectories(probed);
+        Files.writeString(probed.resolve(".write-check-123.tmp"), "");
+        AppDataBootstrap.migrateLegacyData(probed, legacy);
+        assertThat(probed.resolve("flowerfarm.mv.db")).hasContent("legacy database");
+
+        Path used = temporaryDirectory.resolve("packaged-used");
+        Files.createDirectories(used);
+        Files.writeString(used.resolve("notes.txt"), "grower notes");
+        AppDataBootstrap.migrateLegacyData(used, legacy);
+        assertThat(used.resolve("flowerfarm.mv.db")).doesNotExist();
+        assertThat(used.resolve(".legacy-data-imported")).doesNotExist();
+    }
 }
