@@ -32,6 +32,11 @@
         <java.version>17</java.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <flowerfarm.build.directory>target</flowerfarm.build.directory>
+        <!-- Spring Boot 4.1.1 manages H2 2.4.240, whose CHECK constraints keep the session that
+             created them and fail with "Check constraint invalid ... database has been closed" once
+             that connection closes (h2database#4291, fixed upstream but not yet released). Stay on
+             2.3.232, which FlowersForever already ships and Flyway 12 is verified with. -->
+        <h2.version>2.3.232</h2.version>
     </properties>
 
     <dependencies>
