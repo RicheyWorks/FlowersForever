@@ -77,15 +77,7 @@ public class StemDemandService {
 
     @Transactional(readOnly = true)
     public StemDemand.Board build(LocalDate from, LocalDate to, boolean includeDrafts) {
-        if (from == null || to == null) {
-            throw new IllegalArgumentException("Start and end dates are required.");
-        }
-        if (to.isBefore(from)) {
-            throw new IllegalArgumentException("The end date must be on or after the start date.");
-        }
-        if (to.toEpochDay() - from.toEpochDay() >= MAX_DAYS) {
-            throw new IllegalArgumentException("The stem demand board covers at most " + MAX_DAYS + " days.");
-        }
+        requireWindow(from, to);
         Map<Long, FloralRecipe> recipes = new LinkedHashMap<>();
         for (FloralRecipe recipe : studio.listRecipes()) {
             recipes.put(recipe.getId(), recipe);
@@ -93,11 +85,10 @@ public class StemDemandService {
         List<StemDemand.Need> needs = new ArrayList<>();
         List<StemDemand.NotCounted> notCounted = new ArrayList<>();
         for (CustomerOrder order : orders.findBetween(from, to)) {
-            String status = order.getStatus() == null ? "" : order.getStatus().toUpperCase(Locale.ROOT);
-            boolean confirmed = "CONFIRMED".equals(status);
-            if (!confirmed && !(includeDrafts && "DRAFT".equals(status))) {
+            if (!counts(order, includeDrafts)) {
                 continue;
             }
+            boolean confirmed = isConfirmed(order);
             String source = source(order, confirmed);
             for (OrderLine line : order.getLines()) {
                 addLine(order, line, confirmed, source, recipes, needs, notCounted);
@@ -130,6 +121,58 @@ public class StemDemandService {
             }
         }
         return StemDemand.plan(from, to, includeDrafts, needs, stock, plantings, notCounted, notes);
+    }
+
+    /**
+     * Order lines in the window that are counted as a saved recipe, so the grower can
+     * check or stop each link. A link whose recipe was deleted shows a {@code null} name.
+     */
+    @Transactional(readOnly = true)
+    public List<LinkedLine> recipeLinks(LocalDate from, LocalDate to, boolean includeDrafts) {
+        requireWindow(from, to);
+        Map<Long, String> names = new LinkedHashMap<>();
+        for (FloralRecipe recipe : studio.listRecipes()) {
+            names.put(recipe.getId(), recipe.getName());
+        }
+        List<LinkedLine> linked = new ArrayList<>();
+        for (CustomerOrder order : orders.findBetween(from, to)) {
+            if (!counts(order, includeDrafts)) {
+                continue;
+            }
+            String source = source(order, isConfirmed(order));
+            for (OrderLine line : order.getLines()) {
+                if (line.getRecipeId() != null) {
+                    linked.add(new LinkedLine(order.getOrderDate(), order.getId(), line.getId(), source,
+                            line.getProductName(), designs(line), line.getRecipeId(),
+                            names.get(line.getRecipeId())));
+                }
+            }
+        }
+        return linked;
+    }
+
+    public record LinkedLine(LocalDate date, Long orderId, Long lineId, String source, String product,
+                             int designs, Long recipeId, String recipeName) {
+    }
+
+    private static void requireWindow(LocalDate from, LocalDate to) {
+        if (from == null || to == null) {
+            throw new IllegalArgumentException("Start and end dates are required.");
+        }
+        if (to.isBefore(from)) {
+            throw new IllegalArgumentException("The end date must be on or after the start date.");
+        }
+        if (to.toEpochDay() - from.toEpochDay() >= MAX_DAYS) {
+            throw new IllegalArgumentException("The stem demand board covers at most " + MAX_DAYS + " days.");
+        }
+    }
+
+    private static boolean isConfirmed(CustomerOrder order) {
+        return "CONFIRMED".equalsIgnoreCase(order.getStatus());
+    }
+
+    private static boolean counts(CustomerOrder order, boolean includeDrafts) {
+        return isConfirmed(order) || (includeDrafts && "DRAFT".equalsIgnoreCase(order.getStatus()));
     }
 
     /**
@@ -177,7 +220,7 @@ public class StemDemandService {
                         "Its linked recipe no longer exists; link another recipe to count its stems."));
                 return;
             }
-            int designs = (int) Math.min(Integer.MAX_VALUE, Math.ceil(line.getQuantity() - 1e-9));
+            int designs = designs(line);
             String detail = source + " · " + recipe.getName() + " × " + designs;
             boolean counted = false;
             for (FloralRecipeIngredient ingredient : recipe.getIngredients()) {
@@ -201,6 +244,10 @@ public class StemDemandService {
         }
         notCounted.add(notCounted(order, line, source, "Sold in " + line.getUnit()
                 + ", so its stems are unknown. Count it as a saved recipe to include it."));
+    }
+
+    private static int designs(OrderLine line) {
+        return (int) Math.min(Integer.MAX_VALUE, Math.ceil(line.getQuantity() - 1e-9));
     }
 
     private static StemDemand.NotCounted notCounted(CustomerOrder order, OrderLine line, String source,

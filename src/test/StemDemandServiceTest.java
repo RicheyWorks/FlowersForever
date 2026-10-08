@@ -79,6 +79,30 @@ class StemDemandServiceTest {
     }
 
     @Test
+    @DisplayName("recipe links list each counted line, including links to deleted recipes, for draft-aware windows")
+    void recipeLinksForReview() {
+        OrderLine linked = line(1L, "Centerpiece", 12, "designs");
+        linked.setRecipeId(5L);
+        OrderLine orphan = line(2L, "Bud vase", 4, "designs");
+        orphan.setRecipeId(77L);
+        order(10L, EVENT, "CONFIRMED", "Kitsap Weddings", linked, line(3L, "Nootka Rose", 10, "stems"));
+        order(12L, EVENT, "DRAFT", "Bloom Studio", orphan);
+
+        assertThat(service.recipeLinks(FROM, FROM.plusDays(13), false))
+                .singleElement().satisfies(link -> {
+                    assertThat(link.lineId()).isEqualTo(1L);
+                    assertThat(link.designs()).isEqualTo(12);
+                    assertThat(link.recipeName()).isEqualTo("Centerpiece");
+                });
+        assertThat(service.recipeLinks(FROM, FROM.plusDays(13), true))
+                .extracting(StemDemandService.LinkedLine::source, StemDemandService.LinkedLine::recipeName)
+                .containsExactly(org.assertj.core.groups.Tuple.tuple("Order #10 Kitsap Weddings", "Centerpiece"),
+                        org.assertj.core.groups.Tuple.tuple("Order #12 Bloom Studio (draft)", null));
+        assertThatThrownBy(() -> service.recipeLinks(FROM, FROM.minusDays(1), false))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
     @DisplayName("stems count directly; other units are listed as not counted with the reason")
     void unitsDecideWhatCounts() {
         order(11L, EVENT, "CONFIRMED", "Bloom Studio",
