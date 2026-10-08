@@ -66,7 +66,7 @@ public class ApiExceptionHandler {
             MaxUploadSizeExceededException.class})
     public ResponseEntity<Map<String, Object>> attachmentTooLarge(
             Exception exception, HttpServletRequest request) {
-        return response(HttpStatus.PAYLOAD_TOO_LARGE, "ATTACHMENT_TOO_LARGE",
+        return response(HttpStatus.CONTENT_TOO_LARGE, "ATTACHMENT_TOO_LARGE",
                 publicMessage(exception, "Attachment file cannot exceed 15 MiB."), request);
     }
 

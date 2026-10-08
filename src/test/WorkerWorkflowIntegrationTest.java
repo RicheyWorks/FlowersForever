@@ -575,7 +575,7 @@ class WorkerWorkflowIntegrationTest {
                 "mobile-photo-too-large-" + suffix,
                 "PRODUCTION_TASK", task.getId(), "too-large.png", "image/png",
                 "", oversized);
-        assertThat(tooLarge.getStatusCode()).isEqualTo(HttpStatus.PAYLOAD_TOO_LARGE);
+        assertThat(tooLarge.getStatusCode()).isEqualTo(HttpStatus.CONTENT_TOO_LARGE);
         assertThat(tooLarge.getBody().path("code").asText())
                 .isEqualTo("ATTACHMENT_TOO_LARGE");
         assertThat(receipts.count()).isEqualTo(receiptsBeforeRejected);
