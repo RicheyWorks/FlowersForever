@@ -12,7 +12,8 @@ public record GrowerReminder(Kind kind, String title, String detail, String targ
         STOCK,
         COOLER,
         KNOWLEDGE,
-        CHECKLIST
+        CHECKLIST,
+        SCOUTING
     }
 
     public GrowerReminder {

@@ -60,9 +60,13 @@ final class ChildJvm implements AutoCloseable {
                 + ", last progress=" + last;
     }
 
-    /** Hard kill (TerminateProcess on Windows, SIGKILL elsewhere), then drain what was already printed. */
+    /**
+     * Hard kill (TerminateProcess on Windows, SIGKILL elsewhere), then drain what was already printed.
+     * Goes through the process handle because {@code Process.destroyForcibly()} on Linux also closes
+     * the output pipe, which would throw away progress lines the child had already printed.
+     */
     void kill() throws Exception {
-        process.destroyForcibly();
+        process.toHandle().destroyForcibly();
         if (!process.waitFor(30, TimeUnit.SECONDS)) {
             throw new IllegalStateException("The child JVM did not stop");
         }
