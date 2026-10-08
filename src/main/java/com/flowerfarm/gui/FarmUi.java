@@ -1038,6 +1038,11 @@ public final class FarmUi {
 
     /** Produces a useful user-facing error without leaking a blank/null message. */
     public static String actionableError(String action, Throwable error) {
+        java.util.Optional<com.flowerfarm.safety.StorageProblem> storage =
+                com.flowerfarm.safety.StorageProblem.of(error);
+        if (storage.isPresent()) {
+            return storage.get().explain(action);
+        }
         String detail = error == null ? null : error.getMessage();
         if (detail == null || detail.isBlank()) {
             detail = "The application did not provide additional details.";

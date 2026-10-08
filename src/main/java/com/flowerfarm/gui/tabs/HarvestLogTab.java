@@ -2402,7 +2402,7 @@ public class HarvestLogTab implements FlowerFarmTab {
             return;
         }
         startReportFileExport(file,
-                () -> java.nio.file.Files.write(file.toPath(), presenter.lotLabelPdf(id)),
+                () -> com.flowerfarm.safety.SafeFiles.write(file.toPath(), presenter.lotLabelPdf(id)),
                 "Lot label saved · " + lotCode,
                 "Harvest lot label → " + file.getName(),
                 "Harvest lot label export");
@@ -2508,8 +2508,7 @@ public class HarvestLogTab implements FlowerFarmTab {
                     && beginReportWork("Exporting bed production CSV…",
                     "The reviewed bed-production snapshot is being written in the background.")) {
                 startReportFileExport(file,
-                        () -> java.nio.file.Files.writeString(
-                                file.toPath(), presenter.bedProductionCsv(report)),
+                        () -> com.flowerfarm.safety.SafeFiles.writeString(file.toPath(), presenter.bedProductionCsv(report)),
                         "Bed production CSV saved", "Bed production CSV → " + file.getName(),
                         "Bed-production CSV export");
             }
@@ -2520,8 +2519,7 @@ public class HarvestLogTab implements FlowerFarmTab {
                     && beginReportWork("Creating bed production PDF…",
                     "The reviewed bed-production snapshot is being rendered in the background.")) {
                 startReportFileExport(file,
-                        () -> java.nio.file.Files.write(
-                                file.toPath(), presenter.bedProductionPdf(report)),
+                        () -> com.flowerfarm.safety.SafeFiles.write(file.toPath(), presenter.bedProductionPdf(report)),
                         "Bed production PDF saved", "Bed production PDF → " + file.getName(),
                         "Bed-production PDF export");
             }
@@ -2585,8 +2583,7 @@ public class HarvestLogTab implements FlowerFarmTab {
                     && beginReportWork("Creating harvest log PDF…",
                     "The reviewed harvest-log snapshot is being rendered in the background.")) {
                 startReportFileExport(file,
-                        () -> java.nio.file.Files.write(
-                                file.toPath(), presenter.harvestLogPdf(report)),
+                        () -> com.flowerfarm.safety.SafeFiles.write(file.toPath(), presenter.harvestLogPdf(report)),
                         "Harvest log PDF saved",
                         "Harvest log PDF → " + file.getName()
                                 + " (" + report.entryCount() + " rows)",

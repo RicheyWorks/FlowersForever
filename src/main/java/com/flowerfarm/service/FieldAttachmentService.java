@@ -58,6 +58,18 @@ public class FieldAttachmentService {
             byte[] content) {
         FieldAttachmentTargetType target = targetType(targetType);
         requireTarget(target, targetId);
+        StoredContent stored = storeContent(originalFilename, declaredMediaType, content);
+        FieldAttachment saved = attachments.saveAndFlush(new FieldAttachment(
+                target, targetId, stored.originalFilename(), stored.mediaType(), stored.byteSize(),
+                stored.sha256(), storageKey(stored.sha256()), caption, capturedAt));
+        return AttachmentRecord.from(saved);
+    }
+
+    /**
+     * Validates and stores a photo in the same digest-addressed, backed-up folder without a database row.
+     * Records that keep their own metadata (the scouting log) reference the photo by its SHA-256 and size.
+     */
+    public StoredContent storeContent(String originalFilename, String declaredMediaType, byte[] content) {
         byte[] bytes = content == null ? new byte[0] : content.clone();
         if (bytes.length == 0) {
             throw new IllegalArgumentException("Attachment file is empty.");
@@ -70,12 +82,21 @@ public class FieldAttachmentService {
         verifyDeclaredMediaType(declaredMediaType, mediaType);
         String filename = filename(originalFilename, mediaType);
         String digest = sha256(bytes);
-        String storageKey = digest.substring(0, 2) + "/" + digest;
-        persist(storageKey, bytes, digest);
-        FieldAttachment saved = attachments.saveAndFlush(new FieldAttachment(
-                target, targetId, filename, mediaType, bytes.length, digest,
-                storageKey, caption, capturedAt));
-        return AttachmentRecord.from(saved);
+        persist(storageKey(digest), bytes, digest);
+        return new StoredContent(filename, mediaType, bytes.length, digest);
+    }
+
+    /** Reads stored content by digest and size, verifying both against the bytes on disk. */
+    public byte[] readContent(String sha256, long byteSize) {
+        String digest = sha256 == null ? "" : sha256.trim();
+        if (!digest.matches("[0-9a-f]{64}")) {
+            throw new IllegalArgumentException("Attachment digest must be 64 lowercase hex characters.");
+        }
+        return verifiedBytes(storageKey(digest), byteSize, digest, "digest " + digest.substring(0, 12));
+    }
+
+    private static String storageKey(String digest) {
+        return digest.substring(0, 2) + "/" + digest;
     }
 
     /** Reads and verifies complete content for an authenticated HTTP response. */
@@ -147,19 +168,24 @@ public class FieldAttachmentService {
     }
 
     private byte[] verifiedBytes(FieldAttachment attachment) {
-        Path contentPath = resolveStorageKey(attachment.getStorageKey());
+        return verifiedBytes(attachment.getStorageKey(), attachment.getByteSize(), attachment.getSha256(),
+                "id=" + attachment.getId());
+    }
+
+    private byte[] verifiedBytes(String storageKey, long byteSize, String digest, String which) {
+        Path contentPath = resolveStorageKey(storageKey);
         try {
             if (!Files.isRegularFile(contentPath)) {
                 throw new IllegalStateException(
-                        "Attachment content is missing for id=" + attachment.getId());
+                        "Attachment content is missing for " + which);
             }
             long size = Files.size(contentPath);
-            if (size != attachment.getByteSize() || size > MAX_ATTACHMENT_BYTES) {
+            if (size != byteSize || size > MAX_ATTACHMENT_BYTES) {
                 throw new IllegalStateException(
                         "Attachment content size does not match its metadata.");
             }
             byte[] bytes = Files.readAllBytes(contentPath);
-            if (!sha256(bytes).equals(attachment.getSha256())) {
+            if (!sha256(bytes).equals(digest)) {
                 throw new IllegalStateException(
                         "Attachment content hash does not match its metadata.");
             }
@@ -188,6 +214,7 @@ public class FieldAttachmentService {
             Path temporary = Files.createTempFile(incoming, "attachment-", ".tmp");
             try {
                 Files.write(temporary, bytes);
+                com.flowerfarm.safety.SafeFiles.force(temporary);
                 moveNewContent(temporary, destination);
             } finally {
                 Files.deleteIfExists(temporary);
@@ -336,6 +363,10 @@ public class FieldAttachmentService {
                     attachment.getSha256(), attachment.getCaption(),
                     attachment.getCapturedAt(), attachment.getCreatedAt());
         }
+    }
+
+    /** Validated content stored without a database row. */
+    public record StoredContent(String originalFilename, String mediaType, long byteSize, String sha256) {
     }
 
     public record AttachmentContent(AttachmentRecord attachment, byte[] bytes) {
