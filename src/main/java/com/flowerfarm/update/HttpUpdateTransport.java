@@ -4,9 +4,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InterruptedIOException;
 import java.io.OutputStream;
-import java.net.InetAddress;
 import java.net.URI;
-import java.net.UnknownHostException;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
@@ -112,20 +110,6 @@ public final class HttpUpdateTransport implements UpdateTransport {
     }
 
     private static boolean isLoopback(String host) {
-        if (host == null) {
-            return false;
-        }
-        if ("localhost".equalsIgnoreCase(host)) {
-            return true;
-        }
-        try {
-            String literal = host.startsWith("[") ? host.substring(1, host.length() - 1) : host;
-            if (!literal.chars().allMatch(c -> Character.isDigit(c) || c == '.' || c == ':')) {
-                return false; // Never resolve names here; only literal loopback addresses.
-            }
-            return InetAddress.getByName(literal).isLoopbackAddress();
-        } catch (UnknownHostException invalid) {
-            return false;
-        }
+        return LoopbackAddresses.isLoopbackHost(host);
     }
 }

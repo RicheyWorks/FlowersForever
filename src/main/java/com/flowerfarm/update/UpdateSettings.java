@@ -80,6 +80,17 @@ public record UpdateSettings(boolean enabledByConfiguration, boolean checkOnLaun
         return Path.of(System.getProperty("user.home"), "Documents", "FlowersForever Backups");
     }
 
+    /**
+     * The same settings pointed at a local test feed, for the headless release check
+     * only ({@link HeadlessUpdateCommand}). Loopback http is allowed because the feed
+     * must be on this computer; the backup folder can be moved for a test run.
+     */
+    public UpdateSettings forTestFeed(URI feed, Optional<Path> backupOverride) {
+        return new UpdateSettings(true, checkOnLaunch, Optional.of(feed), channel, currentVersion, dataDirectory,
+                updatesDirectory, backupOverride.map(path -> path.toAbsolutePath().normalize()).orElse(backupDirectory),
+                launcherPath, requireRollbackInstaller, true, connectTimeout, requestTimeout, authenticodeSubject);
+    }
+
     /** True when the update source is set up: a manifest URL and at least one trusted key. */
     public boolean configured(TrustedKeys keys) {
         return manifestUrl.isPresent() && !keys.isEmpty();
