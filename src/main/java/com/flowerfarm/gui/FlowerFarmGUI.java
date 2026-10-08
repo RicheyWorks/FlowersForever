@@ -1675,6 +1675,9 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
 
         JMenu helpMenu = menu("Help", KeyEvent.VK_H,
                 "Open growing guidance, contact support, or application information.");
+        helpMenu.add(menuItem(GettingStartedGuide.MENU_LABEL, KeyEvent.VK_N,
+                GettingStartedGuide.menuDescription(),
+                e -> openGettingStarted()));
         if (enabled.contains(FarmWorkspace.ROSE_AND_EVENTS)
                 || enabled.contains(FarmWorkspace.WILDFLOWER_FARM)) {
             helpMenu.add(menuItem("Start here…", KeyEvent.VK_S,
@@ -2566,6 +2569,20 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
         } else {
             selectTab(target);
         }
+    }
+
+    /** Help → Getting started guide…: the bundled one-page guide in a read-only dialog. */
+    void openGettingStarted() {
+        JEditorPane page = new JEditorPane("text/html", GettingStartedGuide.html());
+        page.setEditable(false);
+        page.setCaretPosition(0);
+        page.getAccessibleContext().setAccessibleName(GettingStartedGuide.TITLE);
+        page.getAccessibleContext().setAccessibleDescription(GettingStartedGuide.menuDescription());
+        JScrollPane scroll = new JScrollPane(page);
+        scroll.setPreferredSize(new java.awt.Dimension(560, 520));
+        Object[] options = {"Close"};
+        dialogs.showOption(frame, scroll, GettingStartedGuide.TITLE,
+                JOptionPane.DEFAULT_OPTION, JOptionPane.PLAIN_MESSAGE, null, options, options[0]);
     }
 
     private void openScouting() {
