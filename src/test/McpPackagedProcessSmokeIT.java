@@ -43,7 +43,7 @@ class McpPackagedProcessSmokeIT {
         assertThat(doctor.path("ready").asBoolean()).isTrue();
         assertThat(doctor.path("dataDirectory").asText())
                 .isEqualTo(dataDirectory.toAbsolutePath().normalize().toString());
-        assertThat(doctor.path("schemaVersion").asText()).isEqualTo("47");
+        assertThat(doctor.path("schemaVersion").asText()).isEqualTo("48");
         assertThat(doctor.path("enabledFarmDataToolCount").asInt()).isEqualTo(38);
         assertThat(doctor.path("capabilities").path("readBackAndResume").asBoolean())
                 .isTrue();

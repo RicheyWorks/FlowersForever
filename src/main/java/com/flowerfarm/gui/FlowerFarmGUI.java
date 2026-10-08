@@ -49,6 +49,7 @@ import com.flowerfarm.service.TrendService;
 import com.flowerfarm.service.SeasonPlanService;
 import com.flowerfarm.service.CoolerShelfLife;
 import com.flowerfarm.service.FloristAvailabilityExport;
+import com.flowerfarm.service.StemDemand;
 import com.flowerfarm.support.SupportGuide;
 import com.flowerfarm.update.AppVersion;
 import com.flowerfarm.update.UpdateMessages;
@@ -169,6 +170,7 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
     private DesktopRemindersController remindersController;
     private DesktopFloristExportController floristExportController;
     private DesktopCoolerReviewController coolerReviewController;
+    private DesktopStemDemandController stemDemandController;
     private DesktopScoutingController scoutingController;
 
     private final Preferences prefs = Preferences.userNodeForPackage(FlowerFarmGUI.class);
@@ -1230,6 +1232,12 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
         this.floristExportController = floristExportController;
     }
 
+    /** Stem demand board: stems by crop and date for upcoming orders. */
+    @Autowired(required = false)
+    void setStemDemandController(DesktopStemDemandController stemDemandController) {
+        this.stemDemandController = stemDemandController;
+    }
+
     /** Cooler lot shelf-life review (aging, intervals, QR labels). */
     @Autowired(required = false)
     void setCoolerReviewController(DesktopCoolerReviewController coolerReviewController) {
@@ -1359,6 +1367,10 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
         if (floristExportController != null) {
             floristExportController.attach(new DesktopFloristExportController.Host(
                     frame, dialogs, fileChooser, clipboard, mailer, this::setStatus));
+        }
+        if (stemDemandController != null) {
+            stemDemandController.attach(new DesktopStemDemandController.Host(
+                    frame, dialogs, fileChooser, clipboard, this::setStatus));
         }
         if (coolerReviewController != null) {
             coolerReviewController.attach(new DesktopCoolerReviewController.Host(
@@ -1599,6 +1611,10 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
             fileMenu.add(menuItem("Share availability with florists…", KeyEvent.VK_L,
                     "Copy or save a Florlist-friendly live stock list with this week’s planned stems.",
                     e -> shareFloristAvailability()));
+            fileMenu.add(menuItem("Stem demand board…", KeyEvent.VK_D,
+                    "Total the stems upcoming orders need by crop and date, see what the cooler and "
+                            + "planned harvest cover, and copy or save the buying list.",
+                    e -> openStemDemandBoard()));
         }
         fileMenu.addSeparator();
         fileMenu.add(menuItem("Back up now…", KeyEvent.VK_B,
@@ -2613,6 +2629,16 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
             return;
         }
         remindersController.showToday();
+    }
+
+    private void openStemDemandBoard() {
+        if (stemDemandController == null) {
+            dialogs.showMessage(frame,
+                    "The stem demand board is not available in this session.",
+                    StemDemand.TITLE, javax.swing.JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+        stemDemandController.openBoard();
     }
 
     private void shareFloristAvailability() {
