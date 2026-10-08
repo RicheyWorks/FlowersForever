@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.flowerfarm.update.AppVersion;
+import com.flowerfarm.update.LoopbackAddresses;
 import com.flowerfarm.update.SignedManifestVerifier;
 import com.flowerfarm.update.TrustedKeys;
 import com.flowerfarm.update.UpdateChannel;
@@ -53,9 +54,17 @@ public final class UpdateReleaseTool {
     private final PrintStream out;
     private final Function<String, String> environment;
     private final Clock clock;
+    private final TrustedKeys releaseKeys;
     private final ObjectMapper mapper = new ObjectMapper().enable(SerializationFeature.INDENT_OUTPUT);
 
     public UpdateReleaseTool(PrintStream out, Function<String, String> environment, Clock clock) {
+        this(out, environment, clock, TrustedKeys.fromClasspath());
+    }
+
+    /** @param releaseKeys the built-in release keys; a test feed may never be signed with one of them */
+    public UpdateReleaseTool(PrintStream out, Function<String, String> environment, Clock clock,
+                             TrustedKeys releaseKeys) {
+        this.releaseKeys = releaseKeys;
         this.out = out;
         this.environment = environment;
         this.clock = clock;
@@ -144,6 +153,7 @@ public final class UpdateReleaseTool {
         SigningKey signingKey = signingKey(options);
         PrivateKey key = signingKey.privateKey();
         PublicKey publicKey = signingKey.publicKey();
+        boolean testFeed = testFeed(options, publicKey);
         String version = AppVersion.parse(required(options, "version")).toString();
         if (!AppVersion.parse(version).isRelease()) {
             throw new IllegalArgumentException("Only final versions can be published: " + version);
@@ -171,9 +181,7 @@ public final class UpdateReleaseTool {
             }
             Path file = Path.of(spec.substring(equals + 1, at));
             URI url = URI.create(spec.substring(at + 1));
-            if (!"https".equalsIgnoreCase(url.getScheme())) {
-                throw new IllegalArgumentException("Package URLs must use https: " + url);
-            }
+            requireAllowedPackageUrl(url, testFeed);
             Path fileName = file.getFileName();
             if (fileName == null || !Files.isRegularFile(file)) {
                 throw new IllegalArgumentException("Package file not found: " + file);
@@ -243,6 +251,12 @@ public final class UpdateReleaseTool {
         PrivateKey key = signingKey.privateKey();
         PublicKey publicKey = signingKey.publicKey();
         ObjectNode root = loadOrCreate(manifestPath);
+        boolean testFeed = testFeed(options, publicKey);
+        for (JsonNode release : root.path("releases")) {
+            for (JsonNode pkg : release.path("packages")) {
+                requireAllowedPackageUrl(URI.create(pkg.path("url").asText("")), testFeed);
+            }
+        }
         root.put("issuedAt", Instant.now(clock).toString());
         byte[] payload = mapper.writeValueAsBytes(root);
         // Self-check before anything is published.
@@ -259,6 +273,38 @@ public final class UpdateReleaseTool {
         Files.write(output, envelope(payload, key, publicKey));
         out.println("Signed manifest written to " + output + " (" + manifest.releases().size()
                 + " releases, key id " + UpdateSignatures.keyId(publicKey) + ").");
+    }
+
+    /**
+     * {@code --test-feed loopback} builds a feed for the headless release check: installer
+     * addresses must then be on this computer, and the signing key must be a throwaway
+     * key, never one of the built-in release keys.
+     */
+    private boolean testFeed(Map<String, List<String>> options, PublicKey publicKey) {
+        if (!options.containsKey("test-feed")) {
+            return false;
+        }
+        if (!"loopback".equals(required(options, "test-feed"))) {
+            throw new IllegalArgumentException("--test-feed only accepts the value loopback");
+        }
+        if (releaseKeys.find(UpdateSignatures.keyId(publicKey)).isPresent()) {
+            throw new IllegalArgumentException("A test feed must be signed with a throwaway key, never a built-in "
+                    + "release key.");
+        }
+        return true;
+    }
+
+    private static void requireAllowedPackageUrl(URI url, boolean testFeed) {
+        if (testFeed) {
+            if (!LoopbackAddresses.isLoopback(url)) {
+                throw new IllegalArgumentException("Test-feed package URLs must be on this computer "
+                        + "(127.0.0.1, [::1] or localhost): " + url);
+            }
+            return;
+        }
+        if (!"https".equalsIgnoreCase(url.getScheme())) {
+            throw new IllegalArgumentException("Package URLs must use https: " + url);
+        }
     }
 
     private byte[] envelope(byte[] payload, PrivateKey key, PublicKey publicKey)
@@ -438,10 +484,11 @@ public final class UpdateReleaseTool {
                   add-release --manifest unsigned.json --private-key K --version 1.2.1 --channels owner
                               --package windows-msi=<file.msi>@<https url> [--package macos-dmg=...]
                               [--notes "text" | --notes-file f] [--minimum-version 1.2.0]
+                              [--test-feed loopback]  (throwaway key, http://127.0.0.1 URLs; release checks only)
                   channels    --manifest unsigned.json --version 1.2.1 --channels owner,early,stable
                   pause       --manifest unsigned.json [--message "text"]
                   resume      --manifest unsigned.json
-                  sign        --manifest unsigned.json --private-key K --out latest.json
+                  sign        --manifest unsigned.json --private-key K --out latest.json [--test-feed loopback]
                   verify      --signed latest.json [--public-key B64] [--package windows-msi=<file>]
                 """);
     }

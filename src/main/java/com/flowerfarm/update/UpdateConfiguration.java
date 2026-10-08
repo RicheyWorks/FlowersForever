@@ -9,7 +9,6 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.core.env.Environment;
 
 import javax.sql.DataSource;
-import java.time.Clock;
 import java.util.Optional;
 
 /**
@@ -50,21 +49,13 @@ public class UpdateConfiguration {
     @Bean
     UpdateCoordinator updateCoordinator(UpdateSettings settings,
                                         ObjectProvider<UpdateActivityLog> activity) {
-        TrustedKeys keys = TrustedKeys.fromClasspath();
-        SignedManifestVerifier verifier = new SignedManifestVerifier(keys);
         String agent = "FlowersForever/" + settings.currentVersion() + " (update check)";
         UpdateTransport transport = new HttpUpdateTransport(settings.connectTimeout(),
                 settings.requestTimeout(), settings.allowLoopbackHttp(), agent);
         Optional<UpdatePlatform> platform = UpdatePlatform.forOperatingSystem(System.getProperty("os.name"));
-        UpdateStateStore store = new UpdateStateStore(settings.updatesDirectory());
-        PublisherVerifier publisher = settings.authenticodeSubject().isBlank()
-                ? PublisherVerifier.none() : new AuthenticodePublisherVerifier(settings.authenticodeSubject());
-        UpdateChecker checker = new UpdateChecker(settings, verifier, transport, platform, store::failedVersions);
-        PackageDownloader downloader = new PackageDownloader(settings.updatesDirectory(), transport, verifier,
-                publisher);
-        return new UpdateCoordinator(settings, checker, downloader, new DataBackupService(Clock.systemDefaultZone()),
-                store, PlatformInstallers.forThisProcess(platform, settings.launcherPath()), platform,
-                activity.getIfAvailable(UpdateActivityLog::none), Clock.systemUTC());
+        return UpdateWiring.coordinator(settings, TrustedKeys.fromClasspath(), transport, platform,
+                PlatformInstallers.forThisProcess(platform, settings.launcherPath()),
+                activity.getIfAvailable(UpdateActivityLog::none));
     }
 
     @Bean

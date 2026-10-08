@@ -4,7 +4,10 @@ import com.flowerfarm.automation.mcp.McpDoctorBootstrap;
 import com.flowerfarm.automation.mcp.McpDoctorRunner;
 import com.flowerfarm.backup.RestoreStartup;
 import com.flowerfarm.config.AppDataBootstrap;
+import com.flowerfarm.update.HeadlessUpdateCommand;
+import com.flowerfarm.update.HeadlessUpdateLog;
 import com.flowerfarm.update.UpdateLaunchGuard;
+import com.flowerfarm.update.UpdateSettings;
 import com.flowerfarm.update.UpdateStartup;
 import com.flowerfarm.update.UpdateState;
 import org.springframework.boot.Banner;
@@ -14,6 +17,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.event.ApplicationEnvironmentPreparedEvent;
 import org.springframework.context.ConfigurableApplicationContext;
 
+import javax.sql.DataSource;
 import java.awt.GraphicsEnvironment;
 import java.io.IOException;
 import java.sql.Connection;
@@ -21,14 +25,21 @@ import java.sql.DriverManager;
 import java.sql.Statement;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Clock;
 import java.time.Instant;
 import java.util.Arrays;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
 
 @SpringBootApplication
 public class FlowerFarmApp {
 
     public static void main(String[] args) {
+        if (HeadlessUpdateCommand.requested(args)) {
+            // Test-only release check; never falls through to the desktop window.
+            System.exit(runHeadlessUpdateCheck(args));
+            return;
+        }
         boolean mcpDoctor = Arrays.asList(args).contains("--mcp-doctor");
         if (mcpDoctor) {
             McpDoctorBootstrap.prepare();
@@ -93,14 +104,7 @@ public class FlowerFarmApp {
     private static ConfigurableApplicationContext startDesktopWithUpdateGuard(SpringApplication app, String[] args) {
         UpdateLaunchGuard guard = UpdateStartup.guardForThisProcess();
         AtomicReference<String[]> datasource = new AtomicReference<>(new String[3]);
-        app.addListeners(event -> {
-            if (event instanceof ApplicationEnvironmentPreparedEvent prepared) {
-                var environment = prepared.getEnvironment();
-                datasource.set(new String[] {environment.getProperty("spring.datasource.url"),
-                        environment.getProperty("spring.datasource.username", "sa"),
-                        environment.getProperty("spring.datasource.password", "")});
-            }
-        });
+        captureDatasource(app, datasource);
         app.addInitializers(context -> context.getBeanFactory().registerSingleton("updateLaunchGuard", guard));
         UpdateStartup.Result<ConfigurableApplicationContext> result;
         try {
@@ -122,6 +126,61 @@ public class FlowerFarmApp {
             return null;
         }
         return result.started().get();
+    }
+
+    private static void captureDatasource(SpringApplication app, AtomicReference<String[]> datasource) {
+        app.addListeners(event -> {
+            if (event instanceof ApplicationEnvironmentPreparedEvent prepared) {
+                var environment = prepared.getEnvironment();
+                datasource.set(new String[] {environment.getProperty("spring.datasource.url"),
+                        environment.getProperty("spring.datasource.username", "sa"),
+                        environment.getProperty("spring.datasource.password", "")});
+            }
+        });
+    }
+
+    /**
+     * The test-only headless update path for the real-install release check
+     * (docs/AUTO_UPDATES.md). Refuses before touching any folder unless
+     * explicitly enabled; returns the process exit code.
+     */
+    static int runHeadlessUpdateCheck(String[] args) {
+        boolean enabled = HeadlessUpdateCommand.gateOpen(System::getProperty, System::getenv);
+        HeadlessUpdateCommand.Request request;
+        try {
+            request = HeadlessUpdateCommand.parse(args);
+        } catch (IllegalArgumentException invalid) {
+            System.err.println("Headless update check refused: " + invalid.getMessage());
+            return HeadlessUpdateCommand.Exit.REFUSED.code();
+        }
+        if (!enabled) {
+            return new HeadlessUpdateLog(request.log(), System.err, Clock.systemUTC(), request.mode().name())
+                    .finish(HeadlessUpdateCommand.Exit.REFUSED, HeadlessUpdateCommand.notEnabledMessage());
+        }
+        AppDataBootstrap.configure();
+        UpdateSettings settings = UpdateSettings.fromSystemProperties();
+        HeadlessUpdateLog log = new HeadlessUpdateLog(
+                Optional.of(request.log().orElse(settings.updatesDirectory().resolve(HeadlessUpdateCommand.DEFAULT_LOG))),
+                System.out, Clock.systemUTC(), request.mode().name());
+        HeadlessUpdateCommand command = HeadlessUpdateCommand.forThisProcess(true, settings, log);
+        if (request.mode() == HeadlessUpdateCommand.Mode.APPLY) {
+            return command.apply(request);
+        }
+        SpringApplication app = new SpringApplication(FlowerFarmApp.class);
+        app.setHeadless(true);
+        // The packaged-runtime acceptance profile: full persistence and services, no web server, no window.
+        app.setAdditionalProfiles("release-smoke");
+        UpdateLaunchGuard guard = command.guard();
+        AtomicReference<String[]> datasource = new AtomicReference<>(new String[3]);
+        captureDatasource(app, datasource);
+        app.addInitializers(context -> context.getBeanFactory().registerSingleton("updateLaunchGuard", guard));
+        return command.verifyLaunch(guard,
+                () -> RestoreStartup.forThisProcess().start(() -> app.run(),
+                        () -> shutdownEmbeddedDatabase(datasource.get()),
+                        guard.decision() == UpdateState.Decision.NORMAL),
+                () -> shutdownEmbeddedDatabase(datasource.get()),
+                context -> HeadlessUpdateCommand.recordCounts(context.getBean(DataSource.class)),
+                ConfigurableApplicationContext::close);
     }
 
     private static void shutdownEmbeddedDatabase(String[] datasource) {

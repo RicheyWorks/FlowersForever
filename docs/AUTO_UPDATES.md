@@ -193,7 +193,140 @@ pwsh scripts/update-release.ps1 channels --manifest "$site\manifest.unsigned.jso
 repository contains only the signed list. If it is lost, rebuild it by decoding the
 `payload` field of the published `latest.json` (Base64).
 
+## Headless release check (tracker check #15, test builds only)
+
+Check #15 (auto-update and rollback) can run with **no window at all**. The
+launcher has a test-only update path that runs the same code as **Update now** /
+**Install now**: the same signature and installer checks, the same verified
+backup before installing, the same hand-off, and the same health check with
+rollback on the first start. Only three things differ: it trusts a throwaway test
+key you name, it only talks to addresses on this computer, and the installer runs
+silently (`msiexec /qn` instead of `/passive`).
+
+### It is off unless you turn it on
+
+The path is refused (exit 64, before the data folder is even looked at) unless
+the JVM property `flowerfarm.updates.headless-test=true` or the environment
+variable `FLOWERFARM_UPDATES_HEADLESS_TEST=true` is set. Only the exact value
+`true` opens it. Nothing in the packaged app or its installer sets either, so a
+normal install ignores these options.
+
+Safety rails, each covered by `HeadlessUpdateCommandTest`, `HeadlessUpdateGateTest`
+and `UpdateReleaseToolTestFeedTest`:
+
+- `--apply-update-from` needs `--trust-test-key`. The built-in release keys are
+  never trusted on this path, and a test key that matches a release key is refused.
+- With a test key, the feed address must be on this computer (`localhost`,
+  `127.0.0.1` or `::1`; names are never looked up). Any other address is refused
+  before a single request, so the production feed can never be used with a test
+  key. Every installer address in the feed must also be on this computer.
+- The release tool builds such a feed only with `--test-feed loopback`, and
+  refuses to do that with a built-in release key. Without the option, installer
+  addresses must still be `https`, and `sign` checks them again.
+- `--trust-test-key` must point to a file holding only the public key. A file
+  containing a private key is refused, and its contents are never printed or logged.
+- A bad signature, a wrong installer, or records that are still open stop the
+  update before anything is installed, exactly as in the app.
+
+### Commands and exit codes
+
+```
+FlowersForever.exe --apply-update-from <http://127.0.0.1:PORT/latest.json> --trust-test-key <test.pub>
+                   [--update-log <file>] [--update-backup-dir <folder>]
+FlowersForever.exe --verify-update-launch [--update-log <file>]
+```
+
+`--apply-update-from` checks the feed, downloads and verifies the new installer
+and the installer for the current version (needed to go back), makes the verified
+backup, and hands off to a hidden script that
+waits for the app to exit, runs `msiexec /i … /qn /norestart /l*v`, and starts the
+new version with `--verify-update-launch`. That start runs the normal start-up
+(Flyway migration, Hibernate check) without Swing or the web server, then the
+first-start health check: pass → confirmed; fail → restore the backup (current
+folder kept as `data.before-restore-*`), silently reinstall the previous version
+and start it with `--verify-update-launch` again. `--verify-update-launch` on its
+own is also a handy headless "do my records open?" check: it prints the table and
+row counts.
+
+Every step is appended to the log (default `updates\headless-update-check.log`
+beside the data folder) as `time  mode  STEP  message`, ending with
+`RESULT  exit=<code> <NAME> …`:
+
+| Exit | Name | Meaning |
+|---|---|---|
+| 0 | OK | Apply: verified, backed up, handed off to the installer. Verify: records opened and checked (first start after an update confirmed). |
+| 2 | BLOCKED | Verify: the app stayed closed to protect the records (for example the backup could not be restored). |
+| 3 | ROLLED_BACK | Verify: the new version failed its first-start check; records restored and the previous version is being reinstalled. |
+| 64 | REFUSED | Not enabled, bad arguments, a non-local feed or installer address with a test key, a release key or private key given as the test key. |
+| 65 | NO_UPDATE | The feed offers nothing newer (or only a version that already failed). |
+| 66 | REJECTED | Bad signature, wrong installer size or checksum, or a non-local installer address. Nothing installed. |
+| 67 | NOT_INSTALLED | Not running from an installed copy, no supported installer type on this computer, no installer for the current version, records still open, or the backup failed. Nothing installed. |
+| 68 | OFFLINE | The local feed did not answer. |
+| 70 | START_FAILED | Verify: the app could not start at all. |
+
+### Exact steps for check #15 (Windows, elevated)
+
+The MSI installs per machine, so `msiexec /qn` only works from an **elevated**
+PowerShell (Run as administrator). Without elevation it fails with 1603 /
+Error 1925 and changes nothing, which is what happened on 2026-10-08. The hidden
+hand-off script inherits elevation from the launcher, so no permission prompt
+appears. Never use the production key or the real update address here.
+
+```powershell
+# 0. Elevated Windows PowerShell 5.1. Work folder outside every checkout; test data folder, not the real one.
+$w = "$env:TEMP\ff-check15"; $ev = "C:\Users\730ri\projects\install-checks\check15"
+New-Item -ItemType Directory -Force $w, $ev, "$w\feed", "$w\data", "$w\backups" | Out-Null
+$env:FLOWERFARM_DATA_DIR = "$w\data"           # updates\ lands beside it, in $w
+$env:FLOWERFARM_UPDATES_HEADLESS_TEST = 'true'  # this session only
+
+# 1. Build three MSIs from the same commit in throwaway worktrees under $w (version set only there):
+#    1.3.0, 1.3.1, and 1.3.2 with a broken migration
+#    (src/main/resources/db/migration/h2/V999__broken.sql containing invalid SQL).
+
+# 2. Throwaway test key outside every repository; keep only the public part for the app.
+$env:FLOWERSFOREVER_JAR = "<1.3.1 worktree>\target\flowerfarm-manager-1.3.1.jar"
+powershell -File scripts\update-release.ps1 keygen --out "$w\keys\test.key"
+(powershell -File scripts\update-release.ps1 public-key --private-key "$w\keys\test.key")[-1] |
+    Set-Content -Encoding ascii "$w\keys\test.pub"
+
+# 3. Local feed: 1.3.0 (to go back to) and 1.3.1, signed with the test key.
+Copy-Item <1.3.0 msi>, <1.3.1 msi> "$w\feed"
+$u = 'http://127.0.0.1:8765'
+powershell -File scripts\update-release.ps1 add-release --manifest "$w\feed\manifest.unsigned.json" `
+  --private-key "$w\keys\test.key" --version 1.3.0 --channels stable --test-feed loopback `
+  --package "windows-msi=$w\feed\FlowersForever-1.3.0.msi@$u/FlowersForever-1.3.0.msi"
+powershell -File scripts\update-release.ps1 add-release --manifest "$w\feed\manifest.unsigned.json" `
+  --private-key "$w\keys\test.key" --version 1.3.1 --channels stable --minimum-version 1.3.0 --test-feed loopback `
+  --package "windows-msi=$w\feed\FlowersForever-1.3.1.msi@$u/FlowersForever-1.3.1.msi"
+powershell -File scripts\update-release.ps1 sign --manifest "$w\feed\manifest.unsigned.json" `
+  --private-key "$w\keys\test.key" --out "$w\feed\latest.json" --test-feed loopback
+$server = Start-Process jwebserver -ArgumentList '-b','127.0.0.1','-p','8765','-d',"$w\feed" -WindowStyle Hidden -PassThru
+
+# 4. Install 1.3.0 silently, add sample records headlessly, check they open.
+msiexec /i "$w\feed\FlowersForever-1.3.0.msi" /qn /norestart /l*v "$ev\install-1.3.0.log"
+$exe = "${env:ProgramFiles}\FlowersForever\FlowersForever.exe"
+& $exe --release-smoke --spring.profiles.active=demo          # seeds demo records, writes release-smoke.ok, exits
+& $exe --verify-update-launch --update-log "$ev\baseline.log"  # RECORDS line = counts before the update
+
+# 5. Update 1.3.0 -> 1.3.1.
+& $exe --apply-update-from "$u/latest.json" --trust-test-key "$w\keys\test.pub" `
+  --update-log "$ev\update-1.3.1.log" --update-backup-dir "$w\backups"
+#    exit 0, then wait for the hand-off: update-1.3.1.log ends with a VERIFY RESULT exit=0 (records confirmed),
+#    "$w\updates\handoff\" holds the msiexec log, and the installed version is 1.3.1. Compare RECORDS with baseline.
+
+# 6. Broken update 1.3.1 -> 1.3.2: add 1.3.2 to the feed (add-release + sign as above), apply again.
+#    Expect the 1.3.2 start to log ROLLBACK and RESULT exit=3, then 1.3.1 to start again and log exit=0 with the
+#    baseline RECORDS, "data.before-restore-*" kept in $w, and a re-apply to return 65 (1.3.2 is never offered again).
+
+# 7. Bad signature: change one byte of latest.json (or an MSI) and apply: exit 66, nothing installed.
+# 8. Clean up: Stop-Process $server; msiexec /x {product code} /qn /l*v "$ev\uninstall.log";
+#    check Program Files, the registry and shortcuts are clean; delete $w (test key included).
+```
+
 ## What still needs a real Windows test
+
+Steps 2 (apart from the permission prompt and progress bar), 4, 5 and 7 can also run
+with no window using the [headless release check](#headless-release-check-tracker-check-15-test-builds-only).
 
 All of this is covered by automated headless tests with fake installers; none
 of it has run against real MSIs yet. Suggested pass on a spare Windows account:
