@@ -8,7 +8,7 @@
 | Lab samples | Samples sent to a lab or clinic. Each sample links to a finding, or to a soil block or water source. It records the type, lab, collected and shipped dates, tracking number, status (collected, shipped, received, results in), cost, a result summary or report file, and the date results came back. |
 | Pest & disease guide | 13 common PNW cut-flower problems with what to look for and scouting tips. Each one links to the extension page it was taken from. |
 | Labs | Washington labs and clinics, with what they accept, address, phone, form link and listed fees. See [LAB-SAMPLES.md](LAB-SAMPLES.md). |
-| How to send a sample | Packing guides for diseased plants, tape lifts and swabs, insects, and soil, taken from the labs' own instructions. |
+| How to send a sample | Packing guides for diseased plants, tape lifts and swabs, insects, soil, and irrigation or well water, taken from the labs' own instructions. |
 
 ## Overdue results
 
