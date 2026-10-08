@@ -78,9 +78,11 @@ public final class DataBackupService {
                     zip.closeEntry();
                 }
             }
+            com.flowerfarm.safety.SafeFiles.force(partial);
             Files.move(partial, archive, StandardCopyOption.ATOMIC_MOVE);
             String sha256 = UpdateSignatures.sha256Hex(archive);
-            Files.writeString(checksum, sha256 + "  " + archive.getFileName() + "\n", StandardCharsets.US_ASCII);
+            com.flowerfarm.safety.SafeFiles.write(checksum,
+                    (sha256 + "  " + archive.getFileName() + "\n").getBytes(StandardCharsets.US_ASCII));
             long bytes = verifyArchiveMatches(archive, checksum, data, rootName.toString(), files);
             return new VerifiedBackup(archive, checksum, sha256, files.size(), bytes);
         } catch (IOException failure) {

@@ -24,6 +24,11 @@ public interface FarmFileChooser {
         return Optional.empty();
     }
 
+    /** Picks a photo to attach (scouting findings). Choosers that cannot open files answer "cancelled". */
+    default Optional<File> choosePhoto(Component parent, String title) {
+        return Optional.empty();
+    }
+
     /** Uses the normal installed-app Swing file chooser. */
     static FarmFileChooser swing() {
         return SwingFileChooser.INSTANCE;
@@ -62,6 +67,18 @@ public interface FarmFileChooser {
             chooser.getAccessibleContext().setAccessibleName("Backup file chooser");
             chooser.setDialogTitle(title);
             chooser.setFileFilter(new FileNameExtensionFilter("FlowersForever backups (*.zip)", "zip"));
+            return chooser.showOpenDialog(parent) == JFileChooser.APPROVE_OPTION
+                    ? Optional.ofNullable(chooser.getSelectedFile()) : Optional.empty();
+        }
+
+        @Override
+        public Optional<File> choosePhoto(Component parent, String title) {
+            JFileChooser chooser = new JFileChooser();
+            chooser.setName("farm.photoFileChooser");
+            chooser.getAccessibleContext().setAccessibleName("Photo file chooser");
+            chooser.setDialogTitle(title);
+            chooser.setFileFilter(new FileNameExtensionFilter("Photos (JPEG, PNG, WebP, HEIC)",
+                    "jpg", "jpeg", "png", "webp", "heic", "heif"));
             return chooser.showOpenDialog(parent) == JFileChooser.APPROVE_OPTION
                     ? Optional.ofNullable(chooser.getSelectedFile()) : Optional.empty();
         }

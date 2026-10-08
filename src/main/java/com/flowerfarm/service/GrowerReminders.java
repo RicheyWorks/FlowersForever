@@ -58,12 +58,29 @@ public final class GrowerReminders {
                                   List<Item> lowStock,
                                   int lowStockThreshold,
                                   List<CoolerShelfLife.AgedLot> coolerLots) {
+        return assemble(date, dueTasks, followUps, packing, harvestQuietWeek, lowStock, lowStockThreshold,
+                coolerLots, List.of());
+    }
+
+    /** As above, plus already-built reminders (for example scouting) placed after the cooler items. */
+    public static Digest assemble(LocalDate date,
+                                  List<ProductionTask> dueTasks,
+                                  List<KnowledgeEntry> followUps,
+                                  MarketDayPlan packing,
+                                  boolean harvestQuietWeek,
+                                  List<Item> lowStock,
+                                  int lowStockThreshold,
+                                  List<CoolerShelfLife.AgedLot> coolerLots,
+                                  List<GrowerReminder> extra) {
         List<GrowerReminder> items = new ArrayList<>();
         addTasks(items, dueTasks, date);
         addPack(items, packing);
         addHarvest(items, harvestQuietWeek);
         addStock(items, lowStock, lowStockThreshold);
         addCooler(items, coolerLots);
+        if (extra != null) {
+            extra.stream().filter(Objects::nonNull).forEach(items::add);
+        }
         addKnowledge(items, followUps);
         if (items.size() > MAX_ITEMS) {
             items = new ArrayList<>(items.subList(0, MAX_ITEMS));
