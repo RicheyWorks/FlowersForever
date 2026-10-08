@@ -82,9 +82,10 @@ public final class RestoreService {
     private RecordsVersion checkRecordsOpen(Path records) throws BackupException {
         String url = "jdbc:h2:file:" + records.resolve("flowerfarm").toAbsolutePath() + ";IFEXISTS=TRUE";
         try {
-            MigrationInfoService info = Flyway.configure().dataSource(url, user, password)
+            Flyway flyway = Flyway.configure().dataSource(url, user, password)
                     .locations(migrationLocations).baselineOnMigrate(true).baselineVersion("1")
-                    .load().info();
+                    .ignoreMigrationPatterns("*:pending").load();
+            MigrationInfoService info = flyway.info();
             for (MigrationInfo step : info.all()) {
                 MigrationState state = step.getState();
                 if (state == MigrationState.FUTURE_SUCCESS || state == MigrationState.FUTURE_FAILED) {
@@ -93,6 +94,9 @@ public final class RestoreService {
                 if (state.isFailed()) {
                     throw new BackupException(BackupMessages.DAMAGED_RECORDS);
                 }
+            }
+            if (!flyway.validateWithResult().validationSuccessful) {
+                throw new BackupException(BackupMessages.DAMAGED_RECORDS);
             }
             MigrationInfo current = info.current();
             MigrationVersion version = current == null ? null : current.getVersion();

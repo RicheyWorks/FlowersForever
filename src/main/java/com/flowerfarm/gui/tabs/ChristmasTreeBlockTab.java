@@ -80,6 +80,7 @@ public final class ChristmasTreeBlockTab implements FlowerFarmTab {
     private JButton refreshButton;
     private JLabel feedback;
     private JLabel accessBadge;
+    private final NotebookSaveRecovery saveRecovery = new NotebookSaveRecovery();
     private List<ChristmasTreeBlockPlan> lastView = List.of();
     private Long editingId;
     private FormState cleanForm;
@@ -135,14 +136,17 @@ public final class ChristmasTreeBlockTab implements FlowerFarmTab {
                 try {
                     List<ChristmasTreeBlockPlan> blocks = get();
                     showBlocks(blocks == null ? List.of() : blocks);
+                    saveRecovery.refreshed();
                     showFeedback(hasUnsavedDraft()
                                     ? "Tree blocks refreshed; unsaved draft kept."
                                     : "Tree blocks refreshed.", FarmUi.Tone.SUCCESS);
                 } catch (InterruptedException exception) {
                     Thread.currentThread().interrupt();
+                    saveRecovery.refreshFailed();
                     showFeedback("Could not load tree blocks. Choose Refresh to retry.",
                             FarmUi.Tone.DANGER);
                 } catch (Exception exception) {
+                    saveRecovery.refreshFailed();
                     showFeedback("Could not load tree blocks. Choose Refresh to retry.",
                             FarmUi.Tone.DANGER);
                 } finally {
@@ -208,6 +212,7 @@ public final class ChristmasTreeBlockTab implements FlowerFarmTab {
         scroll.setBorder(BorderFactory.createEmptyBorder());
         scroll.getVerticalScrollBar().setUnitIncrement(24);
         panel.add(scroll, BorderLayout.CENTER);
+        FarmUi.revealFocusedControls(scroll);
         clearForm();
         updateActions();
     }
@@ -336,8 +341,8 @@ public final class ChristmasTreeBlockTab implements FlowerFarmTab {
         form.add(fields, BorderLayout.CENTER);
         JPanel footer = new JPanel(new BorderLayout());
         footer.setOpaque(false);
-        footer.add(FarmUi.toolbar(saveButton, discardButton), BorderLayout.NORTH);
-        footer.add(feedback, BorderLayout.SOUTH);
+        footer.add(FarmUi.toolbar(saveButton, discardButton), BorderLayout.SOUTH);
+        footer.add(feedback, BorderLayout.NORTH);
         form.add(footer, BorderLayout.SOUTH);
         return FarmUi.section("Tree block details",
                 "Record a grower-entered block plan. Block, species, and target "
@@ -508,12 +513,23 @@ public final class ChristmasTreeBlockTab implements FlowerFarmTab {
             return false;
         }
         if (!hasUnsavedDraft()) return true;
+        DraftDecisionGuard reviewed = new DraftDecisionGuard(editingId, formState(),
+                lastView, table.getSelectedRow(), canWrite, loading);
         Object[] options = {"Keep editing", "Discard draft"};
         int choice = dialogs.showOption(panel,
                 "This Christmas tree block plan has unsaved planning changes. Discard them?",
                 "Unsaved Christmas tree block plan draft", JOptionPane.DEFAULT_OPTION,
                 JOptionPane.WARNING_MESSAGE, null, options, options[0]);
-        return choice == 1;
+        if (choice != 1) {
+            return false;
+        }
+        if (!reviewed.stillCurrent(editingId, formState(), lastView,
+                table.getSelectedRow(), canWrite, loading, saving)) {
+            showFeedback("Draft kept because this notebook changed while the question was open. "
+                    + "Review it and choose again.", FarmUi.Tone.WARNING);
+            return false;
+        }
+        return true;
     }
 
     private void discardChanges() {
@@ -548,17 +564,27 @@ public final class ChristmasTreeBlockTab implements FlowerFarmTab {
                 boolean wrote = false;
                 try {
                     ChristmasTreeBlockPlan saved = get();
+                    wrote = true;
                     editingId = saved.getId();
+                    lastView = saveRecovery.remember(lastView, saved, ChristmasTreeBlockPlan::getId);
                     cleanForm = formState();
+                    showBlocks(lastView);
                     showFeedback("Christmas tree block plan saved · " + saved.getBlockName(),
                             FarmUi.Tone.SUCCESS);
                     host.setStatus("Christmas tree block plan “" + saved.getBlockName() + "” saved.");
-                    wrote = true;
                 } catch (InterruptedException exception) {
                     Thread.currentThread().interrupt();
-                    showSaveFailure();
+                    if (wrote) {
+                        showSavedRefreshFailure();
+                    } else {
+                        showSaveFailure();
+                    }
                 } catch (Exception exception) {
-                    showSaveFailure();
+                    if (wrote) {
+                        showSavedRefreshFailure();
+                    } else {
+                        showSaveFailure();
+                    }
                 } finally {
                     saving = false;
                     updateActions();
@@ -742,17 +768,27 @@ public final class ChristmasTreeBlockTab implements FlowerFarmTab {
                 boolean wrote = false;
                 try {
                     ChristmasTreeBlockPlan saved = get();
+                    wrote = true;
+                    lastView = saveRecovery.remember(lastView, saved, ChristmasTreeBlockPlan::getId);
                     if (Objects.equals(editingId, saved.getId())) loadBlock(saved);
+                    showBlocks(lastView);
                     showFeedback(saved.getBlockName() + " moved to "
                             + enumLabel(saved.getStage()) + ".", FarmUi.Tone.SUCCESS);
                     host.setStatus("Christmas tree block plan “" + saved.getBlockName()
                             + "” moved to " + enumLabel(saved.getStage()) + ".");
-                    wrote = true;
                 } catch (InterruptedException exception) {
                     Thread.currentThread().interrupt();
-                    showFeedback("Stage was not changed. Retry the move.", FarmUi.Tone.DANGER);
+                    if (wrote) {
+                        showSavedRefreshFailure();
+                    } else {
+                        showFeedback("Stage was not changed. Retry the move.", FarmUi.Tone.DANGER);
+                    }
                 } catch (Exception exception) {
-                    showFeedback("Stage was not changed. Retry the move.", FarmUi.Tone.DANGER);
+                    if (wrote) {
+                        showSavedRefreshFailure();
+                    } else {
+                        showFeedback("Stage was not changed. Retry the move.", FarmUi.Tone.DANGER);
+                    }
                 } finally {
                     saving = false;
                     updateActions();
@@ -825,6 +861,12 @@ public final class ChristmasTreeBlockTab implements FlowerFarmTab {
         }
     }
 
+    private void showSavedRefreshFailure() {
+        saveRecovery.refreshFailed();
+        showFeedback("Save completed. Refresh the notebook to finish updating its display.",
+                FarmUi.Tone.WARNING);
+    }
+
     private void showSaveFailure() {
         showFeedback("Not saved · complete planning draft kept. "
                 + "Check the local data store and retry.", FarmUi.Tone.DANGER);
@@ -832,7 +874,9 @@ public final class ChristmasTreeBlockTab implements FlowerFarmTab {
     }
 
     private void showFeedback(String text, FarmUi.Tone tone) {
-        if (feedback != null) FarmUi.updateStatusBadge(feedback, text, tone);
+        if (feedback != null) FarmUi.updateStatusBadge(feedback, saveRecovery.feedback(text),
+                    saveRecovery.needsRefresh() && tone != FarmUi.Tone.DANGER
+                            ? FarmUi.Tone.WARNING : tone);
     }
 
     private FormState formState() {

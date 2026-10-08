@@ -44,6 +44,19 @@ public final class DataBackupService {
 
     public VerifiedBackup backup(Path dataDirectory, Path destination, String label)
             throws UpdateVerificationException {
+        return backupFrom(dataDirectory, destination, label, null);
+    }
+
+    /** A live snapshot records provenance against its original store, not its scratch directory. */
+    public VerifiedBackup backup(Path dataDirectory, Path destination, String label,
+                                 com.flowerfarm.backup.BackupSettings source)
+            throws UpdateVerificationException {
+        return backupFrom(dataDirectory, destination, label, java.util.Objects.requireNonNull(source, "source"));
+    }
+
+    private VerifiedBackup backupFrom(Path dataDirectory, Path destination, String label,
+                                      com.flowerfarm.backup.BackupSettings source)
+            throws UpdateVerificationException {
         Path data = dataDirectory.toAbsolutePath().normalize();
         if (!Files.isDirectory(data)) {
             throw new UpdateVerificationException("The farm records folder was not found: " + data);
@@ -84,7 +97,13 @@ public final class DataBackupService {
             com.flowerfarm.safety.SafeFiles.write(checksum,
                     (sha256 + "  " + archive.getFileName() + "\n").getBytes(StandardCharsets.US_ASCII));
             long bytes = verifyArchiveMatches(archive, checksum, data, rootName.toString(), files);
-            return new VerifiedBackup(archive, checksum, sha256, files.size(), bytes);
+            VerifiedBackup verified = new VerifiedBackup(archive, checksum, sha256, files.size(), bytes);
+            if (source == null) {
+                com.flowerfarm.backup.BackupReceipts.record(data, verified);
+            } else {
+                com.flowerfarm.backup.BackupReceipts.record(source, verified);
+            }
+            return verified;
         } catch (IOException failure) {
             throw new UpdateVerificationException("The backup could not be written: " + failure.getMessage(),
                     failure);
@@ -114,6 +133,19 @@ public final class DataBackupService {
      * kept as {@code <data>.before-restore-<stamp>} and returned.
      */
     public Path restore(Path archive, Path dataDirectory) throws UpdateVerificationException {
+        return restore(archive, dataDirectory, keptAside -> { });
+    }
+
+    /** Persists the exact recovery destination before either live-folder move. */
+    @FunctionalInterface
+    public interface BeforeRestoreSwap {
+        void record(Path keptAside) throws IOException;
+    }
+
+    /** The callback must succeed before any existing records are moved. */
+    public Path restore(Path archive, Path dataDirectory, BeforeRestoreSwap beforeSwap)
+            throws UpdateVerificationException {
+        java.util.Objects.requireNonNull(beforeSwap, "beforeSwap");
         verifyChecksum(archive);
         Path data = dataDirectory.toAbsolutePath().normalize();
         Path parent = data.getParent();
@@ -135,6 +167,13 @@ public final class DataBackupService {
             }
             if (Files.exists(data)) {
                 keptAside = parent.resolve(dataName + ".before-restore-" + stamp());
+                int counter = 2;
+                while (Files.exists(keptAside)) {
+                    keptAside = parent.resolve(dataName + ".before-restore-" + stamp() + "-" + counter++);
+                }
+            }
+            beforeSwap.record(keptAside);
+            if (keptAside != null) {
                 Files.move(data, keptAside, StandardCopyOption.ATOMIC_MOVE);
             }
             try {

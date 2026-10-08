@@ -30,7 +30,7 @@ public class BackupConfiguration {
 
     @Bean
     RestoreRecords restoreRecords(BackupSettings settings) {
-        return new RestoreRecords(settings.stateDirectory());
+        return new RestoreRecords(settings.stateDirectory(), settings.dataDirectory());
     }
 
     @Bean

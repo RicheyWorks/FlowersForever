@@ -50,9 +50,20 @@ even when a good backup was sitting in the backups folder.
 
 **Fix.** Before opening the records, FlowersForever now reads every table once (`DatabaseIntegrityGuard`).
 
-- If the file is damaged, the damaged folder is kept as `data.damaged-<date>`. It is never deleted.
-- The app then puts back the newest backup that both matches its checksum and opens cleanly. A
-  backup that fails either check is skipped for the next older one.
+- If the file is damaged, the damaged folder is kept as `data.before-restore-*`. It is never deleted.
+- The app then puts back the newest backup that has a local receipt tying its exact contents
+  to this records directory, matches its checksum, and opens cleanly. A shared backup folder
+  cannot supply another farm's records. A backup that fails these checks is skipped for the
+  next older one. Backups with a newer,
+  failed, or inconsistent database migration are also skipped; a compatible older backup
+  can still be used.
+- Before moving the records, the app saves the exact location where the previous folder
+  will be kept. If the restore is interrupted, startup uses that record to recover the
+  folder even if an empty records directory has already been recreated. The restore
+  record stays in place until the restored farm successfully opens.
+- Recovery instructions are also tied to the records directory. Instructions belonging to
+  another farm, or older instructions without a known source, stop startup for review;
+  they are preserved rather than applied to the wrong farm.
 - The grower sees a plain message saying what happened, which backup was used, and that anything
   entered after that backup is not included.
 - If there is no usable backup, nothing is changed or deleted. The app stops with a plain message
@@ -60,6 +71,11 @@ even when a good backup was sitting in the backups folder.
 - A records file that is only in use (another FlowersForever window, the AI helper) is never
   treated as damaged.
 - Backups are flushed to disk before they count as made.
+
+Older archives and PowerShell backups remain available for manual restore. Automatic recovery
+does not guess which farm an archive belongs to when its local receipt is missing. Moving the
+records directory or losing its backup settings can therefore require a manual restore. See
+[Backup and restore](BACKUP_RESTORE.md).
 
 **Tests** (`PowerCutDataSafetyTest`):
 - the last 2 KB of the file is cut off: every earlier record is still readable;
@@ -69,18 +85,27 @@ even when a good backup was sitting in the backups folder.
 - healthy records are left alone;
 - the check runs at start-up before the records open.
 
+`IntegrityRestoreSafetyTest`, `AutomaticBackupProvenanceTest`, and the restore-journal tests
+also exercise interrupted folder swaps, migration compatibility, shared backup/settings
+folders, and changed archive contents.
+
 ## Failed saves (release check 4)
 
 **Risk found.** Some save errors reached the grower as raw technical text, like
 `General error: java.io.IOException …`.
 
-**Fix.** Disk full, permission denied, read-only folder or media, file in use, and damaged records
-are now recognised wherever the app reports a failed save. The grower is told what happened and
+**Fix.** The shared save-error formatter recognises disk full, permission denied, read-only
+folder or media, file in use, and damaged records. Its messages tell the grower what happened and
 what to do, for example: "Saving the harvest did not finish: the disk is full. Free up some space
 on this computer…".
 
 The screens that already kept drafts after a failed save still do; the grower's typing is kept so
 they can retry. Previously saved records are not affected.
+
+Specialty notebooks also keep each acknowledged save in their local view before refreshing
+the full list. If that refresh fails, Discard changes restores the saved values, and an edit
+keeps the saved record's identity. The screen distinguishes a completed save from a list that
+still needs refreshing, so retrying the refresh does not create another record.
 
 **Tests** (`FailedSaveDataSafetyTest`):
 - **Disk full:** a test file system makes every database write fail with Windows' own "There is

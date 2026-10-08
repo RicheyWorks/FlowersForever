@@ -91,7 +91,7 @@ final class FarmTypeLauncher extends JPanel {
         JPanel header = FarmUi.pageHeader("Choose your farm type",
                 "Pick one farm type or combine several for the same operation.",
                 headerActions);
-        JLabel mixSummary = FarmUi.mutedLabel(enabledWorkspaces.size() > 1
+        JLabel mixSummary = FarmUi.wrappingHint(enabledWorkspaces.size() > 1
                 ? "Current mix: " + enabledWorkspaces.stream()
                         .map(FarmSetupDialog::workspaceLabel)
                         .collect(java.util.stream.Collectors.joining(" · "))

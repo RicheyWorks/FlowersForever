@@ -1,4 +1,90 @@
-# Latest direction — September 26, 2026
+# Latest direction — October 7, 2026
+
+## Notebook save recovery, keyboard reachability, and restore ownership
+
+Continue in `C:\Users\730ri\.codex\worktrees\farm-shipping-polish\FlowersForever`
+on `codex/farm-shipping-polish-20261007`. Draft PR #41 remains based on the
+README/farm preview branch (PR #31). The original checkout on
+`codex/recover-unpushed-work` still contains substantial local work: preserve it.
+Upstream data-safety PR #32 (`cc96266`) was merged here as `5ed463e`; unrelated
+`main` licensing changes were not pulled into this preview stack.
+
+All 20 specialty notebooks preserve the service's acknowledged save and record
+identity before rendering or refreshing. A failed list read no longer lets
+Discard, review, or stage actions revive stale values. Create, edit, stage,
+recovery, and host-notification failures are covered across the actual forms.
+Each form reveals keyboard targets while passive refresh preserves typing and
+scroll position. Recovery feedback wraps above Save/Discard and reassures the
+grower that the completed save is kept.
+
+Automatic and manual restore now journal the exact retained folder before either
+move and preserve recovery instructions until the restored application opens.
+Automatic candidates must pass database-version validation and have a local
+receipt binding their checksum to the original records directory. Live snapshots
+use the original farm identity. Foreign or ambiguous legacy restore journals stop
+startup without moving records. Older/PowerShell backups remain manually restorable;
+missing receipts do not authorize automatic recovery from a shared backup folder.
+See `docs/DATA_SAFETY.md` and `docs/BACKUP_RESTORE.md` for the user-facing limits.
+
+The forced-close regression reproduced an external Windows file lock after the
+child had exited. Its harness now waits at most five seconds for that lock only,
+then checks health once and still checks every acknowledged saved record. A
+damaged/unreadable result or missing record is never retried into a pass.
+
+Verification: 307 focused cases passed, including 77 saved-snapshot and 40
+keyboard cases, plus 18 new restore/provenance/journal cases. The final clean
+`python -B scripts/verify_harness.py --isolated` run passed 2,952 tests and two
+packaged-JAR checks; the subsequent `--check` passed. All 206 suite/phase floors
+are met, coverage is 86.08% lines and 69.45% branches, and Checkstyle/SpotBugs
+report zero findings. The initial full run caught a missing receipt-parent null
+check; the corrected source passed the complete clean rerun. Source commit:
+`91f2c3b964f9e458a5e69b3095541d0b54a11cc2`. Source digest:
+`9389327d584d4a80eb1ed5efcee89f4418abcd5c2b86f2a8030646ab987763e4`.
+Evidence: `dist/harness-evidence/latest.json`; complete final log:
+`dist/harness-evidence/notebook-recovery-quality-final.log`. Runtime: Temurin
+22.0.2, Java 17 compilation target. Native installers were not rebuilt.
+
+Next UI candidate: the Seed Fields "Planning only" section description truncates
+at 850 pixels because the shared section description is a plain JLabel. Reproduce
+the compact layout before changing the shared component. Native installer and
+interactive acceptance remain separate from the headless Swing renders here.
+
+## Combined farm navigation and notebook draft decisions
+
+Work continues in the isolated `farm-shipping-polish/FlowersForever` worktree,
+on `codex/farm-shipping-polish-20261007`, based on the complete README/farm
+preview branch at `c948c16`. The original checkout's local work is preserved.
+
+The actual catalog for all 25 farm types exposed a startup exception after
+26 navigation mnemonics. Additional workflows now use ordinary keyboard
+navigation and Workspace links without claiming duplicate shortcuts. Mushroom,
+cranberry, and pumpkin tools join the correct combined-farm navigation group.
+Long farm-mix labels wrap in the launcher and Workspace home; home content
+tracks the viewport width and its guidance grows with the available width.
+
+All 20 specialty notebooks now bind a discard confirmation to the reviewed
+draft, record identity, saved-row snapshot, selection, permissions, and
+load/save state. A change during the modal question keeps the draft and asks
+the grower to review again. This prevents a completed refresh from loading an
+obsolete selected record after discarding another draft.
+
+Focused verification passed 201 cases, including 100 notebook decision cases,
+eight rendered light/dark cases at 850 and 1100 pixels, and the actual combined
+catalog's navigation beyond 26 tabs. Corresponding suite floors are recorded
+in `config/harness-test-floors.json`. Rendered examples are under
+`target/ui-previews/farm-entry`.
+
+The clean `python -B scripts/verify_harness.py --isolated` run passed 2,802
+tests and two packaged-JAR checks on Temurin 22.0.2 (Java 17 compilation target).
+Line coverage is 86.11%, branch coverage 69.39%; all coverage gates pass and
+Checkstyle/SpotBugs report zero findings. Source digest:
+`e60089066f0d5be41cc40dbe09ef3cf68964f452146890b31300f190f6ded947`.
+Evidence is `dist/harness-evidence/latest.json`, with the complete log at
+`dist/harness-evidence/farm-shipping-quality.log`. Native installers were not
+rebuilt. GitHub's upstream check was still unable to start because of account
+payment or spending-limit settings; do not treat that as a failed test.
+
+## Previous direction — September 26, 2026
 
 ## Entry and review dialog polish
 

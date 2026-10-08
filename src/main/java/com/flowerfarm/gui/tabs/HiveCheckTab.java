@@ -74,6 +74,7 @@ public final class HiveCheckTab implements FlowerFarmTab {
     private JButton refreshButton;
     private JLabel feedback;
     private JLabel accessBadge;
+    private final NotebookSaveRecovery saveRecovery = new NotebookSaveRecovery();
     private List<HiveCheck> lastView = List.of();
     private Long editingId;
     private FormState cleanForm;
@@ -129,14 +130,17 @@ public final class HiveCheckTab implements FlowerFarmTab {
                 try {
                     List<HiveCheck> checks = get();
                     showChecks(checks == null ? List.of() : checks);
+                    saveRecovery.refreshed();
                     showFeedback(hasUnsavedDraft()
                                     ? "Hive checks refreshed; unsaved draft kept."
                                     : "Hive checks refreshed.", FarmUi.Tone.SUCCESS);
                 } catch (InterruptedException exception) {
                     Thread.currentThread().interrupt();
+                    saveRecovery.refreshFailed();
                     showFeedback("Could not load hive checks. Choose Refresh to retry.",
                             FarmUi.Tone.DANGER);
                 } catch (Exception exception) {
+                    saveRecovery.refreshFailed();
                     showFeedback("Could not load hive checks. Choose Refresh to retry.",
                             FarmUi.Tone.DANGER);
                 } finally {
@@ -202,6 +206,7 @@ public final class HiveCheckTab implements FlowerFarmTab {
         scroll.setBorder(BorderFactory.createEmptyBorder());
         scroll.getVerticalScrollBar().setUnitIncrement(24);
         panel.add(scroll, BorderLayout.CENTER);
+        FarmUi.revealFocusedControls(scroll);
         clearForm();
         updateActions();
     }
@@ -319,8 +324,8 @@ public final class HiveCheckTab implements FlowerFarmTab {
         form.add(fields, BorderLayout.CENTER);
         JPanel footer = new JPanel(new BorderLayout());
         footer.setOpaque(false);
-        footer.add(FarmUi.toolbar(saveButton, discardButton), BorderLayout.NORTH);
-        footer.add(feedback, BorderLayout.SOUTH);
+        footer.add(FarmUi.toolbar(saveButton, discardButton), BorderLayout.SOUTH);
+        footer.add(feedback, BorderLayout.NORTH);
         form.add(footer, BorderLayout.SOUTH);
         return FarmUi.section("Hive check details",
                 "Record observations from one dated visit. Apiary, hive, and check date "
@@ -470,12 +475,23 @@ public final class HiveCheckTab implements FlowerFarmTab {
             return false;
         }
         if (!hasUnsavedDraft()) return true;
+        DraftDecisionGuard reviewed = new DraftDecisionGuard(editingId, formState(),
+                lastView, table.getSelectedRow(), canWrite, loading);
         Object[] options = {"Keep editing", "Discard draft"};
         int choice = dialogs.showOption(panel,
                 "This hive check has unsaved changes. Discard them?",
                 "Unsaved hive check draft", JOptionPane.DEFAULT_OPTION,
                 JOptionPane.WARNING_MESSAGE, null, options, options[0]);
-        return choice == 1;
+        if (choice != 1) {
+            return false;
+        }
+        if (!reviewed.stillCurrent(editingId, formState(), lastView,
+                table.getSelectedRow(), canWrite, loading, saving)) {
+            showFeedback("Draft kept because this notebook changed while the question was open. "
+                    + "Review it and choose again.", FarmUi.Tone.WARNING);
+            return false;
+        }
+        return true;
     }
 
     private void discardChanges() {
@@ -510,18 +526,28 @@ public final class HiveCheckTab implements FlowerFarmTab {
                 boolean wrote = false;
                 try {
                     HiveCheck saved = get();
+                    wrote = true;
                     editingId = saved.getId();
+                    lastView = saveRecovery.remember(lastView, saved, HiveCheck::getId);
                     cleanForm = formState();
+                    showChecks(lastView);
                     showFeedback("Hive check saved · " + saved.getHiveLabel()
                             + " · " + saved.getCheckDate(),
                             FarmUi.Tone.SUCCESS);
                     host.setStatus("Hive check for “" + saved.getHiveLabel() + "” saved.");
-                    wrote = true;
                 } catch (InterruptedException exception) {
                     Thread.currentThread().interrupt();
-                    showSaveFailure();
+                    if (wrote) {
+                        showSavedRefreshFailure();
+                    } else {
+                        showSaveFailure();
+                    }
                 } catch (Exception exception) {
-                    showSaveFailure();
+                    if (wrote) {
+                        showSavedRefreshFailure();
+                    } else {
+                        showSaveFailure();
+                    }
                 } finally {
                     saving = false;
                     updateActions();
@@ -628,17 +654,27 @@ public final class HiveCheckTab implements FlowerFarmTab {
                 boolean wrote = false;
                 try {
                     HiveCheck saved = get();
+                    wrote = true;
+                    lastView = saveRecovery.remember(lastView, saved, HiveCheck::getId);
                     if (Objects.equals(editingId, saved.getId())) loadCheck(saved);
+                    showChecks(lastView);
                     showFeedback(saved.getHiveLabel() + " status set to "
                             + enumLabel(saved.getStatus()) + ".", FarmUi.Tone.SUCCESS);
                     host.setStatus("Hive check “" + saved.getHiveLabel()
                             + "” status set to " + enumLabel(saved.getStatus()) + ".");
-                    wrote = true;
                 } catch (InterruptedException exception) {
                     Thread.currentThread().interrupt();
-                    showFeedback("Status was not changed. Retry the update.", FarmUi.Tone.DANGER);
+                    if (wrote) {
+                        showSavedRefreshFailure();
+                    } else {
+                        showFeedback("Status was not changed. Retry the update.", FarmUi.Tone.DANGER);
+                    }
                 } catch (Exception exception) {
-                    showFeedback("Status was not changed. Retry the update.", FarmUi.Tone.DANGER);
+                    if (wrote) {
+                        showSavedRefreshFailure();
+                    } else {
+                        showFeedback("Status was not changed. Retry the update.", FarmUi.Tone.DANGER);
+                    }
                 } finally {
                     saving = false;
                     updateActions();
@@ -711,6 +747,12 @@ public final class HiveCheckTab implements FlowerFarmTab {
         }
     }
 
+    private void showSavedRefreshFailure() {
+        saveRecovery.refreshFailed();
+        showFeedback("Save completed. Refresh the notebook to finish updating its display.",
+                FarmUi.Tone.WARNING);
+    }
+
     private void showSaveFailure() {
         showFeedback("Not saved · complete hive check draft kept. "
                 + "Check the local data store and retry.", FarmUi.Tone.DANGER);
@@ -718,7 +760,9 @@ public final class HiveCheckTab implements FlowerFarmTab {
     }
 
     private void showFeedback(String text, FarmUi.Tone tone) {
-        if (feedback != null) FarmUi.updateStatusBadge(feedback, text, tone);
+        if (feedback != null) FarmUi.updateStatusBadge(feedback, saveRecovery.feedback(text),
+                    saveRecovery.needsRefresh() && tone != FarmUi.Tone.DANGER
+                            ? FarmUi.Tone.WARNING : tone);
     }
 
     private FormState formState() {

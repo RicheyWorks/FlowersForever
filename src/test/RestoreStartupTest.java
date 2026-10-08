@@ -41,7 +41,7 @@ class RestoreStartupTest {
         settings = BackupTestSupport.settings(temp);
         data = settings.dataDirectory();
         archives = new DataBackupService(Clock.systemDefaultZone());
-        records = new RestoreRecords(settings.stateDirectory());
+        records = new RestoreRecords(settings.stateDirectory(), settings.dataDirectory());
         startup = new RestoreStartup(settings, records, archives, Clock.systemDefaultZone(), Duration.ofMillis(300));
         BackupTestSupport.fakeRecords(data, "from-the-backup");
         archive = archives.backup(data, settings.defaultFolder(), "backup").archive();
@@ -134,7 +134,7 @@ class RestoreStartupTest {
     void crashBetweenMoves() throws Exception {
         Path aside = data.resolveSibling("data.before-restore-20261004-120000");
         Files.move(data, aside);
-        records.saveInProgress(new RestoreRecords.InProgress(archive, Optional.empty(), Optional.empty(), ""));
+        records.saveInProgress(new RestoreRecords.InProgress(archive, Optional.of(aside), Optional.empty(), ""));
 
         startup.start(this::startSpring, () -> events.add("close"), true);
 

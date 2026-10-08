@@ -99,7 +99,7 @@ class DesktopBackupControllerTest {
         settings = BackupTestSupport.settings(temp);
         BackupTestSupport.realRecords(settings.dataDirectory(), "current records");
         store = new BackupPreferencesStore(settings.stateDirectory());
-        restoreRecords = new RestoreRecords(settings.stateDirectory());
+        restoreRecords = new RestoreRecords(settings.stateDirectory(), settings.dataDirectory());
         Clock clock = Clock.systemUTC();
         LiveBackupService backups = BackupTestSupport.service(settings,
                 BackupTestSupport.copyOf(settings.dataDirectory()), clock);

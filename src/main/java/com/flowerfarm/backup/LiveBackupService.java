@@ -73,7 +73,7 @@ public final class LiveBackupService {
                 database.writeTo(databaseCopy);
                 extractDatabase(databaseCopy, snapshot);
                 copyRecordFiles(data, snapshot);
-                return archives.backup(snapshot, target, label);
+                return archives.backup(snapshot, target, label, settings);
             } catch (SQLException databaseBusy) {
                 throw new BackupException(BackupMessages.databaseCopyFailed(databaseBusy.getMessage()), databaseBusy);
             } catch (IOException ioFailure) {

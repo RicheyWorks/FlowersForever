@@ -10,12 +10,15 @@ import javax.swing.JComponent;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
+import javax.swing.Scrollable;
 import javax.swing.JTextArea;
 import java.awt.BorderLayout;
+import java.awt.Dimension;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.GridLayout;
 import java.awt.Insets;
+import java.awt.Rectangle;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
@@ -83,7 +86,6 @@ public final class WorkspaceHomeTab implements FlowerFarmTab {
         if (scopeNote != null) {
             String detail = copy().limit();
             scopeNote.setText(detail);
-            scopeNote.setRows(noteRows(detail));
             scopeNote.revalidate();
         }
     }
@@ -111,9 +113,15 @@ public final class WorkspaceHomeTab implements FlowerFarmTab {
         panel = FarmUi.page();
         panel.setName("workspace.page");
         panel.getAccessibleContext().setAccessibleName(copy.heading() + " workspace");
-        panel.add(FarmUi.pageHeader(copy.heading(), copy.scope(), null), BorderLayout.NORTH);
+        JPanel header = FarmUi.pageHeader(copy.heading(), null, null);
+        JLabel subtitle = FarmUi.wrappingHint(copy.scope());
+        subtitle.setName("farm.pageSubtitle");
+        subtitle.setFont(subtitle.getFont().deriveFont(13f));
+        subtitle.setBorder(BorderFactory.createEmptyBorder(0, 0, 8, 0));
+        header.add(subtitle, BorderLayout.SOUTH);
+        panel.add(header, BorderLayout.NORTH);
 
-        JPanel body = new JPanel(new GridBagLayout());
+        JPanel body = new WorkspaceBody();
         body.setOpaque(false);
         GridBagConstraints row = new GridBagConstraints();
         row.gridx = 0;
@@ -123,8 +131,11 @@ public final class WorkspaceHomeTab implements FlowerFarmTab {
         row.anchor = GridBagConstraints.NORTH;
         row.insets = new Insets(0, 0, 16, 0);
         scopeNote = note(copy.limit());
-        body.add(FarmUi.section("How to use this workspace", copy.summary(),
-                scopeNote), row);
+        JPanel guidance = new JPanel(new BorderLayout(0, 8));
+        guidance.setOpaque(false);
+        guidance.add(FarmUi.wrappingHint(copy.summary()), BorderLayout.NORTH);
+        guidance.add(scopeNote, BorderLayout.CENTER);
+        body.add(FarmUi.section("How to use this workspace", null, guidance), row);
         row.gridy = 1;
         row.insets = new Insets(0, 0, 0, 0);
         body.add(FarmUi.section("Open a workflow",
@@ -173,7 +184,7 @@ public final class WorkspaceHomeTab implements FlowerFarmTab {
     }
 
     private static JTextArea note(String text) {
-        JTextArea note = new JTextArea(text, noteRows(text), 56);
+        JTextArea note = new JTextArea(text, 2, 0);
         note.setName("workspace.scopeNote");
         note.setEditable(false);
         note.setFocusable(false);
@@ -185,8 +196,22 @@ public final class WorkspaceHomeTab implements FlowerFarmTab {
         return note;
     }
 
-    private static int noteRows(String text) {
-        return Math.max(2, (text.length() + 89) / 90);
+    private static final class WorkspaceBody extends JPanel implements Scrollable {
+        private static final long serialVersionUID = 1L;
+
+        private WorkspaceBody() { super(new GridBagLayout()); }
+
+        @Override public Dimension getPreferredScrollableViewportSize() { return getPreferredSize(); }
+        @Override public int getScrollableUnitIncrement(Rectangle visible, int orientation, int direction) {
+            return 20;
+        }
+        @Override public int getScrollableBlockIncrement(Rectangle visible, int orientation, int direction) {
+            return Math.max(20, visible.height - 20);
+        }
+        @Override public boolean getScrollableTracksViewportWidth() { return true; }
+        @Override public boolean getScrollableTracksViewportHeight() {
+            return getParent() != null && getParent().getHeight() >= getPreferredSize().height;
+        }
     }
 
     private Copy copy() {

@@ -18,7 +18,7 @@ import java.util.TreeMap;
  * the backup settings folder beside (never inside) the records:
  * <ul>
  *   <li>{@code restore-request.properties}: the checked backup to restore on the next start;</li>
- *   <li>{@code restore-in-progress.properties}: written once the swap happened, removed after a good start;</li>
+ *   <li>{@code restore-in-progress.properties}: written before the swap, removed after a good start;</li>
  *   <li>{@code restore-notice.properties}: one message to show (and log) once the window is open.</li>
  * </ul>
  */
@@ -42,9 +42,38 @@ public final class RestoreRecords {
     }
 
     private final Path directory;
+    private final Path sourceDirectory;
 
+    /** Legacy reader; new restore writers must also identify their records directory. */
     public RestoreRecords(Path stateDirectory) {
+        this(stateDirectory, null);
+    }
+
+    public RestoreRecords(Path stateDirectory, Path dataDirectory) {
         this.directory = stateDirectory;
+        this.sourceDirectory = dataDirectory == null ? null : canonical(dataDirectory);
+    }
+
+    /** Never apply or overwrite another store's pending restore, including ambiguous old journals. */
+    public synchronized void requireStore(Path dataDirectory) throws IOException {
+        Path expected = canonical(dataDirectory);
+        for (String name : new String[]{REQUEST, IN_PROGRESS}) {
+            Path file = directory.resolve(name);
+            if (!Files.exists(file)) continue;
+            Optional<Properties> values = read(name);
+            String source = values.map(value -> value.getProperty("source-directory")).orElse(null);
+            if (source == null || source.isBlank()) {
+                throw new DamagedRecordsException("Older or unreadable restore instructions at " + file
+                        + " do not identify their original records folder. Nothing was changed. "
+                        + "Keep this file and contact support to review the restore before reopening.");
+            }
+            if (!expected.toString().equals(source)) {
+                throw new DamagedRecordsException("Restore instructions at " + file
+                        + " belong to a different records folder: " + source
+                        + ". Nothing was changed. Open FlowersForever with that original records folder "
+                        + "to finish its restore, or contact support before changing these instructions.");
+            }
+        }
     }
 
     public synchronized void saveRequest(Request request) throws IOException {
@@ -87,6 +116,7 @@ public final class RestoreRecords {
 
     /** Returns the pending notice once and removes it. */
     public synchronized Optional<Notice> takeNotice() {
+        if (!mayClear(NOTICE)) return Optional.empty();
         Optional<Notice> notice = read(NOTICE).map(values -> new Notice(values.getProperty("message", ""),
                 Boolean.parseBoolean(values.getProperty("success", "false")),
                 values.getProperty("operation", "RESTORE")));
@@ -95,6 +125,7 @@ public final class RestoreRecords {
     }
 
     public synchronized void clear(String name) {
+        if (!mayClear(name)) return;
         try {
             Files.deleteIfExists(directory.resolve(name));
         } catch (IOException stuck) {
@@ -117,6 +148,12 @@ public final class RestoreRecords {
     }
 
     private void write(String name, Map<String, String> values) throws IOException {
+        if (sourceDirectory != null) {
+            if (REQUEST.equals(name) || IN_PROGRESS.equals(name)) {
+                requireStore(sourceDirectory);
+            }
+            values.put("source-directory", sourceDirectory.toString());
+        }
         Files.createDirectories(directory);
         Properties properties = new Properties();
         properties.putAll(values);
@@ -136,5 +173,28 @@ public final class RestoreRecords {
     private static Optional<Path> path(Properties values, String key) {
         String value = values.getProperty(key);
         return value == null || value.isBlank() ? Optional.empty() : Optional.of(Path.of(value));
+    }
+
+    private boolean mayClear(String name) {
+        if (sourceDirectory == null || !Files.exists(directory.resolve(name))) return true;
+        return read(name).map(values -> sourceDirectory.toString().equals(values.getProperty("source-directory")))
+                .orElse(false);
+    }
+
+    private static Path canonical(Path dataDirectory) {
+        try {
+            return dataDirectory.toRealPath();
+        } catch (IOException missing) {
+            Path absolute = dataDirectory.toAbsolutePath().normalize();
+            Path parent = absolute.getParent();
+            if (parent != null) {
+                try {
+                    return parent.toRealPath().resolve(absolute.getFileName());
+                } catch (IOException unavailable) {
+                    // The store may not exist yet; no existing journal is approved by this fallback alone.
+                }
+            }
+            return absolute;
+        }
     }
 }
