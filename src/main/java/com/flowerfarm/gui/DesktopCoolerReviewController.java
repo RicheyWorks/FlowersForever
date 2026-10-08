@@ -15,7 +15,6 @@ import java.awt.BorderLayout;
 import java.awt.FlowLayout;
 import java.io.File;
 import java.io.IOException;
-import java.nio.file.Files;
 import java.util.Objects;
 import java.util.function.Consumer;
 
@@ -123,11 +122,11 @@ public class DesktopCoolerReviewController {
     private void writeLabel(CoolerReviewPanel panel, CoolerShelfLife.AgedLot lot, File file) {
         try {
             byte[] pdf = cooler.lotLabelPdf(lot.harvestId());
-            Files.write(file.toPath(), pdf);
+            com.flowerfarm.safety.SafeFiles.write(file.toPath(), pdf);
             panel.announce(CoolerShelfLife.statusLabelSaved(lot.lotCode()));
         } catch (IOException | RuntimeException failed) {
             host.dialogs().showMessage(host.frame(),
-                    "Could not save the lot label: " + failed.getMessage(),
+                    com.flowerfarm.gui.FarmUi.actionableError("Saving the lot label", failed),
                     CoolerShelfLife.TITLE, JOptionPane.WARNING_MESSAGE);
             panel.announce("Could not save the QR lot label.");
         }

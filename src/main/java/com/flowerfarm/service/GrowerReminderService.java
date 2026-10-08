@@ -4,7 +4,9 @@ import com.flowerfarm.model.FarmProfile;
 import com.flowerfarm.model.Item;
 import com.flowerfarm.model.KnowledgeEntry;
 import com.flowerfarm.model.ProductionTask;
+import com.flowerfarm.scouting.ScoutingService;
 import com.flowerfarm.service.MarketDayPackingService.MarketDayPlan;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,6 +29,7 @@ public class GrowerReminderService {
     private final InventoryService inventoryService;
     private final CoolerShelfLifeService coolerShelfLifeService;
     private final FarmProfile farmProfile;
+    private ScoutingService scoutingService;
 
     public GrowerReminderService(ProductionStudioService productionStudioService,
                                  KnowledgeService knowledgeService,
@@ -44,6 +47,12 @@ public class GrowerReminderService {
         this.farmProfile = farmProfile;
     }
 
+    /** Overdue lab results and serious recent findings from the scouting log. */
+    @Autowired(required = false)
+    public void setScoutingService(ScoutingService scoutingService) {
+        this.scoutingService = scoutingService;
+    }
+
     @Transactional(readOnly = true)
     public GrowerReminders.Digest collect() {
         return collect(LocalDate.now(farmProfile.zoneId()));
@@ -59,8 +68,9 @@ public class GrowerReminderService {
         boolean quietHarvest = harvestService.totalQuantityLast7Days() <= 0;
         List<Item> lowStock = lowStockItems(GrowerReminders.DEFAULT_LOW_STOCK);
         CoolerShelfLife.Board cooler = coolerShelfLifeService.board(day);
+        List<GrowerReminder> scouting = scoutingService == null ? List.of() : scoutingService.reminders(day);
         return GrowerReminders.assemble(day, tasks, followUps, packing, quietHarvest, lowStock,
-                GrowerReminders.DEFAULT_LOW_STOCK, cooler.lots());
+                GrowerReminders.DEFAULT_LOW_STOCK, cooler.lots(), scouting);
     }
 
     private List<Item> lowStockItems(int threshold) {

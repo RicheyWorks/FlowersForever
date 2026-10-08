@@ -69,6 +69,7 @@ public final class BackupPreferencesStore {
             properties.store(writer, "FlowersForever backup choices (File > Automatic backups)");
         }
         try {
+            com.flowerfarm.safety.SafeFiles.force(temporary);
             Files.move(temporary, file, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
         } catch (AtomicMoveNotSupportedException notAtomic) {
             Files.move(temporary, file, StandardCopyOption.REPLACE_EXISTING);
