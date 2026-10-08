@@ -694,6 +694,27 @@ class OrderServiceTest {
     }
 
     @Test
+    @DisplayName("correcting a line keeps its recipe link for the same product and clears it for a new one")
+    void lineCorrectionKeepsOrClearsRecipeLink() {
+        Customer c = new Customer("Kitsap Weddings", "", "", "", "FLORIST", "");
+        CustomerOrder order = new CustomerOrder(c, LocalDate.now(), "DRAFT", "");
+        order.setId(12L);
+        OrderLine line = new OrderLine("Centerpiece", 12, "designs", 65.0);
+        line.setId(3L);
+        line.setRecipeId(5L);
+        order.addLine(line);
+        when(orderRepository.findByIdForUpdate(12L)).thenReturn(Optional.of(order));
+        when(orderRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        service.updateLine(12L, 3L, new OrderLine(" centerpiece ", 14, "designs", 65.0));
+        assertThat(line.getRecipeId()).isEqualTo(5L);
+        assertThat(line.getQuantity()).isEqualTo(14);
+
+        service.updateLine(12L, 3L, new OrderLine("Dahlia mix", 14, "bunches", 12.0));
+        assertThat(line.getRecipeId()).isNull();
+    }
+
+    @Test
     @DisplayName("cannot un-fulfill via status change")
     void cannotUnfulfill() {
         Customer c = new Customer("A", "", "", "", "WHOLESALE", "");

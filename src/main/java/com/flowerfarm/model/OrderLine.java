@@ -1,6 +1,7 @@
 package com.flowerfarm.model;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import jakarta.persistence.*;
 
 /**
@@ -33,6 +34,11 @@ public class OrderLine {
     @Column(nullable = false)
     private double unitPrice;
 
+    /** Optional saved floral recipe this line is made from (stem demand board). */
+    @Column(name = "recipe_id")
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    private Long recipeId;
+
     protected OrderLine() {
     }
 
@@ -50,7 +56,18 @@ public class OrderLine {
     public String getUnit() { return unit; }
     public double getUnitPrice() { return unitPrice; }
 
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public Long getRecipeId() { return recipeId; }
+
     public void setId(Long id) { this.id = id; }
+
+    /** Links this line to a saved floral recipe, or clears the link with {@code null}. */
+    public void setRecipeId(Long recipeId) {
+        if (recipeId != null && recipeId <= 0) {
+            throw new IllegalArgumentException("Recipe id must be positive.");
+        }
+        this.recipeId = recipeId;
+    }
 
     public void setOrder(CustomerOrder order) {
         this.order = order;

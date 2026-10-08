@@ -1054,6 +1054,10 @@ public class OrderService {
                     "review the order and correct the product again");
         }
         String previous = line.getProductName() + " × " + line.getQuantity() + " " + line.getUnit();
+        if (!line.getProductName().equalsIgnoreCase(replacement.getProductName().trim())) {
+            // A different product is no longer made from the linked recipe.
+            line.setRecipeId(null);
+        }
         line.setProductName(replacement.getProductName());
         line.setQuantity(replacement.getQuantity());
         line.setUnit(replacement.getUnit());
