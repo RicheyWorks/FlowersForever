@@ -1481,7 +1481,9 @@ var TEXNOTE = {
       navigator.clipboard.writeText(s).then(ok,function(){lg(s,ok);});} else lg(s,ok);}
   function lg(s,ok){var a=document.createElement("textarea");a.value=s;a.style.position="fixed";
     a.style.opacity="0";document.body.appendChild(a);a.select();
-    try{document.execCommand("copy");ok();}catch(e){toast("Copy failed");}document.body.removeChild(a);}
+    /* execCommand says no by RETURNING false (ADR-280, as ADR-203 found on the outbox pages). */
+    var c=false;try{c=document.execCommand("copy");}catch(e){}document.body.removeChild(a);
+    if(c) ok(); else toast("Copy failed");}
 
   /* ======================================================== COMPOST ===== */
   var method="windrow", unitC=true, readings=[];

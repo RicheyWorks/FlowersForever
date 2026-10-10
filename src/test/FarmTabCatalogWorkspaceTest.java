@@ -60,6 +60,22 @@ import static org.mockito.Mockito.mock;
 @DisplayName("Farm workspace primary navigation")
 class FarmTabCatalogWorkspaceTest {
 
+    @Test
+    void installedReadingServiceAddsExactlyOneEquipmentScreenToEveryFarmAndMixedFarm() {
+        FarmTabCatalog configured = catalog();
+        configured.setFarmReadingService(mock(com.flowerfarm.telemetry.FarmReadingService.class));
+        for (FarmWorkspace workspace : FarmWorkspace.values()) {
+            assertThat(titles(configured.create(mock(TabHost.class), workspace)))
+                    .filteredOn("Equipment readings"::equals).hasSize(1);
+        }
+        FarmOperationSettings settings = new FarmOperationSettings();
+        settings.setWorkspace(FarmWorkspace.CUSTOM_FARM);
+        settings.setEnabledWorkspaces(new LinkedHashSet<>(List.of(
+                FarmWorkspace.CUSTOM_FARM, FarmWorkspace.NURSERY_FARM, FarmWorkspace.CANNABIS_FARM)));
+        assertThat(titles(configured.create(mock(TabHost.class), FarmWorkspace.CUSTOM_FARM, settings)))
+                .filteredOn("Equipment readings"::equals).hasSize(1);
+    }
+
     private static final List<String> LEGACY_ROSE_TABS = List.of(
             "Dashboard", "Market Day", "Season Planner", "Harvest Log", "Inventory",
             "Irrigation & Care", "Knowledge Log", "Customers & Orders", "Reports",

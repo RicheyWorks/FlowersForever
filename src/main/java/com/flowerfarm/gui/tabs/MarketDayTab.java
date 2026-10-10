@@ -280,7 +280,7 @@ public class MarketDayTab implements FlowerFarmTab {
             startPlanRefresh();
         });
         exportType = new JComboBox<>(new String[]{
-                "Packing PDF", "Spreadsheet CSV", "Plain text"
+                "Packing PDF", "Spreadsheet (CSV)", "Plain text"
         });
         exportType.setName("marketDay.exportType");
         exportType.getAccessibleContext().setAccessibleName("Packing list export format");
@@ -2802,7 +2802,7 @@ public class MarketDayTab implements FlowerFarmTab {
     }
 
     private enum ExportKind {
-        PDF("Packing PDF", "PDF"), CSV("Spreadsheet CSV", "CSV"), TEXT("Plain text", "text file");
+        PDF("Packing PDF", "PDF"), CSV("Spreadsheet (CSV)", "CSV"), TEXT("Plain text", "text file");
 
         private final String label;
         private final String shortName;

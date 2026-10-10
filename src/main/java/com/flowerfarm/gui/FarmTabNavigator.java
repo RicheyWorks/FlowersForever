@@ -189,6 +189,7 @@ public final class FarmTabNavigator {
             case "Event Services", "Production Studio" -> "Design & service";
             case "Reports", "Trend Analysis", "Activity History" -> "Reports & admin";
             case "Reference & Planning", "Field science" -> "Reference";
+            case "Equipment readings" -> "Farm conditions";
             default -> "Other";
         };
     }

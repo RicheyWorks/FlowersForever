@@ -559,7 +559,7 @@ public class InventoryTab implements FlowerFarmTab {
         shareAvailabilityBtn.setName("inventory.shareAvailability");
         shareAvailabilityBtn.setToolTipText(
                 "Copy or save live stock for florists (Florlist-friendly CSV) with this week’s planned stems.");
-        exportBtn = FarmUi.secondaryButton("Export visible CSV…");
+        exportBtn = FarmUi.secondaryButton("Save spreadsheet (CSV)…");
         reviewNameConflictBtn = FarmUi.secondaryButton("Review existing SKU");
         reviewNameConflictBtn.setName("inventory.reviewNameConflict");
         reviewNameConflictBtn.setEnabled(false);
@@ -1156,7 +1156,7 @@ public class InventoryTab implements FlowerFarmTab {
         if (tableModel.getRowCount() == 0 && !inventoryViewFiltered()) {
             inventoryEmptyState.updateCopy(
                     "No inventory yet",
-                    "Add the first flower in Add item, or use Help > Start here… / File > Import CSV… "
+                    "Add your first product in Add item, or use File > Bring in a spreadsheet (CSV)… "
                             + "to bring products from a spreadsheet.");
         } else {
             inventoryEmptyState.updateCopy(
@@ -1991,7 +1991,7 @@ public class InventoryTab implements FlowerFarmTab {
             return;
         }
 
-        File file = files.chooseSave(panel, "Export Visible Rows to CSV",
+        File file = files.chooseSave(panel, "Save this stock list as a spreadsheet (CSV)",
                 new File("inventory_visible.csv")).orElse(null);
         if (file == null) {
             showDocumentExportCancelled();
@@ -2022,7 +2022,7 @@ public class InventoryTab implements FlowerFarmTab {
                         }
                     }
                 },
-                "Inventory CSV saved · " + snapshot.size() + " visible rows",
+                "Stock spreadsheet saved · " + snapshot.size() + " visible rows",
                 snapshot.size() + " row(s) exported to " + file.getName(),
                 "Visible inventory CSV export");
     }

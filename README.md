@@ -59,8 +59,8 @@ See the screens your team will use, from customer records to field work and soil
       <strong>Plant guide</strong><br>Search Pacific Northwest plant profiles and read the sources behind the notes.
     </td>
     <td width="50%" valign="top">
-      <a href="docs/images/app-field-science.png"><img src="docs/images/app-field-science.png" width="100%" alt="Field science: Open Soil Recipes, Soil Bench, and other offline tools; review exports before saving."></a><br>
-      <strong>Field science</strong><br>Open Soil Recipes, Soil Bench, and other offline tools; review exports before saving.
+      <a href="docs/images/app-field-science.png"><img src="docs/images/app-field-science.png" width="100%" alt="Field science: Explore soil mixes, greenhouse conditions, and field tools; review your results before saving a copy."></a><br>
+      <strong>Field science</strong><br>Explore soil mixes, greenhouse conditions, and field tools; review your results before saving a copy.
     </td>
   </tr>
 </table>
@@ -200,7 +200,35 @@ The combined workspace can show a berry block plan beside an egg collection log,
 
 [See more specialty tabs](docs/SCREENSHOTS.md#farm-specific-notebooks): orchards, potato fields, herds, aquaculture, apiaries, mushrooms, and more.
 
-The bundled **Field science** shelf brings relevant offline CSRBT tools into selected farm types. Cannabis growers can open Subcool's Super Soil in Soil Recipes, then save a reviewed text export and link a finding to that source. [Explore the farm-to-tool map](docs/CSRBT_FIELD_KIT_PORT.md).
+The **Field science** shelf helps you check soil mixes, review greenhouse conditions, and keep field observations. Cannabis growers can open Subcool's Super Soil in Soil Recipes, then save a copy of their results with a note about what they found. [See which tools fit your farm](docs/CSRBT_FIELD_KIT_PORT.md).
+
+Select **Browse all farm tools** to find all 41 tools and guides, including Soil Bench and Greenhouse Monitor. These tools come from the CSRBT field kit. [See the full tool inventory](docs/CSRBT_COMPLETENESS_AUDIT_20261010.md).
+
+## Keep readings from your farm equipment
+
+Open **Equipment readings** to record measurements from your soil, water, air, and growing spaces. Give the equipment a familiar name, choose the measurement, enter its value and unit, and review it before saving. The history also shows readings brought in by an equipment helper, with when and where they were taken. Missing readings stay missing, and retrying a save does not count the same reading twice.
+
+Choose **Latest reported measurements** to see the last measured observation for each equipment, measurement, source, unit, and growing area. Old logs arriving later stay in history without replacing a newer measurement. **Age of reading** shows how old the measurement was when refreshed; missing and faulty reports stay visible. This view does not claim a device is connected or healthy.
+
+Choose **Bring in equipment spreadsheet…** to select a spreadsheet (CSV), check all its readings, and review them before saving. **Spreadsheet layout** explains the headings using farm language. Up to 500 readings save together; an unchanged retry adds no duplicates, and your manual draft stays intact. Other logger layouts and readings files (JSON) can use the optional helper. Automatic readings, Bluetooth pairing, health alarms, and pump operation still need further work. [Read the farmer's guide to equipment readings](docs/FARM_READINGS.md).
+
+**Show this equipment** narrows saved history or latest measurements to the selected equipment and its source. **Show all equipment** returns to the whole farm. Measurements from different growing areas and units stay distinct, and unfinished entries remain intact. Familiar source labels distinguish **Entered on this farm** from **Equipment spreadsheet**.
+
+**See changes…** opens a chart for a selected measurement, with exact readings underneath. Review soil moisture or greenhouse temperature over time without mixing equipment, growing areas, sources, or units. Missing and faulted readings appear as gaps; values needing checking are marked separately. The view shows up to the latest 200 observations and preserves unfinished entries.
+
+Choose **Save readings spreadsheet…** to review and save a readable copy of the full history, including older pages and every source. Exact values, units, conditions, and measured times stay together; unfinished entries stay in the app. The copy is for reference and sharing. Use a full farm backup for restoration.
+
+[![Equipment readings: familiar equipment names, reviewed manual entry, saved measurement history, and a button to save a spreadsheet copy, using sample records.](docs/images/app-equipment-readings.png)](docs/images/app-equipment-readings.png)
+
+[![Latest reported measurements: measurement ages, soil moisture, and an explicitly missing tank reading, using isolated sample records.](docs/images/app-equipment-latest.png)](docs/images/app-equipment-latest.png)
+
+[![See changes: sample soil moisture history with measured points, a needs-checking square, missing and equipment-error gaps, and the exact saved readings underneath.](docs/images/app-equipment-changes.png)](docs/images/app-equipment-changes.png)
+
+[![Saved soil-probe readings focused on one equipment source, with clear scope and Show all equipment controls.](docs/images/app-equipment-focused.png)](docs/images/app-equipment-focused.png)
+
+[![Review an equipment spreadsheet before saving: equipment names, growing areas, exact values, units, conditions, and measured times using sample records.](docs/images/app-equipment-spreadsheet-review.png)](docs/images/app-equipment-spreadsheet-review.png)
+
+[![Review a saved-readings spreadsheet copy: full-history count, snapshot, destination, and explanation of what is included, using sample records.](docs/images/app-equipment-export-review.png)](docs/images/app-equipment-export-review.png)
 
 ## Take a five-minute tour
 
@@ -238,6 +266,7 @@ FlowersForever is in development. The public source is available under the MIT L
 
 - JDK 17 or newer
 - Maven 3.9 or newer
+- Python 3.10 or newer on PATH for logger-import integration tests and the importer (`python` on Windows, `python3` elsewhere)
 
 ### Build and run
 

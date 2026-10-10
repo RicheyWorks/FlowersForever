@@ -1,20 +1,20 @@
 # CSRBT field kit in FlowersForever
 
 FlowersForever's **Field science** tab opens selected instruments from the
-[CSRBT field-science kit](https://github.com/RicheyWorks/CSRBT/blob/f4c9a25c287ac98b96efb38b99a9d95b281434de/README.md).
+[CSRBT field-science kit](https://github.com/RicheyWorks/CSRBT/blob/5990b9c21e419f5836c9f0a22f15d993403557a3/README.md).
 The bundled source is pinned to CSRBT commit
-`f4c9a25c287ac98b96efb38b99a9d95b281434de`; its HTML pages, source
+`5990b9c21e419f5836c9f0a22f15d993403557a3`; its HTML pages, source
 attribution, and MIT license are packaged together. This is a contextual way to
 reach CSRBT's existing browser tools, not a new crop model or a replacement for
 the farm's saved plans.
 
-The bundle includes 41 HTML pages so their internal navigation works offline.
+The bundle includes all 41 upstream HTML pages plus a searchable FlowersForever library index. Select **Browse all farm tools** in Field science to reach every page directly, including specialist tools and supporting guides.
 [PROVENANCE.txt](../src/main/resources/csrbt-field-kit/PROVENANCE.txt) records
 the commit, source selection, checksums, and the one repaired relative link in
 an internal reference page; the curated instrument pages are otherwise copied
 from that commit.
 
-The bundled [license](https://github.com/RicheyWorks/CSRBT/blob/f4c9a25c287ac98b96efb38b99a9d95b281434de/LICENSE)
+The bundled [license](https://github.com/RicheyWorks/CSRBT/blob/5990b9c21e419f5836c9f0a22f15d993403557a3/LICENSE)
 covers CSRBT's code and documentation. Soil Recipes also names and links the
 growers whose published recipes it describes; the license is not a claim that
 CSRBT originated those recipes.
@@ -153,22 +153,22 @@ FlowersForever tab adds farm-specific discovery and a local-browser launcher.
 
 | Card | CSRBT source and meaning | Boundary to keep visible |
 |---|---|---|
-| Soil Recipes | [Grower's Soil Recipes](https://github.com/RicheyWorks/CSRBT/blob/f4c9a25c287ac98b96efb38b99a9d95b281434de/docs/soil-recipes.html) scales four separately sourced grower mixes. [Subcool’s original Super Soil article](https://hightimes.com/news/subcools-super-soil-step-by-step/) describes a cannabis container mix. | Subcool is the grower's name, not a CSRBT product. Keep the author's source, original units and ranges, and the distinction between a concentrate and plain base soil. The page does not calculate NPK, C:N, or yield from a published recipe. |
-| Soil Bench | [Soil Bench](https://github.com/RicheyWorks/CSRBT/blob/f4c9a25c287ac98b96efb38b99a9d95b281434de/docs/soil-bench.html) covers compost logs, dry-mass C:N, mix parts, and texture by feel. | Compost time/temperature criteria are not proof of maturity or crop suitability. Mix characteristics are ordinal ranks, not lab measurements. |
-| Farm Scout | [Farm Scout](https://github.com/RicheyWorks/CSRBT/blob/f4c9a25c287ac98b96efb38b99a9d95b281434de/docs/farm-scout.html) covers pest counts, pollinator counts, germination tests, and plant-family rotation checks. | Its threshold is chosen by the user; do not turn its comparison into a universal treatment instruction. |
-| Greenhouse Monitor | [Greenhouse Monitor](https://github.com/RicheyWorks/CSRBT/blob/f4c9a25c287ac98b96efb38b99a9d95b281434de/docs/greenhouse.html) reads environment, light, and energy logs. | Leaf VPD depends on the leaf-temperature assumption; DLI from lux needs an explicit fixture factor. Run comparisons are observational. |
-| Breeding Bench | [Breeding Bench](https://github.com/RicheyWorks/CSRBT/blob/f4c9a25c287ac98b96efb38b99a9d95b281434de/docs/breeding-bench.html) covers population, isolation, trials, and seed germination. | Its crop picker does not include cannabis; generic analysis can still be explored, but do not imply cannabis-specific population or isolation guidance. Most isolation distances are not supplied; planning notes are not seed certification. |
-| Pheno Tracker | [Pheno Tracker](https://github.com/RicheyWorks/CSRBT/blob/f4c9a25c287ac98b96efb38b99a9d95b281434de/docs/pheno-tracker.html) scores user-defined traits and records selection runs. | Trait weights and scores are the grower's choices, not measured genetic performance. |
-| Relevé | [Relevé](https://github.com/RicheyWorks/CSRBT/blob/f4c9a25c287ac98b96efb38b99a9d95b281434de/docs/releve.html) records vegetation plots and botanical vouchers. | Its plot observations do not create crop plans, seed lots, or nursery inventory. |
-| Collection Sheet; Fungal Characters | [Collection Sheet](https://github.com/RicheyWorks/CSRBT/blob/f4c9a25c287ac98b96efb38b99a9d95b281434de/docs/collection-sheet.html) and [Fungal Characters](https://github.com/RicheyWorks/CSRBT/blob/f4c9a25c287ac98b96efb38b99a9d95b281434de/docs/fungal-characters.html) support wild specimen descriptions. | Neither says whether a fungus is edible. They are separate from cultivated mushroom batches. |
-| Ethogram | [Ethogram](https://github.com/RicheyWorks/CSRBT/blob/f4c9a25c287ac98b96efb38b99a9d95b281434de/docs/ethogram.html) structures observed animal states and events. | It does not diagnose animal health or write herd, egg, or milk records. |
-| CP Bench | [CP Bench](https://github.com/RicheyWorks/CSRBT/blob/f4c9a25c287ac98b96efb38b99a9d95b281434de/docs/cp-bench.html) handles carnivorous-plant water, media, plant, and dormancy logs. | Only relevant to a nursery growing those plants; its nutrient-free media guidance is not a general nursery rule. |
-| Food Web Builder | [Food Web Builder](https://github.com/RicheyWorks/CSRBT/blob/f4c9a25c287ac98b96efb38b99a9d95b281434de/docs/food-web.html) explores feeding links and simulated removals. | It is an ecology model, not aquaculture feed management or water-quality testing. |
+| Soil Recipes | [Grower's Soil Recipes](https://github.com/RicheyWorks/CSRBT/blob/5990b9c21e419f5836c9f0a22f15d993403557a3/docs/soil-recipes.html) scales four separately sourced grower mixes. [Subcool’s original Super Soil article](https://hightimes.com/news/subcools-super-soil-step-by-step/) describes a cannabis container mix. | Subcool is the grower's name, not a CSRBT product. Keep the author's source, original units and ranges, and the distinction between a concentrate and plain base soil. The page does not calculate NPK, C:N, or yield from a published recipe. |
+| Soil Bench | [Soil Bench](https://github.com/RicheyWorks/CSRBT/blob/5990b9c21e419f5836c9f0a22f15d993403557a3/docs/soil-bench.html) covers compost logs, dry-mass C:N, mix parts, and texture by feel. | Compost time/temperature criteria are not proof of maturity or crop suitability. Mix characteristics are ordinal ranks, not lab measurements. |
+| Farm Scout | [Farm Scout](https://github.com/RicheyWorks/CSRBT/blob/5990b9c21e419f5836c9f0a22f15d993403557a3/docs/farm-scout.html) covers pest counts, pollinator counts, germination tests, and plant-family rotation checks. | Its threshold is chosen by the user; do not turn its comparison into a universal treatment instruction. |
+| Greenhouse Monitor | [Greenhouse Monitor](https://github.com/RicheyWorks/CSRBT/blob/5990b9c21e419f5836c9f0a22f15d993403557a3/docs/greenhouse.html) reads environment, light, and energy logs. | Leaf VPD depends on the leaf-temperature assumption; DLI from lux needs an explicit fixture factor. Run comparisons are observational. |
+| Breeding Bench | [Breeding Bench](https://github.com/RicheyWorks/CSRBT/blob/5990b9c21e419f5836c9f0a22f15d993403557a3/docs/breeding-bench.html) covers population, isolation, trials, and seed germination. | Its crop picker does not include cannabis; generic analysis can still be explored, but do not imply cannabis-specific population or isolation guidance. Most isolation distances are not supplied; planning notes are not seed certification. |
+| Pheno Tracker | [Pheno Tracker](https://github.com/RicheyWorks/CSRBT/blob/5990b9c21e419f5836c9f0a22f15d993403557a3/docs/pheno-tracker.html) scores user-defined traits and records selection runs. | Trait weights and scores are the grower's choices, not measured genetic performance. |
+| Relevé | [Relevé](https://github.com/RicheyWorks/CSRBT/blob/5990b9c21e419f5836c9f0a22f15d993403557a3/docs/releve.html) records vegetation plots and botanical vouchers. | Its plot observations do not create crop plans, seed lots, or nursery inventory. |
+| Collection Sheet; Fungal Characters | [Collection Sheet](https://github.com/RicheyWorks/CSRBT/blob/5990b9c21e419f5836c9f0a22f15d993403557a3/docs/collection-sheet.html) and [Fungal Characters](https://github.com/RicheyWorks/CSRBT/blob/5990b9c21e419f5836c9f0a22f15d993403557a3/docs/fungal-characters.html) support wild specimen descriptions. | Neither says whether a fungus is edible. They are separate from cultivated mushroom batches. |
+| Ethogram | [Ethogram](https://github.com/RicheyWorks/CSRBT/blob/5990b9c21e419f5836c9f0a22f15d993403557a3/docs/ethogram.html) structures observed animal states and events. | It does not diagnose animal health or write herd, egg, or milk records. |
+| CP Bench | [CP Bench](https://github.com/RicheyWorks/CSRBT/blob/5990b9c21e419f5836c9f0a22f15d993403557a3/docs/cp-bench.html) handles carnivorous-plant water, media, plant, and dormancy logs. | Only relevant to a nursery growing those plants; its nutrient-free media guidance is not a general nursery rule. |
+| Food Web Builder | [Food Web Builder](https://github.com/RicheyWorks/CSRBT/blob/5990b9c21e419f5836c9f0a22f15d993403557a3/docs/food-web.html) explores feeding links and simulated removals. | It is an ecology model, not aquaculture feed management or water-quality testing. |
 
-CSRBT's [soil-recipe decision record](https://github.com/RicheyWorks/CSRBT/blob/f4c9a25c287ac98b96efb38b99a9d95b281434de/docs/ADR-042-grower-soil-recipes-2026-08-26.md)
+CSRBT's [soil-recipe decision record](https://github.com/RicheyWorks/CSRBT/blob/5990b9c21e419f5836c9f0a22f15d993403557a3/docs/ADR-042-grower-soil-recipes-2026-08-26.md)
 explains why recipe amounts are left in their source units, published ranges
 stay ranges, and different recipes are not normalized to an invented common
-batch size. Its [evidence rule](https://github.com/RicheyWorks/CSRBT/blob/f4c9a25c287ac98b96efb38b99a9d95b281434de/docs/ADR-031-entry-layer-and-suites-2026-08-24.md)
+batch size. Its [evidence rule](https://github.com/RicheyWorks/CSRBT/blob/5990b9c21e419f5836c9f0a22f15d993403557a3/docs/ADR-031-entry-layer-and-suites-2026-08-24.md)
 distinguishes a sourced result, a labeled convention, and a result the kit
 refuses to claim. Those source boundaries remain part of this port.
 
@@ -178,3 +178,7 @@ For the four recipe cards, CSRBT links to [Subcool in *High Times*](https://high
 and [BuildASoil's own living-soil recipe](https://buildasoil.com/blogs/news/living-soil-ingredients-and-recipe).
 The Rev and Coot links are references used by CSRBT, not claims that those
 pages are the growers' original publications.
+
+## Completeness audit and live data
+
+The [October 10 audit](CSRBT_COMPLETENESS_AUDIT_20261010.md) inventories every upstream page and separately identifies Java engines and integration gaps. The [farm readings contract](FARM_READINGS.md) describes the first persistent data intake boundary. Browser-tool exports and incoming sensor readings remain distinct records.

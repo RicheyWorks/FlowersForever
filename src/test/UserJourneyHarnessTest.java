@@ -568,10 +568,10 @@ class UserJourneyHarnessTest {
         Path export = tempDir.resolve("filtered-harvest.csv");
         Files.writeString(export, "keep existing harvest export", StandardCharsets.UTF_8);
         SwingFileHarness files = new SwingFileHarness()
-                .cancelSave("Export filtered harvest view to CSV", "harvest_filtered.csv")
-                .saveAs("Export filtered harvest view to CSV", "harvest_filtered.csv",
+                .cancelSave("Save the shown harvest as a spreadsheet (CSV)", "harvest_filtered.csv")
+                .saveAs("Save the shown harvest as a spreadsheet (CSV)", "harvest_filtered.csv",
                         export.toFile())
-                .saveAs("Export filtered harvest view to CSV", "harvest_filtered.csv",
+                .saveAs("Save the shown harvest as a spreadsheet (CSV)", "harvest_filtered.csv",
                         export.toFile());
         SwingDialogHarness dialogs = new SwingDialogHarness()
                 .confirmForm("Replace existing file", false, form -> form
@@ -609,7 +609,7 @@ class UserJourneyHarnessTest {
                 .type("Filter by crop", "rose")
                 .click("Apply filters")
                 .awaitTableRows("harvest.history.table", 1)
-                .select("Harvest reports and exports", "Export filtered CSV")
+                .select("Harvest reports and exports", "Save shown harvest (CSV)")
                 .click("Create report");
         assertThat(Files.readString(export, StandardCharsets.UTF_8))
                 .isEqualTo("keep existing harvest export");
@@ -619,7 +619,7 @@ class UserJourneyHarnessTest {
                 .isEqualTo("keep existing harvest export");
 
         user.click("Create report")
-                .awaitText("Harvest CSV saved · 1 visible rows");
+                .awaitText("Harvest spreadsheet saved · 1 visible rows");
         assertThat(Files.readString(export, StandardCharsets.UTF_8))
                 .isEqualTo("crop,quantity\nNootka Rose,24.0\n");
 
@@ -1541,8 +1541,8 @@ class UserJourneyHarnessTest {
         Path export = tempDir.resolve("filtered-inventory.csv");
         SwingDialogHarness dialogs = new SwingDialogHarness();
         SwingFileHarness files = new SwingFileHarness()
-                .cancelSave("Export Visible Rows to CSV", "inventory_visible.csv")
-                .saveAs("Export Visible Rows to CSV", "inventory_visible.csv", export.toFile());
+                .cancelSave("Save this stock list as a spreadsheet (CSV)", "inventory_visible.csv")
+                .saveAs("Save this stock list as a spreadsheet (CSV)", "inventory_visible.csv", export.toFile());
         HarnessHost host = new HarnessHost();
         InventoryTab tab = new InventoryTab(inventory, host, dialogs, files);
         SwingUserHarness user = SwingUserHarness.on(build(tab));
@@ -1550,14 +1550,14 @@ class UserJourneyHarnessTest {
 
         user.awaitTableRows("inventory.table", 1)
                 .type("Inventory search", "Nootka")
-                .click("Export visible CSV…")
+                .click("Save spreadsheet (CSV)…")
                 .awaitText("Inventory export cancelled · no file changed");
         assertThat(export).doesNotExist();
         assertThat(host.lastStatus).isEqualTo(
                 "Inventory export cancelled. No file was changed.");
 
-        user.click("Export visible CSV…")
-                .awaitText("Inventory CSV saved · 1 visible rows");
+        user.click("Save spreadsheet (CSV)…")
+                .awaitText("Stock spreadsheet saved · 1 visible rows");
         assertThat(Files.readString(export, StandardCharsets.UTF_8))
                 .contains("Name,Category,Price,Unit,Cost,Quantity,Notes")
                 .contains("Nootka Rose,Flowers/Plants,4.50,Per Stem,1.10,42,Field grown");
@@ -1627,12 +1627,12 @@ class UserJourneyHarnessTest {
         SwingUserHarness user = SwingUserHarness.on(build(tab));
         initialize(tab);
 
-        user.awaitButtonEnabled("Export CSV…", true)
-                .click("Export CSV…")
-                .awaitText("CSV not saved · exports ready");
+        user.awaitButtonEnabled("Save a spreadsheet (CSV)…", true)
+                .click("Save a spreadsheet (CSV)…")
+                .awaitText("Spreadsheet not saved · try saving again");
 
         assertThat(user.text("activity.exportStatus"))
-                .isEqualTo("CSV not saved · exports ready");
+                .isEqualTo("Spreadsheet not saved · try saving again");
         verify(history, never()).exportToCsv(anyString(), anyList());
         files.assertComplete();
         dialogs.assertComplete();
@@ -1749,23 +1749,23 @@ class UserJourneyHarnessTest {
                         .expectText("Replace “existing-inventory.csv”?")
                         .expectText("overwritten only if you continue"));
         SwingFileHarness files = new SwingFileHarness()
-                .saveAs("Export Visible Rows to CSV", "inventory_visible.csv", export.toFile())
-                .saveAs("Export Visible Rows to CSV", "inventory_visible.csv", export.toFile());
+                .saveAs("Save this stock list as a spreadsheet (CSV)", "inventory_visible.csv", export.toFile())
+                .saveAs("Save this stock list as a spreadsheet (CSV)", "inventory_visible.csv", export.toFile());
         HarnessHost host = new HarnessHost();
         InventoryTab tab = new InventoryTab(inventory, host, dialogs, files);
         SwingUserHarness user = SwingUserHarness.on(build(tab));
         initialize(tab);
 
         user.awaitTableRows("inventory.table", 1)
-                .click("Export visible CSV…")
+                .click("Save spreadsheet (CSV)…")
                 .awaitText("Inventory export not saved · existing file kept");
         assertThat(Files.readString(export, StandardCharsets.UTF_8))
                 .isEqualTo("keep this file");
         assertThat(host.lastStatus).isEqualTo(
                 "Inventory export not saved. Existing file kept: existing-inventory.csv");
 
-        user.click("Export visible CSV…")
-                .awaitText("Inventory CSV saved · 1 visible rows");
+        user.click("Save spreadsheet (CSV)…")
+                .awaitText("Stock spreadsheet saved · 1 visible rows");
         assertThat(Files.readString(export, StandardCharsets.UTF_8))
                 .startsWith("Name,Category,Price,Unit,Cost,Quantity,Notes")
                 .contains("Nootka Rose");
@@ -2641,7 +2641,7 @@ class UserJourneyHarnessTest {
         assertThat(inventoryUser.isButtonEnabled("Record stock count…")).isFalse();
         assertThat(inventoryUser.isButtonEnabled("Edit selected")).isFalse();
         assertThat(inventoryUser.isButtonEnabled("Low-stock reorder…")).isTrue();
-        assertThat(inventoryUser.isButtonEnabled("Export visible CSV…")).isTrue();
+        assertThat(inventoryUser.isButtonEnabled("Save spreadsheet (CSV)…")).isTrue();
 
         CustomerService customers = mock(CustomerService.class);
         OrderService orders = mock(OrderService.class);
@@ -2729,7 +2729,7 @@ class UserJourneyHarnessTest {
         SyncHistoryTab handTab = new SyncHistoryTab(history, handHost);
         SwingUserHarness hand = SwingUserHarness.on(build(handTab));
         assertThat(hand.isButtonEnabled("Clear history…")).isFalse();
-        assertThat(hand.isButtonEnabled("Export CSV…")).isTrue();
+        assertThat(hand.isButtonEnabled("Save a spreadsheet (CSV)…")).isTrue();
         hand.awaitText("VIEWER / HAND · read and export only");
 
         HarnessHost ownerHost = new HarnessHost();
@@ -2800,7 +2800,7 @@ class UserJourneyHarnessTest {
         assertThat(user.isButtonEnabled("Record stock count…")).isFalse();
         assertThat(user.isButtonEnabled("Edit selected")).isFalse();
         assertThat(user.isButtonEnabled("Delete selected")).isFalse();
-        assertThat(user.isButtonEnabled("Export visible CSV…")).isFalse();
+        assertThat(user.isButtonEnabled("Save spreadsheet (CSV)…")).isFalse();
 
         items.add(item(901L, "First Farm Bouquet", 8));
         user.click("Refresh")

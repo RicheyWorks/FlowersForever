@@ -73,7 +73,7 @@ public class DesktopFloristExportController {
                         + sheet.weekStart() + "–" + sheet.weekEnd()),
                 BorderLayout.SOUTH);
 
-        Object[] options = {"Copy for florists", "Save CSV…", "Open email draft…", "Close"};
+        Object[] options = {"Copy for florists", "Save a spreadsheet (CSV)…", "Open email draft…", "Close"};
         int choice = host.dialogs().showOption(host.frame(), panel, FloristAvailabilityExport.TITLE,
                 JOptionPane.DEFAULT_OPTION, JOptionPane.PLAIN_MESSAGE, null, options, options[0]);
         if (choice == 0) {
@@ -92,7 +92,7 @@ public class DesktopFloristExportController {
 
     private void saveCsv(FloristAvailabilityExport.Sheet sheet) {
         String suggested = FloristAvailabilityExport.suggestedCsvFileName(sheet);
-        host.files().chooseSave(host.frame(), "Save florist availability CSV",
+        host.files().chooseSave(host.frame(), "Save your florist stock list as a spreadsheet (CSV)",
                         new java.io.File(suggested))
                 .ifPresent(file -> writeCsv(sheet, file.toPath()));
     }
@@ -117,7 +117,7 @@ public class DesktopFloristExportController {
             host.status().accept(FloristAvailabilityExport.statusSaved(label));
         } catch (IOException failed) {
             host.dialogs().showMessage(host.frame(),
-                    "Could not save the CSV: " + failed.getMessage(),
+                    "Could not save the spreadsheet: " + failed.getMessage(),
                     FloristAvailabilityExport.TITLE, JOptionPane.WARNING_MESSAGE);
         }
     }

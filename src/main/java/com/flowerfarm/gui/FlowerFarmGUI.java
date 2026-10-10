@@ -162,6 +162,7 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
     private PumpkinPatchTab pumpkinPatchTab;
     private KnowledgeLogTab knowledgeTab;
     private FieldScienceTab fieldScienceTab;
+    private EquipmentReadingsTab equipmentReadingsTab;
     private EventServicesTab eventServicesTab;
 
     private DesktopUpdateController updateController;
@@ -1254,6 +1255,11 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
         tabCatalog.setFieldScienceExportService(service);
     }
 
+    @Autowired
+    void configureFarmReadingService(com.flowerfarm.telemetry.FarmReadingService service) {
+        tabCatalog.setFarmReadingService(service);
+    }
+
     // ── ApplicationRunner ─────────────────────────────────────────────────────
 
     @Override
@@ -1459,6 +1465,9 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
         pumpkinPatchTab = catalog.pumpkinPatches();
         knowledgeTab = catalog.knowledge();
         fieldScienceTab = catalog.fieldScience();
+        equipmentReadingsTab = catalog.tabs().stream()
+                .filter(EquipmentReadingsTab.class::isInstance)
+                .map(EquipmentReadingsTab.class::cast).findFirst().orElse(null);
         eventServicesTab = catalog.eventServices();
         tabs.clear();
         tabs.addAll(catalog.tabs());
@@ -1499,16 +1508,16 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
         boolean integrationsExpanded = prefs.getBoolean(PREF_INTEGRATIONS, false);
         connectorScroll.setVisible(integrationsExpanded);
         JToggleButton integrationsToggle = new JToggleButton(
-                integrationsExpanded ? "Hide integrations" : "Show integrations",
+                integrationsExpanded ? "Hide farm connections" : "Show farm connections",
                 integrationsExpanded);
         integrationsToggle.setToolTipText(
-                "Open connector actions for CSV, commerce, sheets, and farm systems.");
-        integrationsToggle.getAccessibleContext().setAccessibleName("Toggle integrations tray");
+                "Bring in or share records with spreadsheets, sales programs, and other farm programs.");
+        integrationsToggle.getAccessibleContext().setAccessibleName("Show or hide farm connections");
         integrationsToggle.getAccessibleContext().setAccessibleDescription(
                 "Show or hide import, export, and synchronization actions.");
         JPanel integrationHeader = FarmUi.toolbar(
                 integrationsToggle,
-                FarmUi.mutedLabel("CSV · Excel · Shopify · Square · Sheets · Airtable · farm systems"));
+                FarmUi.mutedLabel("Spreadsheets · sales programs · other farm programs"));
         integrationHeader.setBorder(BorderFactory.createEmptyBorder(6, 10, 6, 10));
         JPanel integrations = new JPanel(new BorderLayout());
         integrations.add(integrationHeader, BorderLayout.NORTH);
@@ -1516,7 +1525,7 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
         integrationsToggle.addActionListener(e -> {
             boolean expanded = integrationsToggle.isSelected();
             connectorScroll.setVisible(expanded);
-            integrationsToggle.setText(expanded ? "Hide integrations" : "Show integrations");
+            integrationsToggle.setText(expanded ? "Hide farm connections" : "Show farm connections");
             prefs.putBoolean(PREF_INTEGRATIONS, expanded);
             integrations.revalidate();
             integrations.repaint();
@@ -1592,17 +1601,17 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
                 KeyEvent.VK_F, InputEvent.CTRL_DOWN_MASK | InputEvent.SHIFT_DOWN_MASK));
         fileMenu.add(chooseFarmType);
         fileMenu.addSeparator();
-        fileMenu.add(writeMenuItem("Import from spreadsheet…", KeyEvent.VK_I,
-                "Bring products from a CSV or Excel spreadsheet you already use.",
+        fileMenu.add(writeMenuItem("Bring in a spreadsheet…", KeyEvent.VK_I,
+                "Bring in a product list from a spreadsheet you already use (CSV or Excel).",
                 e -> importFromSpreadsheet()));
-        fileMenu.add(writeMenuItem("Import CSV…", KeyEvent.VK_C,
-                "Import products from a CSV spreadsheet.",
+        fileMenu.add(writeMenuItem("Bring in a spreadsheet (CSV)…", KeyEvent.VK_C,
+                "Bring in your product list from a simple spreadsheet (CSV).",
                 e -> runImportConnector("csv", "CSV")));
         fileMenu.add(writeMenuItem("Import Excel…", KeyEvent.VK_E,
                 "Import products from an Excel spreadsheet.",
                 e -> runImportConnector("excel", "Excel")));
-        fileMenu.add(menuItem("Export All to CSV…", KeyEvent.VK_A,
-                "Save all current inventory records to a CSV file.",
+        fileMenu.add(menuItem("Save all inventory as a spreadsheet (CSV)…", KeyEvent.VK_A,
+                "Save your complete stock list as a spreadsheet (CSV).",
                 e -> exportAllToCsv()));
         if (enabled.contains(FarmWorkspace.ROSE_AND_EVENTS)
                 || enabled.contains(FarmWorkspace.WILDFLOWER_FARM)
@@ -2052,6 +2061,7 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
                 pumpkinPatchTab == null ? null : pumpkinPatchTab.applicationExitWarning(),
                 knowledgeTab == null ? null : knowledgeTab.applicationExitWarning(),
                 fieldScienceTab == null ? null : fieldScienceTab.applicationExitWarning(),
+                equipmentReadingsTab == null ? null : equipmentReadingsTab.applicationExitWarning(),
                 eventServicesTab == null ? null : eventServicesTab.applicationExitWarning());
     }
 
@@ -2177,6 +2187,7 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
                 pumpkinPatchTab == null ? null : pumpkinPatchTab.applicationExitWarning(),
                 knowledgeTab == null ? null : knowledgeTab.applicationExitWarning(),
                 fieldScienceTab == null ? null : fieldScienceTab.applicationExitWarning(),
+                equipmentReadingsTab == null ? null : equipmentReadingsTab.applicationExitWarning(),
                 eventServicesTab == null ? null : eventServicesTab.applicationExitWarning());
         if (warning != null) {
             boolean savePending = (productionStudioTab != null && productionStudioTab.hasPendingSave())
@@ -2210,6 +2221,7 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
                     || (seasonPlannerTab != null && seasonPlannerTab.hasPendingSave())
                     || (knowledgeTab != null && knowledgeTab.hasPendingSave())
                     || (fieldScienceTab != null && fieldScienceTab.hasPendingSave())
+                    || (equipmentReadingsTab != null && equipmentReadingsTab.hasPendingSave())
                     || (crmTab != null && crmTab.hasPendingSave())
                     || (marketDayTab != null && marketDayTab.hasPendingSave());
             Object[] options = {"Keep working", savePending ? "Exit before result"
@@ -2376,8 +2388,8 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
         connectorGrid.setBorder(BorderFactory.createEmptyBorder(8, 10, 8, 10));
 
         // Local files
-        connectorGrid.add(connButton("Import CSV",     () -> runImportConnector("csv", "CSV"), true));
-        connectorGrid.add(connButton("Export CSV",     this::exportAllToCsv, false));
+        connectorGrid.add(connButton("Bring in a spreadsheet (CSV)",     () -> runImportConnector("csv", "CSV"), true));
+        connectorGrid.add(connButton("Save a spreadsheet (CSV)",     this::exportAllToCsv, false));
         connectorGrid.add(connButton("Import Excel",   () -> runImportConnector("excel", "Excel"), true));
         connectorGrid.add(connButton("Export Excel",   () -> runExportConnector("excel", "Excel"), false));
         // Retail / POS
@@ -2447,7 +2459,7 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
 
     private void exportAllToCsv() {
         // Export is read of local data — allowed for VIEWER (accounting / backup)
-        var selected = fileChooser.chooseSave(frame, "Export Full Inventory to CSV",
+        var selected = fileChooser.chooseSave(frame, "Save your full stock list as a spreadsheet (CSV)",
                 new File("exported_inventory.csv"));
         if (selected.isEmpty()) {
             setStatus("Export cancelled. No file was changed.");
@@ -2667,12 +2679,12 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
 
     @Override
     public void importFromSpreadsheet() {
-        Object[] options = {"CSV file…", "Excel workbook…", "Cancel"};
+        Object[] options = {"Simple spreadsheet (CSV)…", "Excel workbook…", "Cancel"};
         int choice = dialogs.showOption(frame,
                 "Bring products from a spreadsheet into Inventory.\n\n"
-                        + "CSV works for simple lists. Excel works for .xlsx workbooks.\n"
-                        + "You can also use File > Import CSV… or Import Excel… directly.",
-                "Import from spreadsheet",
+                        + "Choose a simple spreadsheet (CSV) or an Excel workbook (.xlsx).\n"
+                        + "You can also use File > Bring in a spreadsheet (CSV)… or Import Excel… directly.",
+                "Bring in a spreadsheet",
                 javax.swing.JOptionPane.YES_NO_CANCEL_OPTION,
                 javax.swing.JOptionPane.QUESTION_MESSAGE,
                 null, options, options[0]);

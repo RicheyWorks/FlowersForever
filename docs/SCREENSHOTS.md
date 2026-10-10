@@ -79,15 +79,43 @@ Explore actual app tabs and entry forms with sample records. Select any image to
   </tr>
   <tr>
     <td width="50%" valign="top">
-      <a href="images/app-activity-history.png"><img src="images/app-activity-history.png" width="100%" alt="Activity history: Review completed imports and exports and operations that need attention."></a><br>
-      <strong>Activity history</strong><br>Review completed imports and exports and operations that need attention.
+      <a href="images/app-activity-history.png"><img src="images/app-activity-history.png" width="100%" alt="Activity history: See which records were brought in or shared, and which jobs need attention."></a><br>
+      <strong>Activity history</strong><br>See which records were brought in or shared, and which jobs need attention.
     </td>
     <td width="50%" valign="top">
-      <a href="images/app-field-science.png"><img src="images/app-field-science.png" width="100%" alt="Field science: Open Soil Recipes, Soil Bench, and other offline tools; review exports before saving."></a><br>
-      <strong>Field science</strong><br>Open Soil Recipes, Soil Bench, and other offline tools; review exports before saving.
+      <a href="images/app-field-science.png"><img src="images/app-field-science.png" width="100%" alt="Field science: Explore soil mixes, greenhouse conditions, and field tools; review your results before saving a copy."></a><br>
+      <strong>Field science</strong><br>Explore soil mixes, greenhouse conditions, and field tools; review your results before saving a copy.
     </td>
   </tr>
 </table>
+
+## Equipment readings
+
+Record soil, water, and greenhouse measurements with familiar equipment names and explicit units. Review an observation before saving, or choose an equipment spreadsheet and review its checked rows before saving them together. This picture uses isolated sample records, including a missing value and a reading that needs checking. Automatic pairing and pump controls remain future work.
+
+The **Latest reported measurements** view chooses measurements by when they were taken and shows their age at refresh. A delayed older upload stays in the full history; it does not replace a newer observation. Missing and faulty reports remain visible, and sources, units, and areas are kept separate.
+
+**Save readings spreadsheet…** copies the full saved history across all pages and sources after a review of the count and destination. It preserves unfinished work. The readable copy is for reference and sharing; a full farm backup is used for restoration.
+
+[![Equipment readings with manual entry, saved sample observations, and a button to save the full history as a spreadsheet copy.](images/app-equipment-readings.png)](images/app-equipment-readings.png)
+
+[![Latest reported measurements with measurement ages, soil moisture, and an explicit missing tank reading, using isolated sample records.](images/app-equipment-latest.png)](images/app-equipment-latest.png)
+
+[![Equipment spreadsheet review with three checked sample observations, including a missing value.](images/app-equipment-spreadsheet-review.png)](images/app-equipment-spreadsheet-review.png)
+
+[![Saved-readings spreadsheet copy review showing the count, snapshot, destination, and readable-copy scope with sample records.](images/app-equipment-export-review.png)](images/app-equipment-export-review.png)
+
+**See changes…** follows one selected measurement in measured-time order. Measured points, needs-checking squares, and missing/error gaps accompany an exact table. It keeps sources, equipment, areas, and units separate and displays up to the latest 200 observations. These pictures render actual Swing components with isolated sample records; they are not a claim of a connected sensor or live monitoring.
+
+[![Selected soil moisture history showing measured points, a needs-checking square, missing and equipment-error gaps, and exact saved observations.](images/app-equipment-changes.png)](images/app-equipment-changes.png)
+
+[![The same soil moisture history at a narrower width, with wrapped explanations and horizontally scrollable exact readings.](images/app-equipment-changes-compact.png)](images/app-equipment-changes-compact.png)
+
+**Show this equipment** narrows saved history or latest measurements to the selected equipment and its source. **Show all equipment** returns to the whole farm. Measurements from different growing areas and units stay distinct, and unfinished entries remain intact. Familiar source labels distinguish **Entered on this farm** from **Equipment spreadsheet**.
+
+[![Saved soil-probe history focused on one source, with a clear equipment caption and Show all equipment control.](images/app-equipment-focused.png)](images/app-equipment-focused.png)
+
+[![The same filtered history on a smaller window, scrolled down to show equipment controls and the source caption.](images/app-equipment-focused-compact.png)](images/app-equipment-focused-compact.png)
 
 ## Plant and flower references
 
@@ -246,7 +274,9 @@ The optional phone screen connects to a running, authenticated farm instance.
 <details>
 <summary>Screenshot sources and refresh notes</summary>
 
-These images show real application components rendered with demo fixtures; they are not concept mockups. Desktop window decorations are omitted. New gallery captures were reviewed on October 10, 2026, using the coding campaign source at `88feb249f38ed2e183221e423efb706109a601eb`. Existing screenshots remain representative of their documented workflows.
+These images show real application components rendered with demo fixtures; they are not concept mockups. Desktop window decorations are omitted. New gallery captures were reviewed on October 10, 2026, using the coding campaign source at `88feb249f38ed2e183221e423efb706109a601eb`. Existing screenshots remain representative of their documented workflows. The Inventory, Activity history, and Field science pictures were refreshed again on October 10 from the farmer-language follow-up on `codex/farm-instruments`; they show the clearer spreadsheet and results labels and the collapsed tool credits.
+
+The Equipment readings picture was added on October 10 from the actual desktop component at 1360 × 700, using a separate in-memory H2 database with three sample observations. Its form was also checked at an 860-pixel content width, representative of the application's smallest supported laptop window beside its navigation. The complete time field and save actions remain visible; the history can scroll horizontally to show all columns.
 
 The current UI rendering fixtures are in `src/test/DataEntryVisualContractTest.java`, `ProductionStudioVisualContractTest.java`, `FieldScienceTabTest.java`, `NotebookKeyboardReachabilityTest.java`, and the farm notebook tests. They write previews under `target/ui-previews`. Field science uses a 1180 × 1000 viewport here so Soil Recipes and Soil Bench remain readable. Inspect refreshed previews before copying them into `docs/images`; use sample data and retain the tab names and scope in captions.
 

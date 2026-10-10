@@ -29,6 +29,11 @@ public interface FarmFileChooser {
         return Optional.empty();
     }
 
+    /** Picks a farmer's equipment spreadsheet; cancellation never imports anything. */
+    default Optional<File> chooseEquipmentSpreadsheet(Component parent, String title) {
+        return Optional.empty();
+    }
+
     /** Uses the normal installed-app Swing file chooser. */
     static FarmFileChooser swing() {
         return SwingFileChooser.INSTANCE;
@@ -36,6 +41,19 @@ public interface FarmFileChooser {
 
     enum SwingFileChooser implements FarmFileChooser {
         INSTANCE;
+
+        @Override
+        public Optional<File> chooseEquipmentSpreadsheet(Component parent, String title) {
+            JFileChooser chooser = new JFileChooser();
+            chooser.setName("farm.equipmentSpreadsheetChooser");
+            chooser.getAccessibleContext().setAccessibleName("Equipment spreadsheet chooser");
+            chooser.setDialogTitle(title);
+            chooser.setFileSelectionMode(JFileChooser.FILES_ONLY);
+            chooser.setAcceptAllFileFilterUsed(false);
+            chooser.setFileFilter(new FileNameExtensionFilter("Equipment spreadsheet (CSV)", "csv"));
+            return chooser.showOpenDialog(parent) == JFileChooser.APPROVE_OPTION
+                    ? Optional.ofNullable(chooser.getSelectedFile()) : Optional.empty();
+        }
 
         @Override
         public Optional<File> chooseSave(Component parent, String title, File suggestedFile) {

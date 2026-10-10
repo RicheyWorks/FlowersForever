@@ -1274,22 +1274,53 @@ var KEEP = (function(){
   var TRAJECTORY = { levins: 1, logistic: 1, island: 1, exponential: 1, competition: 1, predation: 1 };
   /* Parse one phase value ("<name> <kind> <ops> ...") the way parsePhase does.
      Returns {ph: {...}} or {err: "..."} — bounds are the lint's job. */
+  /* A whole number read the engine's way. Long.parseLong takes any Unicode decimal digit
+     (Character.digit), and the kit reads one that way on purpose (FieldData, eighth pass:
+     one definition of digit), so `phase: a uniform ١٢` is 12 ops to the engine. parseInt
+     reads ASCII only, and the lint called that line a PROBLEM (ADR-278). Folded to ASCII
+     first; a digit outside the BMP is not a digit to Java's char-based Character.digit. */
+  function wholeText(s) {
+    if (!/^[+-]?\p{Nd}+$/u.test(s) || /[\u{10000}-\u{10FFFF}]/u.test(s)) return s;
+    return s.replace(/\p{Nd}/gu, function (ch) {
+      var cp = ch.codePointAt(0), v = 0;
+      while (v < 9 && /\p{Nd}/u.test(String.fromCodePoint(cp - v - 1))) v++;
+      return String(v);
+    });
+  }
   function phaseFrom(val) {
     var p = val.trim().split(/\s+/);
     if (p.length < 3) return { err: "phase needs: <name> <kind> <ops> ..." };
-    var kind = p[1].toLowerCase(), ops = parseInt(p[2], 10);
+    var kind = p[1].toLowerCase(), ops = parseInt(wholeText(p[2]), 10);
     if (isNaN(ops)) return { err: "phase ops must be a whole number, not '" + p[2] + "'" };
     if (kind === "uniform") return { ph: { name: p[0], kind: "uniform", ops: ops } };
     if (kind === "hot") {
       if (p.length < 5) return { err: "hot needs: <ops> <hotSetSize> <hotShare%>" };
       return { ph: { name: p[0], kind: "hot", ops: ops,
-        hotSet: parseInt(p[3], 10), hotShare: parseInt(p[4], 10) } };
+        hotSet: parseInt(wholeText(p[3]), 10), hotShare: parseInt(wholeText(p[4]), 10) } };
     }
     if (kind === "churn") {
       if (p.length < 4) return { err: "churn needs: <ops> <addPercent>" };
-      return { ph: { name: p[0], kind: "churn", ops: ops, addPct: parseInt(p[3], 10) } };
+      return { ph: { name: p[0], kind: "churn", ops: ops, addPct: parseInt(wholeText(p[3]), 10) } };
     }
     return { err: "unknown phase kind '" + p[1] + "'" };
+  }
+  /* A number the engine's way (ADR-279): Double.parseDouble's grammar, then
+     ExperimentSpec.finite and, for a count or a step count, whole. parseFloat read "1,5" as
+     1, "60abc" as 60 and "1e400" as Infinity it then called "not a number"; the engine
+     refuses the first two outright, so the lint does too, and says the engine's sentence
+     for the rest. Returns the problem, or null. */
+  var J_DEC = /^[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?[fFdD]?$/;
+  var J_HEX = /^([+-]?)0[xX]([0-9a-fA-F]*)\.?([0-9a-fA-F]*)[pP]([+-]?\d+)[fFdD]?$/;
+  function numberProblem(raw, what, whole) {
+    var t = raw.replace(/^[\x00-\x20]+|[\x00-\x20]+$/g, ""), v, h;
+    if (/^[+-]?NaN$/.test(t) || /^[+-]?Infinity$/.test(t)) v = NaN;
+    else if (J_DEC.test(t)) v = Number(t.replace(/[fFdD]$/, ""));
+    else if ((h = J_HEX.exec(t)) && (h[2] || h[3]))
+      v = (h[1] === "-" ? -1 : 1) * Number("0x" + h[2] + h[3]) * Math.pow(2, Number(h[4]) - 4 * h[3].length);
+    else return "'" + raw + "' is not a number";
+    if (!isFinite(v)) return what + " must be a finite number, got '" + raw + "'";
+    if (whole && v !== Math.trunc(v)) return what + " must be a whole number, got '" + raw + "'";
+    return null;
   }
   function modelProblem(kind, params) {
     var toks = params.split(" ");
@@ -1298,15 +1329,21 @@ var KEEP = (function(){
       if (toks.length < 2) return "eulerlotka needs >= 2 lx:mx pairs";
       for (var i = 0; i < toks.length; i++) {
         var pair = toks[i].split(":");
-        if (pair.length !== 2 || !isFinite(parseFloat(pair[0])) || !isFinite(parseFloat(pair[1])))
-          return "pairs are lx:mx, got '" + toks[i] + "'";
+        if (pair.length !== 2) return "pairs are lx:mx, got '" + toks[i] + "'";
+        var bad = numberProblem(pair[0], "eulerlotka lx at age " + i, false)
+               || numberProblem(pair[1], "eulerlotka mx at age " + i, false);
+        if (bad) return bad;
       }
       return null;
     }
     var want = MODEL_ARITY[kind];
     if (toks.length !== want) return "model " + kind + " needs " + want + " parameters";
-    for (var j = 0; j < toks.length; j++)
-      if (!isFinite(parseFloat(toks[j]))) return "'" + toks[j] + "' is not a number";
+    for (var j = 0; j < toks.length; j++) {
+      var last = TRAJECTORY[kind] && j === want - 1;
+      var nb = numberProblem(toks[j], "model " + kind + (last ? " steps" : " parameter " + (j + 1)),
+                             last || !TRAJECTORY[kind]);
+      if (nb) return nb;
+    }
     if (TRAJECTORY[kind]) {
       var steps = parseFloat(toks[want - 1]);
       if (steps < 0 || steps > 100000) return "steps out of range [0, 100000]";
@@ -1643,14 +1680,19 @@ var KEEP = (function(){
   }
 
   /* ── pre-flight lint: the same rules ExperimentSpec.parse applies, before the runner sees the file ── */
-  var DIRECTIVE = /^(name|keys|seed|window|phase|factor|model|cross|data|note(\([A-Za-z0-9_-]+\))?|tree|expect):/;
+  /* The engine's own key rule (ADR-278): the text before the first colon, trimmed and
+     lowercased, and a note's target is whatever sits in its parentheses. This list had no
+     `dwc` (ADR-108 gave the engine one), refused `NAME:` and `phase :`, which the engine
+     reads, and refused a note target with a space in it. verify_eco_mirror holds it to the
+     engine: no line the engine accepts is a PROBLEM here. */
+  var DIRECTIVE = /^\s*(name|keys|seed|window|phase|factor|model|cross|data|dwc|tree|expect|note(\([^:]*\))?)\s*:/i;
   var FACTOR_NAMES = ["area", "temperature", "wind", "distance"];
   /* What's checkably wrong with one free-typed directive line (extra-lines box, imports).
      cross:/data:/tree:/note:/expect: get their deep checks at parse or grading time. */
   function extraLineProblem(l) {
     if (l.indexOf(":") < 0) return "'" + l.slice(0, 40) + "' has no directive — reported, never guessed at";
     if (!DIRECTIVE.test(l)) return "unknown directive '" + l.split(":")[0] + "'";
-    var key = l.slice(0, l.indexOf(":")).toLowerCase(), val = l.slice(l.indexOf(":") + 1).trim();
+    var key = l.slice(0, l.indexOf(":")).trim().toLowerCase(), val = l.slice(l.indexOf(":") + 1).trim();
     if (key === "phase") { var r = phaseFrom(val); if (r.err) return r.err; }
     if (key === "model") {
       var t = val.split(/\s+/);
@@ -1661,7 +1703,8 @@ var KEEP = (function(){
       if (f.length !== 2) return "factor needs: <name> <value>";
       if (FACTOR_NAMES.indexOf(f[0].toLowerCase()) < 0)
         return "unknown factor '" + f[0] + "' (area, temperature, wind, distance)";
-      if (!isFinite(parseFloat(f[1]))) return "'" + f[1] + "' is not a number";
+      var fb = numberProblem(f[1], "factor " + f[0], false);
+      if (fb) return fb;
     }
     return null;
   }

@@ -5,7 +5,7 @@ on:
   push:
     branches: [main, codex/recover-unpushed-work]
   pull_request:
-    branches: [main, codex/recover-unpushed-work]
+    branches: [main, "codex/**"]
   schedule:
     - cron: "17 6 * * 1" # weekly Monday sweep
 

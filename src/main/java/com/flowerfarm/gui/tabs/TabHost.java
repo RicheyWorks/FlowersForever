@@ -193,7 +193,7 @@ public interface TabHost {
      * file type choice; others leave a status tip.
      */
     default void importFromSpreadsheet() {
-        setStatus("Use File > Import CSV… or Import Excel… to bring products from a spreadsheet.");
+        setStatus("Use File > Bring in a spreadsheet (CSV)… or Import Excel… to bring products from a spreadsheet.");
     }
 
     /** Switch to Trend Analysis and forecast from weekly harvest history in the background. */

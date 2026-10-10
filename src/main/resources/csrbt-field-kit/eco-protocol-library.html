@@ -282,9 +282,14 @@
       var pre=btn.closest(".protobox").querySelector("pre");
       var text=pre.textContent;
       function done(){ show("Copied — save as a .eco file"); }
+      /* The copy command says whether it copied by what it RETURNS -- false, not a throw,
+         when the browser refuses (no user activation left by the time a rejected clipboard
+         promise gets here, a sandboxed frame). The fallback used to say "Copied" either way
+         (ADR-280); it says so now only when the copy happened. */
       function fallback(){ var ta=document.createElement("textarea"); ta.value=text; ta.style.position="fixed";
         ta.style.opacity="0"; document.body.appendChild(ta); ta.select();
-        try{ document.execCommand("copy"); done(); }catch(e){ show("Select & copy manually"); }
+        var copied=false; try{ copied=document.execCommand("copy"); }catch(e){}
+        if(copied) done(); else show("Select & copy manually");
         document.body.removeChild(ta); }
       try{ if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, fallback);
         else fallback(); }catch(e){ fallback(); }

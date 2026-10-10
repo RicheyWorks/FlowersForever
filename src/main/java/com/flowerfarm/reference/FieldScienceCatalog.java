@@ -50,7 +50,7 @@ public final class FieldScienceCatalog {
                     "CSRBT Farm Scout", TERRESTRIAL_GROWERS),
             tool("greenhouse", "Greenhouse Monitor", "greenhouse.html",
                     "Controlled environments",
-                    "Review logger readings, leaf VPD, light, and energy against the "
+                    "Review temperature, humidity, light, and energy against the "
                             + "conditions and equipment values you enter.",
                     "Use measured conditions and your own targets; this is not "
                             + "an automated climate controller.",

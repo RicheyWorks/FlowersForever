@@ -1,12 +1,11 @@
 CSRBT field-science kit snapshot
-Source: https://github.com/RicheyWorks/CSRBT/tree/f4c9a25c287ac98b96efb38b99a9d95b281434de
-Commit: f4c9a25c287ac98b96efb38b99a9d95b281434de
-Selection: 41 HTML pages from tools/artifact_map.json pages at this commit.
+Source: https://github.com/RicheyWorks/CSRBT/tree/5990b9c21e419f5836c9f0a22f15d993403557a3
+Commit: 5990b9c21e419f5836c9f0a22f15d993403557a3
+Selection: all 41 HTML pages from tools/artifact_map.json pages at this commit.
 HTML, ADR-011, and LICENSE were read from Git objects, not the working tree.
 Offline link patch: tree-proofs.html changes the single upstream link
 href="../README.md">ADR-011 to href="ADR-011-evolution-machine-2026-06-10.md">ADR-011.
-The upstream README does not contain ADR-011; the linked ADR is bundled
-from the same commit so that this reference works offline. No other HTML
-content was changed from the committed source.
+No other upstream HTML content was changed.
+FlowersForever addition: library.html is a local discovery index linking every selected page.
 License: MIT; retain the adjacent LICENSE file with this bundle.
 Checksums: manifest.sha256 lists SHA-256 for every extracted file.

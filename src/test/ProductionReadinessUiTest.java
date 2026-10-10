@@ -109,10 +109,10 @@ class ProductionReadinessUiTest {
                     .isEqualTo(FarmUi.borderColor());
             assertThat(((MatteBorder) connectors.getBorder()).getMatteColor())
                     .isEqualTo(FarmUi.borderColor());
-            JButton importCsv = button(connectors, "Import CSV");
+            JButton importCsv = button(connectors, "Bring in a spreadsheet (CSV)");
             assertThat(importCsv.getToolTipText()).contains("HAND or OWNER");
             assertThat(importCsv.getAccessibleContext().getAccessibleDescription())
-                    .contains("Import CSV", "HAND or OWNER");
+                    .contains("Bring in a spreadsheet (CSV)", "HAND or OWNER");
         } finally {
             FlatLightLaf.setup();
             FarmUi.installThemeDefaults();
@@ -134,7 +134,7 @@ class ProductionReadinessUiTest {
         assertThat(menu.getMenu(4).getMnemonic()).isEqualTo(KeyEvent.VK_H);
         assertThat(menu.getMenu(0).getAccessibleContext().getAccessibleDescription())
                 .contains("Import farm data");
-        assertThat(menuItem(menu, "Import CSV…").getMnemonic()).isEqualTo(KeyEvent.VK_C);
+        assertThat(menuItem(menu, "Bring in a spreadsheet (CSV)…").getMnemonic()).isEqualTo(KeyEvent.VK_C);
         assertThat(menuItem(menu, "Refresh All Tabs").getAccelerator())
                 .isEqualTo(KeyStroke.getKeyStroke(KeyEvent.VK_F5, 0));
         assertThat(menuItem(menu, "Dark Mode").getAccelerator()).isEqualTo(
@@ -207,11 +207,11 @@ class ProductionReadinessUiTest {
         });
 
         SwingMenuHarness.MenuSweep sweep = menu.clickEveryEnabledExcept(
-                "Import from spreadsheet…", "Import CSV…", "Import Excel…", "Exit");
+                "Bring in a spreadsheet…", "Bring in a spreadsheet (CSV)…", "Import Excel…", "Exit");
         assertThat(sweep.intentionallyExcluded())
-                .containsExactly("Import from spreadsheet…", "Import CSV…", "Import Excel…", "Exit");
+                .containsExactly("Bring in a spreadsheet…", "Bring in a spreadsheet (CSV)…", "Import Excel…", "Exit");
         assertThat(sweep.clicked()).contains(
-                "Export All to CSV…", "Share availability with florists…", "Refresh All Tabs", "Dark Mode",
+                "Save all inventory as a spreadsheet (CSV)…", "Share availability with florists…", "Refresh All Tabs", "Dark Mode",
                 "Run Harvest Forecast", "My access", "Start here…", "PNW Plant Guide",
                 "Wedding & Memorial Services", "PNW Rose Growing Guide",
                 "Getting started guide…",
@@ -219,7 +219,7 @@ class ProductionReadinessUiTest {
                 "Today’s reminders…",
                 "About FlowersForever");
         assertThat(files.transcript()).containsExactly(
-                "SAFE CANCEL SAVE Export Full Inventory to CSV · suggested exported_inventory.csv");
+                "SAFE CANCEL SAVE Save your full stock list as a spreadsheet (CSV) · suggested exported_inventory.csv");
         assertThat(dialogs.transcript()).anyMatch(line -> line.contains("My access"));
         assertThat(dialogs.transcript()).anyMatch(line -> line.contains("About"));
         assertThat(dialogs.transcript()).anyMatch(line -> line.contains("Getting started guide"));
@@ -245,13 +245,13 @@ class ProductionReadinessUiTest {
         JPanel south = gui(gate, session, registry, dialogs, files).buildSouthBar();
         SwingUserHarness user = SwingUserHarness.on(south).layoutAt(1400, 180);
 
-        user.setChecked("Toggle integrations tray", true);
+        user.setChecked("Show or hide farm connections", true);
         SwingUserHarness.SurfaceAudit audit = user.auditInteractiveSurface();
         assertThat(audit.defects()).isEmpty();
         assertThat(audit.controls()).filteredOn(control -> "button".equals(control.kind()))
                 .hasSizeGreaterThanOrEqualTo(22)
                 .extracting(SwingUserHarness.Control::selector)
-                .contains("Toggle integrations tray", "Import CSV", "Export CSV",
+                .contains("Show or hide farm connections", "Bring in a spreadsheet (CSV)", "Save a spreadsheet (CSV)",
                         "Sync Shopify", "Import Airtable", "Send Webhook",
                         "Sync Farmbrite", "Sync Floranext");
 
@@ -271,10 +271,10 @@ class ProductionReadinessUiTest {
             SwingUtilities.invokeAndWait(() -> { });
             failures.assertNone();
         }
-        user.setChecked("Toggle integrations tray", false)
-                .setChecked("Toggle integrations tray", true);
+        user.setChecked("Show or hide farm connections", false)
+                .setChecked("Show or hide farm connections", true);
         assertThat(files.transcript()).containsExactly(
-                "SAFE CANCEL SAVE Export Full Inventory to CSV · suggested exported_inventory.csv");
+                "SAFE CANCEL SAVE Save your full stock list as a spreadsheet (CSV) · suggested exported_inventory.csv");
         assertThat(dialogs.transcript().stream()
                 .filter(line -> line.startsWith("SAFE CLOSE MESSAGE")).count()).isEqualTo(20);
     }
@@ -659,7 +659,7 @@ class ProductionReadinessUiTest {
                 (parent, title, suggested) -> Optional.empty());
         JPanel south = gui.buildSouthBar();
 
-        menuItem(gui.buildMenuBar(), "Export All to CSV…").doClick();
+        menuItem(gui.buildMenuBar(), "Save all inventory as a spreadsheet (CSV)…").doClick();
 
         JLabel status = (JLabel) named(south, "farm.statusMessage");
         assertThat(status.getText()).isEqualTo("Export cancelled. No file was changed.");
@@ -680,7 +680,7 @@ class ProductionReadinessUiTest {
                 (parent, title, suggested) -> Optional.of(existing.toFile()));
         JPanel south = gui.buildSouthBar();
 
-        menuItem(gui.buildMenuBar(), "Export All to CSV…").doClick();
+        menuItem(gui.buildMenuBar(), "Save all inventory as a spreadsheet (CSV)…").doClick();
 
         JLabel status = (JLabel) named(south, "farm.statusMessage");
         assertThat(status.getText())
@@ -703,11 +703,11 @@ class ProductionReadinessUiTest {
         JMenuBar menu = gui.buildMenuBar();
         gui.applyRoleToUi();
 
-        assertThat(menuItem(menu, "Import CSV…").isEnabled()).isFalse();
+        assertThat(menuItem(menu, "Bring in a spreadsheet (CSV)…").isEnabled()).isFalse();
         assertThat(menuItem(menu, "Import Excel…").isEnabled()).isFalse();
-        assertThat(menuItem(menu, "Export All to CSV…").isEnabled()).isTrue();
-        assertThat(button(connectors, "Import CSV").isEnabled()).isFalse();
-        assertThat(button(connectors, "Export CSV").isEnabled()).isTrue();
+        assertThat(menuItem(menu, "Save all inventory as a spreadsheet (CSV)…").isEnabled()).isTrue();
+        assertThat(button(connectors, "Bring in a spreadsheet (CSV)").isEnabled()).isFalse();
+        assertThat(button(connectors, "Save a spreadsheet (CSV)").isEnabled()).isTrue();
         assertThat(button(connectors, "Export Excel").isEnabled()).isTrue();
         assertThat(button(connectors, "Sync Shopify").isEnabled()).isFalse();
         assertThat(button(connectors, "Export Shopify").isEnabled()).isFalse();
@@ -715,10 +715,53 @@ class ProductionReadinessUiTest {
         session.set(new FarmUser("field-hand", "", FarmRole.HAND));
         gui.applyRoleToUi();
 
-        assertThat(menuItem(menu, "Import CSV…").isEnabled()).isTrue();
-        assertThat(button(connectors, "Import CSV").isEnabled()).isTrue();
+        assertThat(menuItem(menu, "Bring in a spreadsheet (CSV)…").isEnabled()).isTrue();
+        assertThat(button(connectors, "Bring in a spreadsheet (CSV)").isEnabled()).isTrue();
         assertThat(button(connectors, "Sync Shopify").isEnabled()).isTrue();
         assertThat(button(connectors, "Export Shopify").isEnabled()).isTrue();
+    }
+
+    @ParameterizedTest
+    @CsvSource({"false, 0", "false, 1", "true, 0", "true, 1"})
+    void equipmentDraftAndPendingSaveRequireExplicitShellExitDecision(boolean pending, int choice) throws Exception {
+        FarmDialogs dialogs = mock(FarmDialogs.class);
+        when(dialogs.showOption(any(), any(), anyString(), anyInt(), anyInt(), any(), any(), any()))
+                .thenAnswer(invocation -> {
+                    assertThat(String.valueOf((Object) invocation.getArgument(1))).contains("Equipment readings");
+                    assertThat((Object[]) invocation.getArgument(6)).containsExactly(
+                            "Keep working", pending ? "Exit before result" : "Discard and exit");
+                    return choice;
+                });
+        var equipment = mock(com.flowerfarm.gui.tabs.EquipmentReadingsTab.class);
+        when(equipment.applicationExitWarning()).thenReturn(pending
+                ? "Equipment readings has a save still running." : "Equipment readings has an unfinished reading.");
+        when(equipment.hasPendingSave()).thenReturn(pending);
+        FlowerFarmGUI gui = gui(mock(GuiLoginGate.class), new DesktopSession(), dialogs,
+                new SwingFileHarness().cancelUnscripted());
+        ReflectionTestUtils.setField(gui, "equipmentReadingsTab", equipment);
+        SwingUtilities.invokeAndWait(() -> {
+            gui.buildSouthBar();
+            assertThat(gui.confirmApplicationClose(false)).isEqualTo(choice == 1);
+        });
+    }
+
+    @Test
+    void equipmentDraftBlocksChangingFarmTypeBeforeAnySettingsWrite() throws Exception {
+        FarmDialogs dialogs = mock(FarmDialogs.class);
+        var settings = mock(com.flowerfarm.service.FarmOperationSettingsService.class);
+        var equipment = mock(com.flowerfarm.gui.tabs.EquipmentReadingsTab.class);
+        when(equipment.applicationExitWarning()).thenReturn("Equipment readings has an unfinished reading.");
+        FlowerFarmGUI gui = gui(mock(GuiLoginGate.class), new DesktopSession(), dialogs,
+                new SwingFileHarness().cancelUnscripted());
+        ReflectionTestUtils.setField(gui, "equipmentReadingsTab", equipment);
+        ReflectionTestUtils.setField(gui, "farmOperationSettingsService", settings);
+        SwingUtilities.invokeAndWait(() -> {
+            gui.buildSouthBar();
+            gui.selectFarmType(com.flowerfarm.model.FarmWorkspace.CANNABIS_FARM);
+        });
+        verify(dialogs).showMessage(any(), org.mockito.ArgumentMatchers.contains("Equipment readings"),
+                eq("Farm type unchanged"), eq(JOptionPane.INFORMATION_MESSAGE));
+        verify(settings, never()).saveSettings(any());
     }
 
     private static FlowerFarmGUI gui(GuiLoginGate gate, DesktopSession session) {

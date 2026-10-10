@@ -120,7 +120,7 @@ class InventoryRecoveryVisualTest {
                     assertButtonReachable(mutation, root[0], view);
                 }
                 render(view + "-stock-actions", root[0]);
-                for (String text : List.of("Low-stock reorder…", "Price list…", "Export visible CSV…")) {
+                for (String text : List.of("Low-stock reorder…", "Price list…", "Save spreadsheet (CSV)…")) {
                     assertButtonReachable(button(root[0], text), root[0], view);
                 }
                 render(view + "-report-actions", root[0]);

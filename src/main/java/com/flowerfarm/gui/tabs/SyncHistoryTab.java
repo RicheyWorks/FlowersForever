@@ -555,7 +555,7 @@ public class SyncHistoryTab implements FlowerFarmTab {
         });
         refreshBtn = FarmUi.secondaryButton("Refresh");
         refreshBtn.addActionListener(e -> refreshData());
-        exportCsvBtn = FarmUi.secondaryButton("Export CSV…");
+        exportCsvBtn = FarmUi.secondaryButton("Save a spreadsheet (CSV)…");
         exportCsvBtn.addActionListener(e -> exportCsv());
         exportPdfBtn = FarmUi.secondaryButton("Export PDF…");
         exportPdfBtn.setToolTipText("Save a printable copy of the current activity list.");
@@ -587,7 +587,7 @@ public class SyncHistoryTab implements FlowerFarmTab {
         var selected = files.chooseSave(panel, "Export the current activity list",
                 new File("farm_activity_history.csv"));
         if (selected.isEmpty()) {
-            showExportState("CSV not saved · exports ready",
+            showExportState("Spreadsheet not saved · try saving again",
                     "No destination was changed; the filtered activity rows were kept.",
                     FarmUi.Tone.NEUTRAL);
             return;
@@ -596,7 +596,7 @@ public class SyncHistoryTab implements FlowerFarmTab {
         if (approveReplacement(file)) {
             startActivityCsvExport(file, snapshot);
         } else {
-            showExportState("CSV not saved · existing file kept",
+            showExportState("Spreadsheet not saved · existing file kept",
                     "The selected file was not replaced; the filtered activity rows were kept.",
                     FarmUi.Tone.NEUTRAL);
         }
@@ -610,7 +610,7 @@ public class SyncHistoryTab implements FlowerFarmTab {
     }
 
     void startActivityCsvExport(File destination, List<SyncHistoryEntry> entries) {
-        if (!beginExport("Saving activity CSV…",
+        if (!beginExport("Saving an activity spreadsheet…",
                 "Writing the captured filtered activity rows in the background.")) {
             return;
         }

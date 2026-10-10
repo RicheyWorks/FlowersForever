@@ -23,7 +23,7 @@ import java.util.Set;
  */
 public final class FieldScienceBundle {
 
-    public static final String SOURCE_COMMIT = "f4c9a25c287ac98b96efb38b99a9d95b281434de";
+    public static final String SOURCE_COMMIT = "5990b9c21e419f5836c9f0a22f15d993403557a3";
     private static final String VERSION = SOURCE_COMMIT.substring(0, 12);
     private static final String RESOURCE_ROOT = "/csrbt-field-kit/";
     private static final String MANIFEST = "manifest.sha256";
