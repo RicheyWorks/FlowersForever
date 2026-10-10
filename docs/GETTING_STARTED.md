@@ -17,7 +17,7 @@ At the first start, pick your farm type: **Wildflower farm** for cut flowers, **
 On a flower farm, open **Help → Start here…** and pick one start (other farm types begin on the first tab of their workspace):
 
 - Log today’s first cut: the crop and the quantity are enough.
-- Bring in the spreadsheet you already keep: **File → Import from spreadsheet…** (CSV or Excel).
+- Bring in the spreadsheet you already keep: **File → Bring in a spreadsheet…** (CSV or Excel).
 - Add one product by hand.
 
 You do not need every screen on day one.
