@@ -821,7 +821,6 @@ public class HarvestService {
                 .append('\n');
         sb.append("═════════════════════════════════════════\n");
         sb.append("Period: ").append(from).append(" → ").append(to).append('\n');
-        double totalLoss = entries.stream().mapToDouble(HarvestEntry::getLossQuantity).sum();
         sb.append(String.format(Locale.US,
                 "Entries: %d  ·  Marketable: %s  ·  Loss: %s  ·  Crops: %d%n",
                 entries.size(), InventoryQuantity.summary(entries, HarvestEntry::getQuantity, HarvestEntry::getUnit),

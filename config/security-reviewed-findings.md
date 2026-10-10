@@ -10,7 +10,7 @@ Source and caller review on 2026-10-09 classified exactly 38 FindSecBugs 1.14.0 
 | Configured CSV/Excel connector files and local JSON mirrors | 7 | Constructor/deployment configuration fixes the paths. HTTP connector operations choose registered connector names and cannot replace those paths with request filenames. |
 | Inventory startup seed | 1 | A private final constructor `@Value` path is used only by the private startup seed loader. |
 | Farm data snapshot staging | 1 | A configured export root fixes the parent; bounded request keys are hashed into derived staging names. |
-| DatabaseIntegrityGuard.check metadata SQL | 1 | H2 `PUBLIC` base-table metadata supplies the identifier. The entire name is quoted and embedded quotes are doubled. The SQL-looking quoted-table/non-admin regression checks that existing records survive. |
+| RecordsReadProbe.readAll metadata SQL | 1 | The package-private reader receives an existing connection from integrity or verified-backup probes. H2 `PUBLIC` base-table metadata supplies the identifier. The entire name is quoted and embedded quotes are doubled. The SQL-looking quoted-table/non-admin regression checks that existing records survive. |
 | InstalledAppLauncher.relaunch | 1 | One absolute regular non-link FlowersForever executable must be the same file as the running process command. Relaunch has no arguments or shell. |
 | PlatformInstaller.ProcessStarter system handoff | 1 | The helper admits the actual fixed OS interpreter, exact flags/argument count and one bounded generated script directly beneath the updates folder. Signed release metadata and package hashes are verified before handoff. |
 | AuthenticodePublisherVerifier.signatureCommand | 1 | The absolute Windows system PowerShell executable runs a constant script. Installer paths are separate child-environment data read with `-LiteralPath`; output and completion time are bounded. |
@@ -26,5 +26,27 @@ The manifest binds every checked-in production Java file under `src/main/java` a
 The observed canonical identities came from the complete hosted scan of commit `5c2e955`, including the reviewed DTO/null guards, structural POSIX system-tool resolution and UI layout adjustments. Comparison with the preceding hosted scan confirmed five raw hash changes caused solely by swapped Unknown-source annotations. The older launcher location was separately rejected: its annotation location changed with an explicit null-parent guard. The canonical policy accepts ordering variance while continuing to reject changed evidence or locations. No unobserved finding is accepted.
 
 A subsequent source/caller review renewed exactly three production file bindings. `SecurityConfig` enables cookie-backed CSRF in both modes while retaining the default XOR handler, and `AuthController` adds only the public, non-cacheable GET handshake. `ShopifyConnector` admits a fixed HTTPS store product endpoint, refuses redirects and bounds provider parsing. Its configured local-mirror path constructor and local-mode callers remain unchanged. These edits introduce no path, SQL or process configuration endpoint. All 545 final production Java files and the unchanged POM are bound, while the 38 observed finding annotations, locations and raw hash provenance remain unchanged. A complete hosted scan of the final code must match those exact contexts; source review does not approve any additional finding.
+
+The ten-pass coding campaign received a fresh review of all 38 boundaries and their
+changed caller bindings. Connector edits change numeric mappings, with the configured
+local files and registered-name HTTP dispatch retained. Desktop quantity/report edits
+retain chooser approval and cancellation checks; file suggestions are not export
+destinations. Startup sample opt-in does not expose a seed-path setter. The new worker
+profile GET returns farm vocabulary without accepting filenames, SQL or process arguments.
+Three added Java files introduce product metadata, quantity arithmetic and the package-private
+records reader. The records reader moves the same quoted H2 metadata SQL from
+`DatabaseIntegrityGuard.check` to `RecordsReadProbe.readAll`, now shared with
+`RestoreService.probeRecords`; its exact eligibility selector is replaced, not broadened.
+The installed-app and signed-installer process boundaries are unchanged.
+
+A fresh Windows scan and the hosted Java 17 scan of campaign commit `22de4aa` have
+identical canonical annotations at all 38 reviewed method boundaries, including
+both chooser suggestions in `presentBedProduction`. No additional Medium or High
+security finding was accepted. Locations and bytecode offsets changed by the reviewed
+refactoring are intentionally renewed from those observed reports; their full canonical
+hashes remain exact. The final two general-quality cleanups affect no security finding
+annotation. The manifest binds all 548 production Java files and the unchanged POM.
+The fresh scan reports zero analysis errors and zero missing classes; all 33 security
+evidence guard tests pass. Hosted verification must still match this exact renewed evidence.
 
 Any new, changed, duplicate or absent reviewed finding fails. Any production Java edit/addition/removal or POM change requires a fresh source/build/caller review and an intentional manifest update; do not regenerate the manifest automatically to make a failed check pass. There are no native category/class/method exclusions in the security profile. The separate general quality profile retains its existing exclusions and Medium-or-higher zero-violation gate.

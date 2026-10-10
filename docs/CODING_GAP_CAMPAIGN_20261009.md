@@ -18,7 +18,7 @@ Implemented passes:
 | 7. Recovery | Integrity and restore probes read every row and column in records tables. Failed restores receive unique recovery filenames even at the same clock time. | `IntegrityRestoreSafetyTest`, `RestoreStartupTest`, real backup/reopen/restore workflow |
 | 8. Farm time | Services and report date presets use the farm's configurable, injectable clock and time zone. | `FarmReportClockTest` at opposite sides of a UTC date boundary |
 | 9. Retry safety | Physical-count requests retain the unit reviewed; unit changes are refused under a transaction lock. Whole-count receipt fingerprints remain compatible. Precise counts replay once after reopening and restoring. | `MeasuredFarmOperationsIT`, worker queue tests |
-| 10. Maintenance | Removed obsolete integer parsers and rounded-quantity copy; documented farm defaults, measured stock, sample opt-in and remaining domain limits. | Full Java verification, quality gates, Node and Python suites |
+| 10. Maintenance | Removed obsolete integer parsers and rounded-quantity copy; validated actual typed stock counts before saving; renewed the existing security contexts after source/caller review; documented farm defaults and remaining domain limits. | `StockCountEditorTest`, full Java verification, quality gates, Node and Python suites |
 
 The real-data integration check uses separate temporary databases: harvest,
 historical import, loss, sale, repeat fulfillment, physical count, backup, reopen,
@@ -39,7 +39,21 @@ Compatibility and scope:
 - Worker writes with durable receipts have tested replay protection. This does not
   establish universal crash-proof behavior for every generic automation mutation.
 
-Verification results are recorded below after the final build completes. Real MSI
+The [review PR](https://github.com/RicheyWorks/FlowersForever/pull/55) records final
+test counts and links the hosted checks for the reviewed commit. Verification commands:
+
+- `python -B scripts/verify_harness.py` performs complete clean Maven verification
+  with packaged-process tests, per-class floors, coverage and the quality profile;
+  its evidence is bound to the tested source and report hashes.
+- The Node worker and launcher/packaging suites check browser queues and desktop
+  distribution scripts; Python tests check harness and security evidence rejection.
+- Fresh FindSecBugs scans are compared with the 38 deliberately reviewed contexts,
+  including the moved metadata reader. New or changed findings still fail. See
+  [the source/caller review](../config/security-reviewed-findings.md).
+- CI checks the supported Java 17 baseline, advisory Java 21, static analysis,
+  container authentication, dependency review, CodeQL and live vulnerability results.
+
+Real MSI
 installation, production restore, signed release publication and hardware power-loss
 acceptance are separate from these coding checks. The currently open sample pilot
 uses the previously verified JAR; source edits do not modify that running app.

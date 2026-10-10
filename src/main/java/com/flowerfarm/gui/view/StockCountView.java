@@ -51,12 +51,12 @@ public final class StockCountView extends JPanel {
                     throw new ParseException("Enter a complete numeric quantity.", position.getIndex());
                 }
                 try {
-                    amount.setScale(InventoryQuantity.SCALE, RoundingMode.UNNECESSARY);
-                    double quantity = InventoryQuantity.requireForUnit(amount.doubleValue(), item.getUnit());
+                    BigDecimal exactAmount = amount.setScale(InventoryQuantity.SCALE, RoundingMode.UNNECESSARY);
+                    double quantity = InventoryQuantity.requireForUnit(exactAmount.doubleValue(), item.getUnit());
                     if (com.flowerfarm.util.InventoryUnits.measured(item.getUnit())) {
                         return Double.valueOf(quantity);
                     }
-                    return Integer.valueOf(amount.intValueExact());
+                    return Integer.valueOf(exactAmount.intValueExact());
                 } catch (IllegalArgumentException | ArithmeticException invalid) {
                     ParseException rejected = new ParseException(invalid.getMessage(), 0);
                     rejected.initCause(invalid);
