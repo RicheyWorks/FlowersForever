@@ -1,5 +1,7 @@
 package com.flowerfarm.connector.impl;
 
+import com.flowerfarm.util.InventoryQuantity;
+
 import com.flowerfarm.connector.ConnectorHttpClient;
 import com.flowerfarm.connector.*;
 import com.flowerfarm.model.Item;
@@ -131,7 +133,7 @@ public class SquareConnector implements ExternalConnector<Map<String, Object>>, 
     private ConnectorResult<List<Item>> importFromRemote() {
         try {
             List<Map<String, Object>> catalogItems = listAllItems();
-            Map<String, Integer> qtyByVariation = hasLocation()
+            Map<String, Double> qtyByVariation = hasLocation()
                     ? fetchInventoryCounts(collectVariationIds(catalogItems))
                     : Map.of();
 
@@ -289,7 +291,7 @@ public class SquareConnector implements ExternalConnector<Map<String, Object>>, 
     private ConnectorResult<SyncSummary> syncRemote(List<Item> localItems) {
         try {
             List<Map<String, Object>> remoteItems = listAllItems();
-            Map<String, Integer> qtyByVariation = hasLocation()
+            Map<String, Double> qtyByVariation = hasLocation()
                     ? fetchInventoryCounts(collectVariationIds(remoteItems))
                     : Map.of();
 
@@ -383,7 +385,7 @@ public class SquareConnector implements ExternalConnector<Map<String, Object>>, 
                         parseDouble(raw.get("price"), 0.0),
                         str(raw.get("unit"), "Per Stem"),
                         parseDouble(raw.get("cost"), 0.0),
-                        parseInt(raw.get("quantity"), 0),
+                        InventoryQuantity.parse(raw.get("quantity")),
                         str(raw.get("notes"), "")
                 );
             }
@@ -403,7 +405,7 @@ public class SquareConnector implements ExternalConnector<Map<String, Object>>, 
             if (unit.isBlank()) {
                 unit = "Per Stem";
             }
-            int qty = parseInt(raw.get("_quantity"), 0);
+            double qty = InventoryQuantity.parse(raw.get("_quantity"));
 
             return new Item(name, category, price, unit, 0.0, qty, notes);
         } catch (Exception e) {
@@ -554,8 +556,8 @@ public class SquareConnector implements ExternalConnector<Map<String, Object>>, 
     // ── Inventory HTTP ────────────────────────────────────────────────────────
 
     @SuppressWarnings("unchecked")
-    private Map<String, Integer> fetchInventoryCounts(List<String> variationIds) {
-        Map<String, Integer> counts = new HashMap<>();
+    private Map<String, Double> fetchInventoryCounts(List<String> variationIds) {
+        Map<String, Double> counts = new HashMap<>();
         if (variationIds.isEmpty() || !hasLocation()) {
             return counts;
         }
@@ -586,9 +588,9 @@ public class SquareConnector implements ExternalConnector<Map<String, Object>>, 
                     if (c instanceof Map<?, ?> m) {
                         Map<String, Object> count = castMap(m);
                         String id = str(count.get("catalog_object_id"), "");
-                        int qty = parseInt(count.get("quantity"), 0);
+                        double qty = InventoryQuantity.parse(count.get("quantity"));
                         // Sum if multiple states returned
-                        counts.merge(id, qty, Integer::sum);
+                        counts.merge(id, qty, com.flowerfarm.util.InventoryQuantity::add);
                     }
                 }
             }
@@ -597,11 +599,11 @@ public class SquareConnector implements ExternalConnector<Map<String, Object>>, 
     }
 
     @SuppressWarnings("unchecked")
-    private void setInventoryCount(String variationId, int quantity) {
+    private void setInventoryCount(String variationId, double quantity) {
         Map<String, Object> physicalCount = new LinkedHashMap<>();
         physicalCount.put("catalog_object_id", variationId);
         physicalCount.put("location_id", config.get("location-id"));
-        physicalCount.put("quantity", String.valueOf(Math.max(0, quantity)));
+        physicalCount.put("quantity", InventoryQuantity.format(quantity));
         physicalCount.put("occurred_at", Instant.now().truncatedTo(ChronoUnit.SECONDS).toString());
         physicalCount.put("state", "IN_STOCK");
 
@@ -653,11 +655,11 @@ public class SquareConnector implements ExternalConnector<Map<String, Object>>, 
     }
 
     private Map<String, Object> enrichWithQuantity(Map<String, Object> catalogObject,
-                                                   Map<String, Integer> qtyByVariation) {
+                                                   Map<String, Double> qtyByVariation) {
         Map<String, Object> copy = new LinkedHashMap<>(catalogObject);
         String varId = firstVariationId(catalogObject);
         if (varId != null) {
-            copy.put("_quantity", qtyByVariation.getOrDefault(varId, 0));
+            copy.put("_quantity", qtyByVariation.getOrDefault(varId, 0d));
         } else {
             copy.put("_quantity", 0);
         }
@@ -718,15 +720,6 @@ public class SquareConnector implements ExternalConnector<Map<String, Object>>, 
         if (v == null) return def;
         try {
             return Double.parseDouble(v.toString().trim());
-        } catch (NumberFormatException e) {
-            return def;
-        }
-    }
-
-    private static int parseInt(Object v, int def) {
-        if (v == null) return def;
-        try {
-            return (int) Math.round(Double.parseDouble(v.toString().trim()));
         } catch (NumberFormatException e) {
             return def;
         }

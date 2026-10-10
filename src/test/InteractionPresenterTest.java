@@ -215,7 +215,7 @@ class InteractionPresenterTest {
         assertThat(complimentary.lineTotal()).isZero();
         assertThat(complimentary.message()).contains("$0.00", "4 on hand");
         assertThat(subUnit.valid()).isFalse();
-        assertThat(subUnit.message()).contains("round to at least 1 inventory unit");
+        assertThat(subUnit.message()).contains("counted products require whole quantities");
         assertThat(wrongUnit.valid()).isFalse();
         assertThat(wrongUnit.message()).contains("Unit must match Inventory", "Per Stem");
         assertThat(oversizedPrice.valid()).isFalse();
@@ -317,15 +317,14 @@ class InteractionPresenterTest {
                 .satisfies(decimal -> {
                     assertThat(decimal.valid()).isTrue();
                     assertThat(decimal.message()).contains(
-                            "1 row ready", "1.5 lbs", "inventory +2 lbs",
-                            "rounded by row");
+                            "1 row ready", "1.5 lbs");
                 });
         assertThat(presenter.previewBatch(new HarvestLogPresenter.BatchDraft(
                 "2026-08-23", "stems", "", "", "Lavender,0.1,lbs")))
                 .satisfies(tooSmall -> {
-                    assertThat(tooSmall.valid()).isFalse();
+                    assertThat(tooSmall.valid()).isTrue();
                     assertThat(tooSmall.message()).contains(
-                            "Line 1", "round to at least one inventory unit", "0.5 or more");
+                            "1 row ready", "0.1 lbs");
                 });
         assertThat(presenter.previewBatch(new HarvestLogPresenter.BatchDraft(
                 "2026-08-23", "stems", "", "", "Rose,4\nDahlia,nope")))
@@ -353,7 +352,7 @@ class InteractionPresenterTest {
                 .isInstanceOfSatisfying(HarvestLogPresenter.InputValidationException.class,
                         error -> {
                             assertThat(error.field()).isEqualTo("quantity");
-                            assertThat(error.getMessage()).contains("0.5 or more");
+                            assertThat(error.getMessage()).contains("whole number");
                         });
         String tomorrow = LocalDate.now().plusDays(1).toString();
         assertThatThrownBy(() -> presenter.fromForm(new HarvestLogPresenter.EntryDraft(

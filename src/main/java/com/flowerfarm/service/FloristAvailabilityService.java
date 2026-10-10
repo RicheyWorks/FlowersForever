@@ -29,12 +29,12 @@ public class FloristAvailabilityService {
 
     @Transactional(readOnly = true)
     public FloristAvailabilityExport.Sheet buildForCurrentWeek() {
-        return build(LocalDate.now(farmProfile.zoneId()));
+        return build(farmProfile.today());
     }
 
     @Transactional(readOnly = true)
     public FloristAvailabilityExport.Sheet build(LocalDate asOf) {
-        LocalDate day = asOf == null ? LocalDate.now(farmProfile.zoneId()) : asOf;
+        LocalDate day = asOf == null ? farmProfile.today() : asOf;
         LocalDate weekStart = day.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
         LocalDate weekEnd = weekStart.plusDays(6);
         InventoryService.PriceListReport live = inventoryService.buildPriceListReport(true);

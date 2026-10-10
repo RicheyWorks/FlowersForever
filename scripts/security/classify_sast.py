@@ -16,9 +16,8 @@ from security_checks import require, spotbugs_complete, strict_json
 # full source/caller inventory and build/analyzer bindings remain required below.
 CONTEXTUAL_REVIEW_SELECTORS = {
     "h2_metadata_identifier": (
-        "SQL_INJECTION_JDBC", "src/main/java/com/flowerfarm/backup/DatabaseIntegrityGuard.java",
-        "com.flowerfarm.backup.DatabaseIntegrityGuard", "check",
-        "(Ljava/nio/file/Path;)Lcom/flowerfarm/backup/DatabaseIntegrityGuard$Health;"),
+        "SQL_INJECTION_JDBC", "src/main/java/com/flowerfarm/backup/RecordsReadProbe.java",
+        "com.flowerfarm.backup.RecordsReadProbe", "readAll", "(Ljava/sql/Connection;)V"),
     "installed_app_relaunch": (
         "COMMAND_INJECTION", "src/main/java/com/flowerfarm/update/InstalledAppLauncher.java",
         "com.flowerfarm.update.InstalledAppLauncher", "relaunch", "(Ljava/nio/file/Path;)V"),

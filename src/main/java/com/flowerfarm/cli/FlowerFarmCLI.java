@@ -1,5 +1,7 @@
 package com.flowerfarm.cli;
 
+import com.flowerfarm.util.InventoryQuantity;
+
 import com.flowerfarm.connector.ConnectorRegistry;
 import com.flowerfarm.connector.ConnectorResult;
 import com.flowerfarm.connector.SyncSummary;
@@ -134,9 +136,9 @@ public class FlowerFarmCLI implements ApplicationRunner {
                 "Name", "Category", "Price", "Unit", "Cost", "Qty");
         System.out.println("-".repeat(100));
         for (Item item : items) {
-            System.out.printf("%-30s %-18s %8.2f %-14s %8.2f %8d  %s%n",
+            System.out.printf("%-30s %-18s %8.2f %-14s %8.2f %8s  %s%n",
                     item.getName(), item.getCategory(), item.getPrice(),
-                    item.getUnit(), item.getCost(), item.getQuantity(), item.getNotes());
+                    item.getUnit(), item.getCost(), InventoryQuantity.format(item.getQuantity()), item.getNotes());
         }
         System.out.println("Total items: " + items.size());
     }
@@ -159,7 +161,7 @@ public class FlowerFarmCLI implements ApplicationRunner {
             System.out.print("Price: ");       double price    = Double.parseDouble(sc.nextLine().trim());
             System.out.print("Unit: ");        String unit     = sc.nextLine().trim();
             System.out.print("Cost: ");        double cost     = Double.parseDouble(sc.nextLine().trim());
-            System.out.print("Quantity: ");    int    qty      = Integer.parseInt(sc.nextLine().trim());
+            System.out.print("Quantity: ");    double qty      = Double.parseDouble(sc.nextLine().trim());
             System.out.print("Notes: ");       String notes    = sc.nextLine().trim();
 
             inventoryService.addItem(new Item(name, category, price, unit, cost, qty, notes));
@@ -189,7 +191,7 @@ public class FlowerFarmCLI implements ApplicationRunner {
             System.out.print("Cost [" + current.getCost() + "]: ");
             double cost = parseDoubleOrDefault(sc.nextLine(), current.getCost());
             System.out.print("Quantity [" + current.getQuantity() + "]: ");
-            int qty = parseIntOrDefault(sc.nextLine(), current.getQuantity());
+            double qty = parseDoubleOrDefault(sc.nextLine(), current.getQuantity());
             System.out.print("Notes [" + current.getNotes() + "]: ");
             String notes = orDefault(sc.nextLine(), current.getNotes());
 

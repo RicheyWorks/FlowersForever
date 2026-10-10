@@ -2,6 +2,11 @@ package com.flowerfarm.controller;
 
 import com.flowerfarm.service.WorkerWorkflowService;
 import com.flowerfarm.service.FieldAttachmentService;
+import com.flowerfarm.service.FarmOperationSettingsService;
+import com.flowerfarm.model.FarmOperationSettings;
+import com.flowerfarm.model.FarmProductProfile;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
@@ -29,11 +34,26 @@ public class WorkerController {
 
     private final WorkerWorkflowService service;
     private final FieldAttachmentService attachments;
+    private final ObjectProvider<FarmOperationSettingsService> settings;
 
     public WorkerController(
             WorkerWorkflowService service, FieldAttachmentService attachments) {
+        this(service, attachments, null);
+    }
+
+    @Autowired
+    public WorkerController(WorkerWorkflowService service, FieldAttachmentService attachments,
+            ObjectProvider<FarmOperationSettingsService> settings) {
         this.service = service;
         this.attachments = attachments;
+        this.settings = settings;
+    }
+
+    @GetMapping("/product-profile")
+    public FarmProductProfile productProfile() {
+        FarmOperationSettingsService available = settings == null ? null : settings.getIfAvailable();
+        FarmOperationSettings current = available == null ? new FarmOperationSettings() : available.getSettings();
+        return FarmProductProfile.combined(current.getWorkspace(), current.getEnabledWorkspaces());
     }
 
     @GetMapping("/today")

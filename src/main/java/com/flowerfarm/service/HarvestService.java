@@ -5,6 +5,7 @@ import com.flowerfarm.model.HarvestEntry;
 import com.flowerfarm.model.Item;
 import com.flowerfarm.repository.HarvestRepository;
 import com.flowerfarm.util.InventoryUnits;
+import com.flowerfarm.util.InventoryQuantity;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -156,6 +157,7 @@ public class HarvestService {
         for (HarvestEntry entry : entries) {
             entry.setId(null);
             assignLotCode(entry);
+            entry.setInventoryContribution(0);
             saved.add(repository.save(entry));
         }
         syncHistoryService.record(
@@ -182,7 +184,8 @@ public class HarvestService {
                 throw new IllegalArgumentException("Batch harvest rows must not be null.");
             }
             validateHarvestDate(entry.getHarvestDate());
-            inventoryQuantityFor(entry.getQuantity());
+            inventoryQuantityFor(entry.getQuantity(), entry.getUnit());
+            InventoryQuantity.requireForUnit(entry.getLossQuantity(), entry.getUnit());
             validateLossQuantity(entry.getLossQuantity());
         }
     }
@@ -198,12 +201,15 @@ public class HarvestService {
         }
         validateHarvestDate(entry.getHarvestDate());
         validateLossQuantity(entry.getLossQuantity());
+        inventoryQuantityFor(entry.getQuantity(), entry.getUnit());
+        InventoryQuantity.requireForUnit(entry.getLossQuantity(), entry.getUnit());
         entry.setId(null);
         validateLotCodes(List.of(entry), null);
         assignLotCode(entry);
+        entry.setInventoryContribution(entry.getQuantity());
         HarvestEntry saved = repository.save(entry);
 
-        int amount = inventoryQuantityFor(saved.getQuantity());
+        double amount = inventoryQuantityFor(saved.getQuantity(), saved.getUnit());
         Item stock = inventoryService.incrementQuantityByName(
                 saved.getCropName(),
                 amount,
@@ -223,7 +229,7 @@ public class HarvestService {
                         + ", grade=" + saved.getGrade() + ", loss=" + saved.getLossQuantity()
                         + ", storage=" + saved.getStorageLocation()
                         + ", inventoryId=" + stock.getId() + ", bed=" + saved.getBedOrField(),
-                amount
+                1
         );
         log.info("[harvest] {}", msg);
         return saved;
@@ -242,13 +248,14 @@ public class HarvestService {
         }
         validateHarvestDate(incoming.getHarvestDate());
         validateLossQuantity(incoming.getLossQuantity());
+        InventoryQuantity.requireForUnit(incoming.getLossQuantity(), incoming.getUnit());
         HarvestEntry existing = repository.findByIdForUpdate(id)
                 .orElseThrow(() -> new IndexOutOfBoundsException("No harvest entry with id=" + id));
 
         String oldCrop = existing.getCropName();
-        int oldQty = inventoryQuantityFor(existing.getQuantity());
+        double oldQty = existing.getInventoryContribution();
         String newCrop = incoming.getCropName() == null ? "" : incoming.getCropName().trim();
-        int newQty = inventoryQuantityFor(incoming.getQuantity());
+        double newQty = inventoryQuantityFor(incoming.getQuantity(), incoming.getUnit());
         String newUnit = incoming.getUnit();
 
         if (newCrop.isBlank()) {
@@ -267,11 +274,14 @@ public class HarvestService {
         }
         validateLotCodes(List.of(incoming), id);
         // Apply inventory correction before persisting harvest fields
-        applyInventoryEdit(oldCrop, oldQty, newCrop, newQty, newUnit, existing.getHarvestDate());
+        if (oldQty > 0) {
+            applyInventoryEdit(oldCrop, oldQty, newCrop, newQty, newUnit, existing.getHarvestDate());
+        }
 
         existing.setHarvestDate(incoming.getHarvestDate());
         existing.setCropName(incoming.getCropName());
         existing.setQuantity(incoming.getQuantity());
+        existing.setInventoryContribution(oldQty > 0 ? newQty : 0);
         existing.setUnit(incoming.getUnit());
         existing.setBedOrField(incoming.getBedOrField());
         existing.setNotes(incoming.getNotes());
@@ -292,29 +302,26 @@ public class HarvestService {
                         + ", loss=" + saved.getLossQuantity()
                         + ", storage=" + saved.getStorageLocation()
                         + ", notes=" + saved.getNotes() + ", bed=" + saved.getBedOrField(),
-                Math.abs(newQty - oldQty)
+                1
         );
         log.info("[harvest] {}", msg);
         return saved;
     }
 
     /**
-     * Converts a recorded harvest quantity to the whole units held by inventory.
-     * Keeping this rule public lets every input surface preview the same adjustment
-     * that the transaction will apply.
+     * Legacy whole-count validation. Measured harvests must supply their unit.
      */
     public static int inventoryQuantityFor(double quantity) {
+        return InventoryQuantity.whole(inventoryQuantityFor(quantity, "each"));
+    }
+
+    public static double inventoryQuantityFor(double quantity, String unit) {
         if (!Double.isFinite(quantity) || quantity <= 0 || quantity > Integer.MAX_VALUE) {
             throw new IllegalArgumentException(
                     "Quantity must be a finite number greater than zero and no more than "
                             + Integer.MAX_VALUE + ".");
         }
-        int rounded = (int) Math.round(quantity);
-        if (rounded <= 0) {
-            throw new IllegalArgumentException(
-                    "Quantity must round to at least one inventory unit; enter 0.5 or more.");
-        }
-        return rounded;
+        return InventoryQuantity.requireForUnit(quantity, unit);
     }
 
     private static void validateLossQuantity(double lossQuantity) {
@@ -363,18 +370,18 @@ public class HarvestService {
         if (date == null) {
             throw new IllegalArgumentException("Harvest date is required.");
         }
-        LocalDate today = LocalDate.now(farmProfile.zoneId());
+        LocalDate today = farmProfile.today();
         if (date.isAfter(today)) {
             throw new IllegalArgumentException(
                     "Harvest date cannot be after today (" + today + ").");
         }
     }
 
-    private void applyInventoryEdit(String oldCrop, int oldQty, String newCrop, int newQty,
+    private void applyInventoryEdit(String oldCrop, double oldQty, String newCrop, double newQty,
                                     String unit, LocalDate harvestDate) {
         boolean sameCrop = oldCrop != null && oldCrop.equalsIgnoreCase(newCrop);
         if (sameCrop) {
-            int delta = newQty - oldQty;
+            double delta = InventoryQuantity.decimal(newQty).subtract(InventoryQuantity.decimal(oldQty)).doubleValue();
             if (delta > 0) {
                 inventoryService.incrementQuantityByName(newCrop, delta, unit,
                         "Harvest edit +" + delta + " on " + harvestDate);
@@ -402,7 +409,7 @@ public class HarvestService {
         HarvestEntry existing = repository.findByIdForUpdate(id)
                 .orElseThrow(() -> new IndexOutOfBoundsException("No harvest entry with id=" + id));
 
-        int amount = inventoryQuantityFor(existing.getQuantity());
+        double amount = existing.getInventoryContribution();
         var stock = inventoryService.decrementQuantityByName(existing.getCropName(), amount);
 
         repository.deleteById(id);
@@ -418,7 +425,7 @@ public class HarvestService {
                 msg,
                 "harvestId=" + id + ", crop=" + existing.getCropName()
                         + ", bed=" + existing.getBedOrField(),
-                amount
+                1
         );
         log.info("[harvest] {}", msg);
     }
@@ -435,10 +442,32 @@ public class HarvestService {
         return totals;
     }
 
+    @Transactional(readOnly = true)
+    public Map<String, Double> totalsByProductUnit() {
+        return totalsByProductUnit(repository.findAllNewestFirst());
+    }
+
+    public Map<String, Double> totalsByProductUnit(List<HarvestEntry> entries) {
+        return groupByProductUnit(entries);
+    }
+
+    public static Map<String, Double> groupByProductUnit(List<HarvestEntry> entries) {
+        Map<String, java.math.BigDecimal> exact = new LinkedHashMap<>();
+        if (entries != null) {
+            for (HarvestEntry entry : entries) {
+                String label = entry.getCropName() + " (" + InventoryUnits.canonical(entry.getUnit()) + ")";
+                exact.merge(label, java.math.BigDecimal.valueOf(entry.getQuantity()), java.math.BigDecimal::add);
+            }
+        }
+        Map<String, Double> totals = new LinkedHashMap<>();
+        exact.forEach((name, value) -> totals.put(name, value.doubleValue()));
+        return totals;
+    }
+
     /** Sum of harvest quantities for the trailing 7 days (inclusive of today). */
     @Transactional(readOnly = true)
     public double totalQuantityLast7Days() {
-        LocalDate to = LocalDate.now(farmProfile.zoneId());
+        LocalDate to = farmProfile.today();
         LocalDate from = to.minusDays(6);
         return findBetween(from, to).stream().mapToDouble(HarvestEntry::getQuantity).sum();
     }
@@ -446,7 +475,7 @@ public class HarvestService {
     /** Prior 7-day window (days -13 … -7) for week-over-week comparison. */
     @Transactional(readOnly = true)
     public double totalQuantityPrior7Days() {
-        LocalDate to = LocalDate.now(farmProfile.zoneId()).minusDays(7);
+        LocalDate to = farmProfile.today().minusDays(7);
         LocalDate from = to.minusDays(6);
         return findBetween(from, to).stream().mapToDouble(HarvestEntry::getQuantity).sum();
     }
@@ -471,7 +500,7 @@ public class HarvestService {
      */
     @Transactional(readOnly = true)
     public double[] dailyQuantitiesLast7Days() {
-        LocalDate today = LocalDate.now(farmProfile.zoneId());
+        LocalDate today = farmProfile.today();
         LocalDate from = today.minusDays(6);
         Map<LocalDate, Double> byDay = new LinkedHashMap<>();
         for (int i = 0; i < 7; i++) {
@@ -546,8 +575,16 @@ public class HarvestService {
             int entryCount,
             Map<String, Double> byCrop,
             String firstDate,
-            String lastDate
-    ) {}
+            String lastDate,
+            String quantitySummary,
+            Map<String, Double> byProductUnit
+    ) {
+        public BedProduction(String bed, double totalQuantity, int entryCount,
+                Map<String, Double> byCrop, String firstDate, String lastDate) {
+            this(bed, totalQuantity, entryCount, byCrop, firstDate, lastDate,
+                    InventoryQuantity.format(totalQuantity), byCrop);
+        }
+    }
 
     /** Farm-wide bed production report for a date window. */
     public record BedProductionReport(
@@ -572,6 +609,8 @@ public class HarvestService {
                 row.put("totalQuantity", b.totalQuantity());
                 row.put("entryCount", b.entryCount());
                 row.put("byCrop", b.byCrop());
+                row.put("byProductUnit", b.byProductUnit());
+                row.put("quantitySummary", b.quantitySummary());
                 row.put("firstDate", b.firstDate());
                 row.put("lastDate", b.lastDate());
                 return row;
@@ -626,16 +665,18 @@ public class HarvestService {
             Map<String, Double> sortedCrops = crops.entrySet().stream()
                     .sorted(Map.Entry.<String, Double>comparingByValue().reversed())
                     .collect(LinkedHashMap::new,
-                            (m, e) -> m.put(e.getKey(), round1(e.getValue())),
+                            (m, e) -> m.put(e.getKey(), e.getValue()),
                             LinkedHashMap::putAll);
             grand += total;
             beds.add(new BedProduction(
                     en.getKey(),
-                    round1(total),
+                    total,
                     rows.size(),
                     sortedCrops,
                     first != null ? first.toString() : "",
-                    last != null ? last.toString() : ""
+                    last != null ? last.toString() : "",
+                    InventoryQuantity.summary(rows, HarvestEntry::getQuantity, HarvestEntry::getUnit),
+                    totalsByProductUnit(rows)
             ));
         }
         beds.sort(Comparator.comparing(BedProduction::totalQuantity).reversed()
@@ -643,16 +684,17 @@ public class HarvestService {
 
         String fromStr = from != null ? from.toString() : "all";
         String toStr = to != null ? to.toString() : "all";
-        String text = formatBedProductionText(fromStr, toStr, beds, grand, entries.size());
+        String text = formatBedProductionText(fromStr, toStr, beds,
+                InventoryQuantity.summary(entries, HarvestEntry::getQuantity, HarvestEntry::getUnit), entries.size());
         return new BedProductionReport(
-                fromStr, toStr, beds.size(), entries.size(), round1(grand),
+                fromStr, toStr, beds.size(), entries.size(), grand,
                 List.copyOf(beds), text);
     }
 
     /** Trailing 7 days bed production (inclusive of today). */
     @Transactional(readOnly = true)
     public BedProductionReport productionByBedLast7Days() {
-        LocalDate to = LocalDate.now(farmProfile.zoneId());
+        LocalDate to = farmProfile.today();
         return productionByBed(to.minusDays(6), to);
     }
 
@@ -688,8 +730,8 @@ public class HarvestService {
             m.put("to", to);
             m.put("entryCount", entryCount);
             m.put("totalQuantity", totalQuantity);
-            m.put("totalLossQuantity", round1(totalLoss));
-            m.put("totalGrossQuantity", round1(totalQuantity + totalLoss));
+            m.put("totalLossQuantity", totalLoss);
+            m.put("totalGrossQuantity", totalQuantity + totalLoss);
             m.put("byCrop", byCrop);
             m.put("entries", entries.stream().map(e -> {
                 Map<String, Object> row = new LinkedHashMap<>();
@@ -714,7 +756,7 @@ public class HarvestService {
 
     @Transactional(readOnly = true)
     public HarvestLogReport buildHarvestLogReport(LocalDate from, LocalDate to) {
-        LocalDate end = to != null ? to : LocalDate.now(farmProfile.zoneId());
+        LocalDate end = to != null ? to : farmProfile.today();
         LocalDate start = from != null ? from : end.minusDays(6);
         if (end.isBefore(start)) {
             throw new IllegalArgumentException("to must be on or after from.");
@@ -737,14 +779,14 @@ public class HarvestService {
                 .thenComparing(Map.Entry.comparingByKey(String.CASE_INSENSITIVE_ORDER)));
         Map<String, Double> orderedCrops = new LinkedHashMap<>();
         for (Map.Entry<String, Double> c : cropSorted) {
-            orderedCrops.put(c.getKey(), round1(c.getValue()));
+            orderedCrops.put(c.getKey(), c.getValue());
         }
         String text = formatHarvestLogText(start.toString(), end.toString(), entries, total, orderedCrops);
         return new HarvestLogReport(
                 start.toString(),
                 end.toString(),
                 entries.size(),
-                round1(total),
+                total,
                 orderedCrops,
                 List.copyOf(entries),
                 text
@@ -754,7 +796,7 @@ public class HarvestService {
     /** Trailing 7 days harvest log (clipboard default). */
     @Transactional(readOnly = true)
     public HarvestLogReport buildHarvestLogReportLast7Days() {
-        LocalDate to = LocalDate.now(farmProfile.zoneId());
+        LocalDate to = farmProfile.today();
         return buildHarvestLogReport(to.minusDays(6), to);
     }
 
@@ -779,19 +821,19 @@ public class HarvestService {
                 .append('\n');
         sb.append("═════════════════════════════════════════\n");
         sb.append("Period: ").append(from).append(" → ").append(to).append('\n');
-        double totalLoss = entries.stream().mapToDouble(HarvestEntry::getLossQuantity).sum();
         sb.append(String.format(Locale.US,
-                "Entries: %d  ·  Marketable: %,.1f  ·  Loss: %,.1f  ·  Crops: %d%n",
-                entries.size(), total, totalLoss, byCrop.size()));
+                "Entries: %d  ·  Marketable: %s  ·  Loss: %s  ·  Crops: %d%n",
+                entries.size(), InventoryQuantity.summary(entries, HarvestEntry::getQuantity, HarvestEntry::getUnit),
+                InventoryQuantity.summary(entries, HarvestEntry::getLossQuantity, HarvestEntry::getUnit), byCrop.size()));
         sb.append('\n');
         sb.append("BY CROP\n");
         sb.append("───────\n");
         if (byCrop.isEmpty()) {
             sb.append("  (none)\n");
         } else {
-            for (Map.Entry<String, Double> c : byCrop.entrySet()) {
-                sb.append(String.format(Locale.US, "  %-24s %8.1f%n",
-                        truncate(c.getKey(), 24), c.getValue()));
+            for (Map.Entry<String, Double> c : totalsByProductUnit(entries).entrySet()) {
+                sb.append(String.format(Locale.US, "  %-40s %12s%n",
+                        c.getKey(), InventoryQuantity.format(c.getValue())));
             }
         }
         sb.append('\n');
@@ -805,14 +847,14 @@ public class HarvestService {
             sb.append("-".repeat(86)).append('\n');
             for (HarvestEntry e : entries) {
                 sb.append(String.format(Locale.US,
-                        "%-12s %-16s %8.1f %-8s %-10s %-12s %10.1f%n",
+                        "%-12s %-16s %12s %-8s %-10s %-12s %12s%n",
                         e.getHarvestDate() == null ? "" : e.getHarvestDate().toString(),
                         truncate(e.getCropName(), 16),
-                        e.getQuantity(),
+                        InventoryQuantity.format(e.getQuantity()),
                         truncate(e.getUnit() == null ? "" : e.getUnit(), 8),
                         e.getGrade(),
                         truncate(e.getLotCode(), 12),
-                        e.getLossQuantity()));
+                        InventoryQuantity.format(e.getLossQuantity())));
                 sb.append("    Source: ").append(
                         e.getBedOrField() == null || e.getBedOrField().isBlank()
                                 ? "—" : e.getBedOrField())
@@ -823,7 +865,9 @@ public class HarvestService {
             }
             sb.append("-".repeat(86)).append('\n');
             sb.append(String.format(Locale.US,
-                    "TOTAL MARKETABLE  %,.1f · TOTAL LOSS %,.1f%n", total, totalLoss));
+                    "TOTAL MARKETABLE  %s · TOTAL LOSS %s%n",
+                    InventoryQuantity.summary(entries, HarvestEntry::getQuantity, HarvestEntry::getUnit),
+                    InventoryQuantity.summary(entries, HarvestEntry::getLossQuantity, HarvestEntry::getUnit)));
         }
         sb.append("\nTip: export bed production PDF for ranked fields; this is the cut list.\n");
         return sb.toString();
@@ -831,7 +875,7 @@ public class HarvestService {
 
     private String formatBedProductionText(String from, String to,
                                            List<BedProduction> beds,
-                                           double grand, int entryCount) {
+                                           String quantitySummary, int entryCount) {
         StringBuilder sb = new StringBuilder();
         sb.append(farmProfile.documentBanner("Bed / Field Production")
                 .toUpperCase(Locale.ROOT)).append('\n');
@@ -839,7 +883,7 @@ public class HarvestService {
         sb.append("Period     : ").append(from).append(" → ").append(to).append('\n');
         sb.append("Beds       : ").append(beds.size())
                 .append("   Entries: ").append(entryCount)
-                .append("   Total qty: ").append(String.format(Locale.US, "%,.1f", grand))
+                .append("   Total qty: ").append(quantitySummary)
                 .append('\n');
         sb.append('\n');
         if (beds.isEmpty()) {
@@ -848,18 +892,18 @@ public class HarvestService {
         }
         int rank = 1;
         for (BedProduction b : beds) {
-            sb.append(String.format(Locale.US, "%2d. %-18s  qty %8.1f  (%d log%s)  %s → %s%n",
-                    rank++, truncate(b.bed(), 18), b.totalQuantity(), b.entryCount(),
+            sb.append(String.format(Locale.US, "%2d. %-18s  qty %s  (%d log%s)  %s → %s%n",
+                    rank++, truncate(b.bed(), 18), b.quantitySummary(), b.entryCount(),
                     b.entryCount() == 1 ? "" : "s",
                     b.firstDate().isEmpty() ? "?" : b.firstDate(),
                     b.lastDate().isEmpty() ? "?" : b.lastDate()));
-            for (Map.Entry<String, Double> c : b.byCrop().entrySet()) {
-                sb.append(String.format(Locale.US, "      • %-20s %8.1f%n",
-                        truncate(c.getKey(), 20), c.getValue()));
+            for (Map.Entry<String, Double> c : b.byProductUnit().entrySet()) {
+                sb.append(String.format(Locale.US, "      • %-40s %12s%n",
+                        c.getKey(), InventoryQuantity.format(c.getValue())));
             }
             sb.append('\n');
         }
-        sb.append(String.format(Locale.US, "GRAND TOTAL %,.1f%n", grand));
+        sb.append(String.format(Locale.US, "GRAND TOTAL %s%n", quantitySummary));
         sb.append("Tip: consistent bed names (Bed A, Tunnel 1) make this report sharper.\n");
         return sb.toString();
     }
@@ -869,10 +913,6 @@ public class HarvestService {
             return "";
         }
         return s.length() <= max ? s : s.substring(0, max - 1) + "…";
-    }
-
-    private static double round1(double v) {
-        return Math.round(v * 10.0) / 10.0;
     }
 
     /**

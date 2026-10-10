@@ -831,7 +831,8 @@ function displayInventoryItem(item) {
 
   if (pending) {
     discardButton.hidden = false;
-    message.textContent = `Pending count: ${pending.body.countedQuantity} ${item.unit}. Review the current system quantity before retrying.`;
+    const reviewedUnit = pending.body.reviewedUnit || pending.unit || item.unit;
+    message.textContent = `Pending count: ${pending.body.countedQuantity} ${reviewedUnit}. Review the current system quantity before retrying.`;
     submitButton.textContent = "Review & retry count";
   }
 
@@ -849,7 +850,8 @@ function displayInventoryItem(item) {
       body: {
         operationKey: id,
         reviewedQuantity: item.quantity,
-        countedQuantity: Number(input.value)
+        countedQuantity: Number(input.value),
+        reviewedUnit: item.unit
       }
     };
     submitButton.disabled = true;
@@ -898,11 +900,8 @@ async function loadInventory() {
     const body = await response.json();
     elements.inventoryList.replaceChildren();
     if (!query) {
-      elements.cropOptions.replaceChildren(...body.items.map(item => {
-        const option = document.createElement("option");
-        option.value = item.name;
-        return option;
-      }));
+      state.inventoryProductNames = body.items.map(item => item.name);
+      updateCropOptions();
     }
     elements.inventoryCount.textContent = String(body.matchingTotal);
     if (body.items.length === 0) {
@@ -922,6 +921,36 @@ async function loadInventory() {
     elements.inventoryMessage.className = "inline-message";
     elements.inventoryMessage.textContent = navigator.onLine
       ? error.message : "Inventory could not refresh while offline. Previously loaded counts remain visible.";
+  }
+}
+
+function updateCropOptions() {
+  const names = new Set([...(state.inventoryProductNames || []), ...(state.productExamples || [])]);
+  elements.cropOptions.replaceChildren(...[...names].map(name => {
+    const option = document.createElement("option");
+    option.value = name;
+    return option;
+  }));
+}
+
+async function loadProductProfile() {
+  try {
+    const response = await fetch("/api/worker/product-profile", {
+      credentials: "same-origin", headers: { "Accept": "application/json" }
+    });
+    if (!response.ok) return;
+    const profile = await response.json();
+    const unit = profile.units && profile.units[0];
+    if (!unit) return;
+    state.harvestDefaultUnit = unit;
+    state.productExamples = profile.examples || [];
+    if (!state.restoredDrafts.harvest && !state.harvestEdited) elements.harvestForm.elements.unit.value = unit;
+    if (state.productExamples.length) {
+      elements.harvestForm.elements.cropName.placeholder = "e.g. " + state.productExamples[0];
+    }
+    updateCropOptions();
+  } catch (_error) {
+    // Keep offline drafts and their explicit units available when the farm cannot be reached.
   }
 }
 
@@ -1110,7 +1139,7 @@ elements.harvestForm.addEventListener("submit", async event => {
     clearDraft("harvest");
     elements.harvestForm.reset();
     elements.harvestDate.value = state.farmToday || localDate();
-    elements.harvestForm.elements.unit.value = "stems";
+    elements.harvestForm.elements.unit.value = state.harvestDefaultUnit;
     elements.harvestForm.elements.grade.value = "UNGRADED";
     elements.harvestForm.elements.lossQuantity.value = "0";
     document.querySelector("#add-harvest small").textContent = "Cut flowers, stock, and lot details";
@@ -1148,7 +1177,10 @@ elements.noteDate.addEventListener("change", () => {
   elements.noteForm.elements.followUpDate.min = elements.noteDate.value;
 });
 for (const kind of ["note", "harvest"]) {
-  captureForm(kind).addEventListener("input", () => rememberDraft(kind));
+  captureForm(kind).addEventListener("input", () => {
+    if (kind === "harvest") state.harvestEdited = true;
+    rememberDraft(kind);
+  });
 }
 window.addEventListener("online", () => { updateConnection(); flushQueue(); });
 window.addEventListener("offline", updateConnection);
@@ -1158,10 +1190,11 @@ elements.harvestDate.value = localDate();
 elements.noteDate.value = localDate();
 document.querySelector("#capture-workspace").append(elements.harvestSection, elements.noteSection);
 restoreDrafts();
+state.harvestDefaultUnit = elements.harvestForm.elements.unit.value;
 elements.noteForm.elements.followUpDate.min = elements.noteDate.value;
 updateConnection();
 renderQueue();
-loadToday(true).then(() => Promise.all([loadOrders(), loadInventory(), loadFieldNotes()]))
+loadToday(true).then(() => Promise.all([loadProductProfile(), loadOrders(), loadInventory(), loadFieldNotes()]))
   .then(flushQueue);
 
 if ("serviceWorker" in navigator) {

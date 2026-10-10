@@ -1,5 +1,7 @@
 package com.flowerfarm.service;
 
+import com.flowerfarm.util.InventoryQuantity;
+
 import com.flowerfarm.model.HarvestEntry;
 import com.flowerfarm.util.CsvSupport;
 import org.slf4j.Logger;
@@ -40,19 +42,19 @@ public class HarvestCsvExporter {
         writer.write(System.lineSeparator());
         for (HarvestEntry entry : rows) {
             writer.write(String.format(java.util.Locale.ROOT,
-                    "%s,%s,%s,%.2f,%s,%s,\"%s\",%s,%s,%.2f,%.2f,%s",
+                    "%s,%s,%s,%s,%s,%s,\"%s\",%s,%s,%s,%s,%s",
                     entry.getId() == null ? "" : entry.getId(),
                     entry.getHarvestDate(),
                     CsvSupport.escape(entry.getCropName(), ','),
-                    entry.getQuantity(),
+                    InventoryQuantity.csv(entry.getQuantity()),
                     CsvSupport.escape(entry.getUnit(), ','),
                     CsvSupport.escape(entry.getBedOrField(), ','),
                     entry.getNotes() == null
                             ? "" : entry.getNotes().replace("\"", "\"\""),
                     CsvSupport.escape(entry.getLotCode(), ','),
                     entry.getGrade(),
-                    entry.getLossQuantity(),
-                    entry.getGrossQuantity(),
+                    InventoryQuantity.csv(entry.getLossQuantity()),
+                    InventoryQuantity.csv(entry.getGrossQuantity()),
                     CsvSupport.escape(entry.getStorageLocation(), ',')));
             writer.write(System.lineSeparator());
         }

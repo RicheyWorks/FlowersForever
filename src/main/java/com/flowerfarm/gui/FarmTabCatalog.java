@@ -995,55 +995,10 @@ public final class FarmTabCatalog {
                 && !enabled.contains(FarmWorkspace.WILDFLOWER_FARM)) {
             productionStudio.setRetailMode(true);
         }
-        if (workspace == FarmWorkspace.FLOWER_SHOP
-                || workspace == FarmWorkspace.CANNABIS_FARM
-                || workspace == FarmWorkspace.POTATO_FARM
-                || workspace == FarmWorkspace.APPLE_ORCHARD
-                || workspace == FarmWorkspace.BERRY_FARM
-                || workspace == FarmWorkspace.NURSERY_FARM
-                || workspace == FarmWorkspace.LIVESTOCK_FARM
-                || workspace == FarmWorkspace.POULTRY_FARM
-                || workspace == FarmWorkspace.DAIRY_FARM
-                || workspace == FarmWorkspace.VINEYARD_FARM
-                || workspace == FarmWorkspace.HAY_FARM
-                || workspace == FarmWorkspace.HOPS_FARM
-                || workspace == FarmWorkspace.GRAIN_FARM
-                || workspace == FarmWorkspace.SEED_FARM
-                || workspace == FarmWorkspace.NUT_ORCHARD
-                || workspace == FarmWorkspace.VEGETABLE_FARM
-                || workspace == FarmWorkspace.AQUACULTURE_FARM
-                || workspace == FarmWorkspace.CHRISTMAS_TREE_FARM
-                || workspace == FarmWorkspace.APIARY_FARM
-                || workspace == FarmWorkspace.MUSHROOM_FARM
-                || workspace == FarmWorkspace.CRANBERRY_FARM
-                || workspace == FarmWorkspace.PUMPKIN_PATCH
-                || workspace == FarmWorkspace.CUSTOM_FARM) {
-            crm.setDefaultUnit("each");
-        }
-        if (workspace == FarmWorkspace.CANNABIS_FARM
-                || workspace == FarmWorkspace.POTATO_FARM
-                || workspace == FarmWorkspace.APPLE_ORCHARD
-                || workspace == FarmWorkspace.BERRY_FARM
-                || workspace == FarmWorkspace.NURSERY_FARM
-                || workspace == FarmWorkspace.LIVESTOCK_FARM
-                || workspace == FarmWorkspace.POULTRY_FARM
-                || workspace == FarmWorkspace.DAIRY_FARM
-                || workspace == FarmWorkspace.VINEYARD_FARM
-                || workspace == FarmWorkspace.HAY_FARM
-                || workspace == FarmWorkspace.HOPS_FARM
-                || workspace == FarmWorkspace.GRAIN_FARM
-                || workspace == FarmWorkspace.SEED_FARM
-                || workspace == FarmWorkspace.NUT_ORCHARD
-                || workspace == FarmWorkspace.VEGETABLE_FARM
-                || workspace == FarmWorkspace.AQUACULTURE_FARM
-                || workspace == FarmWorkspace.CHRISTMAS_TREE_FARM
-                || workspace == FarmWorkspace.APIARY_FARM
-                || workspace == FarmWorkspace.MUSHROOM_FARM
-                || workspace == FarmWorkspace.CRANBERRY_FARM
-                || workspace == FarmWorkspace.PUMPKIN_PATCH
-                || workspace == FarmWorkspace.CUSTOM_FARM) {
-            harvestLog.setDefaultUnit("each");
-        }
+        com.flowerfarm.model.FarmProductProfile productProfile =
+                com.flowerfarm.model.FarmProductProfile.combined(workspace, enabled);
+        crm.setDefaultUnit(productProfile.defaultUnit());
+        harvestLog.setProductProfile(productProfile);
         List<FlowerFarmTab> tabs = enabled.size() > 1
                 ? combinedTabs(enabled, workspace, customMixFocus(settings), host,
                         dashboard, marketDay,

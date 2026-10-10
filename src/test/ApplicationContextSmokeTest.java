@@ -60,6 +60,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         properties = {
                 "spring.main.headless=true",
+                "flowerfarm.inventory.sample-enabled=true",
                 "spring.datasource.url=jdbc:h2:mem:context-smoke;DB_CLOSE_DELAY=-1",
                 "spring.jpa.hibernate.ddl-auto=validate",
                 "flowerfarm.inventory.seed-csv=target/no-context-smoke-seed.csv",
@@ -304,7 +305,7 @@ class ApplicationContextSmokeTest {
                 "concurrency regression",
                 "PICKUP",
                 List.of(new OrderLine("Nootka Rose", 1, "stem", 2.5)));
-        int quantityBefore = inventoryService.findByNameIgnoreCase("Nootka Rose")
+        double quantityBefore = inventoryService.findByNameIgnoreCase("Nootka Rose")
                 .map(Item::getQuantity)
                 .orElseThrow();
 

@@ -1,6 +1,9 @@
 package com.flowerfarm.model;
 
+import com.flowerfarm.util.InventoryQuantity;
+
 import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.persistence.*;
 
@@ -29,6 +32,9 @@ public class HarvestEntry {
 
     @Column(nullable = false)
     private double quantity;
+
+    @Column(name = "inventory_contribution", nullable = false, precision = 16, scale = 6)
+    private java.math.BigDecimal inventoryContribution;
 
     @Column(nullable = false, length = 64)
     private String unit;
@@ -92,6 +98,7 @@ public class HarvestEntry {
         setHarvestDate(harvestDate);
         setCropName(cropName);
         setQuantity(quantity);
+        setInventoryContribution(quantity);
         setUnit(unit);
         setBedOrField(bedOrField);
         setNotes(notes);
@@ -105,6 +112,11 @@ public class HarvestEntry {
     public LocalDate getHarvestDate() { return harvestDate; }
     public String getCropName() { return cropName; }
     public double getQuantity() { return quantity; }
+    @JsonIgnore
+    public double getInventoryContribution() { return inventoryContribution.doubleValue(); }
+    public void setInventoryContribution(double value) {
+        inventoryContribution = InventoryQuantity.decimal(value);
+    }
     public String getUnit() { return unit; }
     public String getBedOrField() { return bedOrField; }
     public String getNotes() { return notes; }
@@ -112,7 +124,10 @@ public class HarvestEntry {
     public HarvestGrade getGrade() { return grade; }
     public double getLossQuantity() { return lossQuantity; }
     public String getStorageLocation() { return storageLocation; }
-    public double getGrossQuantity() { return quantity + lossQuantity; }
+    public double getGrossQuantity() {
+        return java.math.BigDecimal.valueOf(quantity)
+                .add(java.math.BigDecimal.valueOf(lossQuantity)).doubleValue();
+    }
 
     public void setId(Long id) { this.id = id; }
 

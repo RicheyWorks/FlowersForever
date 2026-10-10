@@ -183,18 +183,18 @@
           <label>
             Crop or product
             <input name="cropName" type="text" maxlength="255" autocomplete="off" list="farm-crop-options"
-                   placeholder="e.g. Cafe au Lait Dahlia" required>
+                   placeholder="Enter the variety or named product" required>
           </label>
         </div>
         <div class="field-grid quantity-grid">
           <label>
             Marketable quantity
-            <input name="quantity" type="number" min="0.01" step="0.01"
+            <input name="quantity" type="number" min="0.000001" step="0.000001"
                    inputmode="decimal" placeholder="0" required>
           </label>
           <label>
             Unit
-            <input name="unit" type="text" maxlength="64" value="stems" required>
+            <input name="unit" type="text" maxlength="64" value="each" required>
           </label>
           <label>
             Bed or field
@@ -220,7 +220,7 @@
           </label>
           <label>
             Loss / culls
-            <input name="lossQuantity" type="number" min="0" step="0.01"
+            <input name="lossQuantity" type="number" min="0" step="0.000001"
                    inputmode="decimal" value="0">
           </label>
           <label>
@@ -327,7 +327,7 @@
       <form class="inventory-form">
         <label>
           Physical count
-          <input name="countedQuantity" type="number" min="0" step="1"
+          <input name="countedQuantity" type="number" min="0" step="0.000001"
                  inputmode="numeric" required>
         </label>
         <div class="inventory-actions">

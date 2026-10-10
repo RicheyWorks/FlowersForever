@@ -14,7 +14,7 @@ FlowersForever brings a farm's plans, harvests, stock, customers, orders, and fi
 
 **Local desktop records · Printable farm paperwork · Optional connected phone field entry**
 
-[See a five-minute farm day](#take-a-five-minute-tour) · [Explore farm types](#one-farm-can-be-many-things) · [Ask about pilot access](docs/PILOT_ACCESS.md)
+[Browse the tabs](#explore-the-tabs) · [See a five-minute farm day](#take-a-five-minute-tour) · [Explore farm types](#one-farm-can-be-many-things) · [Ask about pilot access](docs/PILOT_ACCESS.md)
 
 </div>
 
@@ -28,11 +28,56 @@ What is ready to cut? What is in stock? Which orders need attention before the v
   <sub>Actual desktop screen · sample farm data · select any image for full size</sub>
 </p>
 
+## Explore the tabs
+
+See the screens your team will use, from customer records to field work and soil tools. **These are actual app views with sample records and example entry forms.** Select any picture to open it at full size.
+
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <a href="docs/images/app-customers.png"><img src="docs/images/app-customers.png" width="100%" alt="Customers: Keep contacts, account details, and pickup notes together."></a><br>
+      <strong>Customers</strong><br>Keep contacts, account details, and pickup notes together.
+    </td>
+    <td width="50%" valign="top">
+      <a href="docs/images/app-orders.png"><img src="docs/images/app-orders.png" width="100%" alt="Orders: Review customer orders, status, and handoff details before completion."></a><br>
+      <strong>Orders</strong><br>Review customer orders, status, and handoff details before completion.
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <a href="docs/images/app-production-studio.png"><img src="docs/images/app-production-studio.png" width="100%" alt="Production Studio: See field work by crop and bed; record crew time, inputs, and observations."></a><br>
+      <strong>Production Studio</strong><br>See field work by crop and bed; record crew time, inputs, and observations.
+    </td>
+    <td width="50%" valign="top">
+      <a href="docs/images/app-trend-analysis.png"><img src="docs/images/app-trend-analysis.png" width="100%" alt="Harvest outlook: Compare recorded harvests with a fitted trend and a clearly marked forecast."></a><br>
+      <strong>Harvest outlook</strong><br>Compare recorded harvests with a fitted trend and a clearly marked forecast.
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <a href="docs/images/app-plant-guide.png"><img src="docs/images/app-plant-guide.png" width="100%" alt="Plant guide: Search Pacific Northwest plant profiles and read the sources behind the notes."></a><br>
+      <strong>Plant guide</strong><br>Search Pacific Northwest plant profiles and read the sources behind the notes.
+    </td>
+    <td width="50%" valign="top">
+      <a href="docs/images/app-field-science.png"><img src="docs/images/app-field-science.png" width="100%" alt="Field science: Open Soil Recipes, Soil Bench, and other offline tools; review exports before saving."></a><br>
+      <strong>Field science</strong><br>Open Soil Recipes, Soil Bench, and other offline tools; review exports before saving.
+    </td>
+  </tr>
+</table>
+
+[Browse the full screenshot tour](docs/SCREENSHOTS.md) for shared tabs, flower references, and the farm-specific notebooks. The tools shown depend on your selected farm types.
+
 ## One farm can be many things
 
 Grow roses for weddings and sell stems or bouquets. Run a flower shop alongside your fields. Grow potatoes, apples, and cannabis on the same operation. **Choose the types that fit, then keep one set of customers, inventory, orders, and notes.**
 
 The farm menu offers **25 starting points**, including Rose & events, Wildflower farm, Flower shop, Cannabis farm, Potato farm, Apple orchard, Poultry & eggs, Dairy farm, Aquaculture farm, and Custom farm. The [farm-type guide](docs/FARM_TYPES.md) shows every choice and what its tools do today.
+
+Each type supplies named product starters and suitable units. Cannabis starts with
+named flower varieties and grams; dairy uses gallons, nursery uses plants, and
+livestock uses head counts. Measured stock keeps up to six decimal places through
+harvests, orders, physical counts, and exports. Counted products still use whole
+quantities. Mixed farms keep the starter units for each selected type.
 
 <p align="center">
   <a href="docs/images/app-combined-farm-launcher.png"><img src="docs/images/app-combined-farm-launcher.png" width="100%" alt="Farm menu showing potato, cannabis, and apple in one saved operation, with other types ready to add"></a><br>
@@ -60,31 +105,31 @@ For a cut-flower team, one saved harvest updates matching stock and production h
   <tr>
     <td width="50%" valign="top">
       <a href="docs/images/app-season-planner.png"><img src="docs/images/app-season-planner.png" alt="Season planner with bed timelines and a visible overlap"></a><br>
-      <strong>Plan what comes next.</strong><br>See planting and harvest windows, spot bed overlaps, and compare planned stems with actual cuts.
+      <strong>Season Planner · Plan what comes next.</strong><br>See planting and harvest windows, spot bed overlaps, and compare planned stems with actual cuts.
     </td>
     <td width="50%" valign="top">
       <a href="docs/images/app-harvest-log.png"><img src="docs/images/app-harvest-log.png" alt="Harvest entry with crop, quantity, unit, date, bed, and recent saved rows"></a><br>
-      <strong>Record the harvest once.</strong><br>Capture a cut while it is fresh, with its crop and bed attached.
+      <strong>Harvest Log · Record the harvest once.</strong><br>Capture a cut while it is fresh, with its crop and bed attached.
     </td>
   </tr>
   <tr>
     <td width="50%" valign="top">
       <a href="docs/images/app-inventory.png"><img src="docs/images/app-inventory.png" alt="Inventory showing products, on-hand quantities, and low-stock context"></a><br>
-      <strong>Know what is available.</strong><br>Review on-hand stock, prices, and low-stock items before promising an order.
+      <strong>Inventory · Know what is available.</strong><br>Review on-hand stock, prices, and low-stock items before promising an order.
     </td>
     <td width="50%" valign="top">
       <a href="docs/images/app-market-day.png"><img src="docs/images/app-market-day.png" alt="Market Day packing view with confirmed orders, pick list, stock comparison, and handoff blockers"></a><br>
-      <strong>Pack with the full picture.</strong><br>See confirmed loads, stock needs, and missing handoff details before completing an order.
+      <strong>Market Day · Pack with the full picture.</strong><br>See confirmed loads, stock needs, and missing handoff details before completing an order.
     </td>
   </tr>
   <tr>
     <td width="50%" valign="top">
       <a href="docs/images/app-day-closeout.png"><img src="docs/images/app-day-closeout.png" alt="Day closeout with harvest, sales, open orders, and follow-up context"></a><br>
-      <strong>Close the day clearly.</strong><br>Review what was finished, what remains open, and what needs follow-up.
+      <strong>Day closeout · Close the day clearly.</strong><br>Review what was finished, what remains open, and what needs follow-up.
     </td>
     <td width="50%" valign="top">
       <a href="docs/images/app-knowledge-log.png"><img src="docs/images/app-knowledge-log.png" alt="Knowledge Log with searchable farm observations, tags, and a selected lesson"></a><br>
-      <strong>Keep the lesson with the farm.</strong><br>Find an observation by crop, bed, month, or the words your team remembers.
+      <strong>Knowledge Log · Keep the lesson with the farm.</strong><br>Find an observation by crop, bed, month, or the words your team remembers.
     </td>
   </tr>
 </table>
@@ -97,11 +142,11 @@ Farm setup holds your mix of enterprises and named crops. Edit plan details as t
   <tr>
     <td width="50%" valign="top">
       <a href="docs/images/app-add-item.png"><img src="docs/images/app-add-item.png" alt="Add Item screen with editable product, category, unit, quantity, and price"></a><br>
-      <strong>Your products, your units.</strong><br>Record what this farm actually sells, then edit it when the details change.
+      <strong>Add Item · Your products, your units.</strong><br>Record what this farm actually sells, then edit it when the details change.
     </td>
     <td width="50%" valign="top">
       <a href="docs/images/app-event-services.png"><img src="docs/images/app-event-services.png" alt="Wedding and memorial services catalog beside an editable event brief builder"></a><br>
-      <strong>Flowers for a real event.</strong><br>Build an editable wedding or memorial brief from service starters and keep the customer order nearby.
+      <strong>Event services · Flowers for a real event.</strong><br>Build an editable wedding or memorial brief from service starters and keep the customer order nearby.
     </td>
   </tr>
 </table>
@@ -121,14 +166,39 @@ The combined workspace can show a berry block plan beside an egg collection log,
   <tr>
     <td width="50%" valign="top">
       <a href="docs/images/app-berry-block-plan.png"><img src="docs/images/app-berry-block-plan.png" alt="Berry block plan with crop, cultivar, acreage, planned picking window, channel, and editable details"></a><br>
-      <strong>Plan a berry block.</strong><br>Name its crop, growing area, picking window, and intended channel.
+      <strong>Berry block plans · Plan a berry block.</strong><br>Name its crop, growing area, picking window, and intended channel.
     </td>
     <td width="50%" valign="top">
       <a href="docs/images/app-egg-collection-form.png"><img src="docs/images/app-egg-collection-form.png" alt="Egg collection form with flock, date, collected and unusable counts, and usable total"></a><br>
-      <strong>Log an egg collection.</strong><br>Record counts by flock and day, then correct an entry if needed.
+      <strong>Egg collections · Log an egg collection.</strong><br>Record counts by flock and day, then correct an entry if needed.
     </td>
   </tr>
 </table>
+
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <a href="docs/images/app-cannabis-cultivation.png"><img src="docs/images/app-cannabis-cultivation.png" width="100%" alt="Cultivation notebook · Cannabis: Plan a named batch with its cultivar, growing area, plant count, and dates."></a><br>
+      <strong>Cultivation notebook · Cannabis</strong><br>Plan a named batch with its cultivar, growing area, plant count, and dates.
+    </td>
+    <td width="50%" valign="top">
+      <a href="docs/images/app-milk-collection-form.png"><img src="docs/images/app-milk-collection-form.png" width="100%" alt="Milk collections · Dairy: Log a collection with the herd, date, volume, and collection notes."></a><br>
+      <strong>Milk collections · Dairy</strong><br>Log a collection with the herd, date, volume, and collection notes.
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <a href="docs/images/app-nursery-growing-batch.png"><img src="docs/images/app-nursery-growing-batch.png" width="100%" alt="Growing batches · Nursery: Track a named growing batch, crop, plant count, and stage."></a><br>
+      <strong>Growing batches · Nursery</strong><br>Track a named growing batch, crop, plant count, and stage.
+    </td>
+    <td width="50%" valign="top">
+      <a href="docs/images/app-vegetable-plantings.png"><img src="docs/images/app-vegetable-plantings.png" width="100%" alt="Vegetable plantings: Keep crop, variety, bed, and planned planting dates in an editable record."></a><br>
+      <strong>Vegetable plantings</strong><br>Keep crop, variety, bed, and planned planting dates in an editable record.
+    </td>
+  </tr>
+</table>
+
+[See more specialty tabs](docs/SCREENSHOTS.md#farm-specific-notebooks): orchards, potato fields, herds, aquaculture, apiaries, mushrooms, and more.
 
 The bundled **Field science** shelf brings relevant offline CSRBT tools into selected farm types. Cannabis growers can open Subcool's Super Soil in Soil Recipes, then save a reviewed text export and link a finding to that source. [Explore the farm-to-tool map](docs/CSRBT_FIELD_KIT_PORT.md).
 

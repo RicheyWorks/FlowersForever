@@ -1,5 +1,7 @@
 package com.flowerfarm.gui.view;
 
+import com.flowerfarm.util.InventoryQuantity;
+
 import com.flowerfarm.gui.FarmUi;
 import com.flowerfarm.gui.presenter.InventoryItemPresenter;
 import com.flowerfarm.model.Item;
@@ -45,6 +47,29 @@ public final class InventoryItemFormView extends JPanel {
     private JPanel roseFieldGroup;
     private Runnable validationCorrectionListener = () -> { };
     private Runnable draftChangeListener = () -> { };
+    private com.flowerfarm.model.FarmProductProfile productProfile;
+
+    /** Configure before loading a saved item so saved names, units, and quantities survive. */
+    public void setProductProfile(com.flowerfarm.model.FarmProductProfile profile) {
+        productProfile = java.util.Objects.requireNonNull(profile);
+        categoryBox.removeAllItems();
+        categoryBox.addItem(profile.category());
+        java.util.Set<String> categories = new java.util.LinkedHashSet<>();
+        categories.add(profile.category());
+        for (com.flowerfarm.model.FarmWorkspace workspace : com.flowerfarm.model.FarmWorkspace.values()) {
+            com.flowerfarm.model.FarmProductProfile candidate = com.flowerfarm.model.FarmProductProfile.forWorkspace(workspace);
+            if (candidate.examples().stream().anyMatch(profile.examples()::contains)
+                    && categories.add(candidate.category())) categoryBox.addItem(candidate.category());
+        }
+        for (String category : CATEGORIES) {
+            if (!category.equals("Flowers/Plants") && !category.equals(profile.category())) categoryBox.addItem(category);
+        }
+        unitBox.removeAllItems();
+        profile.units().forEach(unitBox::addItem);
+        FarmUi.entryControl(nameField, profile.nameHint(), "Use your cultivar, variety, breed, or named product.");
+        FarmUi.entryControl(quantityField, "0", profile.quantityHint());
+        FarmUi.entryControl(notesField, "e.g. Lot · storage location", "Optional batch, source, or packing notes.");
+    }
 
     public InventoryItemFormView() {
         super(new GridBagLayout());
@@ -136,7 +161,7 @@ public final class InventoryItemFormView extends JPanel {
         priceField.setText(String.format(java.util.Locale.US, "%.2f", item.getPrice()));
         unitBox.setSelectedItem(item.getUnit());
         costField.setText(String.format(java.util.Locale.US, "%.2f", item.getCost()));
-        quantityField.setText(String.valueOf(item.getQuantity()));
+        quantityField.setText(InventoryQuantity.format(item.getQuantity()));
         String notes = item.getNotes() == null ? "" : item.getNotes();
         if (notes.startsWith("Type: ")) {
             int separator = notes.indexOf(';');
@@ -268,6 +293,16 @@ public final class InventoryItemFormView extends JPanel {
     /** Applies safe defaults for a repeated farm item type without erasing entered prices. */
     public void applyPreset(String preset) {
         clearValidation();
+        if (productProfile != null && productProfile.examples().contains(preset)) {
+            com.flowerfarm.model.FarmProductProfile starter = java.util.Arrays.stream(
+                    com.flowerfarm.model.FarmWorkspace.values())
+                    .map(com.flowerfarm.model.FarmProductProfile::forWorkspace)
+                    .filter(candidate -> candidate.examples().contains(preset)).findFirst().orElse(productProfile);
+            if (nameField.getText().isBlank()) nameField.setText(preset);
+            categoryBox.setSelectedItem(starter.category());
+            unitBox.setSelectedItem(starter.defaultUnit());
+            return;
+        }
         switch (preset == null ? "" : preset) {
             case "Cut flower / stem" -> {
                 categoryBox.setSelectedItem("Flowers/Plants");
@@ -287,9 +322,9 @@ public final class InventoryItemFormView extends JPanel {
                     applyFlowerStarter("Wedding Flower Bucket", "Per Unit");
             case "Flower subscription" ->
                     applyFlowerStarter("Flower Subscription Bouquet", "Per Unit");
-            case "Potted plant" -> applyFlowerStarter("Potted Plant", "Per Unit");
-            case "Seedling tray" -> applyFlowerStarter("Seedling Tray", "Per Unit");
-            case "Bare-root plant" -> applyFlowerStarter("Bare-root Plant", "Per Unit");
+            case "Potted plant" -> applyNurseryStarter("Potted Plant", "pots");
+            case "Seedling tray" -> applyNurseryStarter("Seedling Tray", "trays");
+            case "Bare-root plant" -> applyNurseryStarter("Bare-root Plant", "plants");
             case "Farm supply" -> {
                 categoryBox.setSelectedItem("Other");
                 unitBox.setSelectedItem("Per Unit");
@@ -370,6 +405,12 @@ public final class InventoryItemFormView extends JPanel {
     private void updateRoseAvailability() {
         roseBox.setEnabled("Flowers/Plants".equals(selectedText(categoryBox))
                 && categoryBox.isEnabled());
+    }
+
+    private void applyNurseryStarter(String name, String unit) {
+        if (nameField.getText().isBlank()) nameField.setText(name);
+        categoryBox.setSelectedItem("Live plants");
+        unitBox.setSelectedItem(unit);
     }
 
     private String selectedRoseVariety() {

@@ -18,6 +18,7 @@ import static org.assertj.core.api.Assertions.assertThat;
                 "spring.datasource.url=jdbc:h2:mem:mcp-farm-data;DB_CLOSE_DELAY=-1",
                 "spring.jpa.hibernate.ddl-auto=validate",
                 "flowerfarm.inventory.seed-csv=target/no-mcp-farm-data-seed.csv",
+                "flowerfarm.inventory.sample-enabled=true",
                 "flowerfarm.irrigation.live-weather=false",
                 "flowerfarm.harness.enabled=true",
                 "flowerfarm.harness.token=mcp-farm-data-token-123456",

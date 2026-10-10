@@ -60,7 +60,7 @@ class InventoryControllerIT {
                     .andExpect(jsonPath("$[0].name", is("Nootka Rose")))
                     .andExpect(jsonPath("$[0].category", is("Flowers/Plants")))
                     .andExpect(jsonPath("$[0].price", is(3.50)))
-                    .andExpect(jsonPath("$[0].quantity", is(50)));
+                    .andExpect(jsonPath("$[0].quantity", is(50.0)));
         }
 
         @Test

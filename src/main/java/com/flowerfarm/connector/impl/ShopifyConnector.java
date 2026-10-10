@@ -1,5 +1,7 @@
 package com.flowerfarm.connector.impl;
 
+import com.flowerfarm.util.InventoryQuantity;
+
 import com.flowerfarm.connector.ConnectorHttpClient;
 import com.flowerfarm.connector.*;
 import com.flowerfarm.model.Item;
@@ -371,7 +373,7 @@ public class ShopifyConnector implements ExternalConnector<Map<String, Object>>,
             String name = str(flat.get("title"), "Unknown");
             String category = str(flat.get("product_type"), "Other");
             double price = parseDouble(flat.get("price"), 0.0);
-            int qty = parseInt(flat.get("inventory_quantity"), 0);
+            double qty = InventoryQuantity.parse(flat.get("inventory_quantity"));
             String notes = stripHtml(str(flat.get("body_html"), ""));
             return new Item(name, category, price, "Per Stem", 0.0, qty, notes);
         } catch (Exception ex) {
@@ -385,7 +387,7 @@ public class ShopifyConnector implements ExternalConnector<Map<String, Object>>,
         Map<String, Object> variant = new LinkedHashMap<>();
         variant.put("price", String.format(Locale.US, "%.2f", item.getPrice()));
         variant.put("inventory_management", "shopify");
-        variant.put("inventory_quantity", item.getQuantity());
+        variant.put("inventory_quantity", InventoryQuantity.whole(item.getQuantity()));
         if (item.getUnit() != null && !item.getUnit().isBlank()) {
             variant.put("sku", item.getUnit());
         }
@@ -433,7 +435,7 @@ public class ShopifyConnector implements ExternalConnector<Map<String, Object>>,
             variantUpdate.put("id", existing.get("id"));
             variantUpdate.put("price", String.format(Locale.US, "%.2f", local.getPrice()));
             // inventory_quantity on product update is best-effort; Shopify may require Inventory API
-            variantUpdate.put("inventory_quantity", local.getQuantity());
+            variantUpdate.put("inventory_quantity", InventoryQuantity.whole(local.getQuantity()));
             product.put("variants", List.of(variantUpdate));
         }
 

@@ -68,7 +68,6 @@ import java.awt.event.KeyEvent;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.io.File;
-import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -2338,7 +2337,7 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
                 farmProfile.getName(),
                 farmProfile.getTagline(),
                 farmProfile.locationLabel(),
-                LocalDate.now(farmProfile.zoneId()).format(DateTimeFormatter.ofPattern(
+                farmProfile.today().format(DateTimeFormatter.ofPattern(
                         "EEEE · MMMM d", Locale.US)),
                 FarmSetupDialog.workspaceLabel(currentWorkspace));
     }

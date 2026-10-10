@@ -55,12 +55,12 @@ public class GrowerReminderService {
 
     @Transactional(readOnly = true)
     public GrowerReminders.Digest collect() {
-        return collect(LocalDate.now(farmProfile.zoneId()));
+        return collect(farmProfile.today());
     }
 
     @Transactional(readOnly = true)
     public GrowerReminders.Digest collect(LocalDate date) {
-        LocalDate day = date == null ? LocalDate.now(farmProfile.zoneId()) : date;
+        LocalDate day = date == null ? farmProfile.today() : date;
         List<ProductionTask> tasks = productionStudioService.listOpenTasksDueThrough(day, 8);
         List<KnowledgeEntry> followUps = knowledgeService.search(new KnowledgeService.SearchRequest(
                 "", "", "", "", null, null, true, 6));
@@ -80,7 +80,7 @@ public class GrowerReminderService {
                 low.add(item);
             }
         }
-        low.sort(Comparator.comparingInt(Item::getQuantity).thenComparing(Item::getName,
+        low.sort(Comparator.comparingDouble(Item::getQuantity).thenComparing(Item::getName,
                 Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER)));
         if (low.size() > 6) {
             return List.copyOf(low.subList(0, 6));

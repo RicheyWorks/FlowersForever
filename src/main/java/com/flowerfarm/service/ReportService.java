@@ -1,5 +1,7 @@
 package com.flowerfarm.service;
 
+import com.flowerfarm.util.InventoryQuantity;
+
 import com.flowerfarm.model.FarmProfile;
 import com.flowerfarm.model.CustomerOrder;
 import com.flowerfarm.model.HarvestEntry;
@@ -48,9 +50,11 @@ public class ReportService {
     }
 
     /** Weekly report ending today (inclusive), 7 days total. */
+    public LocalDate today() { return farmProfile.today(); }
+
     @Transactional(readOnly = true)
     public byte[] generateWeeklyReportPdf() {
-        LocalDate to = LocalDate.now(farmProfile.zoneId());
+        LocalDate to = today();
         LocalDate from = to.minusDays(6);
         return generateReportPdf(from, to);
     }
@@ -92,7 +96,7 @@ public class ReportService {
 
         List<HarvestEntry> harvests = harvestService.findBetween(from, to);
         List<CustomerOrder> orders = orderService.findBetween(from, to);
-        Map<String, Double> harvestTotals = harvestService.totalsByCrop(); // season-to-date snapshot
+        Map<String, Double> harvestTotals = harvestService.totalsByProductUnit(); // season-to-date snapshot
         double committedRevenue = orders.stream()
                 .filter(o -> {
                     String s = o.getStatus();
@@ -137,7 +141,7 @@ public class ReportService {
             doc.add(new Paragraph(
                     "Period: " + DAY.format(from) + "  →  " + DAY.format(to)
                             + "     ·     Generated: "
-                            + DAY.format(LocalDate.now(farmProfile.zoneId())),
+                            + DAY.format(farmProfile.today()),
                     small));
             doc.add(Chunk.NEWLINE);
 
@@ -173,7 +177,7 @@ public class ReportService {
                 for (HarvestEntry h : harvests) {
                     table.addCell(cell(DAY.format(h.getHarvestDate()), body));
                     table.addCell(cell(h.getCropName(), body));
-                    table.addCell(cell(String.format("%.1f", h.getQuantity()), body));
+                    table.addCell(cell(InventoryQuantity.format(h.getQuantity()), body));
                     table.addCell(cell(h.getUnit(), body));
                     table.addCell(cell(nullToEmpty(h.getBedOrField()), body));
                 }
@@ -191,7 +195,7 @@ public class ReportService {
                 headerCell(totals, "Total qty");
                 harvestTotals.forEach((crop, qty) -> {
                     totals.addCell(cell(crop, body));
-                    totals.addCell(cell(String.format("%.1f", qty), body));
+                    totals.addCell(cell(InventoryQuantity.format(qty), body));
                 });
                 doc.add(totals);
             }
@@ -206,7 +210,7 @@ public class ReportService {
                     bedReport.bedCount() == 0
                             ? "No bed-tagged harvests in this period (set Bed / field when logging cuts)."
                             : bedReport.bedCount() + " bed(s) · " + bedReport.entryCount()
-                            + " log(s) · total qty " + String.format("%,.1f", bedReport.grandTotal()),
+                            + " log(s) · " + InventoryQuantity.summary(harvests, HarvestEntry::getQuantity, HarvestEntry::getUnit),
                     body));
             doc.add(Chunk.NEWLINE);
             if (!bedReport.beds().isEmpty()) {
@@ -220,11 +224,11 @@ public class ReportService {
                 for (HarvestService.BedProduction b : bedReport.beds()) {
                     String topCrop = "—";
                     if (!b.byCrop().isEmpty()) {
-                        Map.Entry<String, Double> first = b.byCrop().entrySet().iterator().next();
-                        topCrop = first.getKey() + " (" + String.format("%.0f", first.getValue()) + ")";
+                        Map.Entry<String, Double> first = b.byProductUnit().entrySet().iterator().next();
+                        topCrop = first.getKey() + " (" + InventoryQuantity.format(first.getValue()) + ")";
                     }
                     bedTable.addCell(cell(b.bed(), body));
-                    bedTable.addCell(cell(String.format("%.1f", b.totalQuantity()), body));
+                    bedTable.addCell(cell(b.quantitySummary(), body));
                     bedTable.addCell(cell(String.valueOf(b.entryCount()), body));
                     bedTable.addCell(cell(topCrop, body));
                     bedTable.addCell(cell(b.firstDate() + " → " + b.lastDate(), body));
@@ -273,8 +277,8 @@ public class ReportService {
                     } else {
                         for (OrderLine line : o.getLines()) {
                             doc.add(new Paragraph(String.format(
-                                    "  • %s — %.1f %s @ $%.2f = $%.2f",
-                                    line.getProductName(), line.getQuantity(), line.getUnit(),
+                                    "  • %s — %s %s @ $%.2f = $%.2f",
+                                    line.getProductName(), InventoryQuantity.format(line.getQuantity()), line.getUnit(),
                                     line.getUnitPrice(), line.lineTotal()), body));
                         }
                     }

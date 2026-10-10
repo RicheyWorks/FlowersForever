@@ -41,10 +41,10 @@
     "src/main/java/com/flowerfarm/automation/farm/FarmDataCommandTransactions.java": "25273196da7a6ea357501ef5cd413a7c8236d52914af106f60c8ab8c33e58c89",
     "src/main/java/com/flowerfarm/automation/farm/FarmDataExportConflictException.java": "87e843f59996aed530f8f5633c91d2912be413910b105c159ece6d7e64a02dc2",
     "src/main/java/com/flowerfarm/automation/farm/FarmDataExportService.java": "ac89a33da3057970f84d87578b08a399454e4978743ae2ceed5d85931de62fdb",
-    "src/main/java/com/flowerfarm/automation/farm/FarmDataHarnessPlugin.java": "37f6e553c5c43c6dda6dfec6c561d69cce2494ab6a30106acf2e570a3249add5",
+    "src/main/java/com/flowerfarm/automation/farm/FarmDataHarnessPlugin.java": "88ca470bd35fa36ebedf40d4e95e3682b6bcf3dd3adcf0ac56e49949fc0799e2",
     "src/main/java/com/flowerfarm/automation/farm/FarmDataImportConflictException.java": "65502e07adf93198126f43790e64b2cdd5461a32b65e4d41b482ca1767e41fe5",
     "src/main/java/com/flowerfarm/automation/farm/FarmDataImportReceiptService.java": "f6f499ace4d82e07aece6a64093af80df855913176816daf5a3562356f199d25",
-    "src/main/java/com/flowerfarm/automation/farm/FarmDataMappingService.java": "6060305c19fa816c55c59417f13b5f0baf60d7ab9538bcb92460d20c1d6f4003",
+    "src/main/java/com/flowerfarm/automation/farm/FarmDataMappingService.java": "9c2f516144b0abe4da98b7f4bcbd50b1d4c28eeec3ffbbd15f39e0d476529127",
     "src/main/java/com/flowerfarm/automation/farm/FarmDataPageService.java": "f76181a5dda514fe7d47f6decf9667bce4991034f42afadaa42db78d013c7db3",
     "src/main/java/com/flowerfarm/automation/mcp/McpDoctor.java": "8521bdba111ec2a7e71c3a4e4ccd8dca506d1635196711733ebbe1e9c17b8479",
     "src/main/java/com/flowerfarm/automation/mcp/McpDoctorBootstrap.java": "2b230220c00aea424da91cda0783a102fd51dbb9522639390da932288f5855a6",
@@ -79,15 +79,16 @@
     "src/main/java/com/flowerfarm/backup/BackupSchedule.java": "000af83fabaed0f22635efaa4429724e316d1bbe4a4202e86505944178417021",
     "src/main/java/com/flowerfarm/backup/BackupSettings.java": "032b7039f05d13c44f26bf42fb7a2313eab2555d639ac6ec6de3f33f31c1e9a4",
     "src/main/java/com/flowerfarm/backup/DamagedRecordsException.java": "417d9f458115aa18c5b33559ee7b934a70db35aa3e359db4e6ddabb3b41a2134",
-    "src/main/java/com/flowerfarm/backup/DatabaseIntegrityGuard.java": "6b7a7535206a6e192f25880af69e2aa2a6fd144650e8a1f958da22b3d937b288",
+    "src/main/java/com/flowerfarm/backup/DatabaseIntegrityGuard.java": "37bbfb1893977eea793f035856ceff708dc0776b06d1cb9b4a431a0b636934e1",
     "src/main/java/com/flowerfarm/backup/DatabaseSnapshot.java": "294d862d7f495b324a085c4a435a688c2d395eb7c40f2eb51c5ae88ed7bcc789",
     "src/main/java/com/flowerfarm/backup/LiveBackupService.java": "e9867cf0a018f4790c533aa3a458854b144a84cdd3b0ada351fca11543e191f9",
+    "src/main/java/com/flowerfarm/backup/RecordsReadProbe.java": "af68f744428fef9042d9ba4d79f06af7de37cfd2391358569df63845ea0451ac",
     "src/main/java/com/flowerfarm/backup/RestoreRecords.java": "0a5ade7ee8f467ad695741fe4fea26add7052a44961a0cf098b11f8c214d29a8",
-    "src/main/java/com/flowerfarm/backup/RestoreService.java": "9ece7fe977f2bc9ac23b738bb0a5f5efaee314ee6ac92984f8a55ff024e48093",
-    "src/main/java/com/flowerfarm/backup/RestoreStartup.java": "08803a554b73dd2660cbdfbb96a6fce7f3cc9b35e73847dae1f9403a7ba78128",
+    "src/main/java/com/flowerfarm/backup/RestoreService.java": "3edebce66e184646db8996a1c60dac778669ecca4a2e2a58e828cdba57ee325b",
+    "src/main/java/com/flowerfarm/backup/RestoreStartup.java": "1c9beb64885ee012eb94abf87cad8d441bb741c168a98305fda91ec1f3bf308b",
     "src/main/java/com/flowerfarm/cli/CliCommandRouter.java": "3fda559a18110e663d4c8dd959327bf060e72718e6fab03420ae1d00312e5f2e",
     "src/main/java/com/flowerfarm/cli/CliReportCommands.java": "28673c5145e4322cd4869b94f7955322ed4503d77a3b65e26e55d3df76f58f20",
-    "src/main/java/com/flowerfarm/cli/FlowerFarmCLI.java": "ffb107d2ed2bafd8dacb468c1c3aa2b9861804907dd83177e77813bea578884b",
+    "src/main/java/com/flowerfarm/cli/FlowerFarmCLI.java": "c358ba47ccfff21d4c3f3771f705f88692fed090d67117efb9b7cbcf19f98ec2",
     "src/main/java/com/flowerfarm/config/AppDataBootstrap.java": "ff21ca0c49934e18155503df7bb070f19be3a3843a7c17b27dcef839958e63d0",
     "src/main/java/com/flowerfarm/config/DemoDataSeeder.java": "4872888411b933495b3cc9f3157c40f1dc936a53da925ac78ae9872a6609cb4c",
     "src/main/java/com/flowerfarm/config/FarmProfileConfig.java": "b2799878c633f1b96be3e65f2ebfd56702eb2f45892013f6d228ed3c420494c1",
@@ -99,18 +100,18 @@
     "src/main/java/com/flowerfarm/connector/ConnectorResult.java": "6a0a340fe36da67ee884730b9899dbf139d3082f209c067e7ecea3aa95a8a5cc",
     "src/main/java/com/flowerfarm/connector/DualModeCapable.java": "2efba74a0ef2c1c05879cdb4eedb66115f7abb472da270b8a01c0a55ed0dd3bf",
     "src/main/java/com/flowerfarm/connector/ExternalConnector.java": "033577313e834e0c2350e62e501d6c2a06ea58f09fe38f6c578afbb000b2ac19",
-    "src/main/java/com/flowerfarm/connector/FieldMapper.java": "529cce031b4828508ad3c27ee56a2ae4c9117aaceb926e225624a5f05370709c",
+    "src/main/java/com/flowerfarm/connector/FieldMapper.java": "a4464324fd5d2b89ef634b5b44b571c7e79b9761dab57fc9e9703d4c57d57974",
     "src/main/java/com/flowerfarm/connector/LocalJsonMirror.java": "8a7ece89ae5f539341c1a6299c532035ce0d7e4ef49ede316a32578f85f949c7",
     "src/main/java/com/flowerfarm/connector/SyncDirection.java": "a409b9858b78483beb8f77c514959be142d7a3e17fc9cf56eb4acf4d4a39f4ea",
     "src/main/java/com/flowerfarm/connector/SyncSummary.java": "a83b72a91936c07a1e575f30a90027c4468134e1b76ba7f5f74675b150bd2e10",
     "src/main/java/com/flowerfarm/connector/impl/AirtableConnector.java": "432f5b3426f12aa62f6823a4a8df05cab66f3bcebce8425ed682f1c177b9d23f",
-    "src/main/java/com/flowerfarm/connector/impl/CsvInventoryConnector.java": "a1cd44aef483a3d80ee7a4e7c9c966f745eda4390615b7356d0d4d740a09fd1f",
-    "src/main/java/com/flowerfarm/connector/impl/ExcelConnector.java": "4b25160db07cab58d45c78a1efb23342f53d86f830e6238bdd36e4857f83d9b7",
-    "src/main/java/com/flowerfarm/connector/impl/FarmbriteConnector.java": "8a6cdc5ed48a98b5dd484b51cd612621d910ff92b5759648052a158663ab9240",
-    "src/main/java/com/flowerfarm/connector/impl/FloranextConnector.java": "d040069eb058b8c711616a45e6dc4a6c1e968c4d3665c17b2a29b72b8c2d996c",
-    "src/main/java/com/flowerfarm/connector/impl/GoogleSheetsConnector.java": "cc359990e0de8bc563f7e2ee84d9032d5526d54752302bc6f6db30f21330ba8e",
-    "src/main/java/com/flowerfarm/connector/impl/ShopifyConnector.java": "fe9cb361e1fc854e20124850359a0da77a146b061a439e2ea4d822eab24f595c",
-    "src/main/java/com/flowerfarm/connector/impl/SquareConnector.java": "ee888ddb2f675a402c77fa230d212704bb9699e7019182e96407884884756184",
+    "src/main/java/com/flowerfarm/connector/impl/CsvInventoryConnector.java": "d01ce43fc91f3679923fc44c7d528c5e87fb4b89e37407cb64a010e08fac2525",
+    "src/main/java/com/flowerfarm/connector/impl/ExcelConnector.java": "d6f87ba999ac06149b2672a35bbf02aaca0c6a65adb9c0ddade6b7aa2f54730e",
+    "src/main/java/com/flowerfarm/connector/impl/FarmbriteConnector.java": "eaeb2b06377128d4442d2448c9d470eb3d49babee0e00d6b631635f031c35c20",
+    "src/main/java/com/flowerfarm/connector/impl/FloranextConnector.java": "1dae24d1e5d21570da9ebfe2c62d0c9254826aad5d530063331de88ecfd189ab",
+    "src/main/java/com/flowerfarm/connector/impl/GoogleSheetsConnector.java": "862fbef8c48b63343de5cd203310400a865e4cfa6fe5cd12ee6a8e73b0ed1d7c",
+    "src/main/java/com/flowerfarm/connector/impl/ShopifyConnector.java": "caa931b25460f2ec683210f47e7247d9d5e892ea2aed0efbfa98f70eb4bfefe3",
+    "src/main/java/com/flowerfarm/connector/impl/SquareConnector.java": "6fa0d523e2b02244843b7b3e731e0467141ddbb92cbd44a7426a0cb2ea9b86a5",
     "src/main/java/com/flowerfarm/connector/impl/WebhookConnector.java": "9ae4ad23df58b5140047000aa21dcac84066a6f58efe396a81e91f93ff5cfb04",
     "src/main/java/com/flowerfarm/controller/ApiExceptionHandler.java": "9559f4358ab79b08ae81e853532b24537948e99f3c1b7cfd124d111c0c36d2fd",
     "src/main/java/com/flowerfarm/controller/AuthController.java": "117477b0981841984109ead4469288d8ab8337aef030b6608b0e3cc4e02cb574",
@@ -133,9 +134,9 @@
     "src/main/java/com/flowerfarm/controller/ReportController.java": "f129815d6b3269616aa58b7f2fe8f9d5008d86bc83b145748f93cec6a64e3d7b",
     "src/main/java/com/flowerfarm/controller/StemDemandController.java": "0d8f5dc06e79bfc943994a4f44c728da683103f2af0b187a669e9bdb2d963427",
     "src/main/java/com/flowerfarm/controller/TrendController.java": "40fdc74ffcaa9098962d12522d0653aae574061bb41473feb7cab86aec34e067",
-    "src/main/java/com/flowerfarm/controller/WorkerController.java": "cff7fe9c5ebb3fab337461db0d05ad32880ff19a7801dea8802d391ab5e0ac8b",
+    "src/main/java/com/flowerfarm/controller/WorkerController.java": "61cdca1b7753faeb8b0bd94a5d9cc03b7ace0b4d8a0d2660fa671d36a957935a",
     "src/main/java/com/flowerfarm/controller/WorkerPageController.java": "4f0f54a08737326b8fcdfe27a5a999d10a8090e84119baeec62b15e9a7d65670",
-    "src/main/java/com/flowerfarm/controller/dto/FarmApiDtos.java": "ad9d13d24efa535cc2bc06ea3635c33d1b54470476a60c00f4f7b5ca2b835b76",
+    "src/main/java/com/flowerfarm/controller/dto/FarmApiDtos.java": "695934ec3627b70f0b5a7c244c0c842f169f115cd092eaf52ca7ca0529732fcd",
     "src/main/java/com/flowerfarm/controller/dto/KnowledgeApiDtos.java": "19e92e813770ddff1b2731b345bc750949409a62d37ecf7802eebdbea991a5d0",
     "src/main/java/com/flowerfarm/controller/dto/ProductionApiDtos.java": "e1713c438fd394d359b3bbe780a89d84585c4933e10469b1c6ef40313fb1012e",
     "src/main/java/com/flowerfarm/gui/BackupSettingsForm.java": "7d3dd6c4c66efc69ce129229018add81b4527dfc48334fd66eec995458f43f4d",
@@ -155,11 +156,11 @@
     "src/main/java/com/flowerfarm/gui/FarmMailer.java": "4cfdbb41f60f540f548d9b9b0bc0670fa5e6741099fc320f2e6c42b5b68eecf2",
     "src/main/java/com/flowerfarm/gui/FarmNotifier.java": "5fb2189ec4b19fb4f6ec1bb86dba36a9fe3b0ccaf3be24bae66ddbe1c2a1c76d",
     "src/main/java/com/flowerfarm/gui/FarmSetupDialog.java": "dcf815336c3988b4fb0e0f27c9dd90dab8f97f0946d6284c85af34fb9acf3d2f",
-    "src/main/java/com/flowerfarm/gui/FarmTabCatalog.java": "bf7bcd876da1916b19557b8cf96be7dc02901942562c2f726fe198eab65287d2",
+    "src/main/java/com/flowerfarm/gui/FarmTabCatalog.java": "b3eaeb5848afab8b7493778af90768908c3a1d33f4aa0bbe834892978dc5653b",
     "src/main/java/com/flowerfarm/gui/FarmTabNavigator.java": "0e6e87b0cf54a2825a78cce503efa5f6ad18586ea018aadaf088971620ea75a5",
     "src/main/java/com/flowerfarm/gui/FarmTypeLauncher.java": "11f557e42ee95fccad1a872e5d68e08c5f7a81c2ac83c91c5acf8247e4ae835b",
-    "src/main/java/com/flowerfarm/gui/FarmUi.java": "6a56e81e7953759943a79fcb7ddbf746f427805ab6e6182cb175be3dc0e7caf7",
-    "src/main/java/com/flowerfarm/gui/FlowerFarmGUI.java": "10d9f95f7c4605752b55695a5ef86b551189cc6fb2255b836d2484cb40ddc044",
+    "src/main/java/com/flowerfarm/gui/FarmUi.java": "e99abc579c7b004bb3bb1e2aeae835e4b8405df87fa2afbb9f203425bbdd28bd",
+    "src/main/java/com/flowerfarm/gui/FlowerFarmGUI.java": "5ec08db97de4a381b8eba8735e33c2f259e459140fce71a5992113ffb95b4b0f",
     "src/main/java/com/flowerfarm/gui/GettingStartedGuide.java": "d91b5ff82b44d5d1ea78bd062820dbd683f749591f6f1ea893f624faaa324d5f",
     "src/main/java/com/flowerfarm/gui/GuiLoginGate.java": "cd782ed9e5c8e4320bffe74c0471b2ebf6bc63ba0caf2e13c1ddf24825c8d8db",
     "src/main/java/com/flowerfarm/gui/GuiPermissions.java": "319adcdb59fa012f428d0fced1b990898431bdfe033fc13938f5a2f6dd4a0b9f",
@@ -183,36 +184,36 @@
     "src/main/java/com/flowerfarm/gui/automation/SwingShortcutResolver.java": "9991dd42748ce9469fdf20d1261818b19007fed27a85ebbad2315c3cc00766b0",
     "src/main/java/com/flowerfarm/gui/automation/SwingSpinnerActions.java": "8fcbe796eb26ab651d15cd9e8534ae4c079b425c96204abbf8d78740bffcf92d",
     "src/main/java/com/flowerfarm/gui/presenter/ConnectorActionPresenter.java": "bde7c908cfb1d3aa84fb4d2d2926044d0b43397e11f16b8f5c64a97da3dda5f0",
-    "src/main/java/com/flowerfarm/gui/presenter/CrmPresenter.java": "61a6dcd96846a843fca27d5d05126f403b1a68cf80674a0acc389ab287cfafa2",
-    "src/main/java/com/flowerfarm/gui/presenter/HarvestLogPresenter.java": "7557d146f4a243d6999c9250b0c38b0e770e91746765f0aaab9469289037228a",
-    "src/main/java/com/flowerfarm/gui/presenter/InventoryItemPresenter.java": "72d28e6a1ff72096d1140327cc9b4cf6bc86d2df7f6a7330f841cf19b70d1326",
+    "src/main/java/com/flowerfarm/gui/presenter/CrmPresenter.java": "3bcb05e2dfac4cfbf449bc499fdd20eeb999d7b050e6166866a123ea47cae638",
+    "src/main/java/com/flowerfarm/gui/presenter/HarvestLogPresenter.java": "32f427319b5c4d76572b6e9183c6a3d987625802d0121092a8bd34e1855bb5df",
+    "src/main/java/com/flowerfarm/gui/presenter/InventoryItemPresenter.java": "ddd36c8b59430b43f4472f29eb016672f094641be0c7c434bff9e61bd915e5b1",
     "src/main/java/com/flowerfarm/gui/tabs/AbstractInfoTab.java": "7c9bf6a6b57aea706c327e00420b7aa8cd5675122150b351caa267fd4e4cda14",
-    "src/main/java/com/flowerfarm/gui/tabs/AddItemTab.java": "92c16704bdf379514ea3e770ba4ed6dd91aa97dfaae311ae7bd2f8c0e1ffd4fa",
+    "src/main/java/com/flowerfarm/gui/tabs/AddItemTab.java": "3d274096a3b295e56f3546294f8d98934528730e4b660aa472919f62453664da",
     "src/main/java/com/flowerfarm/gui/tabs/AquaticCohortTab.java": "d5ac40d2726527eb4dcc5ae9ea552d8c6c51396a9ac9530c1bb47ff09fb1f251",
     "src/main/java/com/flowerfarm/gui/tabs/BerryBlockPlanTab.java": "c1f79d2bbe1bdf0f2ba7a27938d975ff05ab35e347e3cfe834362452d4131966",
     "src/main/java/com/flowerfarm/gui/tabs/CannabisCultivationTab.java": "f13edebde64c796698ac03ce768dc3fa3f8499431b80588c731222c88516dd86",
     "src/main/java/com/flowerfarm/gui/tabs/ChristmasTreeBlockTab.java": "4168ce8f9df438f0df8f5dc428c2df643e031ebbed138caa76c2f863137fa6ce",
     "src/main/java/com/flowerfarm/gui/tabs/CranberryBedTab.java": "6df372618ab4910414aea65728c4809602e44af029513307699dbbb58f49fde2",
-    "src/main/java/com/flowerfarm/gui/tabs/CrmTab.java": "1fab34ba86c861765b2df914290d450dfa2c5ca6bc46c3462db2693a75d382f6",
+    "src/main/java/com/flowerfarm/gui/tabs/CrmTab.java": "de2b2a2e71ae650a1ba6ea9b55dc15e43a4886a019778a75b592ab328f85ea9b",
     "src/main/java/com/flowerfarm/gui/tabs/CropAreaPlanTab.java": "b2b43b268e80c46058983fc090e0d7e952ac07a86c4bba0d665e6e2f1dd03386",
-    "src/main/java/com/flowerfarm/gui/tabs/DashboardTab.java": "aa99e5a83c085b9ef925eb288296dec023ea972698130f1af3a4bb978b65af99",
+    "src/main/java/com/flowerfarm/gui/tabs/DashboardTab.java": "6802dd47a09713b844883e4eb338058b3eae7cef6f659f6b2f521f22dfdcb9ec",
     "src/main/java/com/flowerfarm/gui/tabs/DraftDecisionGuard.java": "edb9357101e4fa81244bfe495544c32ac6ac754acd1991ca176abe56d589f18d",
     "src/main/java/com/flowerfarm/gui/tabs/EggCollectionTab.java": "73d685084ba45c072f6d79956e0a73d9ec7e5432ecbda570e193a2c912e858f0",
     "src/main/java/com/flowerfarm/gui/tabs/EventServicesTab.java": "6bc723454315d9c26696c9e3fec55b2e0c5b8d7da0657e862ce6a7092d0c186e",
     "src/main/java/com/flowerfarm/gui/tabs/FieldScienceTab.java": "863712e48790042bca8261f87c5c9db7c716fed53e9907c8b8b3d3751f2fef67",
     "src/main/java/com/flowerfarm/gui/tabs/FlowerFarmTab.java": "946c407c8835b7ab5f4a02b0bf24fe33e65a3d09f8481d6223b4a6d32539aa36",
     "src/main/java/com/flowerfarm/gui/tabs/GrainFieldPlanTab.java": "b98106f431368ca8d69fba148a35c82139f0798ec0fa7f6e52df88803892bb6e",
-    "src/main/java/com/flowerfarm/gui/tabs/HarvestLogTab.java": "9ff618056ad0f3170298dd94334cf6cf8bc07b9c012aa59b2573bb73668d4071",
+    "src/main/java/com/flowerfarm/gui/tabs/HarvestLogTab.java": "fed5661fbd548466cd0b5d1e513eff2e4f6402e722f009520b442e34d304c330",
     "src/main/java/com/flowerfarm/gui/tabs/HayCuttingTab.java": "cc44bb54cb30d801aae69e92404e974154a3b6f438aa3801b132763ffe9c0ba1",
     "src/main/java/com/flowerfarm/gui/tabs/HerdGroupTab.java": "8d935ba7706729b9742f2ebc0347352d298847ffb1ab5edb353399e5c413579f",
     "src/main/java/com/flowerfarm/gui/tabs/HiveCheckTab.java": "d4a6e49dbfba94d8ba1e03d41274872c111c7290c8ffe5229a69ada671a7c00f",
     "src/main/java/com/flowerfarm/gui/tabs/HopYardPlanTab.java": "b5ccad9e1e9b816763b81844675bf48a3d4727cdc894788cffcd75de92221f23",
-    "src/main/java/com/flowerfarm/gui/tabs/InventoryTab.java": "b675326fcc083e7fed736217302f98b83eea5af896625db8d7ba43007614a408",
+    "src/main/java/com/flowerfarm/gui/tabs/InventoryTab.java": "6e46ceb15acd55ac1be521d484935224301650c793b988d40d832f9208d0650a",
     "src/main/java/com/flowerfarm/gui/tabs/InventoryWorkspaceTab.java": "752493d29ddab9fa68eca988af7210fff19622929a11d1ca49977b09ae316a89",
     "src/main/java/com/flowerfarm/gui/tabs/IrrigationInfoTab.java": "f2820e02a126133ca8d5cd8dfd8d7046200d9360e14a73124bd68d7d9876bf62",
-    "src/main/java/com/flowerfarm/gui/tabs/KnowledgeLogTab.java": "a9a4fc97cc8868bc4a779ea640701626f850cb49fbb788ac51de506c91591563",
+    "src/main/java/com/flowerfarm/gui/tabs/KnowledgeLogTab.java": "be3cdb8adef114acdb8b13d9ab12e92e5378a1ca61e441028a1d54212279a47b",
     "src/main/java/com/flowerfarm/gui/tabs/LSystemCanvas.java": "a18b6e0bb3d4270b4b1b4c06216809de091ef879b481159cc6421243ce49cbe6",
-    "src/main/java/com/flowerfarm/gui/tabs/MarketDayTab.java": "fa1ec7b63c4cedb28734e2e95756d9fb199751c8b8f0707fa2a7fecb6255efdf",
+    "src/main/java/com/flowerfarm/gui/tabs/MarketDayTab.java": "8f8ac26e43ed04476d3f976af632ed555bbd24aa3cd391f139350f7b79af3533",
     "src/main/java/com/flowerfarm/gui/tabs/MilkCollectionTab.java": "f3771ad969ec8e3e0a34c59576e7c3ad850e19b4f926382e00aba68cf19f6ad0",
     "src/main/java/com/flowerfarm/gui/tabs/MushroomBatchTab.java": "f6e676741ab15fb36a49b54586c21a86d820d3facb4a30213a19ab6e17c2118d",
     "src/main/java/com/flowerfarm/gui/tabs/NotebookSaveRecovery.java": "81190a7d8804588e2da1f1ee3f5cb94515aa235cef734f2bdc40865b9e59692a",
@@ -223,7 +224,7 @@
     "src/main/java/com/flowerfarm/gui/tabs/ProductionStudioTab.java": "5d3cb835bf34bd9c83d7e8e713dcc5f8b6122d5a3af7f1b33e283901edb46421",
     "src/main/java/com/flowerfarm/gui/tabs/PumpkinPatchTab.java": "fa8cbf96ca313e9cfcc52eb94479f6ef6a26214da90d44c7ff14b56b2b861758",
     "src/main/java/com/flowerfarm/gui/tabs/ReferenceTab.java": "7f803d2343cdc67390fa78b435e7d6dc41280ef6c1be0aad1f439c632868ee62",
-    "src/main/java/com/flowerfarm/gui/tabs/ReportsTab.java": "d56e0b48f47a53e3fc19dd3b5f0ca2ec1a962cbf64acd87f8bdf4ea4291b09ba",
+    "src/main/java/com/flowerfarm/gui/tabs/ReportsTab.java": "8cfe6fc7a9eed44e2c3e5811eeb96b5fa87331651929e8156afcfd08559c1bf7",
     "src/main/java/com/flowerfarm/gui/tabs/RoseVarietiesTab.java": "216b6c1ee5d8c593681602feee44950fa9ebe6d4568b3b258343d91d301789c4",
     "src/main/java/com/flowerfarm/gui/tabs/RoseVisualizerTab.java": "e6cb6c025e080cf06c332e4cd426248ae6490a7424cf2d7dda1fca67d0e5f943",
     "src/main/java/com/flowerfarm/gui/tabs/SeasonPlannerTab.java": "c183ad60a4435fafd6ddb5536acd680aaa6f44939f068b8ae24b2811748e337a",
@@ -238,8 +239,8 @@
     "src/main/java/com/flowerfarm/gui/view/CrmCustomerSearchView.java": "6a4ceac9b7946e5c7b3ec53c472c17111d8c6fa89dcc031686dd00ecc0392a51",
     "src/main/java/com/flowerfarm/gui/view/HarvestBatchView.java": "6a1056b88db81b19a5f29e6fad48d830b76d0908385aa5711cbab224eac83dbe",
     "src/main/java/com/flowerfarm/gui/view/InventoryDraftReviewView.java": "53e79a04046ed5676812f73db3743325321c751f60ee3eb9201c23ac9efe5844",
-    "src/main/java/com/flowerfarm/gui/view/InventoryItemFormView.java": "68b1a4f02e35e8e76601756bac416effbd7c581c5735c9cc6b6468ad9d4f9fe1",
-    "src/main/java/com/flowerfarm/gui/view/StockCountView.java": "4eaae85381c0e64d14f4c121834249ccf72465ad0050c1fb5dedea8828b704b1",
+    "src/main/java/com/flowerfarm/gui/view/InventoryItemFormView.java": "6d646db3f30bcf69c1634e0ec5312f68c756d6cd2e6b9c021138aa44aa737522",
+    "src/main/java/com/flowerfarm/gui/view/StockCountView.java": "754778af97cb11f2b8b904c492ca429030eea1b721dba407b488d8dfa4dff119",
     "src/main/java/com/flowerfarm/lsystem/LSystem.java": "8e4553f1561cd70df1e295dc659f13ecbceb488e61ae6e626a79fbfed6fe0c11",
     "src/main/java/com/flowerfarm/lsystem/LSystemDefinition.java": "6cf63c49e9c37683928738c66d74d4ea0acbdc6986252d5fdc73585eaa391532",
     "src/main/java/com/flowerfarm/lsystem/LSystemLibrary.java": "b52fd8e3b07c22b47b552027e29527972a3e223d55b5293163ccee6c42f48e8e",
@@ -266,7 +267,8 @@
     "src/main/java/com/flowerfarm/model/FarmDataImportReceipt.java": "c54632eaf40643a290525e0dd1027e0d4499144dc6f236ec1cb616d3e77c7538",
     "src/main/java/com/flowerfarm/model/FarmEnterprise.java": "d06da92f65a1853d699b1a526954c86613da6208f6f1e2674bf2b9212709fb3a",
     "src/main/java/com/flowerfarm/model/FarmOperationSettings.java": "bd9deafe20433f735b75f5367eecbef4523691c4702c1cbddeb5f0972273e2df",
-    "src/main/java/com/flowerfarm/model/FarmProfile.java": "edd67261802b186eed296393a98428026b1e49663b4d7c4dcc75b0f252d3558a",
+    "src/main/java/com/flowerfarm/model/FarmProductProfile.java": "b5539c173934653898d05105c9280995a20c12dbc6c024e3549a9ef91f8d5dcf",
+    "src/main/java/com/flowerfarm/model/FarmProfile.java": "d2f2fabdbfd8f8a89b9cdb22e7be3bc65584650c45ede3f9bf9fb7d66e3df228",
     "src/main/java/com/flowerfarm/model/FarmSeasonSettings.java": "c2610c2c9bbb835f937415f20c5cade0a08b57811c9c21dedeef42b3150c065d",
     "src/main/java/com/flowerfarm/model/FarmState.java": "71cfea7e04a7ffe5daf3bc8ba0118dd2385cc06cdde85a8985105632c45c8b53",
     "src/main/java/com/flowerfarm/model/FarmWorkspace.java": "0ba54f7855fe98355694931f2106b2f319d01eab66a1fbb26b4f6a67e28115a0",
@@ -280,7 +282,7 @@
     "src/main/java/com/flowerfarm/model/GrainFieldPlan.java": "83482b374bac9d0c0b72427f5bd4587e8094e5671c5a9aa59e16e85f3586131c",
     "src/main/java/com/flowerfarm/model/GrainFieldStage.java": "3dd90f44f2dd598eedfc84c103fc63170ad693316bc6686ced69ae322d0a6f6c",
     "src/main/java/com/flowerfarm/model/GrowingTemplate.java": "646a8ccf930de147bb87af3b4940bf93dc50f166121efd785870da2c9288d788",
-    "src/main/java/com/flowerfarm/model/HarvestEntry.java": "3868fc1c994d49bb157f6127a2fd5a68ea430faddc73573441f0611a6f88c9c3",
+    "src/main/java/com/flowerfarm/model/HarvestEntry.java": "f8b8dcb1f44551f185ed98b4ddd27f82edf7d1e7a1ac93c0f3113dfb570c6caf",
     "src/main/java/com/flowerfarm/model/HarvestGrade.java": "5bd206501a22d0cb1ebbf0314e7d95302a2f9c39ed069bdf0c8265e7b51093d3",
     "src/main/java/com/flowerfarm/model/HayCutting.java": "faa56a38092ef277f8b2e4890736c561978a1b14641fb5f898ff2b95643e34fd",
     "src/main/java/com/flowerfarm/model/HayCuttingStage.java": "45067a6aeb01ceb10fda7be71d32fdf171430d1f4b19333cfce6701243017c8f",
@@ -290,7 +292,7 @@
     "src/main/java/com/flowerfarm/model/HopYardPlan.java": "8f218e8738586c77e3a6b16857b6290dcf4949cefaf3a134e0f417977bf3c4c3",
     "src/main/java/com/flowerfarm/model/HopYardStage.java": "ca9decb105597d3ae4ec74306ffad8cb253cfea1cdf832168374eb91dbae6bac",
     "src/main/java/com/flowerfarm/model/IntegrationHandoff.java": "d72bb69ffcd848faf503d1f0f40d825736752d7e5a02cc8fce015979df995ded",
-    "src/main/java/com/flowerfarm/model/Item.java": "d18a68bb3341b97db1706d8bdc2d5050d8a5d3433b782e31806d953e1fb49edf",
+    "src/main/java/com/flowerfarm/model/Item.java": "0197e12f434a66f25bfa63b585a4c205b9388952ccbc9296629751a4dff1f2ee",
     "src/main/java/com/flowerfarm/model/KnowledgeConfidence.java": "837184ba3890d052c7e01fcb971581e7795b080c51be99b37546306a1e559bb9",
     "src/main/java/com/flowerfarm/model/KnowledgeEntry.java": "fe4dd1c1e7c9991afcd2e9afa166ff67f45825e2f7ef34685e4771f15ce623c3",
     "src/main/java/com/flowerfarm/model/KnowledgeKind.java": "5778bb45eb9d9456605bcb080b9b8a3acf01a45cf43579ff9389efa77c02e763",
@@ -451,61 +453,61 @@
     "src/main/java/com/flowerfarm/service/ChristmasTreeBlockPlanService.java": "8dcffb235ba47ec42ed4c19a19b352c5cdb7fbee1deab7ba8f037b7bb8bfe206",
     "src/main/java/com/flowerfarm/service/CoolerShelfLife.java": "ccfc3a5e7f0ff91b6fe898638419051035a63e400806d76d170f2dfebfb14001",
     "src/main/java/com/flowerfarm/service/CoolerShelfLifePreferences.java": "9ea47eb2939a7cb269f09919d491eec9bfdab42656ad7a32e28fa50b7d313c5c",
-    "src/main/java/com/flowerfarm/service/CoolerShelfLifeService.java": "5516b08287dfb197f473adec2e2e2c9ff6f88f31802daf0fc6ea6e215cb743b4",
+    "src/main/java/com/flowerfarm/service/CoolerShelfLifeService.java": "262a1688ef03592fb08d3658bcce330a157c592404f3521a3f79d0777c8b4bee",
     "src/main/java/com/flowerfarm/service/CranberryBedPlanService.java": "049ba114c9a15021e0545305060312b01e64052947b72504ddce3528ab015499",
     "src/main/java/com/flowerfarm/service/CropAreaPlanService.java": "b072ec182c0ef22a7a1fa28152db1bb78bac7771d48e49178eba39b3556e1563",
     "src/main/java/com/flowerfarm/service/CustomerService.java": "4900c1714783fc3bb3b0fb58be56870801842bd28be74c16143600a3a38184af",
     "src/main/java/com/flowerfarm/service/CustomerStatementService.java": "40fa6025cf8253404a019efbb4035b2d2722058eef76fdf3841951963dff00a4",
-    "src/main/java/com/flowerfarm/service/DayCloseoutService.java": "148c8a9df1eee0c1702c36c3a0373b166d21ac2ef88dd1674a7b9b311de18fdc",
+    "src/main/java/com/flowerfarm/service/DayCloseoutService.java": "8f7b6d698cdcb7ecdcd754bd6ce4581b5f1bbe03b3d1aa9479424e29d888d4a0",
     "src/main/java/com/flowerfarm/service/EggCollectionService.java": "c7ba45be15d269b166d86cb44e7194fb1b43709ceff88c2b63560e36138248ee",
     "src/main/java/com/flowerfarm/service/ExportPathResolver.java": "4de823d40f204ddc2a4ffe1e9931ffa4fe9017bf1ea1b43c4bebe8cd7013af11",
     "src/main/java/com/flowerfarm/service/FarmOperationSettingsService.java": "2e0c41d94cf11ae46288bb0bd9a2edca79d5f6e0a4f813b347a5cc678c8aebeb",
     "src/main/java/com/flowerfarm/service/FieldAttachmentService.java": "4f26038214f6fc504633724865414faf52c030f97c6b7f5f9eea2e254b907a38",
     "src/main/java/com/flowerfarm/service/FieldScienceExportService.java": "2662e509614a7e33423cfb603a91041c77b06f2ba633e8065708db5726a37747",
-    "src/main/java/com/flowerfarm/service/FloristAvailabilityExport.java": "b44e0da6499ab6a1ecc64bfc65c49339bd65b7cf60316dbadc605b851dcab6d3",
-    "src/main/java/com/flowerfarm/service/FloristAvailabilityService.java": "29fb4e981ea4a54dfbc2e83ae8932bd2735ec2156f8171b7202aed2a1733fee5",
+    "src/main/java/com/flowerfarm/service/FloristAvailabilityExport.java": "7de2d434c177674d374b64bacdad7de6df9e131202f202eaba92326f16f3eccc",
+    "src/main/java/com/flowerfarm/service/FloristAvailabilityService.java": "5252545615cf1e00db72629d7719a38c11f870885d9d14a877513da6d33dbd64",
     "src/main/java/com/flowerfarm/service/GrainFieldPlanService.java": "4f32c4f7ec32c9fd433007f883632887748c68a20b787f24a8d99f79db4c93ea",
     "src/main/java/com/flowerfarm/service/GrowerReminder.java": "53b688be58dcaa7490c6ad8ab38d0c554c8fc016e01cd5a1c7f9b9d1a9b88d32",
-    "src/main/java/com/flowerfarm/service/GrowerReminderService.java": "761371c7b50a21309aaa430c1c979ae507928e4bcdcf409ae56a7da25d89417b",
+    "src/main/java/com/flowerfarm/service/GrowerReminderService.java": "a504deccc89d05da141bf0764e7ec69d6168e83b2d2176eea78bbbe3c31c8af9",
     "src/main/java/com/flowerfarm/service/GrowerReminders.java": "5c9a683abdbc9143d5728df8f35f9b054d7b9db4009fe9f6962c6e896d30f76d",
-    "src/main/java/com/flowerfarm/service/HarvestCsvExporter.java": "592c57074fa750f1d9d655a6006ed5687ac1e13f904597c0ef6d6d92b2045279",
-    "src/main/java/com/flowerfarm/service/HarvestReportGenerator.java": "a2c928e501cc9ce3909f66a3d54525aca23750fffa74119d1557c0f035a1d461",
-    "src/main/java/com/flowerfarm/service/HarvestService.java": "0d13040358d18cc90e162cebef69a4f8488b0bb60ca85eeaf5ea05f4f30185a3",
+    "src/main/java/com/flowerfarm/service/HarvestCsvExporter.java": "c6ae0df09db23f1406ecf77845b92a8066c2d8b550f041da9694340b195f752c",
+    "src/main/java/com/flowerfarm/service/HarvestReportGenerator.java": "604803575a53edb5767eb159022080b05fb35b7ef154bc1fd75e3cb64d244b6b",
+    "src/main/java/com/flowerfarm/service/HarvestService.java": "1b2321401754693a945c1dfe60ad1d60a95b82dbdcf77af355d823079d5abd71",
     "src/main/java/com/flowerfarm/service/HayCuttingService.java": "aac23136c0a12fef40a5dff3cffd59ee5250d108cc893551ca21d119966b8a35",
     "src/main/java/com/flowerfarm/service/HerdGroupService.java": "b46b0b89e8ca5d7bdc66424157ddd962b39423b565c32823a046b40990362a58",
     "src/main/java/com/flowerfarm/service/HiveCheckService.java": "ed3ae761b56d4ec313dabe6c7cec466406607ccc9a79f24670bbdacab90eaae5",
     "src/main/java/com/flowerfarm/service/HopYardPlanService.java": "2cd9690c22ce6dcf4b6477d84e571b65f4aeba07cdcba0f801291fd42e892d6f",
-    "src/main/java/com/flowerfarm/service/InventoryCountConflictException.java": "3143e4aedb8d46605996f2ded2165e5b48f60c0aa3711da73175867ca1d3f0ec",
+    "src/main/java/com/flowerfarm/service/InventoryCountConflictException.java": "f1d681d9565af8505a2074a5e4805dcd334a9c04e3d7ead9f9151ac2a0e5e7b9",
     "src/main/java/com/flowerfarm/service/InventoryCsvExporter.java": "4e63a8d356ad2ebe6e02bbbea56356971a21e5c978f22be90a3b35a663ebf13f",
-    "src/main/java/com/flowerfarm/service/InventoryReportGenerator.java": "9b9b771219d63b99018ce2c847681f50304b173a0edaa0363f0df143e4e482ac",
-    "src/main/java/com/flowerfarm/service/InventoryService.java": "021c309ba8fe30378e5fd217bf81e25f2d5d919b822f952973bc7268609377c7",
+    "src/main/java/com/flowerfarm/service/InventoryReportGenerator.java": "7fc1e9ded024130eaed9a07dba51ac21755f3d96014a53d2dc1b88a479b1a8cb",
+    "src/main/java/com/flowerfarm/service/InventoryService.java": "eb72e4515f993c574010bb40e7bd2336ec2128ecc48641e4190debb357d4b806",
     "src/main/java/com/flowerfarm/service/IrrigationAdvisorService.java": "034fddff54938498d2be91a6a6b58072b0bd65fa0b4dbbd2aadde9391cc7fdd3",
     "src/main/java/com/flowerfarm/service/KnowledgeService.java": "75da79d15d58e8a9d3305481f0f4d76fc5400203ceb9235b16b7ec0108dd9d26",
     "src/main/java/com/flowerfarm/service/LogValue.java": "3732392e8bcacdbcde2da736740a70d3d34f2fd956942505a0108f2144e31f59",
-    "src/main/java/com/flowerfarm/service/MarketDayPackingService.java": "d53b6d396f5edf00d8da76c0a7bfa129ec9b6f90d6725202ce64f7a3cf2e40a8",
+    "src/main/java/com/flowerfarm/service/MarketDayPackingService.java": "bcdc7030d47436f56457b580a1671c8cf23aaa5e7ef056bdbc207a1dc24bfa52",
     "src/main/java/com/flowerfarm/service/MilkCollectionService.java": "fde3bc434ef72d94062c21a4a04ea965cf567ce0ff9c9951457cbcd435e754c3",
-    "src/main/java/com/flowerfarm/service/MorningBriefingService.java": "fd5359cc937600a982b5094cee5822d3e014e5e36162c8e5ebb0cf14325e9f6c",
+    "src/main/java/com/flowerfarm/service/MorningBriefingService.java": "fa8edd54a32c37605e74650f9037747c6008332f8492e421d0eb6670d7b4ce5f",
     "src/main/java/com/flowerfarm/service/MushroomBatchPlanService.java": "2e2c4fca4858b46568cca254dcc2fb09f8574c49e9c74e0d1ffa2026ea2cb145",
     "src/main/java/com/flowerfarm/service/NurseryBatchService.java": "43f1bbf003773dd4f3a98d031ae8db3923335fe572c0d67f4d9a070cfe77d1a9",
     "src/main/java/com/flowerfarm/service/NutBlockPlanService.java": "40e704a44c4228a6e6ff5498f5b98b99e98f34ab7965a8bc82c9c78f6065614b",
     "src/main/java/com/flowerfarm/service/OrderReportGenerator.java": "7cec0d605c9574a61a742023915b89f6553939e49a030f7df7a19b803d50ff1b",
-    "src/main/java/com/flowerfarm/service/OrderService.java": "c8c9213f61fbce40b5252c259e51cc5d94ac48fe9edd323f591c4d377df5b908",
+    "src/main/java/com/flowerfarm/service/OrderService.java": "f2e14e9952add70496b95ae8e7bb99f07b38b76a6e6131062ffa4f9854346e5e",
     "src/main/java/com/flowerfarm/service/ProductionConflictException.java": "77c045b43674a35129471f809e016369eda3bb84bcca033e6a0d0a77331030d9",
-    "src/main/java/com/flowerfarm/service/ProductionStudioService.java": "fcbaacfbb3b00a682500af1044a42446657b652a052be019f227f7fb9e83393e",
+    "src/main/java/com/flowerfarm/service/ProductionStudioService.java": "642c2db1c974f0561e639e02370422897e8f218e25efa38ad08807566b1d30e7",
     "src/main/java/com/flowerfarm/service/PumpkinPatchPlanService.java": "907214c9a9eea5fff7c61fd8bce00f3bf81956bd37a8d5d7c8ac99a02450c0aa",
-    "src/main/java/com/flowerfarm/service/ReportService.java": "f0567a3e0b2022f2bd67f188d032870c26736e4edf8fe5aae0e31e700aaa94da",
+    "src/main/java/com/flowerfarm/service/ReportService.java": "072e1e70192f8b6ff4d01cf2c168a99032e47bd45236c93959d5be61cf5285c9",
     "src/main/java/com/flowerfarm/service/SeasonPlanService.java": "2b5e323ae83c7d76e8fcb0968c17d991fbaad5046552792f26bb7e4a27392bac",
     "src/main/java/com/flowerfarm/service/SeedFieldPlanService.java": "d80e5149f7932a08cf2e258041d61d28902052fa54699bb0684d6d02c94ce27f",
     "src/main/java/com/flowerfarm/service/ServerCsvExportService.java": "8b28fd3c46dc37e119d9af63390e86f66687a0a431f033dfb52e98d4cd6f063b",
     "src/main/java/com/flowerfarm/service/StemDemand.java": "26a1411d3d9d2bac2cc66354e76d5dd159163094b296ff25daaaaf8f1bb18043",
-    "src/main/java/com/flowerfarm/service/StemDemandService.java": "423fc0fc0f9142d438e7aa664a74dd93db185341b84e8ebae13b946d17112339",
-    "src/main/java/com/flowerfarm/service/SyncHistoryService.java": "f00f927e7264e8a7416479b2fb57909ff52ac236f603a62d147f81aa3285e22a",
+    "src/main/java/com/flowerfarm/service/StemDemandService.java": "0ff819c4ab0cc44f28e020eacc3a648ec9d76ede6ba7c0944667748ba17ad300",
+    "src/main/java/com/flowerfarm/service/SyncHistoryService.java": "bcc31509a1d61fe1552274e1c92158b51862878f3353cd3ca2dd826dca906b0d",
     "src/main/java/com/flowerfarm/service/TrendService.java": "0c61d51893a796ddee7929a6302a69442198a1a74839984721542df1158d4d40",
     "src/main/java/com/flowerfarm/service/VegetablePlantingPlanService.java": "292a7d22bdefda6dc9b1579e7681e20ee1ca3da18a0cf644a38cc77fcff070c2",
     "src/main/java/com/flowerfarm/service/VineyardBlockPlanService.java": "598bc0c9d0a543867c0799da52fac3b8291356c85b57710f4cf4657809641f97",
     "src/main/java/com/flowerfarm/service/WorkerActionConflictException.java": "0785cb4edf4f340ba17876890bd8dea8e73dfbcab7b05d7892ebfcbd29ce3dc0",
     "src/main/java/com/flowerfarm/service/WorkerOrderConflictException.java": "6468851f5993e7fa6433a1ab1a8cc581a1ac0d78c85da67d310df04c46a2acbf",
-    "src/main/java/com/flowerfarm/service/WorkerWorkflowService.java": "56410aa36ab30a79d606b81d8de6754aaf227f48b433c22916530fd510df0f56",
+    "src/main/java/com/flowerfarm/service/WorkerWorkflowService.java": "df9b4651c45263de7689043a0e6ca66970f48fa12cb372928a218936620dfe3d",
     "src/main/java/com/flowerfarm/support/SupportGuide.java": "30cb4c9c4670384598f4c7855c8f3a1351b5d52e44d02f9fb4611c6ed739fb48",
     "src/main/java/com/flowerfarm/update/AppVersion.java": "d0e99a7d48cbd7bfbb5458167c36964b338bd9fd2bff5ba1cc93b39585b4eb07",
     "src/main/java/com/flowerfarm/update/AuthenticodePublisherVerifier.java": "a42b539e822fd48786b0e2501e2d61f851521ab4e0f7e1aa53bc94a677500729",
@@ -552,7 +554,8 @@
     "src/main/java/com/flowerfarm/update/WindowsMsiInstaller.java": "8560116cdebc52499c6491f9086552306896f86352fb3f7751829b34ef361810",
     "src/main/java/com/flowerfarm/update/release/UpdateReleaseTool.java": "f46cae332ed0e50252e4a3889108e46a1fba6e1335f408a596aefca274cd6024",
     "src/main/java/com/flowerfarm/util/CsvSupport.java": "fb7ad7c74e8da3b49b62e65ce9ce085d6375369e61ee3da0e328fbf0b1d06aeb",
-    "src/main/java/com/flowerfarm/util/InventoryUnits.java": "1da173c438f1d5241fded7f2753be6cb1d0b083384c7a55ddf06f84638128aed",
+    "src/main/java/com/flowerfarm/util/InventoryQuantity.java": "01e9e00de89720c62148d2611eef5be1802987160d67329fc50d741c4d9ab1b9",
+    "src/main/java/com/flowerfarm/util/InventoryUnits.java": "700b61bc6b816c9a3a1e8f20374510ff91be801bb00197fc1cb38ec274360acd",
     "src/main/java/com/flowerfarm/util/PathNames.java": "60114c6764d3d17905de208dc0b72f2dcd320e2fcd70691c66a049cf6e73c9c3"
   },
   "build_configuration": {
@@ -580,9 +583,33 @@
       "canonical_hash": "02aeb488cd31995a95c0c64e7e53aa049ffd5e8e1888e9a5bbc11b77f46bb082"
     },
     {
+      "type": "SQL_INJECTION_JDBC",
+      "priority": 2,
+      "instance_hash": "b11a70c03ef89bd7f675740c7fd36ede",
+      "occurrence": 0,
+      "occurrence_max": 0,
+      "source": "src/main/java/com/flowerfarm/backup/RecordsReadProbe.java",
+      "class": "com.flowerfarm.backup.RecordsReadProbe",
+      "method": "readAll",
+      "method_signature": "(Ljava/sql/Connection;)V",
+      "review_kind": "h2_metadata_identifier",
+      "context": "Quoted H2 metadata table identifier",
+      "rationale": "The package-private RecordsReadProbe.readAll helper accepts only an existing JDBC connection from DatabaseIntegrityGuard.check or RestoreService.probeRecords. Table names come exclusively from H2 INFORMATION_SCHEMA PUBLIC BASE TABLE metadata, are quoted as one identifier and have every embedded quote doubled. It reads each row and column with no HTTP/request SQL identifier. Configured credentials and scratch-record connections remain owned by integrity/verified-backup checks; failed copies receive unique derived local filenames. The quoted-table/non-admin regression continues to verify existing records survive.",
+      "caller_bindings": [
+        "src/main/java/com/flowerfarm/backup/RecordsReadProbe.java",
+        "src/main/java/com/flowerfarm/backup/DatabaseIntegrityGuard.java",
+        "src/main/java/com/flowerfarm/backup/RestoreStartup.java",
+        "src/main/java/com/flowerfarm/backup/RestoreService.java",
+        "src/main/java/com/flowerfarm/backup/BackupSettings.java",
+        "src/main/java/com/flowerfarm/update/DataBackupService.java"
+      ],
+      "source_line": 85,
+      "canonical_hash": "63e453d145c15653c64c6b67dd5635ca5be51764bf5931f41ed75e68b96ac2da"
+    },
+    {
       "type": "PATH_TRAVERSAL_IN",
       "priority": 2,
-      "instance_hash": "e399b827724de51df6f9a66727308f06",
+      "instance_hash": "de18ac292b6111fff6c3142e04ad30ea",
       "occurrence": 0,
       "occurrence_max": 0,
       "source": "src/main/java/com/flowerfarm/connector/LocalJsonMirror.java",
@@ -609,7 +636,7 @@
     {
       "type": "PATH_TRAVERSAL_IN",
       "priority": 2,
-      "instance_hash": "5f9b84feaa5c78f0f20a20c4a62ff609",
+      "instance_hash": "641e81e77a0152a680535326bee7ce1c",
       "occurrence": 0,
       "occurrence_max": 0,
       "source": "src/main/java/com/flowerfarm/connector/impl/CsvInventoryConnector.java",
@@ -627,12 +654,12 @@
         "src/main/java/com/flowerfarm/gui/presenter/ConnectorActionPresenter.java"
       ],
       "method_signature": "()Lcom/flowerfarm/connector/ConnectorResult;",
-      "canonical_hash": "15c33b523d8855e2bf5af77946a59c6d5812c371e32659e257dce4762b8a067a"
+      "canonical_hash": "15a58e6544799c606a8ac079f57f0b10ba369080f6c1098ad520a12d07c556b0"
     },
     {
       "type": "PATH_TRAVERSAL_IN",
       "priority": 2,
-      "instance_hash": "1c59343f09628d8aea418ff1c8d06956",
+      "instance_hash": "8a42aa5cc23930762e1aa568dd73830",
       "occurrence": 0,
       "occurrence_max": 0,
       "source": "src/main/java/com/flowerfarm/connector/impl/CsvInventoryConnector.java",
@@ -650,12 +677,12 @@
         "src/main/java/com/flowerfarm/gui/presenter/ConnectorActionPresenter.java"
       ],
       "method_signature": "()Z",
-      "canonical_hash": "b924e5e58468db8c23e32286262d378d56f258b424446eb2e229acf6f527d9cb"
+      "canonical_hash": "a817fa847373ef9ecab6c2f39cc42bdf77a7af27261ef0d58f92b5e4c8b45953"
     },
     {
       "type": "PATH_TRAVERSAL_IN",
       "priority": 2,
-      "instance_hash": "6944c11ba5d3929bf1becfa911498ad4",
+      "instance_hash": "6b7bbfdd94d13dc84d18e865a2a09930",
       "occurrence": 0,
       "occurrence_max": 0,
       "source": "src/main/java/com/flowerfarm/connector/impl/CsvInventoryConnector.java",
@@ -673,7 +700,7 @@
         "src/main/java/com/flowerfarm/gui/presenter/ConnectorActionPresenter.java"
       ],
       "method_signature": "(Ljava/util/List;)Lcom/flowerfarm/connector/ConnectorResult;",
-      "canonical_hash": "9078278ca1e49c334bbdfeb6284b2616db2e2ab3f5ff217b05e7632954010707"
+      "canonical_hash": "4b3369337b53250afbc6474b617728f884ba973df9d24f24e173a69fd04c04ab"
     },
     {
       "type": "PATH_TRAVERSAL_IN",
@@ -696,7 +723,7 @@
         "src/main/java/com/flowerfarm/gui/presenter/ConnectorActionPresenter.java"
       ],
       "method_signature": "()Lcom/flowerfarm/connector/ConnectorResult;",
-      "canonical_hash": "615d77d17a75b42ad774d985a1ace28532df085f649263298ea5ead32dd09d38"
+      "canonical_hash": "404b08027d2b34e2eeb4b44db83c0904f43ba79908e7ab00755f99328303185f"
     },
     {
       "type": "PATH_TRAVERSAL_IN",
@@ -719,7 +746,7 @@
         "src/main/java/com/flowerfarm/gui/presenter/ConnectorActionPresenter.java"
       ],
       "method_signature": "()Z",
-      "canonical_hash": "44fcdcc67e409959aeb8e6bbda968210b424e7ab0d2a7f2fa62908dbd8bfd602"
+      "canonical_hash": "20751a7aaf3e18ddf7686c0fd57ea9d58a93921e690a25ba5054ad4536842821"
     },
     {
       "type": "PATH_TRAVERSAL_OUT",
@@ -742,7 +769,7 @@
         "src/main/java/com/flowerfarm/gui/presenter/ConnectorActionPresenter.java"
       ],
       "method_signature": "(Ljava/util/List;)Lcom/flowerfarm/connector/ConnectorResult;",
-      "canonical_hash": "a086e87f415ca966e8bae08a688ff2cc36279506ecef5bec31bec88980d75439"
+      "canonical_hash": "cfbd24bfffeb3e38a548269d47d083658f5221781f232cb0649fd21203be35ac"
     },
     {
       "type": "PATH_TRAVERSAL_IN",
@@ -896,7 +923,7 @@
         "src/main/java/com/flowerfarm/gui/automation/SwingHarnessBridge.java"
       ],
       "method_signature": "()V",
-      "canonical_hash": "6810115709024a844c70620fcdfdc3a6a43199c17652042a395a453af03601ac"
+      "canonical_hash": "b6229b381a3c8448f353f7d3a1b9e5532668c927557cc0091fc9b3caef22309c"
     },
     {
       "type": "PATH_TRAVERSAL_IN",
@@ -918,7 +945,7 @@
         "src/main/java/com/flowerfarm/gui/automation/SwingHarnessBridge.java"
       ],
       "method_signature": "(Lcom/flowerfarm/service/CustomerStatementService$CustomerStatement;Ljava/lang/String;)V",
-      "canonical_hash": "cb9aad5b54e1c5b8d08844cb778876e6957a29a37f244167902c866b9c4ab87f"
+      "canonical_hash": "2d88db1cd95bdbab40412f9633d6f86e59a45c0fdf5190899082139cc44e6dc5"
     },
     {
       "type": "PATH_TRAVERSAL_IN",
@@ -940,7 +967,7 @@
         "src/main/java/com/flowerfarm/gui/automation/SwingHarnessBridge.java"
       ],
       "method_signature": "(Lcom/flowerfarm/service/DayCloseoutService$DayCloseout;)V",
-      "canonical_hash": "8ee3151b27697b460f67c0d0cbb477dcc7beef6ac80efc5ded7ad48270a9d9b5"
+      "canonical_hash": "c8594c6089e0b4656c62cc603d8e942e4baee91151d7a71fd2284bfab8142c99"
     },
     {
       "type": "PATH_TRAVERSAL_IN",
@@ -962,7 +989,7 @@
         "src/main/java/com/flowerfarm/gui/automation/SwingHarnessBridge.java"
       ],
       "method_signature": "(Lcom/flowerfarm/service/MorningBriefingService$MorningBriefing;)V",
-      "canonical_hash": "c99b5fb7a5c59a15430fb5e38e81f619a042ee4495a3b2309d0a4bcf3edd67d5"
+      "canonical_hash": "8eb2caaa32761e33a2b0b9e50f874b53d6ec560681b59ed8229821d71f5f69dc"
     },
     {
       "type": "PATH_TRAVERSAL_IN",
@@ -984,7 +1011,7 @@
         "src/main/java/com/flowerfarm/gui/automation/SwingHarnessBridge.java"
       ],
       "method_signature": "(Ljava/nio/file/Path;[B)Ljava/nio/file/Path;",
-      "canonical_hash": "04d04d4e595155487744d7f5e5d6b8d22c82bb94d2a17bb2c4cc7457be3ac288"
+      "canonical_hash": "4aa36f56eb03b94834c5c2bb4a2a418b500cac7a5cd05a5d0665ec10413565b8"
     },
     {
       "type": "PATH_TRAVERSAL_IN",
@@ -1028,7 +1055,7 @@
         "src/main/java/com/flowerfarm/gui/automation/SwingHarnessBridge.java"
       ],
       "method_signature": "()V",
-      "canonical_hash": "6809377f3f3eee1493da246cdb2a53167f125377d7fbf0c32cee4828babdcf87"
+      "canonical_hash": "7600485718d78ba2009ea9704886db20f6bf1954558e29a8c97f878e381ab178"
     },
     {
       "type": "PATH_TRAVERSAL_IN",
@@ -1050,7 +1077,7 @@
         "src/main/java/com/flowerfarm/gui/automation/SwingHarnessBridge.java"
       ],
       "method_signature": "(Lcom/flowerfarm/service/HarvestService$BedProductionReport;)V",
-      "canonical_hash": "06804b8925bbe74947a2295e00dcd43644051aa3c73c4034e3d6dadeabac23bb"
+      "canonical_hash": "812385550472f65e3e44d49e40f6361f9d7ee6029fd33ceb6d4b11f527228eb4"
     },
     {
       "type": "PATH_TRAVERSAL_IN",
@@ -1072,7 +1099,7 @@
         "src/main/java/com/flowerfarm/gui/automation/SwingHarnessBridge.java"
       ],
       "method_signature": "(Lcom/flowerfarm/service/HarvestService$BedProductionReport;)V",
-      "canonical_hash": "afe628d451bbc6af3a2162f8fc0608496a5766a7907357140d71ef8b737134e4"
+      "canonical_hash": "5194c7abb46ba630528b0e5dd2d0087bc77229dddedac920131eda342cf33d83"
     },
     {
       "type": "PATH_TRAVERSAL_IN",
@@ -1094,7 +1121,7 @@
         "src/main/java/com/flowerfarm/gui/automation/SwingHarnessBridge.java"
       ],
       "method_signature": "(Lcom/flowerfarm/service/HarvestService$HarvestLogReport;)V",
-      "canonical_hash": "3496886c4e793621b15729298ab390ff8421ff08f364003459b15185ef2ed4bb"
+      "canonical_hash": "b241cb4418933e8265ced7cc6f348c5d17abc6348e5b774272e82743b7ed9980"
     },
     {
       "type": "PATH_TRAVERSAL_IN",
@@ -1116,7 +1143,7 @@
         "src/main/java/com/flowerfarm/gui/automation/SwingHarnessBridge.java"
       ],
       "method_signature": "(Lcom/flowerfarm/service/InventoryService$LowStockReport;I)V",
-      "canonical_hash": "f1a7822a0edd7c7ced489419be327fccd6502a0f4a160525cf2d703a5f8bd4d8"
+      "canonical_hash": "bfa85aa31d12fd5ed761d9db550373a851ae0b4ddfa13d13eff9b1d68266f237"
     },
     {
       "type": "PATH_TRAVERSAL_IN",
@@ -1138,7 +1165,7 @@
         "src/main/java/com/flowerfarm/gui/automation/SwingHarnessBridge.java"
       ],
       "method_signature": "(Lcom/flowerfarm/service/InventoryService$PriceListReport;Z)V",
-      "canonical_hash": "49f6f6105624431c6bc99512c799233993a44a1df148448d6f67725b3b381fa3"
+      "canonical_hash": "6117b2c7685a270544f679f3c629490f1d3c782f116c7d9d43acf9a0f6bd11af"
     },
     {
       "type": "PATH_TRAVERSAL_IN",
@@ -1160,7 +1187,7 @@
         "src/main/java/com/flowerfarm/gui/automation/SwingHarnessBridge.java"
       ],
       "method_signature": "(Ljava/lang/String;)V",
-      "canonical_hash": "d2112ec9290a8324fa119338bcb5c1308abeed00c85008bc7fd0044dbb90c5b6"
+      "canonical_hash": "2f27fc9d6f5470d1bc8671b519d6608531fe9c536a5a6fd96e7ea107dc510cbc"
     },
     {
       "type": "PATH_TRAVERSAL_IN",
@@ -1182,7 +1209,7 @@
         "src/main/java/com/flowerfarm/gui/automation/SwingHarnessBridge.java"
       ],
       "method_signature": "(Ljava/io/File;)Ljava/io/File;",
-      "canonical_hash": "c08c9e86ed635630453ab6066672660cf688de7b83e218e78620332394b2accb"
+      "canonical_hash": "daf1c2d9d1e293eba650051a7b9cd3d32ac7859dcbebb47f5bed225d12eb2813"
     },
     {
       "type": "PATH_TRAVERSAL_IN",
@@ -1204,7 +1231,7 @@
         "src/main/java/com/flowerfarm/gui/automation/SwingHarnessBridge.java"
       ],
       "method_signature": "([BLjava/lang/String;)V",
-      "canonical_hash": "27eea824aace87ca9aded0e03168e36290d5326dadadb6eab06907d5d49ce536"
+      "canonical_hash": "ebb72483d505e77bec335c91f0b2d80101f46aebcdeb1c074831b8e13291a154"
     },
     {
       "type": "PATH_TRAVERSAL_IN",
@@ -1320,30 +1347,7 @@
         "src/main/java/com/flowerfarm/FlowerFarmApp.java"
       ],
       "method_signature": "()Ljava/util/List;",
-      "canonical_hash": "37f43f4d901f78fcb0474ec206baab57b6f2e6fcbcdd03a467551c098fd9d34d"
-    },
-    {
-      "type": "SQL_INJECTION_JDBC",
-      "priority": 2,
-      "instance_hash": "9a82aa73328008e45301e2cad1447c3f",
-      "occurrence": 0,
-      "occurrence_max": 0,
-      "source": "src/main/java/com/flowerfarm/backup/DatabaseIntegrityGuard.java",
-      "class": "com.flowerfarm.backup.DatabaseIntegrityGuard",
-      "method": "check",
-      "method_signature": "(Ljava/nio/file/Path;)Lcom/flowerfarm/backup/DatabaseIntegrityGuard$Health;",
-      "review_kind": "h2_metadata_identifier",
-      "context": "Quoted H2 metadata table identifier",
-      "rationale": "The dynamic identifier comes exclusively from H2 INFORMATION_SCHEMA PUBLIC BASE TABLE metadata. The entire name is double-quoted and every embedded quote is doubled, so even a SQL-looking name remains one identifier. No HTTP/request SQL identifier is accepted. Direct row reads preserve non-admin checks; the quoted-table/non-admin regression verifies existing rows survive.",
-      "caller_bindings": [
-        "src/main/java/com/flowerfarm/backup/DatabaseIntegrityGuard.java",
-        "src/main/java/com/flowerfarm/backup/RestoreStartup.java",
-        "src/main/java/com/flowerfarm/backup/RestoreService.java",
-        "src/main/java/com/flowerfarm/backup/BackupSettings.java",
-        "src/main/java/com/flowerfarm/update/DataBackupService.java"
-      ],
-      "source_line": 85,
-      "canonical_hash": "4652d15720448c60f042f00559be1104cb1b293514a96c91b156da1144feb8e1"
+      "canonical_hash": "58928566f70b06b831c3358ada791384cabf4a7f67164ac9d5e858a04eef0348"
     },
     {
       "type": "COMMAND_INJECTION",
@@ -1395,7 +1399,7 @@
     {
       "type": "COMMAND_INJECTION",
       "priority": 2,
-      "instance_hash": "e1ec03077f4782bac8896aa5d60650fd",
+      "instance_hash": "48241c869852960ac967e9c05c264719",
       "occurrence": 0,
       "occurrence_max": 0,
       "source": "src/main/java/com/flowerfarm/update/PlatformInstaller.java",

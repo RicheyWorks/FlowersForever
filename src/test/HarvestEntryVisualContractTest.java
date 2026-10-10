@@ -171,12 +171,12 @@ class HarvestEntryVisualContractTest {
                 accessible(root, "Batch harvest notes", JTextField.class)
                         .setText("Cut before the heat; keep market and florist stock separate.");
                 JTextArea lines = accessible(root, "Batch harvest lines", JTextArea.class);
-                lines.setText("Nootka Rose,40.4,stems,North field\n"
-                        + "Dahlia Mix,12.2,bunches,Tunnel 2\n"
-                        + "Sweet Pea,3.7,buckets,South field\n");
+                lines.setText("Nootka Rose,40,stems,North field\n"
+                        + "Dahlia Mix,12,bunches,Tunnel 2\n"
+                        + "Lavender,3.7,lbs,South field\n");
                 settleLayout(root);
                 JLabel batchStatus = named(root, "harvest.batchStatus", JLabel.class);
-                assertThat(batchStatus.getText()).contains("3 rows ready", "rounded by row");
+                assertThat(batchStatus.getText()).contains("3 rows ready", "3.7 lbs");
                 assertLabelFits(batchStatus, root, prefix + "-batch-ready");
                 assertWorkspaceUsable(root, workspace, prefix + "-batch-ready");
                 render(prefix + "-batch-ready", root);

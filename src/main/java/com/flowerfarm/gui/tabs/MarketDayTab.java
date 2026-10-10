@@ -1,5 +1,7 @@
 package com.flowerfarm.gui.tabs;
 
+import com.flowerfarm.util.InventoryQuantity;
+
 import com.flowerfarm.gui.FarmUi;
 import com.flowerfarm.gui.FarmDialogs;
 import com.flowerfarm.gui.FarmFileChooser;
@@ -1036,7 +1038,7 @@ public class MarketDayTab implements FlowerFarmTab {
                         normalizedProduct(issue.productName()))) {
                     continue;
                 }
-                if (quantityCorrection && Math.max(0, (int) Math.round(line.quantity())) < 1) {
+                if (quantityCorrection && !InventoryQuantity.validPositive(line.quantity(), line.unit())) {
                     return new OrderIssueTarget(
                             customer.orderId(), line.lineId(), issue, line.unit(), true);
                 }
@@ -1800,7 +1802,7 @@ public class MarketDayTab implements FlowerFarmTab {
     private static String packingIssueDescription(
             MarketDayPackingService.ProductNeed need) {
         if (need.quantityInvalid()) {
-            return need.productName() + " has a quantity below one rounded inventory unit";
+            return need.productName() + " has a quantity invalid for its unit; counted products require whole quantities";
         }
         if (need.unitMismatch()) {
             String inventoryUnit = need.inventoryUnit().isBlank()
@@ -2031,8 +2033,8 @@ public class MarketDayTab implements FlowerFarmTab {
                     : "This confirmed-order issue blocks that load and order completion.";
             if (quantityCorrection) {
                 return issue.productName() + " on order #" + orderId
-                        + " is below one rounded inventory unit. Open that exact order with the "
-                        + "affected saved product selected, correct its quantity to at least one inventory unit, "
+                        + " is invalid for its unit; counted products require whole quantities. Open that exact order with the "
+                        + "affected saved product selected, correct its quantity for the saved unit, "
                         + "and save the product. Saving starts a fresh Market Day snapshot. "
                         + completion + " Return and wait for the packing-list status to say it is "
                         + "current; build the list only if that refresh failed.";
@@ -2051,7 +2053,7 @@ public class MarketDayTab implements FlowerFarmTab {
 
     private static String packingIssueText(MarketDayPackingService.ProductNeed need) {
         if (need.quantityInvalid()) {
-            return need.productName() + " quantity must round to at least 1 inventory unit";
+            return need.productName() + " quantity is invalid; counted products require whole quantities";
         }
         if (need.unitMismatch()) {
             String inventoryUnit = need.inventoryUnit().isBlank()

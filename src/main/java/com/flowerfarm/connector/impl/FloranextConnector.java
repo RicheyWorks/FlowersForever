@@ -1,5 +1,7 @@
 package com.flowerfarm.connector.impl;
 
+import com.flowerfarm.util.InventoryQuantity;
+
 import com.flowerfarm.connector.ConnectorHttpClient;
 import com.flowerfarm.connector.*;
 import com.flowerfarm.model.Item;
@@ -255,7 +257,7 @@ public class FloranextConnector implements ExternalConnector<Map<String, Object>
             String name = str(firstNonNull(raw.get("name"), raw.get("title"), raw.get("product_name")), "Unknown");
             String category = str(firstNonNull(raw.get("category"), raw.get("product_type"), raw.get("type")), "Other");
             double price = parseDouble(firstNonNull(raw.get("price"), raw.get("sale_price"), raw.get("amount")), 0);
-            int qty = parseInt(firstNonNull(raw.get("stock"), raw.get("quantity"), raw.get("inventory")), 0);
+            double qty = InventoryQuantity.parse(firstNonNull(raw.get("stock"), raw.get("quantity"), raw.get("inventory")));
             String unit = str(firstNonNull(raw.get("unit"), raw.get("uom")), "Per Stem");
             String notes = str(firstNonNull(raw.get("description"), raw.get("notes")), "");
             double cost = parseDouble(raw.get("cost"), 0);
@@ -362,15 +364,6 @@ public class FloranextConnector implements ExternalConnector<Map<String, Object>
         if (v == null) return def;
         try {
             return Double.parseDouble(v.toString().replaceAll("[^\\d.\\-]", ""));
-        } catch (Exception e) {
-            return def;
-        }
-    }
-
-    private static int parseInt(Object v, int def) {
-        if (v == null) return def;
-        try {
-            return (int) Math.round(Double.parseDouble(v.toString().replaceAll("[^\\d.\\-]", "")));
         } catch (Exception e) {
             return def;
         }

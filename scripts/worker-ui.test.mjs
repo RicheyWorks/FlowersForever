@@ -170,6 +170,7 @@ async function boot({ storage = new Map(), backend = server(), attachmentFiles =
       backend.csrfToken = `masked-token-${backend.csrfRequests.length}`;
       return response(200, { headerName: "X-XSRF-TOKEN", token: backend.csrfToken });
     }
+    if (url === "/api/worker/product-profile") return response(200, backend.profile || {});
     if (url.startsWith("/api/worker/today")) return response(200,
       backend.today || { date: farmDate, tasks: [], openTaskTotal: 0 });
     if (url.startsWith("/api/worker/orders")) return response(200,
@@ -566,4 +567,46 @@ test("save rejection persists as an error without moving focus from the editable
   assert.equal(page.document.activeElement, save);
   assert.equal(save.disabled, false);
   assert.equal(backend.attempts.length, 0);
+});
+
+test("cannabis harvest starts and resets with grams while a restored custom unit survives", async () => {
+  const backend = server();
+  backend.profile = { units: ["grams", "kg", "plants"], examples: ["Blue Dream flower"] };
+  const page = await boot({ backend });
+  const form = page.get("harvest-form");
+  assert.equal(form.elements.unit.value, "grams");
+  assert.equal(form.elements.cropName.placeholder, "e.g. Blue Dream flower");
+  form.elements.cropName.value = "My own cultivar";
+  form.elements.quantity.value = "3.123456";
+  await form.fire("submit");
+  assert.equal(backend.attempts[0].quantity, 3.123456);
+  assert.equal(backend.attempts[0].unit, "grams");
+  assert.equal(form.elements.unit.value, "grams");
+  form.elements.unit.value = "oz";
+  await form.fire("input");
+  const reopened = await boot({ backend, storage: page.storage });
+  assert.equal(reopened.get("harvest-form").elements.unit.value, "oz");
+});
+
+test("decimal physical count queues the unit reviewed with the exact amount", async () => {
+  const backend = server();
+  backend.inventory = { matchingTotal: 1, items: [{
+    id: 4, name: "Blue Dream flower", category: "Cannabis", quantity: 3.123456, unit: "grams"
+  }] };
+  const page = await boot({ backend });
+  const form = page.get("inventory-list").children[0].querySelector(".inventory-form");
+  form.elements.countedQuantity.value = "3.012345";
+  backend.mode = "offline";
+  await form.fire("submit");
+  const pending = page.pending()[0];
+  assert.equal(pending.body.reviewedQuantity, 3.123456);
+  assert.equal(pending.body.countedQuantity, 3.012345);
+  assert.equal(pending.body.reviewedUnit, "grams");
+  backend.mode = "csrf-reject";
+  backend.inventory.items[0].unit = "kg";
+  const reopened = await boot({ backend, storage: page.storage });
+  const card = reopened.get("inventory-list").children[0];
+  assert.match(card.querySelector(".inventory-form").querySelector(".form-message").textContent,
+    /Pending count: 3.012345 grams\./);
+  assert.match(card.querySelector(".inventory-on-hand").textContent, /kg/);
 });

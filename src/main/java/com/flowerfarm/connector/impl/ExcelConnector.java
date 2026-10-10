@@ -1,5 +1,7 @@
 package com.flowerfarm.connector.impl;
 
+import com.flowerfarm.util.InventoryQuantity;
+
 import com.flowerfarm.connector.ConnectorResult;
 import com.flowerfarm.connector.ExternalConnector;
 import com.flowerfarm.connector.SyncDirection;
@@ -156,11 +158,12 @@ public class ExcelConnector implements ExternalConnector<Row> {
                     getDouble(row, 2),
                     getString(row, 3),
                     getDouble(row, 4),
-                    getInt(row, 5),
+                    getQuantity(row, 5),
                     getString(row, 6)
             );
-        } catch (Exception e) {
-            return null;
+        } catch (IllegalArgumentException invalid) {
+            throw new IllegalArgumentException("Invalid inventory row " + (row.getRowNum() + 1)
+                    + ": " + invalid.getMessage(), invalid);
         }
     }
 
@@ -212,18 +215,14 @@ public class ExcelConnector implements ExternalConnector<Row> {
         }
     }
 
-    private int getInt(Row row, int index) {
+    private double getQuantity(Row row, int index) {
         Cell cell = row.getCell(index);
-        if (cell == null) return 0;
-
-        try {
-            return switch (cell.getCellType()) {
-                case NUMERIC -> (int) cell.getNumericCellValue();
-                case STRING -> Integer.parseInt(cell.getStringCellValue().trim());
-                default -> 0;
-            };
-        } catch (Exception e) {
-            return 0;
-        }
+        if (cell == null || cell.getCellType() == CellType.BLANK) return 0;
+        Object value = switch (cell.getCellType()) {
+            case NUMERIC -> cell.getNumericCellValue();
+            case STRING -> cell.getStringCellValue();
+            default -> throw new IllegalArgumentException("Quantity must be a number or numeric text.");
+        };
+        return InventoryQuantity.parse(value);
     }
 }

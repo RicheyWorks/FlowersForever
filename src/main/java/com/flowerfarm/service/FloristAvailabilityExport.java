@@ -1,5 +1,7 @@
 package com.flowerfarm.service;
 
+import com.flowerfarm.util.InventoryQuantity;
+
 import com.flowerfarm.util.CsvSupport;
 
 import java.time.LocalDate;
@@ -23,7 +25,7 @@ public final class FloristAvailabilityExport {
     public record Line(
             String product,
             String unit,
-            int liveQuantity,
+            double liveQuantity,
             double unitPrice,
             double plannedStems,
             LocalDate weekStart,
@@ -75,7 +77,7 @@ public final class FloristAvailabilityExport {
         for (Line line : sheet.lines()) {
             out.append(CsvSupport.row(',',
                     line.product(),
-                    Integer.toString(line.liveQuantity()),
+                     InventoryQuantity.format(line.liveQuantity()),
                     line.unit(),
                     money(line.unitPrice()),
                     line.weekStart().toString(),
@@ -106,9 +108,9 @@ public final class FloristAvailabilityExport {
         out.append(String.format(Locale.ROOT, "%-24s %8s %-10s %10s %10s%n",
                 "Product", "Live", "Unit", "Price", "Planned"));
         for (Line line : sheet.lines()) {
-            out.append(String.format(Locale.ROOT, "%-24s %8d %-10s %10s %10s%n",
+            out.append(String.format(Locale.ROOT, "%-24s %8s %-10s %10s %10s%n",
                     truncate(line.product(), 24),
-                    line.liveQuantity(),
+                    InventoryQuantity.format(line.liveQuantity()),
                     truncate(line.unit(), 10),
                     "$" + money(line.unitPrice()),
                     trimNumber(line.plannedStems())));

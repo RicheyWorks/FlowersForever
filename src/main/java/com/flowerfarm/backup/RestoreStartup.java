@@ -188,7 +188,8 @@ public final class RestoreStartup {
         try {
             if (Files.exists(data)) {
                 Path failed = (parent == null ? data.resolveSibling(name) : parent)
-                        .resolve(name + ".failed-restore-" + LocalDateTime.now(clock).format(STAMP));
+                        .resolve(name + ".failed-restore-" + LocalDateTime.now(clock).format(STAMP)
+                                + "-" + java.util.UUID.randomUUID());
                 Files.move(data, failed, StandardCopyOption.ATOMIC_MOVE);
             }
             Files.move(previous.get(), data, StandardCopyOption.ATOMIC_MOVE);

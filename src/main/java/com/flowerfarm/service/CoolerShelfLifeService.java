@@ -35,12 +35,12 @@ public class CoolerShelfLifeService {
 
     @Transactional(readOnly = true)
     public CoolerShelfLife.Board board() {
-        return board(LocalDate.now(farmProfile.zoneId()));
+        return board(farmProfile.today());
     }
 
     @Transactional(readOnly = true)
     public CoolerShelfLife.Board board(LocalDate asOf) {
-        LocalDate day = asOf == null ? LocalDate.now(farmProfile.zoneId()) : asOf;
+        LocalDate day = asOf == null ? farmProfile.today() : asOf;
         CoolerShelfLife.Settings settings = preferences.load();
         return CoolerShelfLife.board(day, harvestService.getAll(), settings);
     }
@@ -74,7 +74,7 @@ public class CoolerShelfLifeService {
         CoolerShelfLife.AppliedReview applied = CoolerShelfLife.applyReview(existing, action);
         HarvestEntry incoming = copyForUpdate(existing, applied);
         HarvestEntry saved = harvestService.update(harvestId, incoming);
-        LocalDate today = LocalDate.now(farmProfile.zoneId());
+        LocalDate today = farmProfile.today();
         preferences.save(preferences.load().withReviewed(saved.getLotCode(), today));
         return saved;
     }

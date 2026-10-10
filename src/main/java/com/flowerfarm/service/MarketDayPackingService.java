@@ -1,5 +1,7 @@
 package com.flowerfarm.service;
 
+import com.flowerfarm.util.InventoryQuantity;
+
 import com.flowerfarm.model.FarmProfile;
 import com.flowerfarm.model.CustomerOrder;
 import com.flowerfarm.model.Item;
@@ -126,7 +128,7 @@ public class MarketDayPackingService {
             String productName,
             String unit,
             double neededQty,
-            int stockOnHand,
+            double stockOnHand,
             boolean shortfall,
             double shortfallQty,
             boolean unitMismatch,
@@ -135,7 +137,7 @@ public class MarketDayPackingService {
     ) {
         /** Compatibility constructor for stock-only packing needs. */
         public ProductNeed(String productName, String unit, double neededQty,
-                           int stockOnHand, boolean shortfall, double shortfallQty) {
+                           double stockOnHand, boolean shortfall, double shortfallQty) {
             this(productName, unit, neededQty, stockOnHand, shortfall, shortfallQty,
                     false, "", false);
         }
@@ -607,28 +609,24 @@ public class MarketDayPackingService {
                 String key = normalizeKey(line.productName());
                 Agg agg = needs.computeIfAbsent(
                         key, ignored -> new Agg(line.productName(), line.unit()));
-                agg.add(line.unit(), roundedInventoryQuantity(line.quantity()));
+                agg.add(line.unit(), line.quantity());
             }
         }
         List<ProductNeed> result = new ArrayList<>();
         for (Agg agg : needs.values()) {
-            int stock = stockForProduct(inventory, agg.productName);
+            double stock = stockForProduct(inventory, agg.productName);
             String inventoryUnit = inventoryUnitForProduct(inventory, agg.productName);
             boolean unitMismatch = agg.mixedUnits
                     || (!inventoryUnit.isBlank()
                     && !InventoryUnits.equivalent(inventoryUnit, agg.unit));
-            double shortBy = Math.max(0, agg.qty - stock);
+            double shortBy = InventoryQuantity.shortage(agg.qty, stock);
             result.add(new ProductNeed(
-                    agg.productName, agg.unit, round1(agg.qty), stock,
-                    shortBy > 0.0001, round1(shortBy), unitMismatch, inventoryUnit,
+                    agg.productName, agg.unit, agg.qty, stock,
+                    shortBy > 0.0001, shortBy, unitMismatch, inventoryUnit,
                     agg.invalidQuantity));
         }
         result.sort(Comparator.comparing(ProductNeed::productName, String.CASE_INSENSITIVE_ORDER));
         return List.copyOf(result);
-    }
-
-    private static int roundedInventoryQuantity(double quantity) {
-        return Math.max(0, (int) Math.round(quantity));
     }
 
     private static String inventoryUnitForProduct(List<Item> inventory, String productName) {
@@ -647,7 +645,7 @@ public class MarketDayPackingService {
 
     private static String blockingIssueText(ProductNeed need) {
         if (need.quantityInvalid()) {
-            return need.productName() + " has a line below one rounded inventory unit";
+            return need.productName() + " has an invalid quantity for its unit";
         }
         if (need.unitMismatch()) {
             String inventoryUnit = need.inventoryUnit().isBlank()
@@ -656,7 +654,7 @@ public class MarketDayPackingService {
                     + ", inventory " + inventoryUnit + ")";
         }
         return need.productName() + " short "
-                + String.format(Locale.US, "%.1f", need.shortfallQty())
+                + InventoryQuantity.format(need.shortfallQty())
                 + " " + need.unit();
     }
 
@@ -668,7 +666,7 @@ public class MarketDayPackingService {
             return "UNIT MISMATCH";
         }
         return need.shortfall()
-                ? "SHORT " + String.format(Locale.US, "%.1f", need.shortfallQty())
+                ? "SHORT " + InventoryQuantity.format(need.shortfallQty())
                 : "OK";
     }
 
@@ -773,7 +771,7 @@ public class MarketDayPackingService {
                 for (ProductNeed p : plan.pickList()) {
                     Color rowBg = p.blockingIssue() ? shortRed : Color.WHITE;
                     pick.addCell(cell(p.productName(), body, rowBg));
-                    pick.addCell(cell(String.format(Locale.US, "%.1f", p.neededQty()), body, rowBg));
+                    pick.addCell(cell(InventoryQuantity.format(p.neededQty()), body, rowBg));
                     pick.addCell(cell(p.unit(), body, rowBg));
                     pick.addCell(cell(String.valueOf(p.stockOnHand()), body, rowBg));
                     pick.addCell(cell(packingStatus(p), body, rowBg));
@@ -822,7 +820,7 @@ public class MarketDayPackingService {
                         headerCell(lines, "Line $");
                         for (PackLine l : c.lines()) {
                             lines.addCell(cell(l.productName(), body, Color.WHITE));
-                            lines.addCell(cell(String.format(Locale.US, "%.1f", l.quantity()), body, Color.WHITE));
+                            lines.addCell(cell(InventoryQuantity.format(l.quantity()), body, Color.WHITE));
                             lines.addCell(cell(l.unit(), body, Color.WHITE));
                             lines.addCell(cell(String.format(Locale.US, "%.2f", l.unitPrice()), body, Color.WHITE));
                             lines.addCell(cell(String.format(Locale.US, "%.2f", l.lineTotal()), body, Color.WHITE));
@@ -955,7 +953,7 @@ public class MarketDayPackingService {
         };
     }
 
-    private static int stockForProduct(List<Item> inventory, String productName) {
+    private static double stockForProduct(List<Item> inventory, String productName) {
         if (productName == null || productName.isBlank()) {
             return 0;
         }
@@ -965,7 +963,7 @@ public class MarketDayPackingService {
         return inventory.stream()
                 .filter(item -> item.getName() != null
                         && item.getName().trim().toLowerCase(Locale.ROOT).equals(target))
-                .mapToInt(Item::getQuantity)
+                .mapToDouble(Item::getQuantity)
                 .sum();
     }
 
@@ -1016,9 +1014,9 @@ public class MarketDayPackingService {
                     "Product", "Need", "Unit", "Stock", "Status"));
             for (ProductNeed p : pickList) {
                 String flag = packingStatus(p);
-                sb.append(String.format(Locale.US, "  %-28s %8.1f %-10s %8d %s%n",
-                        truncate(p.productName(), 28), p.neededQty(), p.unit(),
-                        p.stockOnHand(), flag));
+                sb.append(String.format(Locale.US, "  %-28s %8s %-10s %8s %s%n",
+                        truncate(p.productName(), 28), InventoryQuantity.format(p.neededQty()), p.unit(),
+                        InventoryQuantity.format(p.stockOnHand()), flag));
             }
         }
 
@@ -1133,7 +1131,7 @@ public class MarketDayPackingService {
     private static final class Agg {
         final String productName;
         String unit;
-        int qty;
+        double qty;
         boolean mixedUnits;
         boolean invalidQuantity;
 
@@ -1142,7 +1140,7 @@ public class MarketDayPackingService {
             this.unit = unit == null ? "" : unit;
         }
 
-        void add(String lineUnit, int lineQuantity) {
+        void add(String lineUnit, double lineQuantity) {
             String normalizedUnit = lineUnit == null ? "" : lineUnit.trim();
             if (!InventoryUnits.equivalent(unit, normalizedUnit)) {
                 mixedUnits = true;
@@ -1151,7 +1149,12 @@ public class MarketDayPackingService {
             if (lineQuantity <= 0) {
                 invalidQuantity = true;
             }
-            qty += lineQuantity;
+            try {
+                double valid = InventoryQuantity.requireForUnit(lineQuantity, lineUnit);
+                qty = InventoryQuantity.add(qty, valid);
+            } catch (IllegalArgumentException invalid) {
+                invalidQuantity = true;
+            }
         }
     }
 }

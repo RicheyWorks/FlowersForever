@@ -130,6 +130,23 @@ class RestoreStartupTest {
     }
 
     @Test
+    void repeatedFailedRestoresAtTheSameInstantKeepBothFailedCopies() throws Exception {
+        Clock fixed = Clock.fixed(java.time.Instant.parse("2026-10-09T12:00:00Z"), java.time.ZoneOffset.UTC);
+        startup = new RestoreStartup(settings, records, archives, fixed, Duration.ofMillis(300));
+        for (int attempt = 0; attempt < 2; attempt++) {
+            request();
+            startup.start(() -> {
+                if (records().contains("from-the-backup")) throw new IllegalStateException("Rejected restored records");
+                return startSpring();
+            }, () -> { }, true);
+        }
+        assertThat(records()).isEqualTo("database current");
+        assertThat(siblings(".failed-restore-")).hasSize(2).allSatisfy(failed ->
+                assertThat(Files.readString(failed.resolve(DataBackupService.DATABASE_FILE)))
+                        .isEqualTo("database from-the-backup"));
+    }
+
+    @Test
     @DisplayName("a start that stopped between the two folder moves finds the previous records again")
     void crashBetweenMoves() throws Exception {
         Path aside = data.resolveSibling("data.before-restore-20261004-120000");

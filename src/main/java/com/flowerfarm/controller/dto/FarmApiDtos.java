@@ -21,14 +21,14 @@ public final class FarmApiDtos {
     private FarmApiDtos() {}
 
     public record ItemRequest(String name, String category, double price, String unit,
-                              double cost, int quantity, String notes) {
+                              double cost, double quantity, String notes) {
         public Item toItem() {
             return new Item(name, category, price, unit, cost, quantity, notes);
         }
     }
 
     public record ItemResponse(Long id, String name, String category, double price,
-                               String unit, double cost, int quantity, String notes) {
+                               String unit, double cost, double quantity, String notes) {
         public static ItemResponse from(Item item) {
             return new ItemResponse(item.getId(), item.getName(), item.getCategory(),
                     item.getPrice(), item.getUnit(), item.getCost(), item.getQuantity(), item.getNotes());

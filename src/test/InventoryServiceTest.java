@@ -50,6 +50,14 @@ class InventoryServiceTest {
         });
     }
 
+    @Test void aNewFarmDoesNotReceiveUnrelatedFlowerSampleStock() {
+        InMemoryInventoryRepository empty = new InMemoryInventoryRepository();
+        InventoryService farm = new InventoryService(empty, missingSeedCsv.toString(),
+                new InventoryReportGenerator(new FarmProfile()), new InventoryCsvExporter(), new FarmProfile());
+        farm.init();
+        assertThat(farm.getAllItems()).isEmpty();
+    }
+
     @Test
     @DisplayName("init() seeds from CSV when present and DB is empty")
     void seedsFromCsvWhenEmpty() throws Exception {
@@ -72,7 +80,7 @@ class InventoryServiceTest {
             InMemoryInventoryRepository repository, String seedCsv) {
         return new InventoryService(repository, seedCsv,
                 new InventoryReportGenerator(new FarmProfile()), new InventoryCsvExporter(),
-                new FarmProfile());
+                new FarmProfile(), true);
     }
 
     @Test

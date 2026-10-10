@@ -1,5 +1,7 @@
 package com.flowerfarm.gui.tabs;
 
+import com.flowerfarm.util.InventoryQuantity;
+
 import com.flowerfarm.gui.FarmDialogs;
 import com.flowerfarm.gui.FarmFileChooser;
 import com.flowerfarm.gui.FarmUi;
@@ -44,9 +46,21 @@ public class HarvestLogTab implements FlowerFarmTab {
     private final FarmDialogs dialogs;
     private final FarmFileChooser files;
     private String defaultUnit = "stems";
-    private static final String GENERAL_BATCH_SAMPLE =
-            "# Crop,Quantity[,Unit][,Bed]\n"
-                    + "Example crop,40\nSecond crop,25,each\nThird crop,15,lbs,Field C\n";
+    private com.flowerfarm.model.FarmProductProfile productProfile =
+            com.flowerfarm.model.FarmProductProfile.forWorkspace(com.flowerfarm.model.FarmWorkspace.ROSE_AND_EVENTS);
+
+    public void setProductProfile(com.flowerfarm.model.FarmProductProfile profile) {
+        if (panel != null) throw new IllegalStateException("Choose the farm profile before opening harvests.");
+        java.util.Objects.requireNonNull(profile);
+        setDefaultUnit(profile.defaultUnit());
+        productProfile = profile;
+    }
+
+    private String batchSample() {
+        return "# Crop,Quantity[,Unit][,Bed]\n" + productProfile.examples().get(0) + ","
+                + (com.flowerfarm.util.InventoryUnits.measured(defaultUnit) ? "3.5" : "40")
+                + "," + defaultUnit + "\n";
+    }
     private static final int MAX_BATCH_DROP_CHARS = 262_144;
     private static final long MAX_BATCH_DROP_FILE_BYTES = 262_144L;
 
@@ -155,10 +169,15 @@ public class HarvestLogTab implements FlowerFarmTab {
             throw new IllegalArgumentException("Default harvest unit must have 1 to 64 characters.");
         }
         defaultUnit = clean;
+        if (!com.flowerfarm.util.InventoryUnits.equivalent("stems", clean)
+                && productProfile.category().equals("Flowers/Plants")) {
+            productProfile = new com.flowerfarm.model.FarmProductProfile("Farm products",
+                    java.util.List.of(clean), java.util.List.of("Example crop", "Second crop", "Third crop"));
+        }
     }
 
     private boolean usesFlowerCopy() {
-        return "stems".equalsIgnoreCase(defaultUnit);
+        return com.flowerfarm.util.InventoryUnits.equivalent("stems", defaultUnit);
     }
 
     @Override public String getTabTitle() { return "Harvest Log"; }
@@ -687,7 +706,7 @@ public class HarvestLogTab implements FlowerFarmTab {
         HarvestBatchView view = usesFlowerCopy()
                 ? new HarvestBatchView(this::logBatch, this::approveSampleReplacement)
                 : new HarvestBatchView(this::logBatch, this::approveSampleReplacement,
-                        GENERAL_BATCH_SAMPLE);
+                        batchSample());
         batchArea = view.batchArea();
         batchArea.setToolTipText("Drop text or one .csv/.txt file with "
                 + "Crop,Quantity[,Unit][,Bed] lines. Review before logging.");
@@ -1040,7 +1059,7 @@ public class HarvestLogTab implements FlowerFarmTab {
         cropField = new JTextField(14);
         cropField.setName("harvest.crop");
         FarmUi.initialFocus(cropField);
-        cropField.putClientProperty("JTextField.placeholderText", "Search or type a crop");
+        cropField.putClientProperty("JTextField.placeholderText", productProfile.nameHint());
         cropSuggest = new JComboBox<>();
         cropSuggest.setName("harvest.cropPreset");
         cropSuggest.setEditable(false);
@@ -1057,9 +1076,7 @@ public class HarvestLogTab implements FlowerFarmTab {
         qtyField.putClientProperty("JTextField.placeholderText", "Amount");
         unitField = new JTextField(defaultUnit, 8);
         unitField.setName("harvest.unit");
-        unitSuggest = new JComboBox<>(new String[]{
-                "stems", "bunches", "buckets", "lbs", "oz", "each"
-        });
+        unitSuggest = new JComboBox<>(productProfile.units().toArray(String[]::new));
         unitSuggest.setName("harvest.unitPreset");
         boolean defaultIsPreset = false;
         for (int index = 0; index < unitSuggest.getItemCount(); index++) {
@@ -1472,9 +1489,10 @@ public class HarvestLogTab implements FlowerFarmTab {
         try {
             cropSuggest.removeAllItems();
             cropSuggest.addItem("Recent crop…");
-            for (String crop : allTotals.keySet()) {
-                cropSuggest.addItem(crop);
-            }
+            java.util.Set<String> names = new java.util.LinkedHashSet<>();
+            lastView.stream().map(HarvestEntry::getCropName).forEach(names::add);
+            names.addAll(productProfile.examples());
+            names.forEach(cropSuggest::addItem);
             if (previous != null) {
                 cropSuggest.setSelectedItem(previous);
             }
@@ -2443,12 +2461,10 @@ public class HarvestLogTab implements FlowerFarmTab {
         }
         StringBuilder sb = new StringBuilder();
         sb.append(filtered ? "Current filtered totals\n" : "All-time season totals\n");
-        double sum = 0;
         for (Map.Entry<String, Double> e : totals.entrySet()) {
-            sum += e.getValue();
-            sb.append(String.format("%-20s %8.1f%n", e.getKey(), e.getValue()));
+            sb.append(e.getKey()).append("  ")
+                    .append(InventoryQuantity.format(e.getValue())).append('\n');
         }
-        sb.append(String.format("%n%-20s %8.1f%n", "TOTAL", sum));
         totalsArea.setText(sb.toString());
     }
 

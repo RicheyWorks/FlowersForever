@@ -1,5 +1,7 @@
 package com.flowerfarm.gui.tabs;
 
+import com.flowerfarm.util.InventoryQuantity;
+
 import com.flowerfarm.gui.GuiPermissions;
 import com.flowerfarm.gui.FarmUi;
 import com.flowerfarm.gui.FarmDialogs;
@@ -323,7 +325,7 @@ public class InventoryTab implements FlowerFarmTab {
                     String.format("%.2f", item.getPrice()),
                     item.getUnit(),
                     String.format("%.2f", item.getCost()),
-                    item.getQuantity(),
+                    InventoryQuantity.wireNumber(item.getQuantity()),
                     item.getNotes()
             });
         }
@@ -491,8 +493,8 @@ public class InventoryTab implements FlowerFarmTab {
         });
 
         sorter = new TableRowSorter<>(tableModel);
-        sorter.setComparator(QTY_COLUMN, (left, right) -> Integer.compare(
-                ((Number) left).intValue(), ((Number) right).intValue()));
+        sorter.setComparator(QTY_COLUMN, (left, right) -> Double.compare(
+                ((Number) left).doubleValue(), ((Number) right).doubleValue()));
         inventoryTable.setRowSorter(sorter);
 
         // Color coding for low stock on the Qty column.
@@ -506,7 +508,7 @@ public class InventoryTab implements FlowerFarmTab {
                     Color bg = table.getBackground();
                     if (column == QTY_COLUMN && value != null) {
                         try {
-                            int qty = Integer.parseInt(value.toString().trim());
+                            double qty = Double.parseDouble(value.toString().trim());
                             bg = FarmUi.stockBackground(qty, table.getBackground());
                         } catch (NumberFormatException ignored) {
                             // leave default background
@@ -667,7 +669,7 @@ public class InventoryTab implements FlowerFarmTab {
                 deleteBtn.setToolTipText("Select the inventory product to delete.");
             } else {
                 String target = compactName(selectedItem.getName()) + " · "
-                        + selectedItem.getQuantity() + " " + selectedItem.getUnit()
+                        + InventoryQuantity.format(selectedItem.getQuantity()) + " " + selectedItem.getUnit()
                         + " · " + inventorySummaryText();
                 FarmUi.updateStatusBadge(statusLabel, target,
                         selectedItem.getQuantity() <= LOW_STOCK_THRESHOLD
@@ -678,7 +680,7 @@ public class InventoryTab implements FlowerFarmTab {
                         "Inventory actions apply to " + selectedItem.getName()
                                 + ". " + inventorySummaryText() + ".");
                 statusLabel.setToolTipText("Selected “" + selectedItem.getName() + "” · "
-                        + selectedItem.getQuantity() + " " + selectedItem.getUnit()
+                        + InventoryQuantity.format(selectedItem.getQuantity()) + " " + selectedItem.getUnit()
                         + " on hand · " + inventorySummaryText());
                 stockCountBtn.setToolTipText("Record a physical count for “"
                         + selectedItem.getName() + "”.");
@@ -732,7 +734,7 @@ public class InventoryTab implements FlowerFarmTab {
                 : new Object[]{"Save & count next", "Save count", "Cancel"};
         int choice = dialogs.showOption(panel,
                 draftEditor("Record physical count",
-                        "System quantity: " + current.getQuantity() + " "
+                        "System quantity: " + InventoryQuantity.format(current.getQuantity()) + " "
                                 + current.getUnit()
                                 + ". Enter what is physically on hand now.",
                         countView, retained, current),
@@ -742,13 +744,21 @@ public class InventoryTab implements FlowerFarmTab {
         boolean saveAndContinue = nextItem != null && choice == 0;
         boolean save = choice == 0 || (nextItem != null && choice == 1);
         if (save) {
+            double countedQuantity;
+            try {
+                countedQuantity = countView.commitCountedQuantity();
+            } catch (IllegalArgumentException invalid) {
+                dialogs.showMessage(panel, invalid.getMessage(),
+                        "Count was not saved", JOptionPane.WARNING_MESSAGE);
+                return;
+            }
             if (!reviewedInventoryStillSelected(reviewed) || retainedDraft(current, true) != retained) {
                 retainIfUnchanged(retained, new RetainedDraft(reviewed, true,
-                        countView.countedQuantity(), null, null));
+                        countedQuantity, null, null));
                 return;
             }
             startSelectedStockCountSave(
-                    countView.countedQuantity(), countView.variance(), saveAndContinue);
+                    countedQuantity, countView.variance(), saveAndContinue);
         } else if (retained != null) {
             retainIfUnchanged(retained, new RetainedDraft(retained.product(), true,
                     countView.countedQuantity(), null, null));
@@ -756,7 +766,7 @@ public class InventoryTab implements FlowerFarmTab {
     }
 
     /** Saves one captured physical count without blocking Swing's event thread. */
-    void startSelectedStockCountSave(int countedQuantity, int variance,
+    void startSelectedStockCountSave(double countedQuantity, double variance,
                                      boolean continueToNext) {
         if (!inventoryMutationAvailable() || inventoryTable == null
                 || inventoryTable.getSelectedRow() < 0) {
@@ -778,7 +788,7 @@ public class InventoryTab implements FlowerFarmTab {
         setStockCountControlsEnabled(false);
         stockCountBtn.setText("Saving count…");
         String busy = "Saving “" + current.getName() + "” · "
-                + countedQuantity + " " + current.getUnit();
+                + InventoryQuantity.format(countedQuantity) + " " + current.getUnit();
         FarmUi.updateStatusBadge(statusLabel, busy, FarmUi.Tone.INFO);
         statusLabel.getAccessibleContext().setAccessibleName(
                 "Inventory results and selected product");
@@ -828,12 +838,12 @@ public class InventoryTab implements FlowerFarmTab {
                 "Count for “" + result.saved().getName() + "” was saved.");
         finishStockCountControls();
         String message = "Counted “" + result.saved().getName() + "”: "
-                + result.saved().getQuantity() + " " + result.saved().getUnit()
+                + InventoryQuantity.format(result.saved().getQuantity()) + " " + result.saved().getUnit()
                 + " on hand" + varianceSummary(result.variance()) + ".";
         if (refreshed) {
             showInventoryRefreshState(
                 compactName(result.saved().getName()) + " saved · "
-                        + result.saved().getQuantity() + " " + result.saved().getUnit(),
+                        + InventoryQuantity.format(result.saved().getQuantity()) + " " + result.saved().getUnit(),
                     message, FarmUi.Tone.SUCCESS);
             pendingCountNext = result.nextItem();
         }
@@ -857,14 +867,14 @@ public class InventoryTab implements FlowerFarmTab {
         }
     }
 
-    private void failStockCount(ItemSelection identity, int countedQuantity,
+    private void failStockCount(ItemSelection identity, double countedQuantity,
                                 Item current, RetainedDraft submittedDraft, Throwable failure) {
         finishStockCountControls();
         retainIfUnchanged(submittedDraft, new RetainedDraft(InventorySnapshot.from(current),
                 true, countedQuantity, null, null));
         restoreSelection(identity);
         String detail = FarmUi.actionableError("Recording this stock count", failure);
-        String recovery = detail + " The entered count of " + countedQuantity + " "
+        String recovery = detail + " The entered count of " + InventoryQuantity.format(countedQuantity) + " "
                 + current.getUnit() + " is retained for retry.";
         FarmUi.updateStatusBadge(statusLabel,
                 compactName(current.getName()) + " not saved · retry count",
@@ -900,10 +910,10 @@ public class InventoryTab implements FlowerFarmTab {
     }
 
     private record StockCountResult(Item saved, InventoryReadback inventory,
-                                    ItemSelection nextItem, int variance) {
+                                     ItemSelection nextItem, double variance) {
     }
 
-    private static String varianceSummary(int variance) {
+    private static String varianceSummary(double variance) {
         if (variance == 0) {
             return "; matched the system quantity";
         }
@@ -942,7 +952,7 @@ public class InventoryTab implements FlowerFarmTab {
                             ? extends Integer> entry) {
                         Object value = entry.getValue(QTY_COLUMN);
                         return value instanceof Number number
-                                && number.intValue() <= LOW_STOCK_THRESHOLD;
+                                && number.doubleValue() <= LOW_STOCK_THRESHOLD;
                     }
                 });
             }
@@ -1195,6 +1205,7 @@ public class InventoryTab implements FlowerFarmTab {
         InventorySnapshot reviewed = InventorySnapshot.from(current);
         InventoryItemFormView editor = new InventoryItemFormView();
         editor.setRoseVarietyVisible(showRoseDetails());
+        editor.setProductProfile(com.flowerfarm.model.FarmProductProfile.combined(workspace, enabledWorkspaces));
         editor.setItem(current);
         ItemSelection identity = ItemSelection.from(current);
         RetainedDraft retained = retainedDraft(current, false);
@@ -1778,7 +1789,7 @@ public class InventoryTab implements FlowerFarmTab {
         }
     }
 
-    private record RetainedDraft(InventorySnapshot product, boolean countDraft, Integer count,
+    private record RetainedDraft(InventorySnapshot product, boolean countDraft, Double count,
                                   InventoryItemPresenter.ItemDraft edit, String conflictingName) {
         private RetainedDraft {
             if (conflictingName != null && edit != null
@@ -1799,7 +1810,7 @@ public class InventoryTab implements FlowerFarmTab {
     }
 
     private record InventorySnapshot(Long id, String name, String category, double price,
-                                      String unit, double cost, int quantity, String notes) {
+                                      String unit, double cost, double quantity, String notes) {
         private static InventorySnapshot from(Item item) {
             return new InventorySnapshot(item.getId(), item.getName(), item.getCategory(),
                     item.getPrice(), item.getUnit(), item.getCost(), item.getQuantity(), item.getNotes());

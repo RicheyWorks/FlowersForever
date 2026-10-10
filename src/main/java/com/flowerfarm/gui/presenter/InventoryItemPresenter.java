@@ -42,7 +42,7 @@ public final class InventoryItemPresenter {
     }
 
     /** Updates a physical count without making the worker re-enter product details. */
-    public Item setQuantity(int index, Item current, int quantity) {
+    public Item setQuantity(int index, Item current, double quantity) {
         if (current == null) {
             throw new FieldValidationException("quantity", "Select an inventory item first.");
         }
@@ -58,7 +58,7 @@ public final class InventoryItemPresenter {
     }
 
     /** Records a physical count against the exact persisted item id. */
-    public Item setQuantityById(Long id, Item current, int quantity) {
+    public Item setQuantityById(Long id, Item current, double quantity) {
         if (id == null) {
             throw new FieldValidationException("quantity", "This inventory item has no saved id.");
         }
@@ -66,7 +66,7 @@ public final class InventoryItemPresenter {
         return inventoryService.updateById(id, updated);
     }
 
-    private static Item quantityUpdate(Item current, int quantity) {
+    private static Item quantityUpdate(Item current, double quantity) {
         if (current == null) {
             throw new FieldValidationException("quantity", "Select an inventory item first.");
         }
@@ -99,7 +99,7 @@ public final class InventoryItemPresenter {
         String unit = required(draft.unit(), "unit", "Choose or enter how this item is sold.");
         double price = nonNegativeDecimal(draft.price(), "price", "Selling price");
         double cost = nonNegativeDecimal(draft.cost(), "cost", "Cost per unit");
-        int quantity = nonNegativeWholeNumber(draft.quantity());
+        double quantity = nonNegativeDecimal(draft.quantity(), "quantity", "Quantity");
         String notes = draft.notes() == null ? "" : draft.notes().trim();
         if ("Flowers/Plants".equals(category)
                 && draft.roseVariety() != null && !draft.roseVariety().isBlank()) {
@@ -130,19 +130,6 @@ public final class InventoryItemPresenter {
         } catch (NumberFormatException exception) {
             throw new FieldValidationException(field,
                     label + " must be zero or greater, such as 12.50.");
-        }
-    }
-
-    private static int nonNegativeWholeNumber(String raw) {
-        try {
-            int value = Integer.parseInt(raw == null ? "" : raw.trim());
-            if (value < 0) {
-                throw new NumberFormatException();
-            }
-            return value;
-        } catch (NumberFormatException exception) {
-            throw new FieldValidationException("quantity",
-                    "Quantity must be a whole number of zero or more.");
         }
     }
 

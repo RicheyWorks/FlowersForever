@@ -122,8 +122,11 @@ class IntegrityRestoreSafetyTest {
 
         assertThat(Files.readAllBytes(data.resolve(DataBackupService.DATABASE_FILE))).isEqualTo(damage);
         assertThat(archive).exists();
-        assertThat(data.resolveSibling("data.failed-restore-20261007-170000")
-                .resolve(DataBackupService.DATABASE_FILE)).exists();
+        try (var siblings = Files.list(data.getParent())) {
+            assertThat(siblings.filter(path -> path.getFileName().toString()
+                    .startsWith("data.failed-restore-20261007-170000-")).toList()).singleElement()
+                    .satisfies(path -> assertThat(path.resolve(DataBackupService.DATABASE_FILE)).exists());
+        }
         assertThat(records.inProgress()).isEmpty();
     }
 

@@ -1558,7 +1558,7 @@ class PriorityTabsUiTest {
 
     @Test
     @DisplayName("batch harvest previews exact decimal inventory impact before logging")
-    void harvestBatchPreviewsRoundedInventoryImpact() throws Exception {
+    void harvestBatchPreviewsExactMeasuredInventoryImpact() throws Exception {
         HarvestLogTab tab = new HarvestLogTab(emptyHarvestService(), new TestHost());
         JComponent[] root = new JComponent[1];
         Object[] state = new Object[7];
@@ -1578,7 +1578,7 @@ class PriorityTabsUiTest {
             state[1] = status.getText();
             state[2] = log.getToolTipText();
 
-            batch.setText("Lavender,0.1,lbs");
+            batch.setText("Dahlia,0.1,stems");
             state[3] = log.isEnabled();
             state[4] = status.getText();
 
@@ -1591,10 +1591,10 @@ class PriorityTabsUiTest {
 
         assertThat(state[0]).isEqualTo(true);
         assertThat(state[1].toString()).contains(
-                "1 row ready", "1.5 lbs", "inventory +2 lbs", "rounded by row");
+                "1 row ready", "1.5 lbs");
         assertThat(state[2]).isEqualTo("Creates 1 harvest entry and updates inventory.");
         assertThat(state[3]).isEqualTo(false);
-        assertThat(state[4].toString()).contains("Line 1", "0.5 or more");
+        assertThat(state[4].toString()).contains("Line 1", "whole number");
         assertThat(state[5]).isEqualTo(false);
         assertThat(state[6].toString()).contains("Harvest date", "cannot be after today");
         assertThat(textField(root[0], "Harvest quantity")
@@ -2009,7 +2009,7 @@ class PriorityTabsUiTest {
             textField(root[0], "Harvest date").setText("2026-08-24");
             textField(root[0], "Harvest crop or variety").setText("Cafe au Lait Dahlia");
             textField(root[0], "Harvest quantity").setText("7.5");
-            textField(root[0], "Harvest unit").setText("buckets");
+            textField(root[0], "Harvest unit").setText("lbs");
             textField(root[0], "Harvest bed or field").setText("Bed D4");
             textField(root[0], "Harvest notes").setText("Wedding order");
             ((JCheckBox) findNamed(root[0], "harvest.keepContext").get(0)).setSelected(false);
@@ -2024,7 +2024,7 @@ class PriorityTabsUiTest {
         assertThat(textField(root[0], "Harvest crop or variety").getText())
                 .isEqualTo("Cafe au Lait Dahlia");
         assertThat(textField(root[0], "Harvest quantity").getText()).isEqualTo("7.5");
-        assertThat(textField(root[0], "Harvest unit").getText()).isEqualTo("buckets");
+        assertThat(textField(root[0], "Harvest unit").getText()).isEqualTo("lbs");
         assertThat(textField(root[0], "Harvest bed or field").getText()).isEqualTo("Bed D4");
         assertThat(textField(root[0], "Harvest notes").getText()).isEqualTo("Wedding order");
         assertThat(((JCheckBox) findNamed(
@@ -3706,7 +3706,7 @@ class PriorityTabsUiTest {
         assertThat(findNamed(root[0], "crm.orderLinePreview"))
                 .singleElement()
                 .satisfies(component -> assertThat(((javax.swing.JLabel) component).getText())
-                        .contains("round to at least 1 inventory unit"));
+                        .contains("counted products require whole quantities"));
         assertThat(button(root[0], "Create & select order").isEnabled()).isFalse();
         SwingUtilities.invokeAndWait(() -> textField(root[0], "Order quantity").setText("1"));
         SwingUtilities.invokeAndWait(() -> textField(root[0], "Order unit price").setText("0"));
@@ -4310,9 +4310,9 @@ class PriorityTabsUiTest {
 
         JLabel stock = (JLabel) findNamed(root[0], "crm.selectedOrderStock").get(0);
         assertThat(stock.getText()).contains(
-                "1 order packing issue", "quantity must round to at least 1 inventory unit");
+                "1 order packing issue", "quantity is invalid; counted products require whole quantities");
         assertThat(stock.getAccessibleContext().getAccessibleDescription())
-                .contains("blocks completion", "Correct saved quantity", "at least one");
+                .contains("blocks completion", "Correct saved quantity", "valid positive quantity for its unit");
         assertThat(button(root[0], "Complete order").isEnabled()).isFalse();
         JButton correct = button(root[0], "Correct saved quantity");
         assertThat(correct.isEnabled()).isTrue();
@@ -4323,9 +4323,9 @@ class PriorityTabsUiTest {
         assertThat(textField(root[0], "Order quantity").getText()).isEqualTo("0.4");
         assertThat(button(root[0], "Save product changes").isEnabled()).isFalse();
         assertThat(((JLabel) findNamed(root[0], "crm.orderLinePreview").get(0)).getText())
-                .contains("round to at least 1 inventory unit");
+                .contains("counted products require whole quantities");
         assertThat(host.status).contains(
-                "Correct", "Dahlia Mix", "order #54", "at least one inventory unit");
+                "Correct", "Dahlia Mix", "order #54", "counted products require whole quantities");
         verify(orders, never()).fulfill(any());
     }
 
@@ -7439,7 +7439,7 @@ class PriorityTabsUiTest {
     }
 
     @Test
-    @DisplayName("direct completion reviews exact customer load and rounded inventory deduction")
+    @DisplayName("direct completion reviews exact customer load and measured inventory deduction")
     void crmCompletionReviewShowsExactMultiProductInventoryImpact() {
         LocalDate scheduledDate = LocalDate.now().plusDays(7);
         Customer customer = new Customer(7L, "Kitsap Blooms", "Sam Rivera",
@@ -7448,7 +7448,7 @@ class PriorityTabsUiTest {
                 customer, scheduledDate, "CONFIRMED", "Keep upright");
         order.setId(52L);
         order.addLine(new OrderLine("Dahlia Mix", 12, "stems", 3.5));
-        order.addLine(new OrderLine("Rose Bunch", 1.6, "bunches", 18));
+        order.addLine(new OrderLine("Lavender", 1.6, "lbs", 18));
         order.addLine(new OrderLine("Complimentary Cosmos", 1, "stem", 0));
 
         CrmTab.OrderCompletionReview review = CrmTab.orderCompletionReview(
@@ -7462,9 +7462,9 @@ class PriorityTabsUiTest {
                 "Customer contact: Sam Rivera · 360-555-0142 · sam@kitsap.test",
                 "Account delivery note: Use side gate",
                 "Instructions: Keep upright", "Products: 3",
-                "1. 12 stems Dahlia Mix · $3.50 each · $42.00 · deduct 12 inventory units",
-                "2. 1.6 bunches Rose Bunch · $18.00 each · $28.80 · deduct 2 inventory units",
-                "3. 1 stem Complimentary Cosmos · $0.00 each · $0.00 · deduct 1 inventory unit",
+                "1. 12 stems Dahlia Mix · $3.50 each · $42.00 · deduct 12 stems inventory units",
+                "2. 1.6 lbs Lavender · $18.00 each · $28.80 · deduct 1.6 lbs inventory units",
+                "3. 1 stem Complimentary Cosmos · $0.00 each · $0.00 · deduct 1 stem inventory unit",
                 "Order total: $70.80", "all 3 products covered",
                 "Live stock is checked again", "marks this order completed",
                 "physical pickup, delivery, or load-out is complete",
@@ -10699,9 +10699,9 @@ class PriorityTabsUiTest {
 
         JLabel issue = (JLabel) findNamed(root[0], "marketDay.shortfallSummary").get(0);
         assertThat(issue.getText()).contains(
-                "1 packing issue", "Cosmos quantity must round to at least 1 inventory unit");
+                "1 packing issue", "Cosmos quantity is invalid; counted products require whole quantities");
         assertThat(issue.getAccessibleContext().getAccessibleDescription())
-                .contains("Cosmos on order #42", "below one rounded inventory unit",
+                .contains("Cosmos on order #42", "counted products require whole quantities",
                         "saved product selected", "correct its quantity",
                         "fresh Market Day snapshot", "status to say it is current");
         JButton correctQuantity = button(root[0], "Correct quantity #42");
@@ -11190,14 +11190,14 @@ class PriorityTabsUiTest {
                         "#1 Kitsap Blooms → FULFILLED ($80.00)",
                         "#2 Harbor Florist FAILED: only 2 stems available",
                         "#3 Island Market FAILED: inventory unit is bunches, order uses stems",
-                        "#4 Bay Farm FAILED: order quantity must round to at least 1 inventory unit"));
+                        "#4 Bay Farm FAILED: order quantity must counted products require whole quantities"));
 
         assertThat(MarketDayTab.fulfillmentHandoffText(result)).contains(
                 "Completion result · 1 completed · 3 failed · 0 skipped",
                 "#1 Kitsap Blooms → FULFILLED ($80.00)",
                 "#2 Harbor Florist FAILED: only 2 stems available",
                 "#3 Island Market FAILED: inventory unit is bunches, order uses stems",
-                "#4 Bay Farm FAILED: order quantity must round to at least 1 inventory unit",
+                "#4 Bay Farm FAILED: order quantity must counted products require whole quantities",
                 "completed orders are already saved",
                 "Failed confirmed orders remain checked below",
                 "complete only the remaining confirmed orders");
