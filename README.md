@@ -206,9 +206,11 @@ Select **Browse all farm tools** to find all 41 tools and guides, including Soil
 
 ## Keep readings from your farm equipment
 
-Keep temperature, humidity, soil moisture, and other measurements together with when and where they were taken. The optional **Farm readings** feature can receive a spreadsheet or readings file saved by your sensor or recorder (file types called “CSV” and “JSON”). It keeps a history and avoids counting the same reading twice.
+Open **Equipment readings** to record measurements from your soil, water, air, and growing spaces. Give the equipment a familiar name, choose the measurement, enter its value and unit, and review it before saving. The history also shows readings brought in by an equipment helper, with when and where they were taken. Missing readings stay missing, and retrying a save does not count the same reading twice.
 
-This early version needs help from the person setting up your equipment; there is no sensor connection screen yet. Automatic readings, Bluetooth connections, charts, and pump operation are planned next steps. [Read the farmer's guide to equipment readings](docs/FARM_READINGS.md).
+For files saved by a sensor or recorder, your equipment helper can use the optional import tool (file types called “CSV” and “JSON”). Direct file selection in this screen, automatic readings, Bluetooth pairing, charts, and pump operation still need further work. [Read the farmer's guide to equipment readings](docs/FARM_READINGS.md).
+
+[![Equipment readings: familiar equipment names, reviewed manual entry, and saved measurement history using sample records.](docs/images/app-equipment-readings.png)](docs/images/app-equipment-readings.png)
 
 ## Take a five-minute tour
 

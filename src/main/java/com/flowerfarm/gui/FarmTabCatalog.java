@@ -127,6 +127,7 @@ public final class FarmTabCatalog {
     private final CranberryBedPlanService cranberryBedPlanService;
     private final PumpkinPatchPlanService pumpkinPatchPlanService;
     private FieldScienceExportService fieldScienceExportService;
+    private com.flowerfarm.telemetry.FarmReadingService farmReadingService;
 
     public FarmTabCatalog(InventoryService inventoryService, TrendService trendService,
                           HarvestService harvestService, SyncHistoryService syncHistoryService,
@@ -802,6 +803,10 @@ public final class FarmTabCatalog {
         this.fieldScienceExportService = java.util.Objects.requireNonNull(service, "service");
     }
 
+    void setFarmReadingService(com.flowerfarm.telemetry.FarmReadingService service) {
+        this.farmReadingService = java.util.Objects.requireNonNull(service, "service");
+    }
+
     public Catalog create(TabHost host) {
         return create(host, FarmDialogs.swing(), FarmFileChooser.swing(),
                 FarmWorkspace.ROSE_AND_EVENTS);
@@ -1125,6 +1130,17 @@ public final class FarmTabCatalog {
             }
             withScience.add(beforeInventory, fieldScience);
             tabs = List.copyOf(withScience);
+        }
+        if (farmReadingService != null) {
+            List<FlowerFarmTab> withReadings = new java.util.ArrayList<>(tabs);
+            int beforeInventory = 0;
+            while (beforeInventory < withReadings.size()
+                    && !"Inventory".equals(withReadings.get(beforeInventory).getTabTitle())) {
+                beforeInventory++;
+            }
+            withReadings.add(beforeInventory, new com.flowerfarm.gui.tabs.EquipmentReadingsTab(
+                    farmReadingService, host, dialogs));
+            tabs = List.copyOf(withReadings);
         }
         List<CropAreaPlanTab> cropAreas = new java.util.ArrayList<>(2);
         if (potatoArea != null) cropAreas.add(potatoArea);

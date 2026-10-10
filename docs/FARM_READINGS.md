@@ -4,13 +4,27 @@ Keep a history of the conditions on your farm: greenhouse temperature, humidity,
 
 ## Start with readings you already have
 
+Open **Equipment readings** in your farm workspace. To record a reading yourself:
+
+1. Name the equipment and growing area, such as “North greenhouse probe” and “Tomato house.”
+2. Choose the measurement, then enter the number and the unit shown by your equipment. The app does not convert units.
+3. Check the measured date and time. The time includes your local offset so daylight-saving changes remain visible.
+4. Choose **Measured**, **Needs checking**, **No reading**, or **Equipment error**. Leave the value blank for **No reading**; zero is an actual measurement.
+5. Select **Review and save reading**, check the summary, then confirm.
+
+**Latest readings** shows the most recent 200 received observations across your equipment. **Older readings** moves through earlier pages. Each row keeps the equipment, area, measurement, value, unit, condition, measured time, and source. Viewers can review history; farm hands and owners can save readings.
+
+If a save cannot be confirmed, your draft stays in place. Check **Latest readings**, then retry the unchanged draft if needed: the app reuses its identity to avoid a duplicate. To enter a separate observation, use **Start a new reading**. Changing a saved reading is not an overwrite; history stays intact.
+
+## Bring in an equipment file
+
 Ask the person who set up your sensor or recorder to save a spreadsheet or readings file. Some equipment calls this **Export** or **Download readings**. Supported file types are called “CSV” (a simple spreadsheet) and “JSON” (a readings file used by some equipment).
 
 Your equipment helper can check a file before adding its readings to FlowersForever. Sending the same unchanged file again will not count its readings twice. A missing reading stays missing; it is never treated as zero. The original information is kept alongside each measurement so you can check where it came from.
 
 ## What is available now
 
-This is an optional early feature that needs equipment setup help. There is **no sensor connection screen or automatic collection yet**. The setup instructions below are for the person helping you connect your equipment; you do not need to understand the programming terms to understand your farm readings.
+Manual entry and saved history are available directly in the desktop app. Equipment file imports still need setup help through the optional helper; there is **no file chooser, device pairing, or automatic collection in this screen yet**. The setup instructions below are for the person helping you connect your equipment; you do not need to understand the programming terms to understand your farm readings.
 
 Bluetooth connections, automatic readings, charts, and alerts need further work. Pump and valve operation will be a separate later step. Saving a reading does not turn equipment on or off.
 
@@ -129,7 +143,9 @@ The importer stages and checks the full file locally, then submits batches of at
 
 The result contains `readings`, `nextAfterId`, and `hasMore`. Save `nextAfterId` and request the next page with a fresh command ID. Pages contain at most 200 readings and use receipt order, so a late observation is still delivered. The cursor is a database receipt identifier, not a device sequence or measurement time. Individual records retain both times and the reported source/device identity.
 
-Polling this endpoint lets an external monitor see new readings as they arrive. There is currently no built-in continuously running collector, push subscription, sensor tab, chart, or stale-device alarm. Data remains available after reopening and enters the normal full H2 backup; the separate farm-data export/snapshot plugin does not currently include these readings. Keep device-side buffers and original logger files until their receipts are confirmed.
+The desktop **Equipment readings** tab uses a separate bounded, descending receipt cursor to show all sources, newest first. Its manual observations use source `desktop.manual`, a generated reading key retained through failed-save retries, and a reversible UTF-8 equipment-name encoding in `deviceId` (maximum 84 UTF-8 bytes before encoding). Adapter IDs remain unchanged. This does not enable the harness HTTP transport: helper/API intake still requires its opt-in settings and authorization. Desktop entry follows the signed-in barn role, with access checked before confirmation and again before calling the transactional intake. An already started transaction is not canceled by a later account change.
+
+Polling this endpoint lets an external monitor see new readings as they arrive. There is currently no built-in continuously running collector, push subscription, chart, or stale-device alarm. Data remains available after reopening and enters the normal full H2 backup; the separate farm-data export/snapshot plugin does not currently include these readings. Keep device-side buffers and original logger files until their receipts are confirmed.
 
 ## CSRBT and future adapters
 

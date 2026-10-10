@@ -78,4 +78,18 @@ unchanged. The fresh scan has exactly the same 38 reviewed Medium contexts, no
 High or new findings, zero analysis errors, and zero missing classes. The source-bound
 classification gate and all 33 security evidence guard tests pass.
 
+The desktop Equipment readings addition received a fresh Windows scan and source/caller
+review on 2026-10-10. `EquipmentReadingsTab` performs manual draft review, explicit
+confirmation, barn-role checks, and background service calls; it has no file chooser,
+network adapter, process invocation, or physical-action path. Dynamic equipment text
+uses a plain text confirmation component and an HTML-disabled table renderer.
+`ManualFarmReading` reversibly encodes bounded UTF-8 display names into the existing
+identifier contract and parses exact decimal values. `FarmReadingService` adds
+validation without database writes and bounded descending history using fixed SQL
+and bound cursor/limit parameters. Desktop Spring injection and catalog/navigation
+wiring expose the tab without enabling the optional harness transport. All 553
+production Java files and the unchanged POM are bound. The complete scan retains
+exactly the same 38 reviewed Medium canonical annotations and caller contexts, no
+High or new Medium findings, zero analysis errors, and zero missing classes.
+
 Any new, changed, duplicate or absent reviewed finding fails. Any production Java edit/addition/removal or POM change requires a fresh source/build/caller review and an intentional manifest update; do not regenerate the manifest automatically to make a failed check pass. There are no native category/class/method exclusions in the security profile. The separate general quality profile retains its existing exclusions and Medium-or-higher zero-violation gate.

@@ -1254,6 +1254,11 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
         tabCatalog.setFieldScienceExportService(service);
     }
 
+    @Autowired
+    void configureFarmReadingService(com.flowerfarm.telemetry.FarmReadingService service) {
+        tabCatalog.setFarmReadingService(service);
+    }
+
     // ── ApplicationRunner ─────────────────────────────────────────────────────
 
     @Override

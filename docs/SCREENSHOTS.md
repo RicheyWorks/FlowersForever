@@ -89,6 +89,12 @@ Explore actual app tabs and entry forms with sample records. Select any image to
   </tr>
 </table>
 
+## Equipment readings
+
+Record soil, water, and greenhouse measurements with familiar equipment names and explicit units. Review an observation before saving, then browse the history. This picture uses isolated sample records, including a missing value and a reading that needs checking. Equipment file imports currently use the helper; automatic pairing and pump controls remain future work.
+
+[![Equipment readings with manual entry and saved sample observations.](images/app-equipment-readings.png)](images/app-equipment-readings.png)
+
 ## Plant and flower references
 
 <table>
@@ -247,6 +253,8 @@ The optional phone screen connects to a running, authenticated farm instance.
 <summary>Screenshot sources and refresh notes</summary>
 
 These images show real application components rendered with demo fixtures; they are not concept mockups. Desktop window decorations are omitted. New gallery captures were reviewed on October 10, 2026, using the coding campaign source at `88feb249f38ed2e183221e423efb706109a601eb`. Existing screenshots remain representative of their documented workflows. The Inventory, Activity history, and Field science pictures were refreshed again on October 10 from the farmer-language follow-up on `codex/farm-instruments`; they show the clearer spreadsheet and results labels and the collapsed tool credits.
+
+The Equipment readings picture was added on October 10 from the actual desktop component at 1360 × 700, using a separate in-memory H2 database with three sample observations. Its form was also checked at an 860-pixel content width, representative of the application's smallest supported laptop window beside its navigation. The complete time field and save actions remain visible; the history can scroll horizontally to show all columns.
 
 The current UI rendering fixtures are in `src/test/DataEntryVisualContractTest.java`, `ProductionStudioVisualContractTest.java`, `FieldScienceTabTest.java`, `NotebookKeyboardReachabilityTest.java`, and the farm notebook tests. They write previews under `target/ui-previews`. Field science uses a 1180 × 1000 viewport here so Soil Recipes and Soil Bench remain readable. Inspect refreshed previews before copying them into `docs/images`; use sample data and retain the tab names and scope in captions.
 

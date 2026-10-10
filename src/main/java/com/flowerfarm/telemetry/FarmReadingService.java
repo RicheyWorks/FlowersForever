@@ -106,6 +106,27 @@ public class FarmReadingService {
         return new ReadingPage(page, next, more);
     }
 
+    /** Review one desktop draft without writing to the database. Intake validates again at commit. */
+    public void validate(String sourceId, Map<String, Object> reading) {
+        identifier(sourceId, 80, "Source identifier");
+        input(reading, clock.instant());
+    }
+
+    /** All equipment, newest receipts first. A fixed cursor keeps older-page navigation stable. */
+    @Transactional(readOnly = true)
+    public ReadingPage recent(long beforeId, int limit) {
+        if (beforeId < 0 || limit < 1 || limit > MAX_PAGE) {
+            throw new IllegalArgumentException("Choose a history page of 1 to 200 readings.");
+        }
+        List<FarmReading> rows = beforeId == 0
+                ? jdbc.query("SELECT * FROM farm_readings ORDER BY id DESC LIMIT ?", MAPPER, limit + 1)
+                : jdbc.query("SELECT * FROM farm_readings WHERE id < ? ORDER BY id DESC LIMIT ?",
+                        MAPPER, beforeId, limit + 1);
+        List<FarmReading> page = List.copyOf(rows.subList(0, Math.min(rows.size(), limit)));
+        long next = page.isEmpty() ? beforeId : page.get(page.size() - 1).id();
+        return new ReadingPage(page, next, rows.size() > limit);
+    }
+
     @Transactional(readOnly = true)
     public long count() {
         Long count = jdbc.queryForObject("SELECT COUNT(*) FROM farm_readings", Long.class);

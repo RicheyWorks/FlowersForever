@@ -84,6 +84,31 @@ class FarmReadingServiceTest {
         assertThat(service.history("source-a", 0, 100).readings()).hasSize(1);
     }
 
+    @Test void desktopHistoryPagesAcrossSourcesAndDoesNotShiftWhenNewReceiptsArrive() {
+        ingest("a", List.of(row("first", 21), row("second", 22)));
+        ingest("b", List.of(row("third", 23)));
+        var first = service.recent(0, 2);
+        assertThat(first.readings()).extracting(FarmReading::readingKey).containsExactly("third", "second");
+        assertThat(first.hasMore()).isTrue();
+        ingest("c", List.of(row("new-receipt", 24)));
+        var older = service.recent(first.nextAfterId(), 2);
+        assertThat(older.readings()).extracting(FarmReading::readingKey).containsExactly("first");
+        assertThat(older.hasMore()).isFalse();
+        assertThat(service.recent(0, 1).readings().get(0).readingKey()).isEqualTo("new-receipt");
+        assertThatThrownBy(() -> service.recent(-1, 1)).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> service.recent(0, 201)).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test void draftReviewUsesIntakeValidationWithoutSavingAnything() {
+        service.validate("manual", row("draft", 21));
+        assertThat(service.count()).isZero();
+        assertThatThrownBy(() -> service.validate("manual", row("draft", "21")))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> service.validate("bad source", row("draft", 21)))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThat(service.count()).isZero();
+    }
+
     @Test void delayedAndMissingReadingsRemainVisibleThroughReceiptCursorPaging() {
         Map<String, Object> missing = row("missing", 1);
         missing.remove("value");
