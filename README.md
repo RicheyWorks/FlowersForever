@@ -322,10 +322,13 @@ Full setup details: [connector sandbox guide](docs/CONNECTORS_SANDBOX.md).
 | `GET` | `/api/briefing/report.pdf` | Morning briefing |
 | `GET` | `/api/closeout/report.pdf` | Day closeout |
 | `GET` | `/actuator/health` | Application health |
+| `GET` | `/api/auth/csrf` | Fresh masked token and HttpOnly cookie for HTTP writes |
 | `GET` | `/api/harness/manifest` | Opt-in AI tool and schema discovery |
 | `POST` | `/api/harness/farm-data/commands` | Opt-in canonical migration and farm operations |
 
 Printable inventory, harvest, invoice, statement, packing, weekly, and audit routes also provide PDF output. Browse `com.flowerfarm.controller` for the full API surface.
+
+HTTP `POST`, `PUT`, `PATCH`, and `DELETE` requests require a CSRF cookie/header handshake in both local open mode and authenticated mode. The worker performs it automatically before each save, including queued replays and photo uploads. External API and HTTP harness clients must retain the cookie from `GET /api/auth/csrf` and send the returned masked token in its named header. See [HTTP client writes](docs/HTTP_CLIENT_WRITES.md) for examples. Desktop, CLI, and MCP stdio calls continue to use application services directly.
 
 When the opt-in AI harness is enabled, `GET /api/harness/manifest` publishes its authenticated protocol, current policy, plug-ins, and provider-neutral JSON-Schema tools. The headless `farm-data` plugin accepts nine mappable operational types—including production templates, planting plans, and nested floral recipes—and exposes production-task attachment metadata as a tenth readable/exportable type, without driving the desktop. Its three-step suggest/preview/import intake maps arbitrary spreadsheet or provider objects, while stable source-system and row keys make migration replay durable across request changes and application restarts. Checksummed snapshots of the plugin's published canonical record types can be created, recovered, and consumed across restarts; dedicated actions upload retry-safe task photos and read their verified bytes in bounded chunks. Farm setup is recovered through a [database backup](docs/BACKUP_RESTORE.md), not those snapshots. The transport is absent in ordinary disabled and CLI modes; an explicitly enabled container deployment requires both normal HTTP authentication and the harness token.
 

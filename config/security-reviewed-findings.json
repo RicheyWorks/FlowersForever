@@ -1,7 +1,7 @@
 {
-  "schema": 1,
+  "schema": 2,
   "reviewed_on": "2026-10-09",
-  "policy": "Only 38 explicitly source/caller-reviewed Medium contexts: 34 operator paths, one quoted H2 metadata identifier and three fixed/admitted local process boundaries. Exact final raw identities must match; every production Java or Maven change requires re-review.",
+  "policy": "Only 38 explicitly source/caller-reviewed Medium contexts: 34 operator paths, one quoted H2 metadata identifier and three fixed/admitted local process boundaries. Exact canonical annotations/locations must match; observed raw hashes remain as provenance. Every production Java or Maven change requires re-review.",
   "source_hash_algorithm": "sha256-utf8-lf",
   "analyzer": {
     "spotbugs_version": "4.10.4",
@@ -92,7 +92,7 @@
     "src/main/java/com/flowerfarm/config/DemoDataSeeder.java": "4872888411b933495b3cc9f3157c40f1dc936a53da925ac78ae9872a6609cb4c",
     "src/main/java/com/flowerfarm/config/FarmProfileConfig.java": "b2799878c633f1b96be3e65f2ebfd56702eb2f45892013f6d228ed3c420494c1",
     "src/main/java/com/flowerfarm/config/HarnessJsonConfig.java": "dccd30340068376fe359bfff7b93883a70b9cba33144004961d8c4ee5b8fbcdf",
-    "src/main/java/com/flowerfarm/config/SecurityConfig.java": "f50a6b0e229b34494365c2cbd1f2ff31eb05c1a512088d7d6471400a2e1df957",
+    "src/main/java/com/flowerfarm/config/SecurityConfig.java": "0922575ac5d19acf663597f92732545c09aaeaecf8baf85ff51edfa72410ed69",
     "src/main/java/com/flowerfarm/connector/ConnectorConfig.java": "1cf2b74c7151ce47903030d5f1077606cc3cd08d5cb0fca179b7de88631f8d70",
     "src/main/java/com/flowerfarm/connector/ConnectorHttpClient.java": "a01bfffbe110a02e7ff173f4e59d94b412250137521b5964b8fa529f98f35a42",
     "src/main/java/com/flowerfarm/connector/ConnectorRegistry.java": "b9077fd0035c2a1c0f587fd5a5b1ed9f1877e466d0c2c4e0130c8f59976e8068",
@@ -109,11 +109,11 @@
     "src/main/java/com/flowerfarm/connector/impl/FarmbriteConnector.java": "8a6cdc5ed48a98b5dd484b51cd612621d910ff92b5759648052a158663ab9240",
     "src/main/java/com/flowerfarm/connector/impl/FloranextConnector.java": "d040069eb058b8c711616a45e6dc4a6c1e968c4d3665c17b2a29b72b8c2d996c",
     "src/main/java/com/flowerfarm/connector/impl/GoogleSheetsConnector.java": "cc359990e0de8bc563f7e2ee84d9032d5526d54752302bc6f6db30f21330ba8e",
-    "src/main/java/com/flowerfarm/connector/impl/ShopifyConnector.java": "e6564a0287f98772dc3dd7bc85561f92118f6e49ceada0ced3f7acb630cee057",
+    "src/main/java/com/flowerfarm/connector/impl/ShopifyConnector.java": "fe9cb361e1fc854e20124850359a0da77a146b061a439e2ea4d822eab24f595c",
     "src/main/java/com/flowerfarm/connector/impl/SquareConnector.java": "ee888ddb2f675a402c77fa230d212704bb9699e7019182e96407884884756184",
     "src/main/java/com/flowerfarm/connector/impl/WebhookConnector.java": "9ae4ad23df58b5140047000aa21dcac84066a6f58efe396a81e91f93ff5cfb04",
     "src/main/java/com/flowerfarm/controller/ApiExceptionHandler.java": "9559f4358ab79b08ae81e853532b24537948e99f3c1b7cfd124d111c0c36d2fd",
-    "src/main/java/com/flowerfarm/controller/AuthController.java": "55c6d00de2bec372c5ace32b55b22755161bab894fa92436800247292e637844",
+    "src/main/java/com/flowerfarm/controller/AuthController.java": "117477b0981841984109ead4469288d8ab8337aef030b6608b0e3cc4e02cb574",
     "src/main/java/com/flowerfarm/controller/ConnectorController.java": "768ecc3144ba8eee8a7ccdb2af5283d966c5e30576f84da829eb451943ecc1ab",
     "src/main/java/com/flowerfarm/controller/CustomerController.java": "c79da49c3d2ad4062c41436b258003a76b6c0da97e10d06dda2a212d6e1f1d78",
     "src/main/java/com/flowerfarm/controller/DashboardController.java": "4d2d975337e1b772d6b3e824f66f2c375e4954c479c5f9f70ca6cb288d6a2c39",
@@ -575,7 +575,9 @@
         "src/main/java/com/flowerfarm/automation/farm/FarmDataExportService.java",
         "src/main/java/com/flowerfarm/automation/farm/FarmDataHarnessPlugin.java",
         "src/main/java/com/flowerfarm/config/AppDataBootstrap.java"
-      ]
+      ],
+      "method_signature": "(Ljava/lang/String;Ljava/util/List;ILjava/time/LocalDate;Ljava/time/LocalDate;)Lcom/flowerfarm/automation/farm/FarmDataExportService$CreatedExport;",
+      "canonical_hash": "02aeb488cd31995a95c0c64e7e53aa049ffd5e8e1888e9a5bbc11b77f46bb082"
     },
     {
       "type": "PATH_TRAVERSAL_IN",
@@ -600,12 +602,14 @@
         "src/main/java/com/flowerfarm/connector/impl/GoogleSheetsConnector.java",
         "src/main/java/com/flowerfarm/connector/impl/ShopifyConnector.java",
         "src/main/java/com/flowerfarm/connector/impl/SquareConnector.java"
-      ]
+      ],
+      "method_signature": "(Ljava/util/List;)V",
+      "canonical_hash": "cd98b1ed69b8939d7ab687f041c2e80de33a5e87cb174dfddbbf1b1352f2a2df"
     },
     {
       "type": "PATH_TRAVERSAL_IN",
       "priority": 2,
-      "instance_hash": "8fc5fef5e5fc4ef9329fde5745a585f9",
+      "instance_hash": "5f9b84feaa5c78f0f20a20c4a62ff609",
       "occurrence": 0,
       "occurrence_max": 0,
       "source": "src/main/java/com/flowerfarm/connector/impl/CsvInventoryConnector.java",
@@ -621,12 +625,14 @@
         "src/main/java/com/flowerfarm/controller/ConnectorController.java",
         "src/main/java/com/flowerfarm/cli/FlowerFarmCLI.java",
         "src/main/java/com/flowerfarm/gui/presenter/ConnectorActionPresenter.java"
-      ]
+      ],
+      "method_signature": "()Lcom/flowerfarm/connector/ConnectorResult;",
+      "canonical_hash": "15c33b523d8855e2bf5af77946a59c6d5812c371e32659e257dce4762b8a067a"
     },
     {
       "type": "PATH_TRAVERSAL_IN",
       "priority": 2,
-      "instance_hash": "11fa648eaac044f4a926f94a69015675",
+      "instance_hash": "1c59343f09628d8aea418ff1c8d06956",
       "occurrence": 0,
       "occurrence_max": 0,
       "source": "src/main/java/com/flowerfarm/connector/impl/CsvInventoryConnector.java",
@@ -642,12 +648,14 @@
         "src/main/java/com/flowerfarm/controller/ConnectorController.java",
         "src/main/java/com/flowerfarm/cli/FlowerFarmCLI.java",
         "src/main/java/com/flowerfarm/gui/presenter/ConnectorActionPresenter.java"
-      ]
+      ],
+      "method_signature": "()Z",
+      "canonical_hash": "b924e5e58468db8c23e32286262d378d56f258b424446eb2e229acf6f527d9cb"
     },
     {
       "type": "PATH_TRAVERSAL_IN",
       "priority": 2,
-      "instance_hash": "83dbec08dfdad5e72503f64f37d36d65",
+      "instance_hash": "6944c11ba5d3929bf1becfa911498ad4",
       "occurrence": 0,
       "occurrence_max": 0,
       "source": "src/main/java/com/flowerfarm/connector/impl/CsvInventoryConnector.java",
@@ -663,7 +671,9 @@
         "src/main/java/com/flowerfarm/controller/ConnectorController.java",
         "src/main/java/com/flowerfarm/cli/FlowerFarmCLI.java",
         "src/main/java/com/flowerfarm/gui/presenter/ConnectorActionPresenter.java"
-      ]
+      ],
+      "method_signature": "(Ljava/util/List;)Lcom/flowerfarm/connector/ConnectorResult;",
+      "canonical_hash": "9078278ca1e49c334bbdfeb6284b2616db2e2ab3f5ff217b05e7632954010707"
     },
     {
       "type": "PATH_TRAVERSAL_IN",
@@ -684,7 +694,9 @@
         "src/main/java/com/flowerfarm/controller/ConnectorController.java",
         "src/main/java/com/flowerfarm/cli/FlowerFarmCLI.java",
         "src/main/java/com/flowerfarm/gui/presenter/ConnectorActionPresenter.java"
-      ]
+      ],
+      "method_signature": "()Lcom/flowerfarm/connector/ConnectorResult;",
+      "canonical_hash": "615d77d17a75b42ad774d985a1ace28532df085f649263298ea5ead32dd09d38"
     },
     {
       "type": "PATH_TRAVERSAL_IN",
@@ -705,7 +717,9 @@
         "src/main/java/com/flowerfarm/controller/ConnectorController.java",
         "src/main/java/com/flowerfarm/cli/FlowerFarmCLI.java",
         "src/main/java/com/flowerfarm/gui/presenter/ConnectorActionPresenter.java"
-      ]
+      ],
+      "method_signature": "()Z",
+      "canonical_hash": "44fcdcc67e409959aeb8e6bbda968210b424e7ab0d2a7f2fa62908dbd8bfd602"
     },
     {
       "type": "PATH_TRAVERSAL_OUT",
@@ -726,7 +740,9 @@
         "src/main/java/com/flowerfarm/controller/ConnectorController.java",
         "src/main/java/com/flowerfarm/cli/FlowerFarmCLI.java",
         "src/main/java/com/flowerfarm/gui/presenter/ConnectorActionPresenter.java"
-      ]
+      ],
+      "method_signature": "(Ljava/util/List;)Lcom/flowerfarm/connector/ConnectorResult;",
+      "canonical_hash": "a086e87f415ca966e8bae08a688ff2cc36279506ecef5bec31bec88980d75439"
     },
     {
       "type": "PATH_TRAVERSAL_IN",
@@ -746,7 +762,9 @@
         "src/main/java/com/flowerfarm/gui/FlowerFarmGUI.java",
         "src/main/java/com/flowerfarm/gui/FarmTabCatalog.java",
         "src/main/java/com/flowerfarm/gui/automation/SwingHarnessBridge.java"
-      ]
+      ],
+      "method_signature": "(Lcom/flowerfarm/gui/CoolerReviewPanel;)V",
+      "canonical_hash": "67a439dd86e7650ca4237b48e10e8239f2b31c67dce41776023f065b2548e0bd"
     },
     {
       "type": "PATH_TRAVERSAL_IN",
@@ -766,12 +784,14 @@
         "src/main/java/com/flowerfarm/gui/FlowerFarmGUI.java",
         "src/main/java/com/flowerfarm/gui/FarmTabCatalog.java",
         "src/main/java/com/flowerfarm/gui/automation/SwingHarnessBridge.java"
-      ]
+      ],
+      "method_signature": "(Lcom/flowerfarm/service/FloristAvailabilityExport$Sheet;)V",
+      "canonical_hash": "146ab3ecc6d2f9a2eea49ad4b37c54f159bdd2416ea5058edc2e960a0247c85a"
     },
     {
       "type": "PATH_TRAVERSAL_IN",
       "priority": 2,
-      "instance_hash": "3c0d594ab4e5a4a7e6ccdb6309368217",
+      "instance_hash": "86c72c5e91a85e82a9d6829449561050",
       "occurrence": 0,
       "occurrence_max": 0,
       "source": "src/main/java/com/flowerfarm/gui/DesktopScoutingController.java",
@@ -786,7 +806,9 @@
         "src/main/java/com/flowerfarm/gui/FlowerFarmGUI.java",
         "src/main/java/com/flowerfarm/gui/FarmTabCatalog.java",
         "src/main/java/com/flowerfarm/gui/automation/SwingHarnessBridge.java"
-      ]
+      ],
+      "method_signature": "(Lcom/flowerfarm/gui/ScoutingPanel;Lcom/flowerfarm/scouting/Scouting$Photo;)V",
+      "canonical_hash": "161a56ebb043a7f0ac406fc20dbaca6c9528f0ea24896b24db011f3c3ffa987c"
     },
     {
       "type": "PATH_TRAVERSAL_IN",
@@ -806,7 +828,9 @@
         "src/main/java/com/flowerfarm/gui/FlowerFarmGUI.java",
         "src/main/java/com/flowerfarm/gui/FarmTabCatalog.java",
         "src/main/java/com/flowerfarm/gui/automation/SwingHarnessBridge.java"
-      ]
+      ],
+      "method_signature": "(Lcom/flowerfarm/gui/ScoutingPanel;)V",
+      "canonical_hash": "665763c172af32d39bf5c1dd2027c3f8c8d6a1d9d8473fe3a563d42cf5858f4e"
     },
     {
       "type": "PATH_TRAVERSAL_IN",
@@ -826,7 +850,9 @@
         "src/main/java/com/flowerfarm/gui/FlowerFarmGUI.java",
         "src/main/java/com/flowerfarm/gui/FarmTabCatalog.java",
         "src/main/java/com/flowerfarm/gui/automation/SwingHarnessBridge.java"
-      ]
+      ],
+      "method_signature": "(Lcom/flowerfarm/gui/StemDemandPanel;)V",
+      "canonical_hash": "74e60d1ed5274018fb5fe3f40db1a424f5728a6a92541c31298f04db88bc27f8"
     },
     {
       "type": "PATH_TRAVERSAL_IN",
@@ -846,7 +872,9 @@
         "src/main/java/com/flowerfarm/gui/FlowerFarmGUI.java",
         "src/main/java/com/flowerfarm/gui/FarmTabCatalog.java",
         "src/main/java/com/flowerfarm/gui/automation/SwingHarnessBridge.java"
-      ]
+      ],
+      "method_signature": "(Lcom/flowerfarm/gui/StemDemandPanel;)V",
+      "canonical_hash": "c29624aaa0498b971d806f8482e67071da660f522e690011df06edc69db8352d"
     },
     {
       "type": "PATH_TRAVERSAL_IN",
@@ -866,7 +894,9 @@
         "src/main/java/com/flowerfarm/gui/FlowerFarmGUI.java",
         "src/main/java/com/flowerfarm/gui/FarmTabCatalog.java",
         "src/main/java/com/flowerfarm/gui/automation/SwingHarnessBridge.java"
-      ]
+      ],
+      "method_signature": "()V",
+      "canonical_hash": "6810115709024a844c70620fcdfdc3a6a43199c17652042a395a453af03601ac"
     },
     {
       "type": "PATH_TRAVERSAL_IN",
@@ -886,7 +916,9 @@
         "src/main/java/com/flowerfarm/gui/FlowerFarmGUI.java",
         "src/main/java/com/flowerfarm/gui/FarmTabCatalog.java",
         "src/main/java/com/flowerfarm/gui/automation/SwingHarnessBridge.java"
-      ]
+      ],
+      "method_signature": "(Lcom/flowerfarm/service/CustomerStatementService$CustomerStatement;Ljava/lang/String;)V",
+      "canonical_hash": "cb9aad5b54e1c5b8d08844cb778876e6957a29a37f244167902c866b9c4ab87f"
     },
     {
       "type": "PATH_TRAVERSAL_IN",
@@ -906,7 +938,9 @@
         "src/main/java/com/flowerfarm/gui/FlowerFarmGUI.java",
         "src/main/java/com/flowerfarm/gui/FarmTabCatalog.java",
         "src/main/java/com/flowerfarm/gui/automation/SwingHarnessBridge.java"
-      ]
+      ],
+      "method_signature": "(Lcom/flowerfarm/service/DayCloseoutService$DayCloseout;)V",
+      "canonical_hash": "8ee3151b27697b460f67c0d0cbb477dcc7beef6ac80efc5ded7ad48270a9d9b5"
     },
     {
       "type": "PATH_TRAVERSAL_IN",
@@ -926,7 +960,9 @@
         "src/main/java/com/flowerfarm/gui/FlowerFarmGUI.java",
         "src/main/java/com/flowerfarm/gui/FarmTabCatalog.java",
         "src/main/java/com/flowerfarm/gui/automation/SwingHarnessBridge.java"
-      ]
+      ],
+      "method_signature": "(Lcom/flowerfarm/service/MorningBriefingService$MorningBriefing;)V",
+      "canonical_hash": "c99b5fb7a5c59a15430fb5e38e81f619a042ee4495a3b2309d0a4bcf3edd67d5"
     },
     {
       "type": "PATH_TRAVERSAL_IN",
@@ -946,7 +982,9 @@
         "src/main/java/com/flowerfarm/gui/FlowerFarmGUI.java",
         "src/main/java/com/flowerfarm/gui/FarmTabCatalog.java",
         "src/main/java/com/flowerfarm/gui/automation/SwingHarnessBridge.java"
-      ]
+      ],
+      "method_signature": "(Ljava/nio/file/Path;[B)Ljava/nio/file/Path;",
+      "canonical_hash": "04d04d4e595155487744d7f5e5d6b8d22c82bb94d2a17bb2c4cc7457be3ac288"
     },
     {
       "type": "PATH_TRAVERSAL_IN",
@@ -966,7 +1004,9 @@
         "src/main/java/com/flowerfarm/gui/FlowerFarmGUI.java",
         "src/main/java/com/flowerfarm/gui/FarmTabCatalog.java",
         "src/main/java/com/flowerfarm/gui/automation/SwingHarnessBridge.java"
-      ]
+      ],
+      "method_signature": "()V",
+      "canonical_hash": "2db3f0eb71aa515e40f693217bd1fa07da5c1a53174c835829dd2f5a9c61e9fb"
     },
     {
       "type": "PATH_TRAVERSAL_IN",
@@ -986,7 +1026,9 @@
         "src/main/java/com/flowerfarm/gui/FlowerFarmGUI.java",
         "src/main/java/com/flowerfarm/gui/FarmTabCatalog.java",
         "src/main/java/com/flowerfarm/gui/automation/SwingHarnessBridge.java"
-      ]
+      ],
+      "method_signature": "()V",
+      "canonical_hash": "6809377f3f3eee1493da246cdb2a53167f125377d7fbf0c32cee4828babdcf87"
     },
     {
       "type": "PATH_TRAVERSAL_IN",
@@ -1006,7 +1048,9 @@
         "src/main/java/com/flowerfarm/gui/FlowerFarmGUI.java",
         "src/main/java/com/flowerfarm/gui/FarmTabCatalog.java",
         "src/main/java/com/flowerfarm/gui/automation/SwingHarnessBridge.java"
-      ]
+      ],
+      "method_signature": "(Lcom/flowerfarm/service/HarvestService$BedProductionReport;)V",
+      "canonical_hash": "06804b8925bbe74947a2295e00dcd43644051aa3c73c4034e3d6dadeabac23bb"
     },
     {
       "type": "PATH_TRAVERSAL_IN",
@@ -1026,7 +1070,9 @@
         "src/main/java/com/flowerfarm/gui/FlowerFarmGUI.java",
         "src/main/java/com/flowerfarm/gui/FarmTabCatalog.java",
         "src/main/java/com/flowerfarm/gui/automation/SwingHarnessBridge.java"
-      ]
+      ],
+      "method_signature": "(Lcom/flowerfarm/service/HarvestService$BedProductionReport;)V",
+      "canonical_hash": "afe628d451bbc6af3a2162f8fc0608496a5766a7907357140d71ef8b737134e4"
     },
     {
       "type": "PATH_TRAVERSAL_IN",
@@ -1046,7 +1092,9 @@
         "src/main/java/com/flowerfarm/gui/FlowerFarmGUI.java",
         "src/main/java/com/flowerfarm/gui/FarmTabCatalog.java",
         "src/main/java/com/flowerfarm/gui/automation/SwingHarnessBridge.java"
-      ]
+      ],
+      "method_signature": "(Lcom/flowerfarm/service/HarvestService$HarvestLogReport;)V",
+      "canonical_hash": "3496886c4e793621b15729298ab390ff8421ff08f364003459b15185ef2ed4bb"
     },
     {
       "type": "PATH_TRAVERSAL_IN",
@@ -1066,7 +1114,9 @@
         "src/main/java/com/flowerfarm/gui/FlowerFarmGUI.java",
         "src/main/java/com/flowerfarm/gui/FarmTabCatalog.java",
         "src/main/java/com/flowerfarm/gui/automation/SwingHarnessBridge.java"
-      ]
+      ],
+      "method_signature": "(Lcom/flowerfarm/service/InventoryService$LowStockReport;I)V",
+      "canonical_hash": "f1a7822a0edd7c7ced489419be327fccd6502a0f4a160525cf2d703a5f8bd4d8"
     },
     {
       "type": "PATH_TRAVERSAL_IN",
@@ -1086,7 +1136,9 @@
         "src/main/java/com/flowerfarm/gui/FlowerFarmGUI.java",
         "src/main/java/com/flowerfarm/gui/FarmTabCatalog.java",
         "src/main/java/com/flowerfarm/gui/automation/SwingHarnessBridge.java"
-      ]
+      ],
+      "method_signature": "(Lcom/flowerfarm/service/InventoryService$PriceListReport;Z)V",
+      "canonical_hash": "49f6f6105624431c6bc99512c799233993a44a1df148448d6f67725b3b381fa3"
     },
     {
       "type": "PATH_TRAVERSAL_IN",
@@ -1106,7 +1158,9 @@
         "src/main/java/com/flowerfarm/gui/FlowerFarmGUI.java",
         "src/main/java/com/flowerfarm/gui/FarmTabCatalog.java",
         "src/main/java/com/flowerfarm/gui/automation/SwingHarnessBridge.java"
-      ]
+      ],
+      "method_signature": "(Ljava/lang/String;)V",
+      "canonical_hash": "d2112ec9290a8324fa119338bcb5c1308abeed00c85008bc7fd0044dbb90c5b6"
     },
     {
       "type": "PATH_TRAVERSAL_IN",
@@ -1126,7 +1180,9 @@
         "src/main/java/com/flowerfarm/gui/FlowerFarmGUI.java",
         "src/main/java/com/flowerfarm/gui/FarmTabCatalog.java",
         "src/main/java/com/flowerfarm/gui/automation/SwingHarnessBridge.java"
-      ]
+      ],
+      "method_signature": "(Ljava/io/File;)Ljava/io/File;",
+      "canonical_hash": "c08c9e86ed635630453ab6066672660cf688de7b83e218e78620332394b2accb"
     },
     {
       "type": "PATH_TRAVERSAL_IN",
@@ -1146,7 +1202,9 @@
         "src/main/java/com/flowerfarm/gui/FlowerFarmGUI.java",
         "src/main/java/com/flowerfarm/gui/FarmTabCatalog.java",
         "src/main/java/com/flowerfarm/gui/automation/SwingHarnessBridge.java"
-      ]
+      ],
+      "method_signature": "([BLjava/lang/String;)V",
+      "canonical_hash": "27eea824aace87ca9aded0e03168e36290d5326dadadb6eab06907d5d49ce536"
     },
     {
       "type": "PATH_TRAVERSAL_IN",
@@ -1166,7 +1224,9 @@
         "src/main/java/com/flowerfarm/gui/FlowerFarmGUI.java",
         "src/main/java/com/flowerfarm/gui/FarmTabCatalog.java",
         "src/main/java/com/flowerfarm/gui/automation/SwingHarnessBridge.java"
-      ]
+      ],
+      "method_signature": "(Ljava/io/File;)Ljava/io/File;",
+      "canonical_hash": "15c02eb269a73be6f0e653b81ef7e98efa3479ca39f49004bb069ecbb4a9839d"
     },
     {
       "type": "PATH_TRAVERSAL_IN",
@@ -1186,7 +1246,9 @@
         "src/main/java/com/flowerfarm/gui/FlowerFarmGUI.java",
         "src/main/java/com/flowerfarm/gui/FarmTabCatalog.java",
         "src/main/java/com/flowerfarm/gui/automation/SwingHarnessBridge.java"
-      ]
+      ],
+      "method_signature": "()V",
+      "canonical_hash": "81c4632f04f6aacb456483a8e4a7e5525c31f45cef8f2831d16aa83e0a292bea"
     },
     {
       "type": "PATH_TRAVERSAL_IN",
@@ -1206,7 +1268,9 @@
         "src/main/java/com/flowerfarm/gui/FlowerFarmGUI.java",
         "src/main/java/com/flowerfarm/gui/FarmTabCatalog.java",
         "src/main/java/com/flowerfarm/gui/automation/SwingHarnessBridge.java"
-      ]
+      ],
+      "method_signature": "(Lcom/flowerfarm/service/SyncHistoryService$AuditReport;)V",
+      "canonical_hash": "42c56badf82b2786e76164455bb6ff1ea2c4efba4ca619f0a8958f2ea25dcb3b"
     },
     {
       "type": "PATH_TRAVERSAL_IN",
@@ -1235,7 +1299,9 @@
         "src/main/java/com/flowerfarm/scouting/ScoutingStore.java",
         "src/main/java/com/flowerfarm/scouting/ScoutingService.java",
         "src/main/java/com/flowerfarm/config/AppDataBootstrap.java"
-      ]
+      ],
+      "method_signature": "(Ljava/nio/file/Path;[B)V",
+      "canonical_hash": "7b486725bd7f3021d0b2010520d260e289906f5f99107d454ba2a1255da02c90"
     },
     {
       "type": "PATH_TRAVERSAL_IN",
@@ -1252,7 +1318,9 @@
       "caller_bindings": [
         "src/main/java/com/flowerfarm/service/InventoryService.java",
         "src/main/java/com/flowerfarm/FlowerFarmApp.java"
-      ]
+      ],
+      "method_signature": "()Ljava/util/List;",
+      "canonical_hash": "37f43f4d901f78fcb0474ec206baab57b6f2e6fcbcdd03a467551c098fd9d34d"
     },
     {
       "type": "SQL_INJECTION_JDBC",
@@ -1274,7 +1342,8 @@
         "src/main/java/com/flowerfarm/backup/BackupSettings.java",
         "src/main/java/com/flowerfarm/update/DataBackupService.java"
       ],
-      "source_line": 85
+      "source_line": 85,
+      "canonical_hash": "4652d15720448c60f042f00559be1104cb1b293514a96c91b156da1144feb8e1"
     },
     {
       "type": "COMMAND_INJECTION",
@@ -1298,7 +1367,8 @@
         "src/main/java/com/flowerfarm/update/UpdateSettings.java",
         "src/main/java/com/flowerfarm/update/UpdateCoordinator.java"
       ],
-      "source_line": 61
+      "source_line": 61,
+      "canonical_hash": "305821cc22057b8edb41236036e12783ac8bffae74e0496f1fc4acfd49ab87ff"
     },
     {
       "type": "COMMAND_INJECTION",
@@ -1319,12 +1389,13 @@
         "src/main/java/com/flowerfarm/gui/DesktopUpdateController.java",
         "src/main/java/com/flowerfarm/update/UpdateSettings.java"
       ],
-      "source_line": 27
+      "source_line": 31,
+      "canonical_hash": "b5f8742a312bcd6829711020780790241fd4e2037430cb3d7a1bed3a26b93016"
     },
     {
       "type": "COMMAND_INJECTION",
       "priority": 2,
-      "instance_hash": "48241c869852960ac967e9c05c264719",
+      "instance_hash": "e1ec03077f4782bac8896aa5d60650fd",
       "occurrence": 0,
       "occurrence_max": 0,
       "source": "src/main/java/com/flowerfarm/update/PlatformInstaller.java",
@@ -1348,8 +1419,11 @@
         "src/main/java/com/flowerfarm/update/HeadlessUpdateCommand.java",
         "src/main/java/com/flowerfarm/update/UpdateWiring.java"
       ],
-      "source_line": 31
+      "source_line": 31,
+      "canonical_hash": "2d8a45d50def5d46e3d102bbc4c26484b9387fb2d5b7220d4553ffcd350db83f"
     }
   ],
-  "source_review_note": "Explicit null DTO rejection in Knowledge/Production controllers; null path guards and fixed POSIX-root tool resolution in InstalledAppLauncher, InstallerProcessCommand and TrustedSystemCommands. FarmTypeLauncher uses the existing measured wrapping toolbar and KnowledgeLogTab reserves a readable workspace height; those UI-only layout changes do not alter input, path, SQL or process boundaries. These preserve the reviewed sink/caller boundaries. A canonical final hosted scan must match exactly."
+  "source_review_note": "Explicit null DTO rejection in Knowledge/Production controllers; null path guards and fixed POSIX-root tool resolution in InstalledAppLauncher, InstallerProcessCommand and TrustedSystemCommands. FarmTypeLauncher uses the existing measured wrapping toolbar and KnowledgeLogTab reserves a readable workspace height; those UI-only layout changes do not alter input, path, SQL or process boundaries. The complete canonical hosted scan includes these final changes. All annotations, locations and multiplicities remain bound; only unordered Unknown-source String annotation slots are sorted. Final three-source review: SecurityConfig enables the cookie-backed default XOR CSRF handler in both modes; AuthController adds only the public no-store GET masked-token handshake. Neither exposes path, SQL or process configuration. ShopifyConnector restricts remote requests to the admitted HTTPS store product endpoint, disables redirects and bounds linear provider parsing. Its existing operator-configured LocalJsonMirror constructor path and local-mode callers are unchanged. All 545 final production files and the unchanged POM are bound; the 38 previously observed canonical finding annotations/locations and raw hash provenance are unchanged. The next complete hosted scan must independently match these exact contexts; no new finding is approved by this source renewal.",
+  "finding_hash_algorithm": "sha256-spotbugs-annotations-unknown-source-order-v1",
+  "canonical_report_commit": "5c2e95590e4036fe7aefd906a4efd180c1987f8d"
 }

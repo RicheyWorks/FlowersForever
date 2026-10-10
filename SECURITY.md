@@ -170,6 +170,28 @@ is omitted from AI-facing observations and status responses; it is audit metadat
 under the shared local harness credential, not proof of an external human
 identity.
 
+### Browser request protection
+
+Both the open loopback mode and authenticated HTTP mode protect unsafe requests
+with a CSRF token and its matching cookie. `GET /api/auth/csrf` issues the token
+and header name with a `Cache-Control: no-store` response. HTTP clients must keep
+the cookie and send the returned token in that header for writes, including
+multipart uploads. Authentication and role checks still apply separately.
+
+The field worker obtains a fresh token before each write and keeps tokens out of
+its durable offline queue. Native Swing and MCP clients that call farm services
+directly do not use this HTTP handshake. Cached browser Basic credentials are
+not sufficient to authorize a cross-site form submission.
+
+### Shopify credentials and pagination
+
+Live Shopify requests admit only the configured store's HTTPS `myshopify.com`
+address on the default HTTPS port. Pagination retains that admitted authority
+and product endpoint while preserving the opaque page query; foreign origins,
+unexpected paths, ambiguous headers and repeated pages are refused. The Shopify
+HTTP transport disables redirects so the Admin API token cannot follow one to
+another destination. Product HTML descriptions use a bounded linear scan.
+
 ### Automatic updates
 
 The desktop fetches one signed manifest over HTTPS (and, after consent, the
@@ -204,7 +226,9 @@ Default inventory DB is local **H2** (`./data/flowerfarm.mv.db`) or optional **S
 
 These checks have different rule sets and analysis models from CodeQL. The OSV gate checks the whole resolved SBOM rather than GitHub's PR dependency delta, and does not provide GitHub's native dependency-review policy or code-scanning alerts. It cannot establish the absence of vulnerabilities. Test-only dependencies, Maven build plugins, GitHub Actions, the JRE and container OS are outside this Maven application SBOM gate; Dependabot and the existing build/test jobs remain separate controls.
 
-The [reviewed contexts](config/security-reviewed-findings.md) preserve desktop chooser destinations and operator-configured file locations. They are exact finding fingerprints/occurrences, not category, class or method exclusions. The manifest binds the analyzer artifact/version, **every production Java source path and content hash under `src/main/java`**, and `pom.xml`. A changed/added/removed production source, Maven configuration change, changed finding, or unused review entry fails and requires contextual re-review. Source symlinks and directory reparse points are rejected. These bindings cover the reviewed source/build inputs, not a complete runtime call graph. Hashes normalize only CRLF to LF for Windows/Linux portability. Raw XML/SARIF retain all reviewed findings; a successful gate means zero unreviewed Medium/High findings, not zero raw findings.
+The [reviewed contexts](config/security-reviewed-findings.md) cover desktop chooser destinations, operator-configured file locations, metadata-quoted database identifiers and the specifically admitted installer/signature commands. They are exact finding fingerprints/occurrences, not category, class or method exclusions. The manifest binds the analyzer artifact/version, **every production Java source path and content hash under `src/main/java`**, and `pom.xml`. A changed/added/removed production source, Maven configuration change, changed finding, or unused review entry fails and requires contextual re-review. Source symlinks and directory reparse points are rejected. These bindings cover the reviewed source/build inputs, not a complete runtime call graph.
+
+Source and POM hashes normalize only CRLF to LF for Windows/Linux portability. Finding hashes retain every annotation value, duplicate, message and source/bytecode location; they normalize XML formatting and attribute order, and sort only the existing unordered `String role="Unknown source"` annotation slots. All other annotation order remains significant. The observed raw instance hashes remain as provenance, and raw XML/SARIF retain all reviewed findings. A successful gate means zero unreviewed Medium/High findings, not zero raw findings.
 
 The existing CycloneDX package output is `target/classes/META-INF/sbom/application.cdx.json`. Compile, provided, runtime and system dependencies are included by the plugin defaults; test dependencies are excluded. The guard validates each full Maven PURL against its component identity, sends the full Maven namespace, requires one response per query and exhausts all pagination. Every returned advisory is fetched and strictly validated, including its ID, modification timestamp and affected Maven identity.
 

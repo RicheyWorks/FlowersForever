@@ -1,5 +1,7 @@
 package com.flowerfarm;
 
+import com.flowerfarm.testsupport.RestCsrfSupport;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.flowerfarm.automation.optimus.OptimusHarnessPlugin;
 import com.flowerfarm.automation.optimus.OptimusRobotAdapter;
@@ -323,8 +325,8 @@ class OptimusHarnessRestIntegrationTest {
                 new HttpEntity<>(body, headers()), JsonNode.class);
     }
 
-    private static HttpHeaders headers() {
-        HttpHeaders headers = new HttpHeaders();
+    private HttpHeaders headers() {
+        HttpHeaders headers = RestCsrfSupport.headers(rest, url("/api/auth/csrf"));
         headers.set(HarnessController.TOKEN_HEADER, TOKEN);
         headers.setContentType(MediaType.APPLICATION_JSON);
         return headers;

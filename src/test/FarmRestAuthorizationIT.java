@@ -21,6 +21,7 @@ import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -63,20 +64,20 @@ class FarmRestAuthorizationIT {
             }
         }
         clearInvocations(inventory, customers, statements, harvest, orders, connectors, history, serverCsvExport);
-        mvc.perform(post("/api/inventory").with(user("fixture").roles("VIEWER"))
+        mvc.perform(post("/api/inventory").with(csrf()).with(user("fixture").roles("VIEWER"))
                 .contentType(MediaType.APPLICATION_JSON).content("{\"name\":\"Rose\"}"))
                 .andExpect(status().isForbidden());
-        mvc.perform(put("/api/customers/12").with(user("fixture").roles("VIEWER"))
+        mvc.perform(put("/api/customers/12").with(csrf()).with(user("fixture").roles("VIEWER"))
                 .contentType(MediaType.APPLICATION_JSON).content("{\"name\":\"Market\"}"))
                 .andExpect(status().isForbidden());
-        mvc.perform(delete("/api/harvest/13").with(user("fixture").roles("VIEWER")))
+        mvc.perform(delete("/api/harvest/13").with(csrf()).with(user("fixture").roles("VIEWER")))
                 .andExpect(status().isForbidden());
-        mvc.perform(patch("/api/orders/14/status").with(user("fixture").roles("VIEWER"))
+        mvc.perform(patch("/api/orders/14/status").with(csrf()).with(user("fixture").roles("VIEWER"))
                 .contentType(MediaType.APPLICATION_JSON).content("{\"status\":\"CONFIRMED\"}"))
                 .andExpect(status().isForbidden());
-        mvc.perform(post("/api/connectors/csv/import").with(user("fixture").roles("VIEWER")))
+        mvc.perform(post("/api/connectors/csv/import").with(csrf()).with(user("fixture").roles("VIEWER")))
                 .andExpect(status().isForbidden());
-        mvc.perform(post("/api/harvest/export").with(user("fixture").roles("VIEWER")))
+        mvc.perform(post("/api/harvest/export").with(csrf()).with(user("fixture").roles("VIEWER")))
                 .andExpect(status().isForbidden());
         assertNoBusinessCalls();
     }
@@ -85,15 +86,15 @@ class FarmRestAuthorizationIT {
     void handCanWriteAllBusinessFamiliesButCannotClearHistory() throws Exception {
         when(inventory.addItem(any())).thenReturn(new Item("Rose", "Other", 0, "stem", 0, 0, ""));
         when(connectors.runExport("csv")).thenReturn(ConnectorResult.ok(1, "Exported"));
-        mvc.perform(post("/api/inventory").with(user("fixture").roles("HAND"))
+        mvc.perform(post("/api/inventory").with(csrf()).with(user("fixture").roles("HAND"))
                 .contentType(MediaType.APPLICATION_JSON).content("{\"name\":\"Rose\"}"))
                 .andExpect(status().isCreated());
         for (String path : List.of("/api/customers/12", "/api/harvest/13", "/api/orders/14")) {
-            mvc.perform(delete(path).with(user("fixture").roles("HAND"))).andExpect(status().isNoContent());
+            mvc.perform(delete(path).with(csrf()).with(user("fixture").roles("HAND"))).andExpect(status().isNoContent());
         }
-        mvc.perform(post("/api/connectors/csv/export").with(user("fixture").roles("HAND")))
+        mvc.perform(post("/api/connectors/csv/export").with(csrf()).with(user("fixture").roles("HAND")))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.exported").value(1));
-        mvc.perform(delete("/api/connectors/history").with(user("fixture").roles("HAND")))
+        mvc.perform(delete("/api/connectors/history").with(csrf()).with(user("fixture").roles("HAND")))
                 .andExpect(status().isForbidden());
         verify(inventory).addItem(any());
         verify(customers).delete(12L);
@@ -105,7 +106,7 @@ class FarmRestAuthorizationIT {
 
     @Test
     void ownerCanClearHistory() throws Exception {
-        mvc.perform(delete("/api/connectors/history").with(user("fixture").roles("OWNER")))
+        mvc.perform(delete("/api/connectors/history").with(csrf()).with(user("fixture").roles("OWNER")))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.message").value("Sync history cleared."));
         verify(history).clearAll();
     }

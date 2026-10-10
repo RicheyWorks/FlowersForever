@@ -1,5 +1,7 @@
 package com.flowerfarm;
 
+import com.flowerfarm.testsupport.RestCsrfSupport;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.flowerfarm.controller.HarnessController;
@@ -760,11 +762,11 @@ class WorkerWorkflowIntegrationTest {
                 "min-height: 44px", ".order-summary", ".handoff-actions",
                 ".attachment-fields", "@media (max-width: 639px)");
         assertThat(serviceWorker.getBody()).contains(
-                "flowersforever-worker-v9", "/worker/worker.js");
+                "flowersforever-worker-v10", "/worker/worker.js");
     }
 
     private ResponseEntity<JsonNode> post(String path, String body) {
-        HttpHeaders headers = new HttpHeaders();
+        HttpHeaders headers = RestCsrfSupport.headers(rest, url("/api/auth/csrf"));
         headers.setContentType(MediaType.APPLICATION_JSON);
         return rest.exchange(url(path), HttpMethod.POST,
                 new HttpEntity<>(body, headers), JsonNode.class);
@@ -793,14 +795,14 @@ class WorkerWorkflowIntegrationTest {
             }
         };
         body.add("file", new HttpEntity<>(resource, fileHeaders));
-        HttpHeaders headers = new HttpHeaders();
+        HttpHeaders headers = RestCsrfSupport.headers(rest, url("/api/auth/csrf"));
         headers.setContentType(MediaType.MULTIPART_FORM_DATA);
         return rest.exchange(url("/api/worker/attachments"), HttpMethod.POST,
                 new HttpEntity<>(body, headers), JsonNode.class);
     }
 
     private JsonNode farmDataCommand(String requestId, String action, String arguments) {
-        HttpHeaders headers = new HttpHeaders();
+        HttpHeaders headers = RestCsrfSupport.headers(rest, url("/api/auth/csrf"));
         headers.set(HarnessController.TOKEN_HEADER, HARNESS_TOKEN);
         headers.setContentType(MediaType.APPLICATION_JSON);
         String body = "{\"requestId\":\"" + requestId + "\",\"action\":\""

@@ -27,6 +27,7 @@ import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -164,7 +165,7 @@ class FarmRestDtoContractIT {
         mvc.perform(get("/api/inventory"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$[0].internalMemo").doesNotExist())
                 .andExpect(jsonPath("$[0].cost").value(1.5));
-        mvc.perform(post("/api/connectors/csv/import"))
+        mvc.perform(post("/api/connectors/csv/import").with(csrf()))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.imported").value(1))
                 .andExpect(jsonPath("$.items[0].internalMemo").doesNotExist())
                 .andExpect(jsonPath("$.items[0].name").value("Rose"));
@@ -184,11 +185,11 @@ class FarmRestDtoContractIT {
         });
         when(inventory.updateById(eq(11L), any())).thenReturn(item());
         when(inventory.editItem(eq(0), any())).thenReturn(item());
-        mvc.perform(post("/api/inventory").contentType(MediaType.APPLICATION_JSON).content(body))
+        mvc.perform(post("/api/inventory").with(csrf()).contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isCreated()).andExpect(jsonPath("$.id").value(11));
-        mvc.perform(put("/api/inventory/by-id/11").contentType(MediaType.APPLICATION_JSON).content(body))
+        mvc.perform(put("/api/inventory/by-id/11").with(csrf()).contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.id").value(11));
-        mvc.perform(put("/api/inventory/0").contentType(MediaType.APPLICATION_JSON).content(body))
+        mvc.perform(put("/api/inventory/0").with(csrf()).contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isOk());
         ArgumentCaptor<Item> created = ArgumentCaptor.forClass(Item.class);
         verify(inventory).addItem(created.capture());
@@ -209,9 +210,9 @@ class FarmRestDtoContractIT {
                 """;
         when(customers.add(any())).thenReturn(customer());
         when(customers.update(eq(12L), any())).thenReturn(customer());
-        mvc.perform(post("/api/customers").contentType(MediaType.APPLICATION_JSON).content(body))
+        mvc.perform(post("/api/customers").with(csrf()).contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isCreated()).andExpect(jsonPath("$.email").value("ada@example.test"));
-        mvc.perform(put("/api/customers/12").contentType(MediaType.APPLICATION_JSON).content(body))
+        mvc.perform(put("/api/customers/12").with(csrf()).contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.id").value(12));
         ArgumentCaptor<Customer> incoming = ArgumentCaptor.forClass(Customer.class);
         verify(customers).add(incoming.capture());
@@ -233,11 +234,11 @@ class FarmRestDtoContractIT {
         when(harvest.add(any())).thenReturn(entry());
         when(harvest.update(eq(13L), any())).thenReturn(entry());
         when(harvest.addBatch(any())).thenReturn(List.of(entry()));
-        mvc.perform(post("/api/harvest").contentType(MediaType.APPLICATION_JSON).content(body))
+        mvc.perform(post("/api/harvest").with(csrf()).contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isCreated()).andExpect(jsonPath("$.harvestDate").value("2026-07-10"));
-        mvc.perform(put("/api/harvest/13").contentType(MediaType.APPLICATION_JSON).content(body))
+        mvc.perform(put("/api/harvest/13").with(csrf()).contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.id").value(13));
-        mvc.perform(post("/api/harvest/batch").contentType(MediaType.APPLICATION_JSON)
+        mvc.perform(post("/api/harvest/batch").with(csrf()).contentType(MediaType.APPLICATION_JSON)
                 .content("[null," + body + "]"))
                 .andExpect(status().isCreated()).andExpect(jsonPath("$[0].id").value(13));
         verify(harvest).add(argThat(e -> e.getId() == null && e.getBedOrField().equals("Bed A") && e.getQuantity() == 20));
@@ -251,7 +252,7 @@ class FarmRestDtoContractIT {
         assertEquals(HarvestGrade.SELECT, batch.getValue().get(1).getGrade());
         assertEquals(2, batch.getValue().get(1).getLossQuantity());
         assertEquals("Cooler A / Shelf 2", batch.getValue().get(1).getStorageLocation());
-        mvc.perform(post("/api/harvest/batch").contentType(MediaType.APPLICATION_JSON)
+        mvc.perform(post("/api/harvest/batch").with(csrf()).contentType(MediaType.APPLICATION_JSON)
                 .content("[" + body.replace("\"quantity\":20", "\"quantity\":0") + "]"))
                 .andExpect(status().isBadRequest());
     }
@@ -264,11 +265,11 @@ class FarmRestDtoContractIT {
         when(orders.create(eq(12L), eq(LocalDate.of(2026, 7, 11)), eq("CONFIRMED"), eq("Pickup"), isNull(), any()))
                 .thenReturn(order());
         when(orders.addLine(eq(14L), any())).thenReturn(order());
-        String created = mvc.perform(post("/api/orders").contentType(MediaType.APPLICATION_JSON)
+        String created = mvc.perform(post("/api/orders").with(csrf()).contentType(MediaType.APPLICATION_JSON)
                 .content("{\"customerId\":12,\"orderDate\":\"2026-07-11\",\"status\":\"CONFIRMED\",\"notes\":\"Pickup\",\"lines\":[" + line + "]}"))
                 .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
         assertEquals(json(mapper.writeValueAsString(order())), json(created));
-        mvc.perform(post("/api/orders/14/lines").contentType(MediaType.APPLICATION_JSON).content(line))
+        mvc.perform(post("/api/orders/14/lines").with(csrf()).contentType(MediaType.APPLICATION_JSON).content(line))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.lines[0].order").doesNotExist());
         ArgumentCaptor<List<OrderLine>> lines = ArgumentCaptor.forClass(List.class);
         verify(orders).create(eq(12L), any(), eq("CONFIRMED"), eq("Pickup"), isNull(), lines.capture());
@@ -284,7 +285,7 @@ class FarmRestDtoContractIT {
         // The real service rejects a null line before repository mutation; the controller must retain it.
         when(orders.create(eq(12L), any(), any(), any(), any(), any()))
                 .thenThrow(new IllegalArgumentException("Order lines cannot contain null entries."));
-        mvc.perform(post("/api/orders").contentType(MediaType.APPLICATION_JSON)
+        mvc.perform(post("/api/orders").with(csrf()).contentType(MediaType.APPLICATION_JSON)
                 .content("{\"customerId\":12,\"lines\":[null]}"))
                 .andExpect(status().isBadRequest());
         verify(orders).create(eq(12L), any(), isNull(), isNull(), isNull(),
@@ -299,12 +300,12 @@ class FarmRestDtoContractIT {
         when(orders.updateNotes(14L, "Pickup")).thenReturn(order());
         when(orders.updateStatus(14L, "CONFIRMED")).thenReturn(order());
         for (String action : List.of("confirm", "cancel", "fulfill")) {
-            String response = mvc.perform(post("/api/orders/14/" + action)).andExpect(status().isOk())
+            String response = mvc.perform(post("/api/orders/14/" + action).with(csrf())).andExpect(status().isOk())
                     .andReturn().getResponse().getContentAsString();
             assertEquals(json(mapper.writeValueAsString(order())), json(response));
         }
         for (Map.Entry<String, String> field : Map.of("notes", "Pickup", "status", "CONFIRMED").entrySet()) {
-            String response = mvc.perform(patch("/api/orders/14/" + field.getKey()).contentType(MediaType.APPLICATION_JSON)
+            String response = mvc.perform(patch("/api/orders/14/" + field.getKey()).with(csrf()).contentType(MediaType.APPLICATION_JSON)
                     .content(mapper.writeValueAsString(Map.of(field.getKey(), field.getValue()))))
                     .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
             assertEquals(json(mapper.writeValueAsString(order())), json(response));
@@ -317,18 +318,18 @@ class FarmRestDtoContractIT {
         when(customers.add(any())).thenAnswer(call -> call.getArgument(0));
         when(harvest.add(any())).thenAnswer(call -> call.getArgument(0));
         when(orders.addLine(eq(14L), any())).thenReturn(order());
-        mvc.perform(post("/api/inventory").contentType(MediaType.APPLICATION_JSON).content("{\"name\":\" Rose \"}"))
+        mvc.perform(post("/api/inventory").with(csrf()).contentType(MediaType.APPLICATION_JSON).content("{\"name\":\" Rose \"}"))
                 .andExpect(status().isCreated()).andExpect(jsonPath("$.name").value("Rose"))
                 .andExpect(jsonPath("$.category").value("Other")).andExpect(jsonPath("$.unit").value("Per Unit"))
                 .andExpect(jsonPath("$.cost").value(0)).andExpect(jsonPath("$.notes").value(""));
-        mvc.perform(post("/api/customers").contentType(MediaType.APPLICATION_JSON).content("{\"name\":\" Market \"}"))
+        mvc.perform(post("/api/customers").with(csrf()).contentType(MediaType.APPLICATION_JSON).content("{\"name\":\" Market \"}"))
                 .andExpect(status().isCreated()).andExpect(jsonPath("$.name").value("Market"))
                 .andExpect(jsonPath("$.customerType").value("OTHER")).andExpect(jsonPath("$.email").value(""));
-        mvc.perform(post("/api/harvest").contentType(MediaType.APPLICATION_JSON)
+        mvc.perform(post("/api/harvest").with(csrf()).contentType(MediaType.APPLICATION_JSON)
                 .content("{\"harvestDate\":\"2026-07-10\",\"cropName\":\" Rose \",\"quantity\":1}"))
                 .andExpect(status().isCreated()).andExpect(jsonPath("$.cropName").value("Rose"))
                 .andExpect(jsonPath("$.unit").value("stems")).andExpect(jsonPath("$.bedOrField").value(""));
-        mvc.perform(post("/api/orders/14/lines").contentType(MediaType.APPLICATION_JSON).content("{\"productName\":\" Rose \",\"quantity\":1}"))
+        mvc.perform(post("/api/orders/14/lines").with(csrf()).contentType(MediaType.APPLICATION_JSON).content("{\"productName\":\" Rose \",\"quantity\":1}"))
                 .andExpect(status().isOk());
         verify(orders).addLine(eq(14L), argThat(line -> line.getProductName().equals("Rose")
                 && line.getUnit().equals("bunch") && line.getQuantity() == 1 && line.getUnitPrice() == 0));
@@ -340,7 +341,7 @@ class FarmRestDtoContractIT {
         LocalDate before = LocalDate.now();
         for (String body : List.of("{\"customerId\":12}", "{\"customerId\":12,\"orderDate\":null,\"lines\":null}",
                 "{\"customerId\":12,\"lines\":[]}")) {
-            mvc.perform(post("/api/orders").contentType(MediaType.APPLICATION_JSON).content(body))
+            mvc.perform(post("/api/orders").with(csrf()).contentType(MediaType.APPLICATION_JSON).content(body))
                     .andExpect(status().isCreated());
         }
         LocalDate after = LocalDate.now();
@@ -361,7 +362,7 @@ class FarmRestDtoContractIT {
                 "/api/harvest", "{\"cropName\":\"Rose\",\"quantity\":1}",
                 "/api/orders/14/lines", "{\"productName\":\"Rose\",\"quantity\":-1}");
         for (Map.Entry<String, String> body : badBodies.entrySet()) {
-            mvc.perform(post(body.getKey()).contentType(MediaType.APPLICATION_JSON).content(body.getValue()))
+            mvc.perform(post(body.getKey()).with(csrf()).contentType(MediaType.APPLICATION_JSON).content(body.getValue()))
                     .andExpect(status().isBadRequest());
         }
         verifyNoInteractions(inventory, customers, harvest, orders);
@@ -372,7 +373,7 @@ class FarmRestDtoContractIT {
         for (String path : List.of("/api/inventory/by-id/999", "/api/customers/999", "/api/harvest/999", "/api/orders/999")) {
             mvc.perform(get(path)).andExpect(status().isNotFound());
         }
-        mvc.perform(delete("/api/inventory/by-id/11")).andExpect(status().isNoContent());
+        mvc.perform(delete("/api/inventory/by-id/11").with(csrf())).andExpect(status().isNoContent());
         verify(inventory).deleteById(11L);
     }
 }

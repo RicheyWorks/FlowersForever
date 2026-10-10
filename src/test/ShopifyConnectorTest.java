@@ -13,6 +13,7 @@ import org.springframework.web.client.RestTemplate;
 
 import java.util.List;
 import java.util.Map;
+import java.net.URI;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.*;
@@ -159,7 +160,7 @@ class ShopifyConnectorTest {
             h1.set(HttpHeaders.LINK,
                     "<https://demo-farm.myshopify.com/admin/api/2024-01/products.json?page_info=abc&limit=50>; rel=\"next\"");
 
-            when(restTemplate.exchange(contains("products.json"), eq(HttpMethod.GET), any(HttpEntity.class), eq(Map.class)))
+            when(restTemplate.exchange(any(URI.class), eq(HttpMethod.GET), any(HttpEntity.class), eq(Map.class)))
                     .thenReturn(new ResponseEntity<>(page1, h1, HttpStatus.OK))
                     .thenReturn(new ResponseEntity<>(page2, HttpStatus.OK));
 
@@ -168,7 +169,7 @@ class ShopifyConnectorTest {
             assertThat(result.isSuccess()).isTrue();
             assertThat(result.getPayload()).hasSize(2);
             assertThat(result.getPayload()).extracting(Item::getName).containsExactly("Rose A", "Rose B");
-            verify(restTemplate, times(2)).exchange(anyString(), eq(HttpMethod.GET), any(), eq(Map.class));
+            verify(restTemplate, times(2)).exchange(any(URI.class), eq(HttpMethod.GET), any(), eq(Map.class));
         }
     }
 
@@ -211,7 +212,7 @@ class ShopifyConnectorTest {
                     "body_html", "",
                     "variants", List.of(Map.of("id", 1L, "price", "3.00", "inventory_quantity", 10))
             );
-            when(restTemplate.exchange(contains("products.json"), eq(HttpMethod.GET), any(HttpEntity.class), eq(Map.class)))
+            when(restTemplate.exchange(any(URI.class), eq(HttpMethod.GET), any(HttpEntity.class), eq(Map.class)))
                     .thenReturn(new ResponseEntity<>(Map.of("products", List.of(existing)), HttpStatus.OK));
             when(restTemplate.exchange(contains("products.json"), eq(HttpMethod.POST), any(HttpEntity.class), eq(Map.class)))
                     .thenReturn(new ResponseEntity<>(Map.of("product", Map.of("id", 100)), HttpStatus.CREATED));

@@ -364,6 +364,22 @@ async function responseFailure(response) {
   }
 }
 
+async function writeCsrfHeaders() {
+  // Obtain a fresh masked token with its HttpOnly cookie immediately before
+  // dispatch. Authentication tokens never become part of an offline operation.
+  const response = await fetch("/api/auth/csrf", {
+    credentials: "same-origin",
+    cache: "no-store",
+    headers: { "Accept": "application/json" }
+  });
+  if (!response.ok) throw new Error("The server could not authorize this save. Please retry.");
+  const csrf = await response.json();
+  if (csrf.headerName !== "X-XSRF-TOKEN" || typeof csrf.token !== "string" || !csrf.token.trim()) {
+    throw new Error("The server returned an invalid save token. Please retry.");
+  }
+  return { [csrf.headerName]: csrf.token };
+}
+
 async function send(item) {
   let response;
   try {
@@ -381,17 +397,19 @@ async function send(item) {
       form.append("caption", item.caption || "");
       form.append("capturedAt", item.capturedAt);
       form.append("file", stored.blob, item.fileName || stored.fileName);
+      const csrfHeaders = await writeCsrfHeaders();
       response = await fetch(item.url, {
         method: "POST",
         credentials: "same-origin",
-        headers: { "Accept": "application/json" },
+        headers: { "Accept": "application/json", ...csrfHeaders },
         body: form
       });
     } else {
+      const csrfHeaders = await writeCsrfHeaders();
       response = await fetch(item.url, {
         method: "POST",
         credentials: "same-origin",
-        headers: { "Content-Type": "application/json", "Accept": "application/json" },
+        headers: { "Content-Type": "application/json", "Accept": "application/json", ...csrfHeaders },
         body: JSON.stringify(item.body)
       });
     }
@@ -526,17 +544,27 @@ async function submit(item, messageElement, action = null) {
   }
 }
 
-async function flushQueue() {
+async function flushQueue({ reviewRejected = false } = {}) {
   if (state.flushing || !navigator.onLine) return;
   state.flushing = true;
   state.syncError = "";
   renderQueue();
   try {
     for (const item of loadQueue()) {
+      if (item.requiresReview && !reviewRejected) {
+        state.syncError = "A save was rejected and needs review. Use Retry now when you are ready to retry it.";
+        break;
+      }
       try {
         await send(item);
         removeQueued(item.id);
       } catch (error) {
+        if (error.status === 403) {
+          // A rejection is a decision, not an uncertain network outcome.
+          // Persist the review requirement so reconnect/reload cannot replay it.
+          item.requiresReview = true;
+          enqueue(item);
+        }
         state.syncError = error.message;
         break;
       }
@@ -1103,7 +1131,7 @@ elements.inventorySearchForm.addEventListener("submit", event => {
   event.preventDefault();
   loadInventory();
 });
-elements.retrySync.addEventListener("click", flushQueue);
+elements.retrySync.addEventListener("click", () => flushQueue({ reviewRejected: true }));
 document.querySelector("#add-harvest").addEventListener("click", () => openCapture("harvest"));
 document.querySelector("#add-field-note").addEventListener("click", () => openCapture("note"));
 document.querySelector("#refresh-field-notes").addEventListener("click", loadFieldNotes);

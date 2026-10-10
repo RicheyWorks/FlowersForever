@@ -1,5 +1,7 @@
 package com.flowerfarm.config;
 
+import com.flowerfarm.testsupport.RestCsrfSupport;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -73,7 +75,7 @@ class ContainerProfileTest {
                 .getForEntity("/worker/", String.class).getStatusCode())
                 .isEqualTo(HttpStatus.OK);
 
-        HttpHeaders viewerHeaders = new HttpHeaders();
+        HttpHeaders viewerHeaders = RestCsrfSupport.headers(restTemplate, "/api/auth/csrf");
         viewerHeaders.setBasicAuth("viewer", "a-long-viewer-password");
         viewerHeaders.setContentType(org.springframework.http.MediaType.APPLICATION_JSON);
         ResponseEntity<String> viewerWrite = restTemplate.exchange(
@@ -94,7 +96,7 @@ class ContainerProfileTest {
                 new HttpEntity<>("{}", viewerHeaders), String.class);
         assertThat(viewerAttachment.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
 
-        HttpHeaders handHeaders = new HttpHeaders();
+        HttpHeaders handHeaders = RestCsrfSupport.headers(restTemplate, "/api/auth/csrf");
         handHeaders.setBasicAuth("hand", "a-long-worker-password");
         handHeaders.setContentType(org.springframework.http.MediaType.APPLICATION_JSON);
         ResponseEntity<String> handCount = restTemplate.exchange(
@@ -105,7 +107,7 @@ class ContainerProfileTest {
                 "/api/worker/orders/1/complete", HttpMethod.POST,
                 new HttpEntity<>("{}", handHeaders), String.class);
         assertThat(handHandoff.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
-        HttpHeaders handMultipartHeaders = new HttpHeaders();
+        HttpHeaders handMultipartHeaders = RestCsrfSupport.headers(restTemplate, "/api/auth/csrf");
         handMultipartHeaders.setBasicAuth("hand", "a-long-worker-password");
         handMultipartHeaders.setContentType(org.springframework.http.MediaType.MULTIPART_FORM_DATA);
         ResponseEntity<String> handAttachment = restTemplate.exchange(
