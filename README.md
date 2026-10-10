@@ -246,6 +246,7 @@ FlowersForever is in development. The public source is available under the MIT L
 
 - JDK 17 or newer
 - Maven 3.9 or newer
+- Python 3.10 or newer on PATH for logger-import integration tests and the importer (`python` on Windows, `python3` elsewhere)
 
 ### Build and run
 
