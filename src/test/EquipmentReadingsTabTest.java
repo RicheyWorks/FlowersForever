@@ -31,7 +31,11 @@ import java.math.BigDecimal;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
+import java.time.Clock;
+import java.time.ZoneOffset;
 import java.util.Date;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -81,7 +85,8 @@ class EquipmentReadingsTabTest {
                 anyString(), anyInt(), anyInt())).thenReturn(JOptionPane.YES_OPTION);
         files = mock(FarmFileChooser.class);
         when(files.chooseEquipmentSpreadsheet(org.mockito.ArgumentMatchers.any(), anyString())).thenReturn(Optional.empty());
-        tab = edt(() -> new EquipmentReadingsTab(service, host, dialogs, files));
+        tab = edt(() -> new EquipmentReadingsTab(service, host, dialogs, files,
+                Clock.fixed(Instant.parse("2026-10-10T12:00:00Z"), ZoneOffset.UTC)));
         root = tab.getUIComponent();
         edt(() -> {
             text("equipment").setText("North greenhouse probe");
@@ -465,6 +470,147 @@ class EquipmentReadingsTabTest {
         assertThat(service.history(EquipmentSpreadsheet.SOURCE, 0, 10).readings().get(0).value()).isNull();
     }
 
+    @Test void latestReportedViewUsesMeasuredTimeAndShowsAgeWithoutLosingManualDraft() throws Exception {
+        adapterAt("newer", "2026-10-10T11:59:00Z", "GOOD", "22");
+        adapterAt("delayed", "2026-10-08T12:00:00Z", "GOOD", "19");
+        click("latest");
+        await(() -> table().getRowCount() == 2 && component("latest", JButton.class).isEnabled());
+        assertThat(edt(() -> table().getValueAt(0, 3))).isEqualTo("19");
+        assertThat(edt(() -> table().getValueAt(0, 8))).isEqualTo("2 days old");
+        chooseView(1);
+        await(() -> table().getRowCount() == 1 && component("view", JComboBox.class).isEnabled());
+        assertThat(edt(() -> table().getValueAt(0, 3))).isEqualTo("22");
+        assertThat(edt(() -> table().getValueAt(0, 8))).isEqualTo("1 minute old");
+        assertThat(edt(() -> component("pageInfo", JLabel.class).getText())).startsWith("Latest reported measurements")
+                .contains("Age at " + java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss XXX")
+                        .withZone(java.time.ZoneId.systemDefault()).format(Instant.parse("2026-10-10T12:00:00Z")));
+        assertThat(edt(() -> text("value").getText())).isEqualTo("21.125000001");
+        assertThat(edt(tab::applicationExitWarning)).contains("unfinished reading");
+    }
+
+    @Test void newerMissingAndErrorReportsStayVisibleInsteadOfForwardFillingOldGoodValue() throws Exception {
+        adapterAt("good", "2026-10-10T11:00:00Z", "GOOD", "21");
+        adapterAt("missing", "2026-10-10T11:59:00Z", "MISSING", null);
+        chooseView(1);
+        await(() -> table().getRowCount() == 1 && component("latest", JButton.class).isEnabled());
+        assertThat(edt(() -> table().getValueAt(0, 3))).isEqualTo("No value");
+        assertThat(edt(() -> table().getValueAt(0, 5))).isEqualTo("No reading");
+        adapterAt("error", "2026-10-10T11:59:30Z", "ERROR", null);
+        click("latest");
+        await(() -> "Equipment error".equals(table().getValueAt(0, 5)) && component("latest", JButton.class).isEnabled());
+        assertThat(edt(() -> table().getValueAt(0, 3))).isEqualTo("No value");
+        assertThat(edt(() -> table().getValueAt(0, 8))).isEqualTo("Under a minute old");
+    }
+
+    @Test void viewerCanReviewLatestAndFutureClockIsFlaggedWithoutEnablingWrites() throws Exception {
+        adapterAt("clock-ahead", "2026-10-10T12:00:30Z", "GOOD", "22");
+        edt(() -> { tab.applyRolePermissions(false); return null; });
+        chooseView(1);
+        await(() -> table().getRowCount() == 1 && component("view", JComboBox.class).isEnabled());
+        assertThat(edt(() -> table().getValueAt(0, 8))).isEqualTo("Clock ahead — check time");
+        assertThat(edt(() -> component("save", JButton.class).isEnabled())).isFalse();
+        assertThat(edt(() -> component("import", JButton.class).isEnabled())).isFalse();
+    }
+
+    @Test void failedOverviewRetainsActualDisplayedScopeAndHistoryThenRetryRecovers() throws Exception {
+        adapterAt("one", "2026-10-10T11:00:00Z", "GOOD", "21");
+        adapterAt("two", "2026-10-10T11:59:00Z", "GOOD", "22");
+        click("latest");
+        await(() -> table().getRowCount() == 2 && component("latest", JButton.class).isEnabled());
+        doThrow(new IllegalStateException("Database unavailable")).when(service).latestReported(anyLong(), anyInt());
+        chooseView(1);
+        await(() -> feedback().contains("Could not refresh") && component("view", JComboBox.class).isEnabled());
+        assertThat(edt(() -> table().getRowCount())).isEqualTo(2);
+        assertThat(edt(() -> component("pageInfo", JLabel.class).getText())).startsWith("All saved readings");
+        assertThat(edt(() -> component("older", JButton.class).isEnabled())).isFalse();
+        org.mockito.Mockito.doCallRealMethod().when(service).latestReported(anyLong(), anyInt());
+        click("latest");
+        await(() -> table().getRowCount() == 1 && component("view", JComboBox.class).isEnabled());
+        assertThat(edt(() -> component("pageInfo", JLabel.class).getText())).startsWith("Latest reported measurements");
+        assertThat(edt(this::feedback)).isEqualTo("Readings refreshed.");
+    }
+
+    @Test void obsoleteHistoryCompletionDoesNotOverwriteNewlyChosenOverview() throws Exception {
+        adapterAt("actual", "2026-10-10T11:59:00Z", "GOOD", "22");
+        var obsolete = service.recent(0, 1).readings().get(0);
+        CountDownLatch entered = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        AtomicBoolean background = new AtomicBoolean();
+        doAnswer(call -> {
+            entered.countDown();
+            assertThat(release.await(5, TimeUnit.SECONDS)).isTrue();
+            return new FarmReadingService.ReadingPage(List.of(new com.flowerfarm.telemetry.FarmReading(
+                    obsolete.id(), obsolete.sourceId(), obsolete.readingKey(), "obsolete-device", obsolete.metric(),
+                    obsolete.unit(), obsolete.value(), obsolete.quality(), obsolete.observedAt(), obsolete.receivedAt(),
+                    obsolete.location(), obsolete.rawFrame())), obsolete.id(), false);
+        }).when(service).recent(anyLong(), anyInt());
+        doAnswer(call -> { background.set(!SwingUtilities.isEventDispatchThread()); return call.callRealMethod(); })
+                .when(service).latestReported(anyLong(), anyInt());
+        List<String> namesShown = new ArrayList<>();
+        edt(() -> {
+            table().getModel().addTableModelListener(event -> {
+                if (table().getRowCount() > 0) namesShown.add(String.valueOf(table().getValueAt(0, 0)));
+            });
+            return null;
+        });
+        try {
+            click("latest");
+            assertThat(entered.await(5, TimeUnit.SECONDS)).isTrue();
+            chooseView(1);
+        } finally { release.countDown(); }
+        await(() -> table().getRowCount() == 1 && component("view", JComboBox.class).isEnabled());
+        assertThat(edt(() -> List.copyOf(namesShown))).doesNotContain("obsolete-device");
+        assertThat(background).isTrue();
+        assertThat(edt(() -> component("pageInfo", JLabel.class).getText())).startsWith("Latest reported measurements");
+    }
+
+    @Test void overviewPagesAcrossDistinctEquipmentAndSwitchingBackResetsHistoryCursor() throws Exception {
+        List<Map<String, Object>> readings = new ArrayList<>();
+        for (int i = 0; i < 201; i++) {
+            readings.add(Map.of("readingKey", "row-" + i, "deviceId", "probe-" + i, "metric", "water.ph", "unit", "pH",
+                    "value", BigDecimal.ONE, "observedAt", "2026-10-10T11:00:00Z"));
+        }
+        transaction.executeWithoutResult(status -> service.ingest("logger", readings));
+        chooseView(1);
+        await(() -> table().getRowCount() == 200 && component("older", JButton.class).isEnabled());
+        click("older");
+        await(() -> table().getRowCount() == 1 && component("latest", JButton.class).isEnabled());
+        assertThat(edt(() -> component("older", JButton.class).isEnabled())).isFalse();
+        chooseView(0);
+        await(() -> table().getRowCount() == 200 && component("older", JButton.class).isEnabled());
+        assertThat(edt(() -> component("pageInfo", JLabel.class).getText())).startsWith("All saved readings");
+    }
+
+    @Test void changingReadOnlyViewPreservesKeptSpreadsheetPreviewAndItsRetryIdentity() throws Exception {
+        adapterAt("adapter", "2026-10-10T11:00:00Z", "GOOD", "21");
+        spreadsheet("1", "Measured");
+        when(dialogs.showConfirm(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(), anyString(), anyInt(), anyInt()))
+                .thenReturn(JOptionPane.NO_OPTION);
+        click("import");
+        await(() -> feedback().contains("preview kept"));
+        chooseView(1);
+        await(() -> table().getRowCount() == 1 && component("view", JComboBox.class).isEnabled());
+        assertThat(edt(tab::applicationExitWarning)).contains("spreadsheet preview");
+        assertThat(edt(() -> component("save", JButton.class).isEnabled())).isFalse();
+        when(dialogs.showConfirm(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(), anyString(), anyInt(), anyInt()))
+                .thenReturn(JOptionPane.YES_OPTION);
+        click("import");
+        await(() -> service.count() == 2 && table().getRowCount() == 2 && component("import", JButton.class).isEnabled());
+        assertThat(edt(() -> component("view", JComboBox.class).getSelectedIndex())).isEqualTo(1);
+        assertThat(edt(() -> text("value").getText())).isEqualTo("21.125000001");
+    }
+
+    private void chooseView(int index) throws Exception {
+        edt(() -> { component("view", JComboBox.class).setSelectedIndex(index); return null; });
+    }
+
+    private void adapterAt(String key, String time, String quality, String value) {
+        Map<String, Object> row = new HashMap<>(Map.of("readingKey", key, "deviceId", "probe-1", "metric", "air.temperature",
+                "unit", "°C", "quality", quality, "observedAt", time, "location", "North house"));
+        if (value != null) row.put("value", new BigDecimal(value));
+        transaction.executeWithoutResult(status -> service.ingest("bridge", List.of(row)));
+    }
+
     private Path spreadsheet(String value, String quality) throws Exception {
         Path file = directory.resolve("equipment.csv");
         Files.writeString(file, String.join(",", EquipmentSpreadsheet.HEADINGS) + "\n"
@@ -479,6 +625,25 @@ class EquipmentReadingsTabTest {
                         "value", new BigDecimal("6.75"), "observedAt", "2026-10-01T12:00:00Z"))));
     }
     private JTextField text(String id) { return component(id, JTextField.class); }
+    @Test void compactWindowKeepsRowsVisibleAndBottomControlsReachableByScrolling() throws Exception {
+        adapterAt("compact", "2026-10-10T11:59:00Z", "GOOD", "22");
+        chooseView(1);
+        await(() -> table().getRowCount() == 1 && component("view", JComboBox.class).isEnabled());
+        edt(() -> {
+            com.flowerfarm.gui.harness.SwingUserHarness.on(root).layoutAt(860, 700);
+            var scroll = component("pageScroll", javax.swing.JScrollPane.class);
+            assertThat(table().getVisibleRect().height).isGreaterThanOrEqualTo(table().getRowHeight() * 3);
+            assertThat(scroll.getVerticalScrollBar().isVisible()).isTrue();
+            JComponent controls = component("latest", JButton.class);
+            java.awt.Rectangle target = javax.swing.SwingUtilities.convertRectangle(controls.getParent(),
+                    controls.getBounds(), scroll.getViewport().getView());
+            ((JComponent) scroll.getViewport().getView()).scrollRectToVisible(target);
+            assertThat(scroll.getViewport().getViewRect().contains(target)).isTrue();
+            assertThat(component("pageInfo", JLabel.class).getText()).startsWith("Latest reported measurements");
+            return null;
+        });
+    }
+
     private JTable table() { return component("history", JTable.class); }
     private String feedback() { return component("feedback", JLabel.class).getText(); }
     private void click(String id) throws Exception {

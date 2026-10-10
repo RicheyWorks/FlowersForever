@@ -14,6 +14,10 @@ Open **Equipment readings** in your farm workspace. To record a reading yourself
 
 **Latest readings** shows the most recent 200 received observations across your equipment. **Older readings** moves through earlier pages. Each row keeps the equipment, area, measurement, value, unit, condition, measured time, and source. Viewers can review history; farm hands and owners can save readings.
 
+Use **Show → Latest reported measurements** to see the most recently measured observation for each equipment/measurement, keeping its source, unit, and growing area separate. Importing an old log later does not replace a newer measurement in this view. A newer **No reading**, **Needs checking**, or **Equipment error** remains visible; the app does not fill it with an older good value. Choose **All saved readings** to see the complete received history again. Both views use pages of up to 200 rows.
+
+**Age of reading** tells you how long ago the measurement was taken, using your farm computer's clock. It does not use the upload time and does not prove that equipment is connected or working. A time ahead of the computer is labeled **Clock ahead — check time**. Age is a snapshot: the line below the table shows when it was calculated. Select **Latest readings** again to update it. These are reported conditions, not automatic health alarms or recommendations to run equipment.
+
 If a save cannot be confirmed, your draft stays in place. Check **Latest readings**, then retry the unchanged draft if needed: the app reuses its identity to avoid a duplicate. To enter a separate observation, use **Start a new reading**. Changing a saved reading is not an overwrite; history stays intact.
 
 Changing farm types is blocked while a reading is unfinished or its save is still running. Closing or signing out asks whether you want to keep working or explicitly leave unfinished work. Drafts are held in memory; an intentional exit discards them. Saved readings remain in the farm records.
@@ -32,7 +36,7 @@ The desktop stores the checked measurements, units, names, conditions, and times
 
 ## What is available now
 
-Manual entry, spreadsheet selection with review, and saved history are available directly in the desktop app. Direct spreadsheet selection uses the headings above; arbitrary logger columns and JSON still use the optional helper. The setup instructions below are for the person helping you connect your equipment; you do not need to understand the programming terms to understand your farm readings.
+Manual entry, spreadsheet selection with review, saved history, and latest reported measurements with reading ages are available directly in the desktop app. Direct spreadsheet selection uses the headings above; arbitrary logger columns and JSON still use the optional helper. The setup instructions below are for the person helping you connect your equipment; you do not need to understand the programming terms to understand your farm readings.
 
 Bluetooth connections, automatic readings, charts, and alerts need further work. Pump and valve operation will be a separate later step. Saving a reading does not turn equipment on or off.
 
@@ -155,13 +159,15 @@ The desktop **Equipment readings** tab uses a separate bounded, descending recei
 
 Polling this endpoint lets an external monitor see new readings as they arrive. There is currently no built-in continuously running collector, push subscription, chart, or stale-device alarm. Data remains available after reopening and enters the normal full H2 backup; the separate farm-data export/snapshot plugin does not currently include these readings. Keep device-side buffers and original logger files until their receipts are confirmed.
 
+The desktop latest-reported view ranks all observations by their actual instant, retaining nanoseconds, within `(source_id, device_id, metric, unit, location)`. Equal observation times use the greatest receipt ID as a deterministic tie-breaker, including missing/error reports. The outer result pages by descending selected receipt ID; ranking happens before applying the cursor so earlier pages cannot revive superseded values. New or updated groups arriving after a page starts are seen on a first-page refresh. This view is a read-only H2 window query suited to the current initial local logger scale, not a sustained industrial telemetry dashboard. Ages use one clock snapshot per displayed page; no background acquisition or timed age update is implied.
+
 ## CSRBT and future adapters
 
 The bundled Greenhouse Monitor already supports controller CSV/JSON files, a local HTTP/JSON source, Web Serial on supported browsers, manual entry, and a labeled generated example. Its source registry is useful integration groundwork. Soil Bench has its own observation and export workflows. They still run in separate browser workspaces: the text archive does not automatically populate this readings store, and this store does not inject records into their calculations. See the [complete port audit](CSRBT_COMPLETENESS_AUDIT_20261010.md).
 
 Implement adapters against published device formats. A future adapter should declare device identity, sampling interval, units, calibration/version information, timestamp handling, quality mapping, buffering, and retry keys. For an analog sensor, the ADC/gateway performs acquisition; Bluetooth or a network connection transports the resulting digital records. Keep original voltage/count readings when useful and label derived measurements and their calibration separately.
 
-The next application layer should show freshness and sensor health beside time-series charts, with explicit metric/unit definitions and retention/export policies before sustained high-rate collection. The present H2 append store and global intake lock suit initial local logger intake, not an unbounded industrial telemetry fleet.
+Beyond the current reading ages, future work should add sensor health and time-series charts, with explicit metric/unit definitions and retention/export policies before sustained high-rate collection. The present H2 append store and global intake lock suit initial local logger intake, not an unbounded industrial telemetry fleet.
 
 Equipment operation is a separate future adapter capability. A pump controller needs reviewed commands, feedback that distinguishes requested from actual state, bounded run time, local stop/override, and defined behavior when data or connectivity is lost. Measurement receipt alone must never imply authorization to run a pump.
 

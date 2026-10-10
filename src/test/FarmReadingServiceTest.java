@@ -109,6 +109,95 @@ class FarmReadingServiceTest {
         assertThat(service.count()).isZero();
     }
 
+    @Test void latestReportedUsesObservationTimeAndNanosecondsRatherThanUploadOrderOrTextSort() {
+        var precise = row("newer-nanosecond", 22);
+        precise.put("observedAt", "2026-10-10T11:59:00.000000001Z");
+        var delayed = row("late-upload", 19);
+        delayed.put("observedAt", "2026-10-10T11:59:00Z");
+        ingest("logger", List.of(precise, delayed));
+        assertThat(service.recent(0, 10).readings().get(0).readingKey()).isEqualTo("late-upload");
+        var latest = service.latestReported(0, 10);
+        assertThat(latest.readings()).extracting(FarmReading::readingKey).containsExactly("newer-nanosecond");
+        assertThat(latest.readings().get(0).observedAt()).isEqualTo(Instant.parse("2026-10-10T11:59:00.000000001Z"));
+    }
+
+    @Test void latestReportedNeverHidesNewerMissingErrorOrSuspectObservationsBehindGoodValues() {
+        ingest("logger", List.of(row("good", 21)));
+        var missing = row("missing", 0);
+        missing.remove("value");
+        missing.put("quality", "MISSING");
+        missing.put("observedAt", "2026-10-10T11:30:00Z");
+        ingest("logger", List.of(missing));
+        assertThat(service.latestReported(0, 10).readings().get(0).value()).isNull();
+        assertThat(service.latestReported(0, 10).readings().get(0).quality()).isEqualTo("MISSING");
+        var error = row("error", 999);
+        error.put("quality", "ERROR");
+        error.put("observedAt", "2026-10-10T11:40:00Z");
+        ingest("logger", List.of(error));
+        assertThat(service.latestReported(0, 10).readings().get(0).quality()).isEqualTo("ERROR");
+        var suspect = row("suspect", 20);
+        suspect.put("quality", "SUSPECT");
+        suspect.put("observedAt", "2026-10-10T11:50:00Z");
+        ingest("logger", List.of(suspect));
+        assertThat(service.latestReported(0, 10).readings().get(0).quality()).isEqualTo("SUSPECT");
+        assertThat(service.count()).isEqualTo(4);
+    }
+
+    @Test void latestReportedSeparatesSourcesDevicesMeasurementsUnitsAndGrowingAreas() {
+        ingest("a", List.of(row("base", 21), row("base-again", 22)));
+        for (var change : List.of(Map.entry("deviceId", "probe-2"), Map.entry("metric", "soil.temperature"),
+                Map.entry("unit", "F"), Map.entry("location", "Other house"))) {
+            var distinct = row(change.getKey(), 30);
+            distinct.put(change.getKey(), change.getValue());
+            ingest("a", List.of(distinct));
+        }
+        ingest("b", List.of(row("base", 99)));
+        var latest = service.latestReported(0, 200);
+        assertThat(latest.readings()).hasSize(6);
+        assertThat(latest.readings().stream().filter(r -> r.sourceId().equals("a") && r.readingKey().equals("base-again"))).hasSize(1);
+        assertThat(latest.readings().stream().filter(r -> r.sourceId().equals("a") && r.readingKey().equals("base"))).isEmpty();
+    }
+
+    @Test void latestReportedRanksBeforePagingSoOlderPagesCannotReviveSupersededReadings() {
+        var secondDevice = row("other-device", 25);
+        secondDevice.put("deviceId", "probe-2");
+        ingest("a", List.of(row("old", 21), secondDevice, row("new-at-same-time", 22)));
+        var first = service.latestReported(0, 1);
+        assertThat(first.readings()).extracting(FarmReading::readingKey).containsExactly("new-at-same-time");
+        assertThat(first.hasMore()).isTrue();
+        var newDevice = row("arrived-after-page", 26);
+        newDevice.put("deviceId", "probe-3");
+        ingest("a", List.of(newDevice));
+        var older = service.latestReported(first.nextAfterId(), 2);
+        assertThat(older.readings()).extracting(FarmReading::readingKey).containsExactly("other-device");
+        assertThat(older.hasMore()).isFalse();
+        assertThat(service.latestReported(older.nextAfterId(), 2).readings()).isEmpty();
+        secondDevice.put("readingKey", "updated-other-device");
+        ingest("a", List.of(secondDevice));
+        assertThat(service.latestReported(first.nextAfterId(), 2).readings()).isEmpty();
+        assertThat(service.latestReported(0, 200).readings()).hasSize(3);
+    }
+
+    @Test void latestReportedHonorsEmptyPagesBoundsAndMaximumPageSize() {
+        assertThat(service.latestReported(0, 200).readings()).isEmpty();
+        assertThat(service.latestReported(0, 200).nextAfterId()).isZero();
+        for (int bad : List.of(0, -1, 201)) {
+            assertThatThrownBy(() -> service.latestReported(0, bad)).isInstanceOf(IllegalArgumentException.class);
+        }
+        assertThatThrownBy(() -> service.latestReported(-1, 200)).isInstanceOf(IllegalArgumentException.class);
+        List<Map<String, Object>> devices = new ArrayList<>();
+        for (int i = 0; i < 201; i++) {
+            var reading = row("row-" + i, i);
+            reading.put("deviceId", "probe-" + i);
+            devices.add(reading);
+        }
+        ingest("logger", devices);
+        var first = service.latestReported(0, 200);
+        assertThat(first.readings()).hasSize(200);
+        assertThat(first.hasMore()).isTrue();
+        assertThat(service.latestReported(first.nextAfterId(), 200).readings()).hasSize(1);
+    }
+
     @Test void delayedAndMissingReadingsRemainVisibleThroughReceiptCursorPaging() {
         Map<String, Object> missing = row("missing", 1);
         missing.remove("value");
@@ -197,6 +286,7 @@ class FarmReadingServiceTest {
         jdbc.execute("SHUTDOWN");
         connect(url, false);
         assertThat(service.history("source", 0, 100).readings().get(0).value()).isEqualByComparingTo("3.123456789012");
+        assertThat(service.latestReported(0, 100).readings().get(0).readingKey()).isEqualTo("sample");
         assertThat(ingest("source", List.of(row("sample", new BigDecimal("3.123456789012")))).replayed()).isEqualTo(1);
     }
 }

@@ -29,6 +29,10 @@ public class FarmReadingService {
     private static final Set<String> FIELDS = Set.of("readingKey", "deviceId", "metric",
             "unit", "value", "quality", "observedAt", "location", "rawFrame");
     private static final Set<String> QUALITIES = Set.of("GOOD", "SUSPECT", "MISSING", "ERROR");
+    private static final String LATEST_REPORTED = "SELECT * FROM (SELECT farm_readings.*, "
+            + "ROW_NUMBER() OVER (PARTITION BY source_id, device_id, metric, unit, location "
+            + "ORDER BY CAST(observed_at AS TIMESTAMP(9) WITH TIME ZONE) DESC, id DESC) AS reading_rank "
+            + "FROM farm_readings) ranked WHERE reading_rank = 1";
     private static final RowMapper<FarmReading> MAPPER = (row, number) -> new FarmReading(
             row.getLong("id"), row.getString("source_id"), row.getString("reading_key"),
             row.getString("device_id"), row.getString("metric"), row.getString("unit"),
@@ -122,6 +126,21 @@ public class FarmReadingService {
                 ? jdbc.query("SELECT * FROM farm_readings ORDER BY id DESC LIMIT ?", MAPPER, limit + 1)
                 : jdbc.query("SELECT * FROM farm_readings WHERE id < ? ORDER BY id DESC LIMIT ?",
                         MAPPER, beforeId, limit + 1);
+        List<FarmReading> page = List.copyOf(rows.subList(0, Math.min(rows.size(), limit)));
+        long next = page.isEmpty() ? beforeId : page.get(page.size() - 1).id();
+        return new ReadingPage(page, next, rows.size() > limit);
+    }
+
+    /** Latest observation per source/device/measurement/unit/area, including missing and error states. */
+    @Transactional(readOnly = true)
+    public ReadingPage latestReported(long beforeId, int limit) {
+        if (beforeId < 0 || limit < 1 || limit > MAX_PAGE) {
+            throw new IllegalArgumentException("Choose a measurement page of 1 to 200 readings.");
+        }
+        // Rank before applying the receipt cursor: paging must not revive an older observation.
+        List<FarmReading> rows = beforeId == 0
+                ? jdbc.query(LATEST_REPORTED + " ORDER BY id DESC LIMIT ?", MAPPER, limit + 1)
+                : jdbc.query(LATEST_REPORTED + " AND id < ? ORDER BY id DESC LIMIT ?", MAPPER, beforeId, limit + 1);
         List<FarmReading> page = List.copyOf(rows.subList(0, Math.min(rows.size(), limit)));
         long next = page.isEmpty() ? beforeId : page.get(page.size() - 1).id();
         return new ReadingPage(page, next, rows.size() > limit);

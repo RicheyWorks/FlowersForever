@@ -7,6 +7,7 @@ import com.flowerfarm.telemetry.EquipmentSpreadsheet;
 import com.flowerfarm.telemetry.FarmReading;
 import com.flowerfarm.telemetry.FarmReadingService;
 import com.flowerfarm.telemetry.ManualFarmReading;
+import com.flowerfarm.telemetry.ReadingAge;
 
 import javax.swing.JButton;
 import javax.swing.JComboBox;
@@ -20,6 +21,7 @@ import javax.swing.JTable;
 import javax.swing.JTextField;
 import javax.swing.JTextArea;
 import javax.swing.SpinnerDateModel;
+import javax.swing.Scrollable;
 import javax.swing.SwingWorker;
 import javax.swing.table.DefaultTableModel;
 import javax.swing.table.DefaultTableCellRenderer;
@@ -28,7 +30,9 @@ import java.awt.GridBagLayout;
 import java.awt.GridBagConstraints;
 import java.awt.Insets;
 import java.awt.Dimension;
+import java.awt.Rectangle;
 import java.text.ParseException;
+import java.time.Clock;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.Date;
@@ -51,7 +55,9 @@ public final class EquipmentReadingsTab implements FlowerFarmTab {
     private final TabHost host;
     private final FarmDialogs dialogs;
     private final FarmFileChooser files;
+    private final Clock clock;
     private final JPanel root = FarmUi.page();
+    private final JScrollPane page;
     private final JTextField equipment = field("equipment");
     private final JTextField area = field("area");
     private final JTextField value = field("value");
@@ -67,10 +73,13 @@ public final class EquipmentReadingsTab implements FlowerFarmTab {
     private final JButton bring = button("Bring in equipment spreadsheet…", "import");
     private final JButton leave = button("Leave spreadsheet preview", "leaveImport");
     private final JButton layout = button("Spreadsheet layout", "layout");
+    private final JComboBox<String> view = new JComboBox<>(new String[] {
+            "All saved readings", "Latest reported measurements"});
+    private final JLabel pageInfo = FarmUi.mutedLabel("All saved readings · 200 per page · Newest received first · Age at last refresh");
     private final JLabel feedback = FarmUi.wrappingStatusBadge(
             "Enter a reading from your equipment, or review readings brought in by a farm connection.", FarmUi.Tone.INFO);
     private final DefaultTableModel rows = new DefaultTableModel(new String[] {
-            "Equipment", "Growing area", "Measurement", "Value", "Unit", "Condition", "Measured at", "Source"}, 0) {
+            "Equipment", "Growing area", "Measurement", "Value", "Unit", "Condition", "Measured at", "Source", "Age of reading"}, 0) {
         @Override public boolean isCellEditable(int row, int column) { return false; }
     };
     private volatile boolean canWrite;
@@ -84,6 +93,7 @@ public final class EquipmentReadingsTab implements FlowerFarmTab {
     private List<Object> cleanDraft;
     private long nextCursor;
     private boolean hasMore;
+    private int displayedView;
     private String readingKey = UUID.randomUUID().toString();
 
     public EquipmentReadingsTab(FarmReadingService service, TabHost host, FarmDialogs dialogs) {
@@ -91,10 +101,15 @@ public final class EquipmentReadingsTab implements FlowerFarmTab {
     }
 
     public EquipmentReadingsTab(FarmReadingService service, TabHost host, FarmDialogs dialogs, FarmFileChooser files) {
+        this(service, host, dialogs, files, Clock.systemUTC());
+    }
+
+    EquipmentReadingsTab(FarmReadingService service, TabHost host, FarmDialogs dialogs, FarmFileChooser files, Clock clock) {
         this.service = Objects.requireNonNull(service, "service");
         this.host = Objects.requireNonNull(host, "host");
         this.dialogs = Objects.requireNonNull(dialogs, "dialogs");
         this.files = Objects.requireNonNull(files, "files");
+        this.clock = Objects.requireNonNull(clock, "clock");
         canWrite = host.canMutateData();
         root.setName("equipmentReadings.root");
         JPanel top = new JPanel(new BorderLayout(8, 8));
@@ -131,28 +146,40 @@ public final class EquipmentReadingsTab implements FlowerFarmTab {
         table.setName("equipmentReadings.history");
         FarmUi.configureTable(table, "Saved equipment readings");
         table.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
-        int[] widths = {180, 150, 155, 130, 80, 140, 210, 175};
+        int[] widths = {180, 150, 155, 130, 80, 140, 210, 175, 190};
         for (int i = 0; i < widths.length; i++) table.getColumnModel().getColumn(i).setPreferredWidth(widths[i]);
         DefaultTableCellRenderer plain = new DefaultTableCellRenderer();
         plain.putClientProperty("html.disable", Boolean.TRUE);
         table.setDefaultRenderer(Object.class, plain);
         JScrollPane history = FarmUi.tableScroll(table);
         history.setColumnHeaderView(table.getTableHeader());
-        root.add(FarmUi.section("Saved equipment readings", "Each value keeps its reported unit and condition.",
+        root.add(FarmUi.section("Saved equipment readings", "Each value keeps its reported unit and condition. Age does not prove equipment is working.",
                 history), BorderLayout.CENTER);
         JPanel bottom = new JPanel(new BorderLayout(4, 4));
         bottom.setOpaque(false);
-        JPanel controls = FarmUi.toolbar(latest, older,
-                new JLabel("200 readings per page; newest received first. Times include the local offset."));
+        view.setName("equipmentReadings.view");
+        view.getAccessibleContext().setAccessibleName("Choose saved history or latest reported measurements");
+        JPanel controls = new JPanel(new BorderLayout(0, 4));
+        controls.setOpaque(false);
+        controls.add(FarmUi.toolbar(new JLabel("Show"), view, latest, older), BorderLayout.NORTH);
+        pageInfo.setName("equipmentReadings.pageInfo");
+        controls.add(pageInfo, BorderLayout.SOUTH);
         bottom.add(controls, BorderLayout.NORTH);
         feedback.setName("equipmentReadings.feedback");
         bottom.add(feedback, BorderLayout.CENTER);
         bottom.add(FarmUi.mutedLabel("Bring in up to 500 readings from a spreadsheet (CSV). Automatic pairing and controls are future features."), BorderLayout.SOUTH);
         root.add(bottom, BorderLayout.SOUTH);
+        JPanel body = new ReadingPage(root);
+        page = new JScrollPane(body, JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED, JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+        page.setName("equipmentReadings.pageScroll");
+        page.setBorder(javax.swing.BorderFactory.createEmptyBorder());
+        page.getVerticalScrollBar().setUnitIncrement(24);
+        FarmUi.revealFocusedControls(body);
         save.addActionListener(event -> saveReading());
         next.addActionListener(event -> newReading());
         latest.addActionListener(event -> load(0));
         older.addActionListener(event -> load(nextCursor));
+        view.addActionListener(event -> load(0));
         bring.addActionListener(event -> bringSpreadsheet());
         leave.addActionListener(event -> leaveSpreadsheet());
         layout.addActionListener(event -> showSpreadsheetLayout());
@@ -164,6 +191,31 @@ public final class EquipmentReadingsTab implements FlowerFarmTab {
         JTextField field = new JTextField();
         field.setName("equipmentReadings." + name);
         return field;
+    }
+
+    /** Leave room for saved readings while keeping the whole form reachable on smaller windows. */
+    private static final class ReadingPage extends JPanel implements Scrollable {
+        private static final long serialVersionUID = 1L;
+
+        private ReadingPage(JComponent content) {
+            super(new BorderLayout());
+            setOpaque(false);
+            add(content, BorderLayout.CENTER);
+        }
+
+        @Override public Dimension getPreferredSize() {
+            Dimension preferred = super.getPreferredSize();
+            return new Dimension(preferred.width, 780);
+        }
+        @Override public Dimension getPreferredScrollableViewportSize() { return getPreferredSize(); }
+        @Override public int getScrollableUnitIncrement(Rectangle visible, int orientation, int direction) { return 24; }
+        @Override public int getScrollableBlockIncrement(Rectangle visible, int orientation, int direction) {
+            return Math.max(24, visible.height - 24);
+        }
+        @Override public boolean getScrollableTracksViewportWidth() { return true; }
+        @Override public boolean getScrollableTracksViewportHeight() {
+            return getParent() != null && getParent().getHeight() >= getPreferredSize().height;
+        }
     }
 
     private static void addField(JPanel form, JComponent field) {
@@ -196,7 +248,7 @@ public final class EquipmentReadingsTab implements FlowerFarmTab {
     }
 
     @Override public String getTabTitle() { return "Equipment readings"; }
-    @Override public JComponent getUIComponent() { return root; }
+    @Override public JComponent getUIComponent() { return page; }
     @Override public String getDescription() { return "Save and review equipment measurements across your farm."; }
     @Override public void initialize() { refreshData(); }
     @Override public void refreshData() { load(0); }
@@ -211,7 +263,8 @@ public final class EquipmentReadingsTab implements FlowerFarmTab {
             control.setEnabled(edit);
         }
         latest.setEnabled(!loading);
-        older.setEnabled(!loading && hasMore);
+        older.setEnabled(!loading && hasMore && displayedView == view.getSelectedIndex());
+        view.setEnabled(!loading);
         bring.setEnabled(canWrite && !saving && !importing && !unconfirmedSave);
         bring.setText(importDraft == null ? "Bring in equipment spreadsheet…" : "Review and retry spreadsheet…");
         leave.setEnabled(importDraft != null && !importing);
@@ -488,30 +541,44 @@ public final class EquipmentReadingsTab implements FlowerFarmTab {
             return;
         }
         loading = true;
+        final int requestedView = view.getSelectedIndex();
         updateControls();
         new SwingWorker<FarmReadingService.ReadingPage, Void>() {
             @Override protected FarmReadingService.ReadingPage doInBackground() {
-                return service.recent(beforeId, FarmReadingService.MAX_PAGE);
+                return requestedView == 1 ? service.latestReported(beforeId, FarmReadingService.MAX_PAGE)
+                        : service.recent(beforeId, FarmReadingService.MAX_PAGE);
             }
             @Override protected void done() {
                 loading = false;
                 try {
                     FarmReadingService.ReadingPage page = get();
-                    rows.setRowCount(0);
-                    for (FarmReading reading : page.readings()) {
-                        int metric = METRICS.indexOf(reading.metric());
-                        int quality = CONDITIONS.indexOf(reading.quality());
-                        rows.addRow(new Object[] {ManualFarmReading.equipmentName(reading), reading.location(),
-                                metric < 0 ? reading.metric() : LABELS.get(metric),
-                                reading.value() == null ? "No value" : reading.value().stripTrailingZeros().toPlainString(),
-                                reading.unit(), quality < 0 ? reading.quality() : condition.getItemAt(quality),
-                                TIME.format(reading.observedAt()),
-                                ManualFarmReading.SOURCE.equals(reading.sourceId()) ? "Entered on this farm"
-                                        : EquipmentSpreadsheet.SOURCE.equals(reading.sourceId()) ? "Equipment spreadsheet" : reading.sourceId()});
+                    if (requestedView == view.getSelectedIndex()) {
+                        java.time.Instant shownAt = clock.instant();
+                        rows.setRowCount(0);
+                        for (FarmReading reading : page.readings()) {
+                            int metric = METRICS.indexOf(reading.metric());
+                            int quality = CONDITIONS.indexOf(reading.quality());
+                            rows.addRow(new Object[] {ManualFarmReading.equipmentName(reading), reading.location(),
+                                    metric < 0 ? reading.metric() : LABELS.get(metric),
+                                    reading.value() == null ? "No value" : reading.value().stripTrailingZeros().toPlainString(),
+                                    reading.unit(), quality < 0 ? reading.quality() : condition.getItemAt(quality),
+                                    TIME.format(reading.observedAt()),
+                                    ManualFarmReading.SOURCE.equals(reading.sourceId()) ? "Entered on this farm"
+                                            : EquipmentSpreadsheet.SOURCE.equals(reading.sourceId()) ? "Equipment spreadsheet" : reading.sourceId(),
+                                    ReadingAge.describe(reading.observedAt(), shownAt)});
+                        }
+                        displayedView = requestedView;
+                        pageInfo.setText(requestedView == 1
+                                ? "Latest reported measurements · Sources, units and areas stay separate · Age at " + TIME.format(shownAt)
+                                : "All saved readings · Newest received first · Age at " + TIME.format(shownAt));
+                        nextCursor = page.nextAfterId();
+                        hasMore = page.hasMore();
+                        if (page.readings().isEmpty()) message("No saved readings on this page. Enter your first equipment reading above.");
+                        else if (feedback.getText().startsWith("Could not refresh history.")
+                                || feedback.getText().startsWith("History refresh interrupted.")) message("Readings refreshed.");
+                    } else {
+                        latestRequested = true;
                     }
-                    nextCursor = page.nextAfterId();
-                    hasMore = page.hasMore();
-                    if (page.readings().isEmpty()) message("No saved readings on this page. Enter your first equipment reading above.");
                 } catch (InterruptedException interrupted) {
                     Thread.currentThread().interrupt();
                     message("History refresh interrupted. Previous readings remain visible.");

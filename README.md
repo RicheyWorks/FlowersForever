@@ -208,9 +208,13 @@ Select **Browse all farm tools** to find all 41 tools and guides, including Soil
 
 Open **Equipment readings** to record measurements from your soil, water, air, and growing spaces. Give the equipment a familiar name, choose the measurement, enter its value and unit, and review it before saving. The history also shows readings brought in by an equipment helper, with when and where they were taken. Missing readings stay missing, and retrying a save does not count the same reading twice.
 
+Choose **Latest reported measurements** to see the last measured observation for each equipment, measurement, source, unit, and growing area. Old logs arriving later stay in history without replacing a newer measurement. **Age of reading** shows how old the measurement was when refreshed; missing and faulty reports stay visible. This view does not claim a device is connected or healthy.
+
 Choose **Bring in equipment spreadsheet…** to select a spreadsheet (CSV), check all its readings, and review them before saving. **Spreadsheet layout** explains the headings using farm language. Up to 500 readings save together; an unchanged retry adds no duplicates, and your manual draft stays intact. Other logger layouts and readings files (JSON) can use the optional helper. Automatic readings, Bluetooth pairing, charts, and pump operation still need further work. [Read the farmer's guide to equipment readings](docs/FARM_READINGS.md).
 
 [![Equipment readings: familiar equipment names, reviewed manual entry, and saved measurement history using sample records.](docs/images/app-equipment-readings.png)](docs/images/app-equipment-readings.png)
+
+[![Latest reported measurements: measurement ages, a missing tank reading, and soil moisture that needs checking; an older uploaded soil log does not replace it.](docs/images/app-equipment-latest.png)](docs/images/app-equipment-latest.png)
 
 [![Review an equipment spreadsheet before saving: equipment names, growing areas, exact values, units, conditions, and measured times using sample records.](docs/images/app-equipment-spreadsheet-review.png)](docs/images/app-equipment-spreadsheet-review.png)
 

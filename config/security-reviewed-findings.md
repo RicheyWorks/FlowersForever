@@ -116,4 +116,18 @@ reader were reviewed together. All 554 production Java files and the unchanged
 POM are bound. The complete scan retains the same 38 reviewed Medium contexts,
 with no High or additional Medium finding, no analysis error and no missing class.
 
+The latest-reported measurements increment adds a fixed, read-only H2 window query
+with bound cursor/limit parameters. Source, device, metric, unit and growing area
+remain stored data; observation timestamps are validated at intake and cast with
+nanosecond precision solely to order measurements. No input becomes an identifier
+or SQL fragment. The desktop captures its selected view on the event thread,
+queries in the background, and rejects obsolete results before replacing rows.
+`ReadingAge` uses measurement time and one display clock snapshot, without network
+access or equipment control. The new page scroll and focus handling are local UI
+operations. Existing literal text renderers, role checks, transactional intake,
+and pending-draft boundaries remain intact. The complete source/caller review
+binds 555 production Java files and the unchanged POM; the fresh scan must retain
+the same 38 reviewed Medium contexts with no High/new Medium findings, analysis
+errors or missing classes.
+
 Any new, changed, duplicate or absent reviewed finding fails. Any production Java edit/addition/removal or POM change requires a fresh source/build/caller review and an intentional manifest update; do not regenerate the manifest automatically to make a failed check pass. There are no native category/class/method exclusions in the security profile. The separate general quality profile retains its existing exclusions and Medium-or-higher zero-violation gate.
