@@ -22,10 +22,14 @@ public final class InstalledAppLauncher {
 
     public static void relaunch(Path launcher) throws IOException {
         Path executable = validatedLauncher(launcher, currentCommand());
+        Path directory = executable.getParent();
+        if (directory == null) {
+            throw new IOException("The installed launcher directory is unavailable.");
+        }
         // One executable, no arguments and no shell. The startup property alone
         // cannot select a different program from the running packaged app.
         new ProcessBuilder(List.of(executable.toString()))
-                .directory(executable.getParent().toFile())
+                .directory(directory.toFile())
                 .redirectErrorStream(true)
                 .redirectOutput(ProcessBuilder.Redirect.DISCARD)
                 .start();
@@ -36,10 +40,14 @@ public final class InstalledAppLauncher {
     }
 
     static Path validatedLauncher(Path launcher, Optional<Path> runningCommand) throws IOException {
-        if (launcher == null || !launcher.isAbsolute() || launcher.getFileName() == null) {
+        if (launcher == null || !launcher.isAbsolute()) {
             throw new IOException("The installed launcher is unavailable.");
         }
-        String name = launcher.getFileName().toString();
+        Path fileName = launcher.getFileName();
+        if (fileName == null) {
+            throw new IOException("The installed launcher is unavailable.");
+        }
+        String name = fileName.toString();
         if (!(name.equalsIgnoreCase("FlowersForever.exe") || name.equals("FlowersForever"))) {
             throw new IOException("The installed launcher name is not recognized.");
         }

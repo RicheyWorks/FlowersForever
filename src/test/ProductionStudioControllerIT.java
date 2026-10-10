@@ -28,9 +28,11 @@ import java.time.Instant;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -129,6 +131,29 @@ class ProductionStudioControllerIT {
                 .andExpect(jsonPath("$.id").value(3))
                 .andExpect(jsonPath("$.cropName").value("Sunflower"))
                 .andExpect(jsonPath("$.sowDaysFromFrost").value(-42));
+    }
+
+    @Test
+    @DisplayName("null template and recipe requests return 400 without saving anything")
+    void rejectsNullProductionRequestsBeforeServiceCalls() throws Exception {
+        ProductionStudioController controller = new ProductionStudioController(service);
+        assertThatThrownBy(() -> controller.createTemplate(null))
+                .isInstanceOf(IllegalArgumentException.class).hasMessage("Growing template is required.");
+        assertThatThrownBy(() -> controller.updateTemplate(9L, null))
+                .isInstanceOf(IllegalArgumentException.class).hasMessage("Growing template is required.");
+        assertThatThrownBy(() -> controller.createRecipe(null))
+                .isInstanceOf(IllegalArgumentException.class).hasMessage("Floral recipe is required.");
+        assertThatThrownBy(() -> controller.updateRecipe(8L, null))
+                .isInstanceOf(IllegalArgumentException.class).hasMessage("Floral recipe is required.");
+        for (String resource : List.of("templates", "recipes")) {
+            mockMvc.perform(post("/api/production-studio/" + resource)
+                            .contentType(MediaType.APPLICATION_JSON).content("null"))
+                    .andExpect(status().isBadRequest());
+            mockMvc.perform(put("/api/production-studio/" + resource + "/9")
+                            .contentType(MediaType.APPLICATION_JSON).content("null"))
+                    .andExpect(status().isBadRequest());
+        }
+        verifyNoInteractions(service);
     }
 
     @Test
@@ -346,9 +371,12 @@ class ProductionStudioControllerIT {
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         String single = mockMvc.perform(get("/api/production-studio/recipes/8"))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
-        assertThat(mapper.readTree(templates)).isEqualTo(mapper.valueToTree(List.of(template)));
-        assertThat(mapper.readTree(recipes)).isEqualTo(mapper.valueToTree(List.of(recipe)));
-        assertThat(mapper.readTree(single)).isEqualTo(mapper.valueToTree(recipe));
+        // Parse both wire representations so Long IDs use the same JSON numeric node type.
+        assertThat(mapper.readTree(templates))
+                .isEqualTo(mapper.readTree(mapper.writeValueAsString(List.of(template))));
+        assertThat(mapper.readTree(recipes))
+                .isEqualTo(mapper.readTree(mapper.writeValueAsString(List.of(recipe))));
+        assertThat(mapper.readTree(single)).isEqualTo(mapper.readTree(mapper.writeValueAsString(recipe)));
     }
 
     private static GrowingTemplate template() {

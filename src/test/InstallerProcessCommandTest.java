@@ -35,6 +35,9 @@ class InstallerProcessCommandTest {
         assertThatThrownBy(() -> InstallerProcessCommand.validate(
                 List.of(interpreter.toString(), "/d", "/c", outside.toString()), work,
                 UpdatePlatform.WINDOWS_MSI, interpreter)).hasMessageContaining("updates folder");
+        assertThatThrownBy(() -> InstallerProcessCommand.validate(
+                List.of(interpreter.toString(), "/d", "/c", temp.getRoot().toString()), work,
+                UpdatePlatform.WINDOWS_MSI, interpreter)).hasMessageContaining("updates folder");
         Path arbitrary = Files.writeString(work.resolve("other.cmd"), "fixture");
         assertThatThrownBy(() -> InstallerProcessCommand.validate(
                 List.of(interpreter.toString(), "/d", "/c", arbitrary.toString()), work,

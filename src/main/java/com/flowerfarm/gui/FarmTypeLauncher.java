@@ -215,12 +215,10 @@ final class FarmTypeLauncher extends JPanel {
                 FarmSetupDialog.workspaceLabel(workspace) + " description");
         body.add(description, BorderLayout.CENTER);
 
-        JPanel footer = new JPanel(new BorderLayout(0, FarmUi.CONTROL_GAP));
-        footer.setOpaque(false);
-        footer.add(FarmUi.statusBadge(active
+        JLabel status = FarmUi.statusBadge(active
                         ? enabledWorkspaces.size() > 1 ? "Primary · in mix" : "Current type"
                         : included ? "In your mix" : scope(workspace),
-                included ? FarmUi.Tone.SUCCESS : FarmUi.Tone.NEUTRAL), BorderLayout.NORTH);
+                included ? FarmUi.Tone.SUCCESS : FarmUi.Tone.NEUTRAL);
         boolean outsideMix = enabledWorkspaces.size() > 1 && !included;
         JButton button = active ? FarmUi.primaryButton(enabledWorkspaces.size() > 1
                         ? "Enter combined farm" : "Enter farm")
@@ -245,7 +243,9 @@ final class FarmTypeLauncher extends JPanel {
         button.setEnabled(included || canChange);
         button.addActionListener(event -> enter.accept(workspace));
         enterButtons.put(workspace, button);
-        footer.add(button, BorderLayout.SOUTH);
+        // Keep compact cards on one row when the labels fit; the toolbar measures
+        // both rows when a longer combined-farm action needs to wrap.
+        JPanel footer = FarmUi.toolbar(status, button);
         body.add(footer, BorderLayout.SOUTH);
 
         JPanel card = FarmUi.section(FarmSetupDialog.workspaceLabel(workspace), null, body);

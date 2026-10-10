@@ -22,9 +22,11 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -140,6 +142,21 @@ class KnowledgeControllerIT {
     }
 
     @Test
+    @DisplayName("null create and update requests return 400 without saving anything")
+    void rejectsNullRequestsBeforeServiceCalls() throws Exception {
+        KnowledgeController controller = new KnowledgeController(knowledgeService);
+        assertThatThrownBy(() -> controller.create(null))
+                .isInstanceOf(IllegalArgumentException.class).hasMessage("Knowledge entry is required.");
+        assertThatThrownBy(() -> controller.update(7L, null))
+                .isInstanceOf(IllegalArgumentException.class).hasMessage("Knowledge entry is required.");
+        mockMvc.perform(post("/api/knowledge").contentType(MediaType.APPLICATION_JSON).content("null"))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(put("/api/knowledge/7").contentType(MediaType.APPLICATION_JSON).content("null"))
+                .andExpect(status().isBadRequest());
+        verifyNoInteractions(knowledgeService);
+    }
+
+    @Test
     @DisplayName("create and update accept record links while managed identity and timestamps stay server-owned")
     void refusesManagedFieldsInCreateAndUpdate() throws Exception {
         KnowledgeEntry saved = linkedEntry();
@@ -187,8 +204,9 @@ class KnowledgeControllerIT {
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         String list = mockMvc.perform(get("/api/knowledge"))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
-        assertThat(mapper.readTree(single)).isEqualTo(mapper.valueToTree(saved));
-        assertThat(mapper.readTree(list)).isEqualTo(mapper.valueToTree(List.of(saved)));
+        // Compare the legacy wire JSON, not in-memory LongNode versus parsed IntNode identity.
+        assertThat(mapper.readTree(single)).isEqualTo(mapper.readTree(mapper.writeValueAsString(saved)));
+        assertThat(mapper.readTree(list)).isEqualTo(mapper.readTree(mapper.writeValueAsString(List.of(saved))));
     }
 
     private static KnowledgeEntry linkedEntry() {

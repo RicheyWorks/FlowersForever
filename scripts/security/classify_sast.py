@@ -12,6 +12,43 @@ import xml.etree.ElementTree as ET
 from security_checks import require, spotbugs_complete, strict_json
 
 
+# Eligibility is limited to these four reviewed boundaries. Exact raw identities,
+# full source/caller inventory and build/analyzer bindings remain required below.
+CONTEXTUAL_REVIEW_SELECTORS = {
+    "h2_metadata_identifier": (
+        "SQL_INJECTION_JDBC", "src/main/java/com/flowerfarm/backup/DatabaseIntegrityGuard.java",
+        "com.flowerfarm.backup.DatabaseIntegrityGuard", "check",
+        "(Ljava/nio/file/Path;)Lcom/flowerfarm/backup/DatabaseIntegrityGuard$Health;"),
+    "installed_app_relaunch": (
+        "COMMAND_INJECTION", "src/main/java/com/flowerfarm/update/InstalledAppLauncher.java",
+        "com.flowerfarm.update.InstalledAppLauncher", "relaunch", "(Ljava/nio/file/Path;)V"),
+    "verified_installer_handoff": (
+        "COMMAND_INJECTION", "src/main/java/com/flowerfarm/update/PlatformInstaller.java",
+        "com.flowerfarm.update.PlatformInstaller$ProcessStarter", "lambda$system$0",
+        "(Ljava/util/List;Ljava/nio/file/Path;)V"),
+    "static_authenticode_script": (
+        "COMMAND_INJECTION", "src/main/java/com/flowerfarm/update/AuthenticodePublisherVerifier.java",
+        "com.flowerfarm.update.AuthenticodePublisherVerifier", "signatureCommand",
+        "(Ljava/nio/file/Path;Ljava/nio/file/Path;)Ljava/lang/ProcessBuilder;"),
+}
+
+
+def contextual_selector(finding):
+    return (finding["type"], finding["source"], finding.get("class"),
+            finding.get("method"), finding.get("method_signature"))
+
+
+def observed_selector(bug):
+    sources = [item for item in bug.findall("SourceLine") if item.attrib.get("primary") == "true"]
+    methods = [item for item in bug.findall("Method") if item.attrib.get("primary") == "true"]
+    require(len(sources) == 1 and len(methods) == 1, "Missing/ambiguous primary contextual finding location")
+    source, method = sources[0], methods[0]
+    require(source.attrib["classname"] == method.attrib["classname"],
+            "Contextual finding source/method class mismatch")
+    return (bug.attrib["type"], "src/main/java/" + source.attrib["sourcepath"],
+            method.attrib["classname"], method.attrib["name"], method.attrib["signature"])
+
+
 def production_inventory(repo):
     root = repo.resolve()
     source_root = root / "src/main/java"
@@ -62,9 +99,13 @@ def classify(report, manifest_path, repo, plugin):
     require(build_inventory(repo) == manifest["build_configuration"],
             "Maven build/dependency configuration changed; contextual re-review required")
     reviewed = Counter()
+    contextual_locations = {}
     for finding in manifest["reviewed_findings"]:
-        require(finding["type"] in ("PATH_TRAVERSAL_IN", "PATH_TRAVERSAL_OUT")
-                and int(finding["priority"]) == 2, "Unapproved reviewed finding category/priority")
+        require(int(finding["priority"]) == 2, "Unapproved reviewed finding category/priority")
+        path_context = finding["type"] in ("PATH_TRAVERSAL_IN", "PATH_TRAVERSAL_OUT")
+        if not path_context:
+            require(CONTEXTUAL_REVIEW_SELECTORS.get(finding.get("review_kind")) == contextual_selector(finding),
+                    "Unapproved reviewed contextual boundary")
         require(finding["source"] in manifest["production_java_inventory"], "Unbound finding source")
         require(finding["rationale"] and finding["caller_bindings"], "Missing contextual review evidence")
         require(all(p in manifest["production_java_inventory"] for p in finding["caller_bindings"]),
@@ -72,6 +113,8 @@ def classify(report, manifest_path, repo, plugin):
         fingerprint = key(finding)
         require(fingerprint not in reviewed, "Duplicate reviewed fingerprint")
         reviewed[fingerprint] = 1
+        if not path_context:
+            contextual_locations[fingerprint] = contextual_selector(finding)
     observed = Counter()
     low = 0
     for bug in root.findall("BugInstance"):
@@ -82,10 +125,14 @@ def classify(report, manifest_path, repo, plugin):
         if priority == 3:
             low += 1
             continue
-        observed[key({"type": bug.attrib["type"], "priority": priority,
-                      "instance_hash": bug.attrib["instanceHash"],
-                      "occurrence": bug.attrib["instanceOccurrenceNum"],
-                      "occurrence_max": bug.attrib["instanceOccurrenceMax"]})] += 1
+        fingerprint = key({"type": bug.attrib["type"], "priority": priority,
+                           "instance_hash": bug.attrib["instanceHash"],
+                           "occurrence": bug.attrib["instanceOccurrenceNum"],
+                           "occurrence_max": bug.attrib["instanceOccurrenceMax"]})
+        if fingerprint in contextual_locations:
+            require(observed_selector(bug) == contextual_locations[fingerprint],
+                    "Observed contextual finding location differs from reviewed boundary")
+        observed[fingerprint] += 1
     require(observed == reviewed,
             f"Security gate: {sum((observed-reviewed).values())} unreviewed Medium/High findings; "
             f"{sum((reviewed-observed).values())} stale/unused reviewed contexts")

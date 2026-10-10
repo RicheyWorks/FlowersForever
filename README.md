@@ -14,7 +14,7 @@ FlowersForever brings a farm's plans, harvests, stock, customers, orders, and fi
 
 **Local desktop records · Printable farm paperwork · Optional connected phone field entry**
 
-[See a five-minute farm day](#take-a-five-minute-tour) · [Explore farm types](#one-farm-can-be-many-things) · [Ask about the private preview](docs/PILOT_ACCESS.md)
+[See a five-minute farm day](#take-a-five-minute-tour) · [Explore farm types](#one-farm-can-be-many-things) · [Ask about pilot access](docs/PILOT_ACCESS.md)
 
 </div>
 
@@ -329,7 +329,7 @@ Printable inventory, harvest, invoice, statement, packing, weekly, and audit rou
 
 When the opt-in AI harness is enabled, `GET /api/harness/manifest` publishes its authenticated protocol, current policy, plug-ins, and provider-neutral JSON-Schema tools. The headless `farm-data` plugin accepts nine mappable operational types—including production templates, planting plans, and nested floral recipes—and exposes production-task attachment metadata as a tenth readable/exportable type, without driving the desktop. Its three-step suggest/preview/import intake maps arbitrary spreadsheet or provider objects, while stable source-system and row keys make migration replay durable across request changes and application restarts. Checksummed snapshots of the plugin's published canonical record types can be created, recovered, and consumed across restarts; dedicated actions upload retry-safe task photos and read their verified bytes in bounded chunks. Farm setup is recovered through a [database backup](docs/BACKUP_RESTORE.md), not those snapshots. The transport is absent in ordinary disabled and CLI modes; an explicitly enabled container deployment requires both normal HTTP authentication and the harness token.
 
-HTTP harvest/audit CSV exports accept CSV leaf filenames and write beneath `flowerfarm.exports.directory`. Configure that directory on the server. Desktop file chooser and operator-configured connector paths retain their local selection behavior.
+HTTP inventory/harvest/audit CSV exports accept CSV leaf filenames and write beneath `flowerfarm.exports.directory`. Configure that directory on the server. Desktop file chooser and operator-configured connector paths retain their local selection behavior.
 
 </details>
 

@@ -72,15 +72,21 @@ public class ProductionStudioController {
 
     @PostMapping("/templates")
     public ResponseEntity<?> createTemplate(@RequestBody TemplateRequest template) {
+        if (template == null) {
+            throw new IllegalArgumentException("Growing template is required.");
+        }
         return ResponseEntity.status(HttpStatus.CREATED).body(TemplateResponse.from(
-                service.createTemplate(template == null ? null : template.toTemplate())));
+                service.createTemplate(template.toTemplate())));
     }
 
     @PutMapping("/templates/{id}")
     public ResponseEntity<?> updateTemplate(@PathVariable Long id,
                                             @RequestBody TemplateRequest template) {
+        if (template == null) {
+            throw new IllegalArgumentException("Growing template is required.");
+        }
         return ResponseEntity.ok(TemplateResponse.from(
-                service.updateTemplate(id, template == null ? null : template.toTemplate())));
+                service.updateTemplate(id, template.toTemplate())));
     }
 
     @DeleteMapping("/templates/{id}")
@@ -156,15 +162,21 @@ public class ProductionStudioController {
 
     @PostMapping("/recipes")
     public ResponseEntity<?> createRecipe(@RequestBody RecipeRequest recipe) {
+        if (recipe == null) {
+            throw new IllegalArgumentException("Floral recipe is required.");
+        }
         return ResponseEntity.status(HttpStatus.CREATED).body(RecipeResponse.from(
-                service.createRecipe(recipe == null ? null : recipe.toRecipe())));
+                service.createRecipe(recipe.toRecipe())));
     }
 
     @PutMapping("/recipes/{id}")
     public ResponseEntity<?> updateRecipe(@PathVariable Long id,
                                           @RequestBody RecipeRequest recipe) {
+        if (recipe == null) {
+            throw new IllegalArgumentException("Floral recipe is required.");
+        }
         return ResponseEntity.ok(RecipeResponse.from(
-                service.updateRecipe(id, recipe == null ? null : recipe.toRecipe())));
+                service.updateRecipe(id, recipe.toRecipe())));
     }
 
     @DeleteMapping("/recipes/{id}")

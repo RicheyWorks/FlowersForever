@@ -28,5 +28,7 @@ class InstalledAppLauncherTest {
                 .hasMessageContaining("does not own");
         assertThatThrownBy(() -> InstalledAppLauncher.validatedLauncher(Path.of("FlowersForever.exe"),
                 Optional.of(launcher))).hasMessageContaining("unavailable");
+        assertThatThrownBy(() -> InstalledAppLauncher.validatedLauncher(temp.getRoot(), Optional.of(launcher)))
+                .hasMessageContaining("unavailable");
     }
 }

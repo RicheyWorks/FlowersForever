@@ -61,13 +61,19 @@ public class KnowledgeController {
 
     @PostMapping
     public ResponseEntity<KnowledgeResponse> create(@RequestBody KnowledgeRequest entry) {
+        if (entry == null) {
+            throw new IllegalArgumentException("Knowledge entry is required.");
+        }
         return ResponseEntity.status(HttpStatus.CREATED).body(KnowledgeResponse.from(
-                knowledgeService.create(entry == null ? null : entry.toEntry())));
+                knowledgeService.create(entry.toEntry())));
     }
 
     @PutMapping("/{id}")
     public KnowledgeResponse update(@PathVariable Long id, @RequestBody KnowledgeRequest entry) {
-        return KnowledgeResponse.from(knowledgeService.update(id, entry == null ? null : entry.toEntry()));
+        if (entry == null) {
+            throw new IllegalArgumentException("Knowledge entry is required.");
+        }
+        return KnowledgeResponse.from(knowledgeService.update(id, entry.toEntry()));
     }
 
     @DeleteMapping("/{id}")

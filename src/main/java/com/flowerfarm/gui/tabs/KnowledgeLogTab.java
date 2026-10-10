@@ -208,7 +208,8 @@ public class KnowledgeLogTab implements FlowerFarmTab {
     /** Keeps a readable lesson workspace when the window is shorter than the form. */
     private static final class KnowledgeBody extends JPanel implements Scrollable {
         private static final long serialVersionUID = 1L;
-        private static final int MINIMUM_WORKSPACE_HEIGHT = 300;
+        // Leave room for the reader when compact action labels need a second row.
+        private static final int MINIMUM_WORKSPACE_HEIGHT = 320;
         private final JComponent search;
 
         private KnowledgeBody(JComponent search, JComponent workspace) {

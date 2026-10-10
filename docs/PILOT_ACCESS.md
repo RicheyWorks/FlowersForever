@@ -36,14 +36,15 @@ validation. They are not approved for external farm distribution. The
    installer from the contact already working with your farm. Do not accept
    forwarded copies or links from another farm.
 2. Confirm the installer filename and version match the onboarding message.
-3. Verify its SHA-256 value against `SHA256SUMS.txt`:
+3. Verify its SHA-256 value against `SHA256SUMS.txt`. Replace `VERSION` below with
+   the approved installer version; the examples do not identify a released build:
 
    ```powershell
-   Get-FileHash .\FlowersForever-1.2.0.msi -Algorithm SHA256
+    Get-FileHash .\FlowersForever-VERSION.msi -Algorithm SHA256
    ```
 
    ```bash
-   shasum -a 256 FlowersForever-1.2.0.dmg
+    shasum -a 256 FlowersForever-VERSION.dmg
    ```
 
 4. Confirm the installer has the expected verified publisher using the

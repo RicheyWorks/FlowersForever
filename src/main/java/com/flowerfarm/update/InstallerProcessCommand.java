@@ -14,7 +14,7 @@ record InstallerProcessCommand(List<String> arguments, Path directory) {
         UpdatePlatform platform = UpdatePlatform.forOperatingSystem(System.getProperty("os.name"))
                 .orElseThrow(() -> new IOException(UpdateMessages.CANNOT_INSTALL_HERE));
         Path executable = platform == UpdatePlatform.WINDOWS_MSI
-                ? TrustedSystemCommands.windowsCommandInterpreter() : Path.of("/bin/sh");
+                ? TrustedSystemCommands.windowsCommandInterpreter() : TrustedSystemCommands.posixShell();
         return validate(command, directory, platform, executable);
     }
 
@@ -45,11 +45,15 @@ record InstallerProcessCommand(List<String> arguments, Path directory) {
             throw new IOException("The installer hand-off interpreter is not recognized.");
         }
         Path work = directory.toRealPath();
-        if (!script.isAbsolute() || !Files.isRegularFile(script, LinkOption.NOFOLLOW_LINKS)
-                || !script.normalize().getParent().toRealPath().equals(work) || Files.size(script) > MAX_SCRIPT_BYTES) {
+        script = script.normalize();
+        Path scriptDirectory = script.getParent();
+        Path scriptFileName = script.getFileName();
+        if (!script.isAbsolute() || scriptDirectory == null || scriptFileName == null
+                || !Files.isRegularFile(script, LinkOption.NOFOLLOW_LINKS)
+                || !scriptDirectory.toRealPath().equals(work) || Files.size(script) > MAX_SCRIPT_BYTES) {
             throw new IOException("The installer hand-off must be a generated script in its updates folder.");
         }
-        String name = script.getFileName().toString();
+        String name = scriptFileName.toString();
         String extension = windows ? ".cmd" : ".sh";
         String prefix = name.startsWith("apply-update-") ? "apply-update-" : "apply-rollback-";
         if (!name.startsWith(prefix) || !name.endsWith(extension)) {
