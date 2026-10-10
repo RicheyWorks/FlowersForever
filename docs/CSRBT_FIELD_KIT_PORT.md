@@ -8,7 +8,7 @@ attribution, and MIT license are packaged together. This is a contextual way to
 reach CSRBT's existing browser tools, not a new crop model or a replacement for
 the farm's saved plans.
 
-The bundle includes all 41 upstream HTML pages plus a searchable FlowersForever library index. Select **Browse complete CSRBT library** in Field science to reach every page directly, including specialist tools and supporting guides.
+The bundle includes all 41 upstream HTML pages plus a searchable FlowersForever library index. Select **Browse all farm tools** in Field science to reach every page directly, including specialist tools and supporting guides.
 [PROVENANCE.txt](../src/main/resources/csrbt-field-kit/PROVENANCE.txt) records
 the commit, source selection, checksums, and the one repaired relative link in
 an internal reference page; the curated instrument pages are otherwise copied

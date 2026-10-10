@@ -4,7 +4,7 @@ Compared the complete upstream artifact map and Git tree at [`5990b9c21e419f5836
 
 All **41 mapped field-kit HTML pages** were already included. **11 pages had upstream changes**, including Soil Bench and Soil Recipes; this change refreshes the full bundle from committed Git bytes. Greenhouse Monitor was already current. The repaired ADR-011 link is retained and every local HTML/Markdown link resolves.
 
-Only **12 instruments** had farm-specific desktop cards. The remaining guides and specialist tools could be reached through original navigation, but they were easy to miss. The new **Browse complete CSRBT library** button opens a searchable local index of all 41 pages; crop-specific cards keep their existing placement. This is an offline browser port with attributed sources, not full database integration of every tool.
+Only **12 instruments** had farm-specific desktop cards. The remaining guides and specialist tools could be reached through original navigation, but they were easy to miss. The new **Browse all farm tools** button opens a searchable local index of all 41 pages; crop-specific cards keep their existing placement. This is an offline browser port with attributed sources, not full database integration of every tool.
 
 ## Every field-kit page
 

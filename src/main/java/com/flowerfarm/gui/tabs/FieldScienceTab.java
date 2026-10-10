@@ -74,11 +74,11 @@ public final class FieldScienceTab implements FlowerFarmTab {
     private static final int MAX_EXPORT_BYTES = 524_288;
 
     private static final String STORAGE_BOUNDARY =
-            "These tools open as separate local browser pages. Some may keep a browser-local "
-                    + "draft; export anything you need to retain. Browser drafts and exports "
-                    + "stay outside FlowersForever's H2 database, backups, and role permissions "
-                    + "until you review and explicitly save a copy here. Opening a tool never "
-                    + "writes a farm record. The tools do not provide "
+            "These tools open in your web browser and can be used without internet. "
+                    + "Work in the browser is kept separately from your saved farm records. "
+                    + "To keep results with your farm records and backups, download them from "
+                    + "the tool, then review and save a copy here. Opening a tool never "
+                    + "changes a farm record. The tools do not provide "
                     + "pesticide, food-safety, or cannabis-compliance advice.";
 
     private final List<Instrument> instruments;
@@ -202,8 +202,8 @@ public final class FieldScienceTab implements FlowerFarmTab {
 
     @Override public String getDescription() {
         return instruments.isEmpty()
-                ? "Browse saved field science exports for this farm"
-                : "Offline field and bench instruments selected for this farm's types";
+                ? "Browse saved field science results for this farm"
+                : "Offline field and bench tools selected for this farm's types";
     }
 
     @Override public JComponent getUIComponent() {
@@ -220,8 +220,8 @@ public final class FieldScienceTab implements FlowerFarmTab {
         }
         for (JButton save : saveButtons) {
             GuiPermissions.setWritable(canWrite && exportService != null && !savingExport,
-                    exportService == null ? "Saved export storage is unavailable."
-                            : savingExport ? "A field science export is being saved."
+                    exportService == null ? "Saved results storage is unavailable."
+                            : savingExport ? "Your field science results are being saved."
                             : GuiPermissions.VIEWER_READONLY_TIP, save);
         }
         updateSelectedArchiveActions();
@@ -257,10 +257,10 @@ public final class FieldScienceTab implements FlowerFarmTab {
                     showExports(result);
                 } catch (InterruptedException exception) {
                     Thread.currentThread().interrupt();
-                    showExportFailure("Could not search saved exports. Previous results "
+                    showExportFailure("Could not search saved results. Previous results "
                             + "are still shown; retry or clear the search.");
                 } catch (ExecutionException exception) {
-                    showExportFailure("Could not search saved exports. Previous results "
+                    showExportFailure("Could not search saved results. Previous results "
                             + "are still shown; retry or clear the search.");
                 } finally {
                     updateExportNavigation();
@@ -302,9 +302,9 @@ public final class FieldScienceTab implements FlowerFarmTab {
     public String applicationExitWarning() {
         if (savingExport || savingSelectedText) {
             return savingSelectedText ? "A saved field science text file is being written."
-                    : "A field science export is being saved.";
+                    : "Your field science results are being saved.";
         }
-        return retryDraft == null ? null : "A field science export draft remains after a failed save.";
+        return retryDraft == null ? null : "Unsaved field science results remain after a failed save.";
     }
 
     public boolean hasPendingSave() {
@@ -316,8 +316,8 @@ public final class FieldScienceTab implements FlowerFarmTab {
         panel.setName("fieldScience.page");
         panel.add(FarmUi.pageHeader("Field science",
                 instruments.isEmpty()
-                        ? "Browse saved exports; matching offline tools appear when available."
-                        : "Open an instrument chosen for the farm types you enabled.", null),
+                        ? "Browse saved results; matching offline tools appear when available."
+                        : "Tools for the kind of farm you run.", null),
                 BorderLayout.NORTH);
 
         JPanel body = new JPanel(new GridBagLayout());
@@ -337,13 +337,13 @@ public final class FieldScienceTab implements FlowerFarmTab {
             host.setStatus("Opened Knowledge Log to record an observation manually. "
                     + "No field science content was copied.");
         });
-        JButton library = FarmUi.secondaryButton("Browse complete CSRBT library");
+        JButton library = FarmUi.secondaryButton("Browse all farm tools");
         library.setName("fieldScience.library");
-        library.setToolTipText("Open all 41 bundled tools and references, with offline search.");
-        library.addActionListener(event -> open("library.html", "Complete CSRBT field kit", library));
+        library.setToolTipText("Find soil, greenhouse, and other tools and guides; no internet needed.");
+        library.addActionListener(event -> open("library.html", "Farm tools and guides", library));
         boundary.add(FarmUi.toolbar(knowledge, library), BorderLayout.SOUTH);
-        row = addRow(body, row, FarmUi.section("Separate browser workspace",
-                "Read before using or exporting an instrument.", boundary));
+        row = addRow(body, row, FarmUi.section("Keep a copy of your results",
+                "How to save work from the tools with your farm records.", boundary));
         if (exportService != null) {
             linkedExportSection = linkedSavedExportSection();
             row = addRow(body, row, linkedExportSection);
@@ -353,10 +353,10 @@ public final class FieldScienceTab implements FlowerFarmTab {
         }
         if (instruments.isEmpty()) {
             JComponent noTools = FarmUi.section("No matching offline tools",
-                    "This farm type has no curated CSRBT instrument cards.",
-                    paragraph("Saved field science exports remain available below. "
-                            + "Choose a farm type with a matching instrument to open or capture "
-                            + "a new CSRBT export.", "fieldScience.noTools", 2));
+                    "There are no suggested tools for this farm type yet.",
+                    paragraph("Saved field science results remain available below. "
+                            + "Choose a farm type with a matching tool to open or capture "
+                            + "a new saved result, or choose Browse all farm tools.", "fieldScience.noTools", 2));
             noTools.setName("fieldScience.noTools.section");
             row = addRow(body, row, noTools);
         }
@@ -378,7 +378,7 @@ public final class FieldScienceTab implements FlowerFarmTab {
         panel.add(scroll, BorderLayout.CENTER);
         status = FarmUi.wrappingStatusBadge(
                 instruments.isEmpty() ? "No matching offline tools · saved archive available"
-                        : instruments.size() + " offline instrument"
+                        : instruments.size() + " farm tool"
                         + (instruments.size() == 1 ? "" : "s") + " available",
                 FarmUi.Tone.INFO);
         status.setName("fieldScience.status");
@@ -401,11 +401,11 @@ public final class FieldScienceTab implements FlowerFarmTab {
         linkedExportMetadata = FarmUi.displayArea(7, 62);
         linkedExportMetadata.setName("fieldScience.linked.metadata");
         linkedExportMetadata.getAccessibleContext().setAccessibleName(
-                "Exact linked export source and archive identity");
+                "Exact linked results source and archive identity");
         linkedExportDetail = FarmUi.displayArea(9, 62);
         linkedExportDetail.setName("fieldScience.linked.detail");
         linkedExportDetail.getAccessibleContext().setAccessibleName(
-                "Exact linked saved field science export text");
+                "Exact linked saved field science results text");
         JScrollPane detailScroll = new JScrollPane(linkedExportDetail);
         detailScroll.setPreferredSize(new Dimension(740, 170));
         detailScroll.setBorder(BorderFactory.createLineBorder(FarmUi.borderColor()));
@@ -415,7 +415,7 @@ public final class FieldScienceTab implements FlowerFarmTab {
             linkedExportLoadSerial++;
             linkedExportSection.setVisible(false);
             panel.revalidate();
-            host.setStatus("Closed linked export view. Saved archive search is unchanged.");
+            host.setStatus("Closed linked results view. Saved archive search is unchanged.");
         });
         JPanel content = new JPanel();
         content.setOpaque(false);
@@ -425,7 +425,7 @@ public final class FieldScienceTab implements FlowerFarmTab {
         content.add(detailScroll);
         content.add(Box.createVerticalStrut(FarmUi.CONTROL_GAP));
         content.add(FarmUi.toolbar(close));
-        JComponent section = FarmUi.section("Linked saved export",
+        JComponent section = FarmUi.section("Linked saved results",
                 "Opened by exact archive ID from Knowledge Log. Your archive search stays unchanged.",
                 content);
         section.setName("fieldScience.linked.section");
@@ -436,12 +436,12 @@ public final class FieldScienceTab implements FlowerFarmTab {
     /** Read one linked export by archive ID without changing the current archive page. */
     public void showSavedExport(long exportId) {
         if (exportId <= 0 || exportService == null) {
-            host.setStatus("The linked field science export is unavailable in this workspace.");
+            host.setStatus("The linked field science results are unavailable in this workspace.");
             return;
         }
         getUIComponent();
         long loadSerial = ++linkedExportLoadSerial;
-        host.setStatus("Opening linked field science export #" + exportId + "…");
+        host.setStatus("Opening linked field science results #" + exportId + "…");
         new SwingWorker<Optional<FieldScienceExport>, Void>() {
             @Override protected Optional<FieldScienceExport> doInBackground() {
                 return exportService.find(exportId);
@@ -454,13 +454,13 @@ public final class FieldScienceTab implements FlowerFarmTab {
                 try {
                     Optional<FieldScienceExport> found = get();
                     if (found.isEmpty()) {
-                        host.setStatus("Linked field science export #" + exportId
+                        host.setStatus("Linked field science results #" + exportId
                                 + " is no longer available. The archive view was kept.");
                         return;
                     }
                     FieldScienceExport saved = found.orElseThrow();
                     if (!verifiedLinkedExport(exportId, saved)) {
-                        host.setStatus("Linked field science export #" + exportId
+                        host.setStatus("Linked field science results #" + exportId
                                 + " failed its identity or text check. The archive view was kept.");
                         return;
                     }
@@ -478,16 +478,16 @@ public final class FieldScienceTab implements FlowerFarmTab {
                     linkedExportDetail.setCaretPosition(0);
                     linkedExportSection.setVisible(true);
                     panel.revalidate();
-                    host.setStatus("Opened linked field science export #" + exportId
+                    host.setStatus("Opened linked field science results #" + exportId
                             + " by exact archive ID.");
                     SwingUtilities.invokeLater(() -> linkedExportSection.scrollRectToVisible(
                             new Rectangle(0, 0, 1, 1)));
                 } catch (InterruptedException exception) {
                     Thread.currentThread().interrupt();
-                    host.setStatus("Could not open linked field science export #" + exportId
+                    host.setStatus("Could not open linked field science results #" + exportId
                             + ". The archive view was kept.");
                 } catch (ExecutionException exception) {
-                    host.setStatus("Could not open linked field science export #" + exportId
+                    host.setStatus("Could not open linked field science results #" + exportId
                             + ". The archive view was kept.");
                 }
             }
@@ -504,11 +504,11 @@ public final class FieldScienceTab implements FlowerFarmTab {
     }
 
     private JComponent savedExportsSection() {
-        exportSearchField = FarmUi.searchField("Search saved exports",
-                "Title, instrument, filename, or note", 38);
+        exportSearchField = FarmUi.searchField("Search saved results",
+                "Title, tool, filename, or note", 38);
         exportSearchField.setName("fieldScience.exports.search");
         exportSearchField.addActionListener(event -> searchSavedExports());
-        searchExports = FarmUi.primaryButton("Search exports");
+        searchExports = FarmUi.primaryButton("Search results");
         searchExports.setName("fieldScience.exports.searchButton");
         searchExports.addActionListener(event -> searchSavedExports());
         clearExportSearch = FarmUi.secondaryButton("Clear search");
@@ -526,7 +526,7 @@ public final class FieldScienceTab implements FlowerFarmTab {
         exportsTable = new JTable(exportsModel);
         exportsTable.setName("fieldScience.exports.table");
         exportsTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
-        FarmUi.configureTable(exportsTable, "Saved field science exports");
+        FarmUi.configureTable(exportsTable, "Saved field science results");
         exportsTable.getSelectionModel().addListSelectionListener(event -> {
             if (!event.getValueIsAdjusting()) {
                 showSelectedExport();
@@ -540,18 +540,18 @@ public final class FieldScienceTab implements FlowerFarmTab {
         exportMetadata.setOpaque(false);
         exportMetadata.setBorder(BorderFactory.createEmptyBorder());
         exportMetadata.getAccessibleContext().setAccessibleName(
-                "Selected export source and note");
-        exportMetadata.setText("Select a saved export to read its source and note.");
+                "Selected results source and note");
+        exportMetadata.setText("Select saved results to read their source and note.");
         exportDetail = FarmUi.displayArea(9, 62);
         exportDetail.setName("fieldScience.exports.detail");
         exportDetail.getAccessibleContext().setAccessibleName(
-                "Selected saved field science export text");
+                "Selected saved field science results text");
         exportDetail.setText("");
         JScrollPane detailScroll = new JScrollPane(exportDetail);
         detailScroll.setPreferredSize(new Dimension(740, 170));
         detailScroll.setBorder(BorderFactory.createLineBorder(FarmUi.borderColor()));
 
-        refreshExports = FarmUi.secondaryButton("Refresh saved exports");
+        refreshExports = FarmUi.secondaryButton("Refresh saved results");
         refreshExports.setName("fieldScience.exports.refresh");
         refreshExports.addActionListener(event -> refreshData());
         previousExports = FarmUi.secondaryButton("Previous");
@@ -568,33 +568,33 @@ public final class FieldScienceTab implements FlowerFarmTab {
                 loadExportPage(appliedExportQuery, exportPageIndex + 1);
             }
         });
-        exportPageLabel = new JLabel("No saved exports loaded");
+        exportPageLabel = new JLabel("No saved results loaded");
         exportPageLabel.setName("fieldScience.exports.pageStatus");
         exportPageLabel.getAccessibleContext().setAccessibleName(
-                "Saved field science export page and count");
+                "Saved field science results page and count");
         saveSelectedText = FarmUi.secondaryButton("Save selected text…");
         saveSelectedText.setName("fieldScience.exports.saveSelected");
         saveSelectedText.setToolTipText("Save the selected archived text as a local "
-                + "UTF-8 file. Available to every farm role.");
+                + "text file. Available to everyone who can view this farm.");
         saveSelectedText.getAccessibleContext().setAccessibleName(
-                "Save selected field science export text to a file");
+                "Save selected field science results text to a file");
         saveSelectedText.addActionListener(event -> saveSelectedText());
         recordSelectedFinding = FarmUi.secondaryButton("Record finding from selected…");
         recordSelectedFinding.setName("fieldScience.exports.recordFinding");
         recordSelectedFinding.setToolTipText("Prepare an editable Knowledge Log finding "
-                + "linked to this exact saved export. Add your own observation before saving.");
+                + "linked to these saved results. Add your own observation before saving.");
         recordSelectedFinding.getAccessibleContext().setAccessibleName(
-                "Record a finding from the selected saved field science export");
+                "Record a finding from the selected saved field science results");
         recordSelectedFinding.addActionListener(event -> recordFindingFromSelected());
         JPanel content = new JPanel();
         content.setOpaque(false);
         content.setLayout(new BoxLayout(content, BoxLayout.Y_AXIS));
         content.add(FarmUi.toolbar(exportSearchField, searchExports, clearExportSearch));
         content.add(Box.createVerticalStrut(FarmUi.CONTROL_GAP));
-        content.add(paragraph("Search title, instrument, filename, and note across all "
-                + "saved exports; export text is not searched. Every role can read, search, "
-                + "and save selected archive text to a local file. Only HAND or OWNER "
-                + "can add reviewed exports to the archive or record a linked finding.",
+        content.add(paragraph("Search title, tool, filename, and note across all "
+                + "saved results; results text is not searched. Every role can read, search, "
+                + "and save selected archive text to a local file. Only a farmhand or owner "
+                + "can add reviewed results to the archive or record a linked finding.",
                 "fieldScience.exports.searchHelp", 3));
         content.add(Box.createVerticalStrut(FarmUi.CONTROL_GAP));
         content.add(tableScroll);
@@ -607,8 +607,8 @@ public final class FieldScienceTab implements FlowerFarmTab {
                 previousExports, nextExports,
                 refreshExports, exportPageLabel));
         updateExportNavigation();
-        JComponent section = FarmUi.section("Saved field science exports",
-                "Find and read reviewed exports from this farm's archive.",
+        JComponent section = FarmUi.section("Saved field science results",
+                "Find and read reviewed results from this farm's archive.",
                 content);
         section.setName("fieldScience.exports.section");
         return section;
@@ -634,9 +634,9 @@ public final class FieldScienceTab implements FlowerFarmTab {
         }
         if (savedExports.isEmpty()) {
             exportMetadata.setText(appliedExportQuery.isEmpty()
-                    ? "No exports saved yet. Open an instrument, copy its export, "
-                    + "then choose Save an export on that instrument's card."
-                    : "No saved exports match “" + appliedExportQuery
+                    ? "No results saved yet. Open a tool, copy its results, "
+                    + "then choose Save results from this tool on that tool's card."
+                    : "No saved results match “" + appliedExportQuery
                     + "”. Try fewer words or choose Clear search.");
             exportDetail.setText("");
         } else {
@@ -660,7 +660,7 @@ public final class FieldScienceTab implements FlowerFarmTab {
             exportPageLabel.setText("Loading page " + (loadingExportPageIndex + 1) + "…");
         } else if (exportTotalCount == 0) {
             exportPageLabel.setText(appliedExportQuery.isEmpty()
-                    ? "No saved exports" : "No results for “"
+                    ? "No saved results" : "No results for “"
                     + shortQuery(appliedExportQuery) + "”");
         } else {
             long first = (long) exportPageIndex * FieldScienceExportService.LIST_LIMIT + 1;
@@ -671,7 +671,7 @@ public final class FieldScienceTab implements FlowerFarmTab {
                     : " · “" + shortQuery(appliedExportQuery) + "”"));
         }
         exportPageLabel.getAccessibleContext().setAccessibleDescription(
-                appliedExportQuery.isEmpty() ? "All saved field science exports"
+                appliedExportQuery.isEmpty() ? "All saved field science results"
                         : "Results for search: " + appliedExportQuery);
         exportPageLabel.getAccessibleContext().setAccessibleName(
                 exportPageLabel.getText());
@@ -714,12 +714,12 @@ public final class FieldScienceTab implements FlowerFarmTab {
                     Optional<FieldScienceExport> found = get();
                     if (found.isEmpty()) {
                         exportMetadata.setText(
-                                "This export is no longer available. Refresh the list.");
+                                "These results are no longer available. Refresh the list.");
                         return;
                     }
                     FieldScienceExport saved = found.orElseThrow();
                     if (!sameArchiveRow(item, saved)) {
-                        exportMetadata.setText("Saved export details changed. Refresh the list "
+                        exportMetadata.setText("Saved results details changed. Refresh the list "
                                 + "before saving this text to a file.");
                         return;
                     }
@@ -737,9 +737,9 @@ public final class FieldScienceTab implements FlowerFarmTab {
                     updateSelectedArchiveActions();
                 } catch (InterruptedException exception) {
                     Thread.currentThread().interrupt();
-                    exportMetadata.setText("Could not read this export. Select it again to retry.");
+                    exportMetadata.setText("Could not read these results. Select them again to retry.");
                 } catch (ExecutionException exception) {
-                    exportMetadata.setText("Could not read this export. Select it again to retry.");
+                    exportMetadata.setText("Could not read these results. Select them again to retry.");
                 }
             }
         }.execute();
@@ -771,7 +771,7 @@ public final class FieldScienceTab implements FlowerFarmTab {
                     && !savingSelectedText && sameArchiveRow(selectedExport(), displayedExport));
             recordSelectedFinding.setToolTipText(permitted
                     ? "Prepare an editable Knowledge Log finding linked to this exact "
-                            + "saved export. Add your own observation before saving."
+                            + "saved results. Add your own observation before saving."
                     : GuiPermissions.VIEWER_READONLY_TIP);
             recordSelectedFinding.getAccessibleContext().setAccessibleDescription(
                     recordSelectedFinding.getToolTipText());
@@ -786,13 +786,13 @@ public final class FieldScienceTab implements FlowerFarmTab {
             return;
         }
         if (loadingExports || savingSelectedText || !sameArchiveRow(row, saved)) {
-            host.setStatus("Select a fully loaded saved export before recording a finding.");
+            host.setStatus("Select saved results that have finished loading before recording a finding.");
             return;
         }
         try {
             verifiedSavedText(row, saved);
         } catch (IllegalArgumentException exception) {
-            showExportFailure("The selected export failed its saved size or fingerprint "
+            showExportFailure("The selected results failed its saved size or fingerprint "
                     + "check. Refresh the archive before recording a finding.");
             return;
         }
@@ -803,7 +803,7 @@ public final class FieldScienceTab implements FlowerFarmTab {
         FieldScienceExportSummary row = selectedExport();
         FieldScienceExport saved = displayedExport;
         if (loadingExports || savingSelectedText || !sameArchiveRow(row, saved)) {
-            host.setStatus("Select a fully loaded saved export before saving its text.");
+            host.setStatus("Select saved results that have finished loading before saving its text.");
             return;
         }
         String suggested = saved.getFilename() == null || saved.getFilename().isBlank()
@@ -820,7 +820,7 @@ public final class FieldScienceTab implements FlowerFarmTab {
             destination = textDestination(choice.orElseThrow(), suggested);
         } catch (IllegalArgumentException exception) {
             dialogs.showMessage(panel, exception.getMessage(),
-                    "Choose a text export file", JOptionPane.WARNING_MESSAGE);
+                    "Choose a text results file", JOptionPane.WARNING_MESSAGE);
             host.setStatus("Selected text was not saved. Choose a .eco, .txt, or .csv file.");
             return;
         }
@@ -834,7 +834,7 @@ public final class FieldScienceTab implements FlowerFarmTab {
                     FarmUi.confirmationPanel("Replace “" + destination.getFileName() + "”?",
                             "The existing file will be replaced only after the selected "
                                     + "text is ready to write.", FarmUi.Tone.WARNING),
-                    "Replace existing export?", JOptionPane.YES_NO_OPTION,
+                    "Replace existing results?", JOptionPane.YES_NO_OPTION,
                     JOptionPane.WARNING_MESSAGE);
             if (confirm != JOptionPane.YES_OPTION) {
                 host.setStatus("Saving selected text was cancelled. Existing file was kept.");
@@ -842,7 +842,7 @@ public final class FieldScienceTab implements FlowerFarmTab {
             }
         }
         if (!sameArchiveRow(selectedExport(), saved) || displayedExport != saved) {
-            host.setStatus("The selected export changed. Select it again before saving text.");
+            host.setStatus("The selected results changed. Select it again before saving text.");
             updateSelectedArchiveActions();
             return;
         }
@@ -850,7 +850,7 @@ public final class FieldScienceTab implements FlowerFarmTab {
         try {
             exactText = verifiedSavedText(row, saved);
         } catch (IllegalArgumentException exception) {
-            showExportFailure("Selected text was not saved. The stored export did not "
+            showExportFailure("Selected text was not saved. The stored results did not "
                     + "match its saved size or fingerprint; refresh the archive.");
             return;
         }
@@ -910,12 +910,12 @@ public final class FieldScienceTab implements FlowerFarmTab {
     private static byte[] verifiedSavedText(FieldScienceExportSummary row,
                                              FieldScienceExport saved) {
         if (!sameArchiveRow(row, saved) || saved.getContent() == null) {
-            throw new IllegalArgumentException("Saved export does not match the selected row.");
+            throw new IllegalArgumentException("Saved results do not match the selected row.");
         }
         byte[] bytes = saved.getContent().getBytes(StandardCharsets.UTF_8);
         if (bytes.length != saved.getByteLength()
                 || !Objects.equals(sha256(bytes), saved.getSha256())) {
-            throw new IllegalArgumentException("Saved export text failed its integrity check.");
+            throw new IllegalArgumentException("Saved results text failed its integrity check.");
         }
         return bytes;
     }
@@ -940,7 +940,7 @@ public final class FieldScienceTab implements FlowerFarmTab {
         try {
             Files.write(temporary, bytes);
             if (Files.size(temporary) != bytes.length) {
-                throw new IOException("The temporary export text was incomplete.");
+                throw new IOException("The temporary results text was incomplete.");
             }
             if (!allowReplace) {
                 return Files.move(temporary, target);
@@ -970,9 +970,22 @@ public final class FieldScienceTab implements FlowerFarmTab {
         copy.add(paragraph(instrument.scopeNote(),
                 "fieldScience.scope." + instrument.id(), 2));
         copy.add(Box.createVerticalStrut(FarmUi.CONTROL_GAP));
-        copy.add(paragraph("Source: " + instrument.sourceLabel() + " · "
+        JTextArea sourceNote = paragraph("Source: " + instrument.sourceLabel() + " · "
                         + instrument.sourceUrl(),
-                "fieldScience.source." + instrument.id(), 2));
+                "fieldScience.source." + instrument.id(), 2);
+        sourceNote.setVisible(false);
+        JButton about = FarmUi.secondaryButton("About this tool");
+        about.setName("fieldScience.about." + instrument.id());
+        about.getAccessibleContext().setAccessibleName("About " + instrument.title());
+        about.setToolTipText("Show the original source and credits for this tool.");
+        about.addActionListener(event -> {
+            sourceNote.setVisible(!sourceNote.isVisible());
+            about.setText(sourceNote.isVisible() ? "Hide source details" : "About this tool");
+            copy.revalidate();
+            copy.repaint();
+        });
+        copy.add(FarmUi.toolbar(about));
+        copy.add(sourceNote);
         content.add(copy, BorderLayout.CENTER);
 
         JButton open = FarmUi.secondaryButton("Open offline tool");
@@ -992,12 +1005,12 @@ public final class FieldScienceTab implements FlowerFarmTab {
                 instrument.title(), instrument.sourceUrl()));
         recordButtons.add(record);
         GuiPermissions.setWritable(canWrite, record);
-        JButton save = FarmUi.secondaryButton("Save an export…");
+        JButton save = FarmUi.secondaryButton("Save results from this tool…");
         save.setName("fieldScience.save." + instrument.id());
-        save.setToolTipText("Paste or drop an export from " + instrument.title()
+        save.setToolTipText("Paste or drop results from " + instrument.title()
                 + ", review the text, then explicitly save it to this farm.");
         save.getAccessibleContext().setAccessibleName(
-                "Save an export from " + instrument.title());
+                "Save results from " + instrument.title());
         save.addActionListener(event -> captureExport(instrument));
         saveButtons.add(save);
         GuiPermissions.setWritable(canWrite && exportService != null, save);
@@ -1024,21 +1037,21 @@ public final class FieldScienceTab implements FlowerFarmTab {
 
     private void captureExport(Instrument instrument) {
         if (exportService == null || savingExport || !canWrite || !host.canMutateData()) {
-            host.setStatus("This session cannot save a field science export.");
+            host.setStatus("This session cannot save field science results.");
             return;
         }
         if (retryDraft != null) {
             if (!instrument.id().equals(retryInstrumentId)) {
                 Object[] choices = {"Keep draft", "Discard and continue"};
                 int answer = dialogs.showOption(panel,
-                        FarmUi.confirmationPanel("Discard the failed export draft?",
-                                "The unsaved export from another instrument will be lost. "
+                        FarmUi.confirmationPanel("Discard the failed results draft?",
+                                "The unsaved results from another tool will be lost. "
                                         + "Choose Keep draft to return and retry it.",
                                 FarmUi.Tone.WARNING),
-                        "Replace export draft?", JOptionPane.DEFAULT_OPTION,
+                        "Replace results draft?", JOptionPane.DEFAULT_OPTION,
                         JOptionPane.WARNING_MESSAGE, null, choices, choices[0]);
                 if (answer != 1) {
-                    host.setStatus("The unsaved field science export draft was kept.");
+                    host.setStatus("The unsaved field science results draft was kept.");
                     return;
                 }
                 retryDraft = null;
@@ -1046,10 +1059,10 @@ public final class FieldScienceTab implements FlowerFarmTab {
             } else {
                 Object[] choices = {"Edit retained draft", "Start blank", "Cancel"};
                 int answer = dialogs.showOption(panel,
-                        FarmUi.confirmationPanel("A failed export draft is available",
+                        FarmUi.confirmationPanel("A failed results draft is available",
                                 "Review and retry the saved draft, or explicitly discard it "
-                                        + "to begin a blank export.", FarmUi.Tone.INFO),
-                        "Continue export draft", JOptionPane.DEFAULT_OPTION,
+                                        + "to begin a new results draft.", FarmUi.Tone.INFO),
+                        "Continue results draft", JOptionPane.DEFAULT_OPTION,
                         JOptionPane.QUESTION_MESSAGE, null, choices, choices[0]);
                 if (answer == 2 || answer < 0) {
                     return;
@@ -1067,25 +1080,25 @@ public final class FieldScienceTab implements FlowerFarmTab {
         scroll.setName("fieldScience.exportDraft.scroll");
         try {
             while (true) {
-                Object[] choices = {"Save export", "Cancel"};
-                int answer = dialogs.showOption(panel, scroll, "Save CSRBT export",
+                Object[] choices = {"Save results", "Cancel"};
+                int answer = dialogs.showOption(panel, scroll, "Save tool results",
                         JOptionPane.DEFAULT_OPTION, JOptionPane.PLAIN_MESSAGE,
                         null, choices, choices[0]);
                 if (answer != 0) {
-                    host.setStatus("Export draft closed. No field science export was saved.");
+                    host.setStatus("Results draft closed. No field science results were saved.");
                     return;
                 }
                 try {
                     ExportDraft draft = form.read();
                     if (!canWrite || !host.canMutateData()) {
-                        host.setStatus("This session cannot save a field science export.");
+                        host.setStatus("This session cannot save field science results.");
                         return;
                     }
                     saveExport(instrument, draft);
                     return;
                 } catch (IllegalArgumentException exception) {
                     dialogs.showMessage(panel, exception.getMessage(),
-                            "Check this export", JOptionPane.WARNING_MESSAGE);
+                            "Check these results", JOptionPane.WARNING_MESSAGE);
                 }
             }
         } finally {
@@ -1104,7 +1117,7 @@ public final class FieldScienceTab implements FlowerFarmTab {
         savingExport = true;
         applyRolePermissions(canWrite);
         FarmUi.updateStatusBadge(status,
-                "Saving export from " + instrument.title() + "…", FarmUi.Tone.INFO);
+                "Saving results from " + instrument.title() + "…", FarmUi.Tone.INFO);
         new SwingWorker<FieldScienceExport, Void>() {
             @Override protected FieldScienceExport doInBackground() {
                 return exportService.save(instrument.id(), draft.title(),
@@ -1118,19 +1131,19 @@ public final class FieldScienceTab implements FlowerFarmTab {
                     FieldScienceExport saved = get();
                     retryDraft = null;
                     retryInstrumentId = null;
-                    String message = "Saved field science export “" + saved.getTitle()
-                            + "”. Select it in Saved field science exports to read it.";
+                    String message = "Saved field science results “" + saved.getTitle()
+                            + "”. Select it in Saved field science results to read it.";
                     FarmUi.updateStatusBadge(status, message, FarmUi.Tone.SUCCESS);
                     host.setStatus(message);
                     exportSearchField.setText("");
                     searchSavedExports();
                 } catch (InterruptedException exception) {
                     Thread.currentThread().interrupt();
-                    showExportFailure("Export was not saved. Its draft is kept; "
-                            + "choose Save an export to retry.");
+                    showExportFailure("Results were not saved. Its draft is kept; "
+                            + "choose Save results from this tool to retry.");
                 } catch (ExecutionException exception) {
-                    showExportFailure("Export was not saved. Its draft is kept; "
-                            + "choose Save an export to retry.");
+                    showExportFailure("Results were not saved. Its draft is kept; "
+                            + "choose Save results from this tool to retry.");
                 }
             }
         }.execute();
@@ -1158,18 +1171,18 @@ public final class FieldScienceTab implements FlowerFarmTab {
             panel.add(paragraph("Source: " + instrument.title() + " · "
                     + instrument.sourceUrl(), "fieldScience.exportDraft.source", 2));
             panel.add(Box.createVerticalStrut(FarmUi.CONTROL_GAP));
-            panel.add(paragraph("Choose the card for the browser page that produced this export; "
-                    + "this card supplies the saved source. Paste copied text or drop one "
-                    + ".eco/.txt/.csv file onto the export text box below, or browse. "
-                    + "The text stays a draft until you choose Save export. A saved export "
+            panel.add(paragraph("Use the card for the tool where you made these results. "
+                    + "Paste copied results or choose a file you downloaded from the tool "
+                    + "(supported file endings: .eco, .txt, .csv). "
+                    + "The text stays a draft until you choose Save results. A saved copy "
                     + "does not update any crop, batch, or sales record.",
                     "fieldScience.exportDraft.help", 4));
             panel.add(Box.createVerticalStrut(FarmUi.CONTROL_GAP));
 
             title = new JTextField(initial == null
-                    ? instrument.title() + " export" : initial.title(), 48);
+                    ? instrument.title() + " results" : initial.title(), 48);
             title.setName("fieldScience.exportDraft.title");
-            title.getAccessibleContext().setAccessibleName("Export title");
+            title.getAccessibleContext().setAccessibleName("Results title");
             panel.add(FarmUi.toolbar(new JLabel("Title:"), title));
             panel.add(Box.createVerticalStrut(FarmUi.CONTROL_GAP));
 
@@ -1177,7 +1190,7 @@ public final class FieldScienceTab implements FlowerFarmTab {
             note.setName("fieldScience.exportDraft.note");
             note.setLineWrap(true);
             note.setWrapStyleWord(true);
-            note.getAccessibleContext().setAccessibleName("Export note");
+            note.getAccessibleContext().setAccessibleName("Notes about these results");
             panel.add(new JLabel("Note (optional):"));
             panel.add(new JScrollPane(note));
             panel.add(Box.createVerticalStrut(FarmUi.CONTROL_GAP));
@@ -1185,7 +1198,7 @@ public final class FieldScienceTab implements FlowerFarmTab {
             filenameLabel = new JLabel(filename.isBlank()
                     ? "Source: pasted text" : "Source file: " + filename);
             filenameLabel.setName("fieldScience.exportDraft.filename");
-            JButton browse = FarmUi.secondaryButton("Browse text file…");
+            JButton browse = FarmUi.secondaryButton("Choose a results file…");
             browse.setName("fieldScience.exportDraft.browse");
             browse.addActionListener(event -> openFilePicker.choose(panel).ifPresent(
                     path -> stageFile(path.toFile())));
@@ -1195,17 +1208,17 @@ public final class FieldScienceTab implements FlowerFarmTab {
             content = new JTextArea(initial == null ? "" : initial.content(), 15, 64);
             content.setName("fieldScience.exportDraft.content");
             content.setLineWrap(false);
-            content.getAccessibleContext().setAccessibleName("CSRBT export text");
+            content.getAccessibleContext().setAccessibleName("Results from your farm tool");
             content.getAccessibleContext().setAccessibleDescription(
-                    "Editable export drop target. Paste text or drop one .eco, .txt, or .csv file here. "
-                            + "Saving requires the Save export dialog choice.");
-            panel.add(new JLabel("Export text (paste or drop file here):"));
+                    "Paste your results or drop one downloaded file here (file endings: .eco, .txt, .csv). "
+                            + "Saving requires the Save results dialog choice.");
+            panel.add(new JLabel("Results to keep (paste or drop your downloaded file here):"));
             content.setTransferHandler(new ExportTextDropHandler(content.getTransferHandler()));
             JScrollPane contentScroll = new JScrollPane(content);
             contentScroll.setPreferredSize(new Dimension(710, 260));
             panel.add(contentScroll);
             panel.add(Box.createVerticalStrut(FarmUi.CONTROL_GAP));
-            draftStatus = FarmUi.wrappingStatusBadge("No export text staged", FarmUi.Tone.NEUTRAL);
+            draftStatus = FarmUi.wrappingStatusBadge("No results added yet", FarmUi.Tone.NEUTRAL);
             draftStatus.setName("fieldScience.exportDraft.status");
             panel.add(draftStatus);
             content.getDocument().addDocumentListener(new DocumentListener() {
@@ -1223,15 +1236,15 @@ public final class FieldScienceTab implements FlowerFarmTab {
             String proposedNote = note.getText().trim();
             String exportText = content.getText();
             if (proposedTitle.isEmpty() || proposedTitle.length() > 180) {
-                throw new IllegalArgumentException("Give the export a title of 1–180 characters.");
+                throw new IllegalArgumentException("Give these results a title of 1–180 characters.");
             }
             if (proposedNote.length() > 500) {
-                throw new IllegalArgumentException("Keep the export note within 500 characters.");
+                throw new IllegalArgumentException("Keep the results note within 500 characters.");
             }
             int size = utf8Size(exportText);
             if (emptyExportText(exportText) || size > MAX_EXPORT_BYTES) {
                 throw new IllegalArgumentException(
-                        "Add export text of no more than 512 KiB before saving.");
+                        "Add your results before saving. The file-size limit is 512 KB (524,288 bytes).");
             }
             return new ExportDraft(proposedTitle, filename, proposedNote, exportText);
         }
@@ -1240,7 +1253,7 @@ public final class FieldScienceTab implements FlowerFarmTab {
             try {
                 int size = utf8Size(content.getText());
                 String message = size + " of " + MAX_EXPORT_BYTES
-                        + " UTF-8 bytes staged · review before saving";
+                        + " bytes of results added · review before saving";
                 FarmUi.updateStatusBadge(draftStatus, message,
                         size > MAX_EXPORT_BYTES ? FarmUi.Tone.WARNING : FarmUi.Tone.INFO);
             } catch (IllegalArgumentException exception) {
@@ -1255,19 +1268,19 @@ public final class FieldScienceTab implements FlowerFarmTab {
                 String extension = file.getName().toLowerCase(java.util.Locale.ROOT);
                 if (!extension.endsWith(".eco") && !extension.endsWith(".txt")
                         && !extension.endsWith(".csv")) {
-                    throw new IllegalArgumentException("Choose a .eco, .txt, or .csv export.");
+                    throw new IllegalArgumentException("Choose a results file (.eco, .txt, or .csv).");
                 }
                 Path path = file.toPath();
                 if (!Files.isRegularFile(path) || Files.size(path) > MAX_EXPORT_BYTES) {
                     throw new IllegalArgumentException(
-                            "Choose one readable export file no larger than 512 KiB.");
+                            "Choose one results file that can be opened, up to 512 KB (524,288 bytes).");
                 }
                 byte[] bytes;
                 try (InputStream stream = Files.newInputStream(path)) {
                     bytes = stream.readNBytes(MAX_EXPORT_BYTES + 1);
                 }
                 if (bytes.length > MAX_EXPORT_BYTES) {
-                    throw new IllegalArgumentException("This export file exceeds 512 KiB.");
+                    throw new IllegalArgumentException("This results file is too large. The limit is 512 KB (524,288 bytes).");
                 }
                 String imported = StandardCharsets.UTF_8.newDecoder()
                         .onMalformedInput(CodingErrorAction.REPORT)
@@ -1276,7 +1289,7 @@ public final class FieldScienceTab implements FlowerFarmTab {
                 return stageText(imported, file.getName());
             } catch (CharacterCodingException exception) {
                 FarmUi.updateStatusBadge(draftStatus,
-                        "File kept out of draft · choose a UTF-8 text export.",
+                        "Could not read this file · ask your equipment helper for a plain-text copy (UTF-8).",
                         FarmUi.Tone.WARNING);
                 return false;
             } catch (IOException | IllegalArgumentException exception) {
@@ -1292,15 +1305,15 @@ public final class FieldScienceTab implements FlowerFarmTab {
                 int size = utf8Size(text);
                 if (emptyExportText(text) || size > MAX_EXPORT_BYTES) {
                     throw new IllegalArgumentException(
-                            "Export text must be nonempty and no larger than 512 KiB.");
+                            "Add your results. The file-size limit is 512 KB (524,288 bytes).");
                 }
                 if (!content.getText().isBlank() && !content.getText().equals(text)) {
                     Object[] choices = {"Keep draft", "Use new text"};
                     int answer = dialogs.showOption(panel,
-                            FarmUi.confirmationPanel("Replace export draft?",
-                                    "The current unsaved export text will be replaced. "
+                            FarmUi.confirmationPanel("Replace results draft?",
+                                    "The current unsaved results text will be replaced. "
                                             + "Title and note stay as entered.", FarmUi.Tone.WARNING),
-                            "Replace export draft?", JOptionPane.DEFAULT_OPTION,
+                            "Replace results draft?", JOptionPane.DEFAULT_OPTION,
                             JOptionPane.WARNING_MESSAGE, null, choices, choices[0]);
                     if (answer != 1) {
                         return false;
@@ -1330,7 +1343,7 @@ public final class FieldScienceTab implements FlowerFarmTab {
                     Object value = transferable.getTransferData(DataFlavor.javaFileListFlavor);
                     if (!(value instanceof List<?> files) || files.size() != 1
                             || !(files.get(0) instanceof File file)) {
-                        throw new IllegalArgumentException("Drop one export file at a time.");
+                        throw new IllegalArgumentException("Drop one results file at a time.");
                     }
                     return stageFile(file);
                 }
@@ -1413,13 +1426,13 @@ public final class FieldScienceTab implements FlowerFarmTab {
 
     private static int utf8Size(String text) {
         if (text == null) {
-            throw new IllegalArgumentException("Export text is required.");
+            throw new IllegalArgumentException("Results text is required.");
         }
         for (int index = 0; index < text.length(); index++) {
             char character = text.charAt(index);
             if ((character < 0x20 && character != '\t' && character != '\r'
                     && character != '\n') || character == 0x7f) {
-                throw new IllegalArgumentException("Export text contains a binary control character.");
+                throw new IllegalArgumentException("These results contain unreadable characters. Use a plain-text copy.");
             }
         }
         try {
@@ -1429,7 +1442,7 @@ public final class FieldScienceTab implements FlowerFarmTab {
                     .onUnmappableCharacter(CodingErrorAction.REPORT)
                     .encode(input).remaining();
         } catch (CharacterCodingException exception) {
-            throw new IllegalArgumentException("Export text is not valid UTF-8.", exception);
+            throw new IllegalArgumentException("Could not read these results. Use a plain-text copy (UTF-8).", exception);
         }
     }
 
@@ -1459,7 +1472,7 @@ public final class FieldScienceTab implements FlowerFarmTab {
                 try {
                     get();
                     String message = title
-                            + " opened as a separate browser page. Export work from that page.";
+                            + " opened in your browser. Download results from that page to keep them.";
                     FarmUi.updateStatusBadge(status, message, FarmUi.Tone.SUCCESS);
                     host.setStatus(message);
                 } catch (InterruptedException exception) {
@@ -1510,10 +1523,10 @@ public final class FieldScienceTab implements FlowerFarmTab {
             return parent -> {
                 JFileChooser chooser = new JFileChooser();
                 chooser.setName("fieldScience.exportDraft.fileChooser");
-                chooser.getAccessibleContext().setAccessibleName("CSRBT export file chooser");
-                chooser.setDialogTitle("Choose a CSRBT text export");
+                chooser.getAccessibleContext().setAccessibleName("Choose a saved tool results file");
+                chooser.setDialogTitle("Choose results downloaded from your tool");
                 chooser.setFileFilter(new FileNameExtensionFilter(
-                        "CSRBT text exports (*.eco, *.txt, *.csv)", "eco", "txt", "csv"));
+                        "Tool results and spreadsheets (*.eco, *.txt, *.csv)", "eco", "txt", "csv"));
                 chooser.setAcceptAllFileFilterUsed(false);
                 return chooser.showOpenDialog(parent) == JFileChooser.APPROVE_OPTION
                         ? Optional.ofNullable(chooser.getSelectedFile()).map(File::toPath)

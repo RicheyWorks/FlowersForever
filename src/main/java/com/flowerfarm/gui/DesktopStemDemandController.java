@@ -74,13 +74,13 @@ public class DesktopStemDemandController {
         JButton copy = FarmUi.primaryButton("Copy list");
         copy.setName("stemDemand.copy");
         copy.addActionListener(event -> copy(panel));
-        JButton csv = FarmUi.secondaryButton("Save CSV…");
+        JButton csv = FarmUi.secondaryButton("Save a spreadsheet (CSV)…");
         csv.setName("stemDemand.saveCsv");
         csv.addActionListener(event -> saveCsv(panel));
         JButton copyEvents = FarmUi.secondaryButton("Copy by event");
         copyEvents.setName("stemDemand.copyEvents");
         copyEvents.addActionListener(event -> copyEvents(panel));
-        JButton eventsCsv = FarmUi.secondaryButton("Save by event CSV…");
+        JButton eventsCsv = FarmUi.secondaryButton("Save event buying lists (CSV)…");
         eventsCsv.setName("stemDemand.saveEventsCsv");
         eventsCsv.addActionListener(event -> saveEventsCsv(panel));
         JButton link = FarmUi.secondaryButton("Count line as recipe…");
@@ -138,7 +138,7 @@ public class DesktopStemDemandController {
         if (board == null) {
             return;
         }
-        host.files().chooseSave(host.frame(), "Save stem demand CSV",
+        host.files().chooseSave(host.frame(), "Save the stem buying list as a spreadsheet (CSV)",
                         new File(StemDemand.suggestedCsvFileName(board)))
                 .ifPresent(file -> writeCsv(panel, file.toPath(), StemDemand.csv(board), "stem demand CSV",
                         StemDemand::statusSaved));
@@ -149,7 +149,7 @@ public class DesktopStemDemandController {
         if (board == null) {
             return;
         }
-        host.files().chooseSave(host.frame(), "Save buying list by event CSV",
+        host.files().chooseSave(host.frame(), "Save event buying lists as a spreadsheet (CSV)",
                         new File(StemDemand.suggestedEventsCsvFileName(board)))
                 .ifPresent(file -> writeCsv(panel, file.toPath(), StemDemand.eventsCsv(board),
                         "buying list by event CSV", StemDemand::statusEventsSaved));

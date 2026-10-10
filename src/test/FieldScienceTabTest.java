@@ -106,8 +106,8 @@ class FieldScienceTabTest {
                         "Breeding Bench", "Pheno Tracker");
         assertThat(descendants(root, JTextArea.class)).extracting(JTextArea::getText)
                 .anySatisfy(text -> assertThat(text).contains(
-                        "browser-local", "export", "H2 database", "backups",
-                        "role permissions", "never writes a farm record", "pesticide"))
+                        "web browser", "saved farm records", "backups",
+                        "save a copy here", "never changes a farm record", "pesticide"))
                 .anySatisfy(text -> assertThat(text).contains(
                         "CSRBT Soil Recipes", "Subcool", "https://github.com/RicheyWorks/CSRBT/"))
                 .anySatisfy(text -> assertThat(text).contains(
@@ -135,14 +135,14 @@ class FieldScienceTabTest {
         JTextArea metadata = named(root, "fieldScience.exports.metadata", JTextArea.class);
         assertThat(metadata.isFocusable()).isTrue();
         assertThat(metadata.getAccessibleContext().getAccessibleName())
-                .isEqualTo("Selected export source and note");
+                .isEqualTo("Selected results source and note");
         JLabel pageStatus = named(root, "fieldScience.exports.pageStatus", JLabel.class);
         assertThat(pageStatus.getAccessibleContext().getAccessibleName())
                 .isEqualTo(pageStatus.getText());
         assertThat(named(root, "fieldScience.exports.searchHelp", JTextArea.class).getText())
                 .contains("Every role can read, search", "save selected archive text",
-                        "Only HAND or OWNER can add reviewed exports",
-                        "export text is not searched");
+                        "Only a farmhand or owner can add reviewed results",
+                        "results text is not searched");
         onEdt((Runnable) () -> named(root, "fieldScience.openKnowledge",
                 JButton.class).doClick());
         assertThat(host.selected).containsExactly("Knowledge Log");
@@ -192,7 +192,7 @@ class FieldScienceTabTest {
         await(() -> library.isEnabled() && host.lastStatus != null);
         assertThat(materialized).containsExactly("library.html");
         assertThat(opened).containsExactly(Path.of("offline", "library.html"));
-        assertThat(host.lastStatus).contains("Complete CSRBT field kit", "separate browser page");
+        assertThat(host.lastStatus).contains("Farm tools and guides", "in your browser");
         assertThat(host.selected).isEmpty();
     }
 
@@ -222,7 +222,7 @@ class FieldScienceTabTest {
         await(() -> collection.isEnabled() && host.lastStatus != null);
         assertThat(materialized).containsExactly("collection-sheet.html");
         assertThat(opened).containsExactly(Path.of("offline", "collection-sheet.html"));
-        assertThat(host.lastStatus).contains("separate browser page", "Export work");
+        assertThat(host.lastStatus).contains("in your browser", "Download results");
 
         RecordingHost failingHost = new RecordingHost();
         FieldScienceTab failing = new FieldScienceTab(Set.of(FarmWorkspace.AQUACULTURE_FARM),
@@ -274,12 +274,12 @@ class FieldScienceTabTest {
         when(service.save("soil-recipes", "Soil mix run", "", "Test plot A",
                 "Pinned soil recipe text")).thenReturn(saved);
         SwingDialogHarness dialogs = new SwingDialogHarness()
-                .chooseForm("Save CSRBT export", "Save export", form -> form
+                .chooseForm("Save tool results", "Save results", form -> form
                         .expectText("Soil recipes · Subcool’s Super Soil")
                         .expectText("stays a draft")
-                        .type("Export title", "Soil mix run")
-                        .type("Export note", "Test plot A")
-                        .type("CSRBT export text", "Pinned soil recipe text"));
+                        .type("Results title", "Soil mix run")
+                        .type("Notes about these results", "Test plot A")
+                        .type("Results from your farm tool", "Pinned soil recipe text"));
         RecordingHost host = new RecordingHost();
         FieldScienceTab tab = new FieldScienceTab(Set.of(FarmWorkspace.CANNABIS_FARM),
                 host, fileName -> Path.of(fileName), page -> { }, service,
@@ -287,7 +287,7 @@ class FieldScienceTabTest {
         JComponent root = onEdt(tab::getUIComponent);
         onEdt((Runnable) tab::initialize);
         JLabel pageStatus = named(root, "fieldScience.exports.pageStatus", JLabel.class);
-        await(() -> "No saved exports".equals(pageStatus.getText()));
+        await(() -> "No saved results".equals(pageStatus.getText()));
         JTextField search = named(root, "fieldScience.exports.search", JTextField.class);
         onEdt(() -> search.setText("soil"));
         onEdt((Runnable) () -> named(root, "fieldScience.exports.searchButton",
@@ -297,9 +297,9 @@ class FieldScienceTabTest {
                 anyString(), anyString());
         onEdt((Runnable) () -> named(root, "fieldScience.save.soil-recipes",
                 JButton.class).doClick());
-        await(() -> host.lastStatus != null && host.lastStatus.contains("Saved field science export"));
+        await(() -> host.lastStatus != null && host.lastStatus.contains("Saved field science results"));
         await(() -> search.getText().isEmpty()
-                && "No saved exports".equals(pageStatus.getText()));
+                && "No saved results".equals(pageStatus.getText()));
         verify(service).save("soil-recipes", "Soil mix run", "", "Test plot A",
                 "Pinned soil recipe text");
         assertThat(tab.applicationExitWarning()).isNull();
@@ -310,7 +310,7 @@ class FieldScienceTabTest {
     void cancelAndViewerRoleDoNotSaveAnExport() throws Exception {
         FieldScienceExportService service = mock(FieldScienceExportService.class);
         SwingDialogHarness dialogs = new SwingDialogHarness()
-                .choose("Save CSRBT export", "Cancel");
+                .choose("Save tool results", "Cancel");
         RecordingHost host = new RecordingHost();
         FieldScienceTab tab = new FieldScienceTab(Set.of(FarmWorkspace.CANNABIS_FARM),
                 host, fileName -> Path.of(fileName), page -> { }, service,
@@ -318,7 +318,7 @@ class FieldScienceTabTest {
         JComponent root = onEdt(tab::getUIComponent);
         onEdt((Runnable) () -> named(root, "fieldScience.save.soil-recipes",
                 JButton.class).doClick());
-        assertThat(host.lastStatus).contains("No field science export was saved");
+        assertThat(host.lastStatus).contains("No field science results were saved");
         onEdt(() -> tab.applyRolePermissions(false));
         assertThat(named(root, "fieldScience.save.soil-recipes", JButton.class).isEnabled())
                 .isFalse();
@@ -457,7 +457,7 @@ class FieldScienceTabTest {
                 "Save selected field science text", "field-science-export-17.txt",
                 destination.toFile());
         SwingDialogHarness dialogs = new SwingDialogHarness()
-                .confirmForm("Replace existing export?", true,
+                .confirmForm("Replace existing results?", true,
                         form -> form.expectText("reviewed-export.txt"));
         RecordingHost host = new RecordingHost();
         FieldScienceTab tab = new FieldScienceTab(Set.of(FarmWorkspace.POTATO_FARM), host,
@@ -546,7 +546,7 @@ class FieldScienceTabTest {
                 "Save selected field science text", "field-science-export-17.txt",
                 existing.toFile());
         SwingDialogHarness dialogs = new SwingDialogHarness()
-                .confirm("Replace existing export?", false);
+                .confirm("Replace existing results?", false);
         RecordingHost host = new RecordingHost();
         FieldScienceTab tab = new FieldScienceTab(Set.of(FarmWorkspace.POTATO_FARM), host,
                 fileName -> Path.of(fileName), page -> { }, service, dialogs,
@@ -577,7 +577,7 @@ class FieldScienceTabTest {
                 "Save selected field science text", "field-science-export-17.txt",
                 existing.toFile());
         SwingDialogHarness dialogs = new SwingDialogHarness()
-                .confirm("Replace existing export?", true);
+                .confirm("Replace existing results?", true);
         CountDownLatch writerStarted = new CountDownLatch(1);
         CountDownLatch releaseWriter = new CountDownLatch(1);
         RecordingHost host = new RecordingHost();
@@ -629,7 +629,7 @@ class FieldScienceTabTest {
         JComponent root = onEdt(tab::getUIComponent);
         onEdt((Runnable) tab::initialize);
         JTextArea metadata = named(root, "fieldScience.exports.metadata", JTextArea.class);
-        await(() -> metadata.getText().contains("Saved export details changed"));
+        await(() -> metadata.getText().contains("Saved results details changed"));
         assertThat(named(root, "fieldScience.exports.saveSelected", JButton.class)
                 .isEnabled()).isFalse();
         assertThat(named(root, "fieldScience.exports.recordFinding", JButton.class)
@@ -767,7 +767,7 @@ class FieldScienceTabTest {
         assertThat(descendants(root, JLabel.class)).extracting(JLabel::getText)
                 .contains("No matching offline tools")
                 .anySatisfy(text -> assertThat(text).contains(
-                        "Browse saved exports; matching offline tools appear"));
+                        "Browse saved results; matching offline tools appear"));
         assertThat(descendants(root, JButton.class).stream()
                 .filter(button -> button.getName() != null
                         && button.getName().startsWith("fieldScience.open.")))

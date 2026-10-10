@@ -1,8 +1,27 @@
-# Pluggable farm readings · contract 1.0
+# Readings from your farm equipment
 
-FlowersForever can now store adapter-reported measurements in its local H2 database. Start with CSV/JSON logger exports or a program that sends readings. A Bluetooth, USB/serial, network, or analog-to-digital gateway can use the same intake format once its adapter translates the hardware protocol.
+Keep a history of the conditions on your farm: greenhouse temperature, humidity, soil moisture, water flow, or other measurements your equipment records. Each reading keeps its unit, the equipment it came from, and the time it was taken. You can also label the growing area, such as “North greenhouse.”
 
-The first implementation receives and retrieves data. It does not pair Bluetooth devices, read arbitrary analog pins, open MQTT subscriptions, or operate pumps. The plugin reports that distinction in its discoverable contract. No hardware is connected by enabling it.
+## Start with readings you already have
+
+Ask the person who set up your sensor or recorder to save a spreadsheet or readings file. Some equipment calls this **Export** or **Download readings**. Supported file types are called “CSV” (a simple spreadsheet) and “JSON” (a readings file used by some equipment).
+
+Your equipment helper can check a file before adding its readings to FlowersForever. Sending the same unchanged file again will not count its readings twice. A missing reading stays missing; it is never treated as zero. The original information is kept alongside each measurement so you can check where it came from.
+
+## What is available now
+
+This is an optional early feature that needs equipment setup help. There is **no sensor connection screen or automatic collection yet**. The setup instructions below are for the person helping you connect your equipment; you do not need to understand the programming terms to understand your farm readings.
+
+Bluetooth connections, automatic readings, charts, and alerts need further work. Pump and valve operation will be a separate later step. Saving a reading does not turn equipment on or off.
+
+The soil and greenhouse tools in **Field science** are available now. They open in your web browser and keep their work separate until you save a copy in FlowersForever.
+
+<details>
+<summary><strong>Setup instructions for your equipment helper (technical details)</strong></summary>
+
+## Pluggable farm readings · contract 1.0
+
+FlowersForever stores adapter-reported measurements in its local H2 database. CSV/JSON logger exports or a program can send readings through the protected intake. A Bluetooth, USB/serial, network, or analog-to-digital gateway can use the same format once its adapter translates the hardware protocol. The plugin receives and retrieves data; it does not pair devices, open MQTT subscriptions, or operate pumps.
 
 ```mermaid
 flowchart LR
@@ -121,3 +140,5 @@ Implement adapters against published device formats. A future adapter should dec
 The next application layer should show freshness and sensor health beside time-series charts, with explicit metric/unit definitions and retention/export policies before sustained high-rate collection. The present H2 append store and global intake lock suit initial local logger intake, not an unbounded industrial telemetry fleet.
 
 Equipment operation is a separate future adapter capability. A pump controller needs reviewed commands, feedback that distinguishes requested from actual state, bounded run time, local stop/override, and defined behavior when data or connectivity is lost. Measurement receipt alone must never imply authorization to run a pump.
+
+</details>

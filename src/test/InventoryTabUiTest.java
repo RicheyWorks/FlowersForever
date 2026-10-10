@@ -122,7 +122,7 @@ class InventoryTabUiTest {
         assertThat(button(root[0], "Delete selected").isEnabled()).isFalse();
         assertThat(button(root[0], "Low-stock reorder…").isEnabled()).isTrue();
         assertThat(button(root[0], "Price list…").isEnabled()).isTrue();
-        assertThat(button(root[0], "Export visible CSV…").isEnabled()).isFalse();
+        assertThat(button(root[0], "Save spreadsheet (CSV)…").isEnabled()).isFalse();
         assertThat(findNamed(root[0], "farm.statusBadge"))
                 .extracting(component -> ((javax.swing.JLabel) component).getText())
                 .contains("VIEWER · read and export only");
@@ -501,10 +501,10 @@ class InventoryTabUiTest {
         SwingUtilities.invokeAndWait(() -> {
             root[0] = tab.getUIComponent();
             tab.startVisibleCsvExport(destination.toFile(), rows);
-            assertThat(button(root[0], "Export visible CSV…").isEnabled()).isFalse();
+            assertThat(button(root[0], "Save spreadsheet (CSV)…").isEnabled()).isFalse();
             tab.startVisibleCsvExport(destination.toFile(), rows);
         });
-        awaitDocumentStatus(root[0], "Inventory CSV saved · 1 visible rows");
+        awaitDocumentStatus(root[0], "Stock spreadsheet saved · 1 visible rows");
 
         assertThat(Files.readAllLines(destination)).containsExactly(
                 "Name,Category,Price,Unit,Cost,Quantity,Notes",

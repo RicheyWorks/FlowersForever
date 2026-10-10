@@ -59,8 +59,8 @@ See the screens your team will use, from customer records to field work and soil
       <strong>Plant guide</strong><br>Search Pacific Northwest plant profiles and read the sources behind the notes.
     </td>
     <td width="50%" valign="top">
-      <a href="docs/images/app-field-science.png"><img src="docs/images/app-field-science.png" width="100%" alt="Field science: Open Soil Recipes, Soil Bench, and other offline tools; review exports before saving."></a><br>
-      <strong>Field science</strong><br>Open Soil Recipes, Soil Bench, and other offline tools; review exports before saving.
+      <a href="docs/images/app-field-science.png"><img src="docs/images/app-field-science.png" width="100%" alt="Field science: Explore soil mixes, greenhouse conditions, and field tools; review your results before saving a copy."></a><br>
+      <strong>Field science</strong><br>Explore soil mixes, greenhouse conditions, and field tools; review your results before saving a copy.
     </td>
   </tr>
 </table>
@@ -200,15 +200,15 @@ The combined workspace can show a berry block plan beside an egg collection log,
 
 [See more specialty tabs](docs/SCREENSHOTS.md#farm-specific-notebooks): orchards, potato fields, herds, aquaculture, apiaries, mushrooms, and more.
 
-The bundled **Field science** shelf brings relevant offline CSRBT tools into selected farm types. Cannabis growers can open Subcool's Super Soil in Soil Recipes, then save a reviewed text export and link a finding to that source. [Explore the farm-to-tool map](docs/CSRBT_FIELD_KIT_PORT.md).
+The **Field science** shelf helps you check soil mixes, review greenhouse conditions, and keep field observations. Cannabis growers can open Subcool's Super Soil in Soil Recipes, then save a copy of their results with a note about what they found. [See which tools fit your farm](docs/CSRBT_FIELD_KIT_PORT.md).
 
-Select **Browse complete CSRBT library** to search all 41 bundled tools and references, including Soil Bench and Greenhouse Monitor. The [completeness audit](docs/CSRBT_COMPLETENESS_AUDIT_20261010.md) shows every page and which parts of the wider ecosystem are integrated today.
+Select **Browse all farm tools** to find all 41 tools and guides, including Soil Bench and Greenhouse Monitor. These tools come from the CSRBT field kit. [See the full tool inventory](docs/CSRBT_COMPLETENESS_AUDIT_20261010.md).
 
-## Bring your farm readings
+## Keep readings from your farm equipment
 
-Start with the logger data you already have. An optional **Farm readings** interface accepts named measurements with their device, unit, time, quality, and original text, and keeps a persistent history. The included CSV/JSON importer previews a file before sending it; matching retries do not duplicate saved readings.
+Keep temperature, humidity, soil moisture, and other measurements together with when and where they were taken. The optional **Farm readings** feature can receive a spreadsheet or readings file saved by your sensor or recorder (file types called “CSV” and “JSON”). It keeps a history and avoids counting the same reading twice.
 
-Bluetooth, USB, network, and analog-to-digital gateways can build adapters around the same contract. Device pairing, continuous collection, sensor dashboards, and pump control are future work. [See the readings format and try a sample file](docs/FARM_READINGS.md).
+This early version needs help from the person setting up your equipment; there is no sensor connection screen yet. Automatic readings, Bluetooth connections, charts, and pump operation are planned next steps. [Read the farmer's guide to equipment readings](docs/FARM_READINGS.md).
 
 ## Take a five-minute tour
 

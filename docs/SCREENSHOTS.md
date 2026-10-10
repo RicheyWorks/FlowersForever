@@ -79,12 +79,12 @@ Explore actual app tabs and entry forms with sample records. Select any image to
   </tr>
   <tr>
     <td width="50%" valign="top">
-      <a href="images/app-activity-history.png"><img src="images/app-activity-history.png" width="100%" alt="Activity history: Review completed imports and exports and operations that need attention."></a><br>
-      <strong>Activity history</strong><br>Review completed imports and exports and operations that need attention.
+      <a href="images/app-activity-history.png"><img src="images/app-activity-history.png" width="100%" alt="Activity history: See which records were brought in or shared, and which jobs need attention."></a><br>
+      <strong>Activity history</strong><br>See which records were brought in or shared, and which jobs need attention.
     </td>
     <td width="50%" valign="top">
-      <a href="images/app-field-science.png"><img src="images/app-field-science.png" width="100%" alt="Field science: Open Soil Recipes, Soil Bench, and other offline tools; review exports before saving."></a><br>
-      <strong>Field science</strong><br>Open Soil Recipes, Soil Bench, and other offline tools; review exports before saving.
+      <a href="images/app-field-science.png"><img src="images/app-field-science.png" width="100%" alt="Field science: Explore soil mixes, greenhouse conditions, and field tools; review your results before saving a copy."></a><br>
+      <strong>Field science</strong><br>Explore soil mixes, greenhouse conditions, and field tools; review your results before saving a copy.
     </td>
   </tr>
 </table>
@@ -246,7 +246,7 @@ The optional phone screen connects to a running, authenticated farm instance.
 <details>
 <summary>Screenshot sources and refresh notes</summary>
 
-These images show real application components rendered with demo fixtures; they are not concept mockups. Desktop window decorations are omitted. New gallery captures were reviewed on October 10, 2026, using the coding campaign source at `88feb249f38ed2e183221e423efb706109a601eb`. Existing screenshots remain representative of their documented workflows.
+These images show real application components rendered with demo fixtures; they are not concept mockups. Desktop window decorations are omitted. New gallery captures were reviewed on October 10, 2026, using the coding campaign source at `88feb249f38ed2e183221e423efb706109a601eb`. Existing screenshots remain representative of their documented workflows. The Inventory, Activity history, and Field science pictures were refreshed again on October 10 from the farmer-language follow-up on `codex/farm-instruments`; they show the clearer spreadsheet and results labels and the collapsed tool credits.
 
 The current UI rendering fixtures are in `src/test/DataEntryVisualContractTest.java`, `ProductionStudioVisualContractTest.java`, `FieldScienceTabTest.java`, `NotebookKeyboardReachabilityTest.java`, and the farm notebook tests. They write previews under `target/ui-previews`. Field science uses a 1180 × 1000 viewport here so Soil Recipes and Soil Bench remain readable. Inspect refreshed previews before copying them into `docs/images`; use sample data and retain the tab names and scope in captions.
 

@@ -970,7 +970,7 @@ public class HarvestLogTab implements FlowerFarmTab {
             applyFilter();
         });
         reportTools = new JComboBox<>(new String[]{
-                "Export filtered CSV", "Export all CSV",
+                "Save shown harvest (CSV)", "Save all harvest (CSV)",
                 "Bed production report", "Harvest log PDF"
         });
         reportTools.setName("harvest.reportTools");
@@ -1033,8 +1033,8 @@ public class HarvestLogTab implements FlowerFarmTab {
             return;
         }
         switch (selection) {
-            case "Export filtered CSV" -> exportCsv(true);
-            case "Export all CSV" -> exportCsv(false);
+            case "Save shown harvest (CSV)" -> exportCsv(true);
+            case "Save all harvest (CSV)" -> exportCsv(false);
             case "Bed production report" -> showBedProduction();
             case "Harvest log PDF" -> showHarvestLogPdf();
             default -> {
@@ -2394,8 +2394,8 @@ public class HarvestLogTab implements FlowerFarmTab {
 
     private void exportCsv(boolean filteredOnly) {
         File file = files.chooseSave(panel, filteredOnly
-                ? "Export filtered harvest view to CSV"
-                : "Export full harvest history to CSV",
+                ? "Save the shown harvest as a spreadsheet (CSV)"
+                : "Save all harvest records as a spreadsheet (CSV)",
                 new File(filteredOnly ? "harvest_filtered.csv" : "harvest_log.csv"))
                 .orElse(null);
         if (!approveReplacement(file)) {
@@ -2428,7 +2428,7 @@ public class HarvestLogTab implements FlowerFarmTab {
     }
 
     void startCsvExport(File file, boolean filteredOnly) {
-        if (file == null || !beginReportWork("Exporting harvest CSV…",
+        if (file == null || !beginReportWork("Saving the harvest spreadsheet…",
                 "The captured harvest rows are being written in the background.")) {
             return;
         }
@@ -2441,7 +2441,7 @@ public class HarvestLogTab implements FlowerFarmTab {
                         presenter.exportAll(file.getAbsolutePath());
                     }
                 },
-                "Harvest CSV saved · " + (filteredOnly ? snapshot.size() + " visible rows" : "all rows"),
+                "Harvest spreadsheet saved · " + (filteredOnly ? snapshot.size() + " visible rows" : "all rows"),
                 "Harvest log exported → " + file.getName()
                         + (filteredOnly ? " (filtered view)" : " (all rows)"),
                 "Harvest CSV export");
@@ -2513,20 +2513,20 @@ public class HarvestLogTab implements FlowerFarmTab {
 
     private void presentBedProduction(HarvestService.BedProductionReport report) {
         JTextArea area = reportArea(report.plainText());
-        Object[] options = {"Export CSV…", "Export PDF…", "Close"};
+        Object[] options = {"Save a spreadsheet (CSV)…", "Export PDF…", "Close"};
         int choice = dialogs.showOption(panel, new JScrollPane(area),
                 "Bed / field production — " + report.from() + " → " + report.to(),
                 JOptionPane.DEFAULT_OPTION, JOptionPane.PLAIN_MESSAGE,
                 null, options, options[2]);
         if (choice == 0) {
-            File file = files.chooseSave(panel, "Save bed production CSV",
+            File file = files.chooseSave(panel, "Save bed production as a spreadsheet (CSV)",
                     new File("bed-production-" + report.to() + ".csv")).orElse(null);
             if (approveReplacement(file)
-                    && beginReportWork("Exporting bed production CSV…",
+                    && beginReportWork("Saving the bed production spreadsheet…",
                     "The reviewed bed-production snapshot is being written in the background.")) {
                 startReportFileExport(file,
                         () -> com.flowerfarm.safety.SafeFiles.writeString(file.toPath(), presenter.bedProductionCsv(report)),
-                        "Bed production CSV saved", "Bed production CSV → " + file.getName(),
+                        "Bed production spreadsheet saved", "Bed production CSV → " + file.getName(),
                         "Bed-production CSV export");
             }
         } else if (choice == 1) {

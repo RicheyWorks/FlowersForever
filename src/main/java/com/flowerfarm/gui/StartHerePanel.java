@@ -32,7 +32,7 @@ public final class StartHerePanel extends JPanel {
 
         importSpreadsheet = FarmUi.secondaryButton("Import spreadsheet…");
         importSpreadsheet.setName("startHere.importSpreadsheet");
-        importSpreadsheet.setToolTipText("Import products from a CSV or Excel file you already use.");
+        importSpreadsheet.setToolTipText("Bring in your product list from a spreadsheet you already use (CSV or Excel).");
         importSpreadsheet.addActionListener(e -> onChoice.accept(StartHereGuide.Choice.IMPORT_SPREADSHEET));
 
         addProduct = FarmUi.secondaryButton("Add a product");

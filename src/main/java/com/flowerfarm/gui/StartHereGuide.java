@@ -49,7 +49,7 @@ public final class StartHereGuide {
     public static String[] dialogOptions() {
         return new String[] {
                 "Log today’s first cut",
-                "Import from spreadsheet…",
+                "Bring in a spreadsheet…",
                 "Add a product by hand",
                 "Not now"
         };
@@ -67,7 +67,7 @@ public final class StartHereGuide {
     public static String statusFor(Choice choice) {
         return switch (choice) {
             case LOG_HARVEST -> "Opened Harvest Log — enter crop and quantity, then Add harvest.";
-            case IMPORT_SPREADSHEET -> "Choose a CSV or Excel file of products to import.";
+            case IMPORT_SPREADSHEET -> "Choose the spreadsheet with your product list (CSV or Excel).";
             case ADD_PRODUCT -> "Opened Add Item — enter one flower or farm product.";
             case DISMISS -> "Start here is in Help whenever you need it.";
         };

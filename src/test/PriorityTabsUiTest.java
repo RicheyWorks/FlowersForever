@@ -1495,7 +1495,7 @@ class PriorityTabsUiTest {
         });
 
         release.countDown();
-        awaitLabel(root[0], "Harvest CSV saved · 0 visible rows");
+        awaitLabel(root[0], "Harvest spreadsheet saved · 0 visible rows");
 
         assertThat(calledOnEdt).isFalse();
         assertThat(button(root[0], "Create report").isEnabled()).isTrue();
@@ -10910,7 +10910,7 @@ class PriorityTabsUiTest {
         });
         awaitMarketPlan(root[0]);
         SwingUtilities.invokeAndWait(() ->
-                tab.startMarketDayExport("Spreadsheet CSV", destination.toFile(), plan));
+                tab.startMarketDayExport("Spreadsheet (CSV)", destination.toFile(), plan));
         assertThat(started.await(2, TimeUnit.SECONDS)).isTrue();
         SwingUtilities.invokeAndWait(() -> {
             assertThat(button(root[0], "Export file…").isEnabled()).isFalse();
@@ -10920,7 +10920,7 @@ class PriorityTabsUiTest {
                     root[0], "marketDay.packOrder.1").get(0)).isEnabled()).isTrue();
             assertThat(tab.applicationExitWarning()).contains(
                     "a packing export still writing", "interrupt", "file write");
-            tab.startMarketDayExport("Spreadsheet CSV", destination.toFile(), plan);
+            tab.startMarketDayExport("Spreadsheet (CSV)", destination.toFile(), plan);
         });
 
         assertThat(calledOnEdt).isFalse();
@@ -11430,7 +11430,7 @@ class PriorityTabsUiTest {
                 .satisfies(table -> assertThat(table.getAccessibleContext().getAccessibleName())
                         .isEqualTo("Farm activity history table"));
         assertThat(button(root[0], "Clear history…").isEnabled()).isFalse();
-        assertThat(button(root[0], "Export CSV…").isEnabled()).isTrue();
+        assertThat(button(root[0], "Save a spreadsheet (CSV)…").isEnabled()).isTrue();
         assertThat(button(root[0], "Export PDF…").isEnabled()).isTrue();
         assertThat(findNamed(root[0], "activity.selectedDetail"))
                 .singleElement()
@@ -11480,7 +11480,7 @@ class PriorityTabsUiTest {
         assertThat(entered.await(2, TimeUnit.SECONDS)).isTrue();
         SwingUtilities.invokeAndWait(() -> {
             assertThat(button(root[0], "Refresh").isEnabled()).isFalse();
-            assertThat(button(root[0], "Export CSV…").isEnabled()).isFalse();
+            assertThat(button(root[0], "Save a spreadsheet (CSV)…").isEnabled()).isFalse();
             assertThat(button(root[0], "Clear history…").isEnabled()).isFalse();
             tab.startActivityRefresh();
             assertThat(((JLabel) findNamed(root[0], "activity.refreshStatus").get(0)).getText())
@@ -11535,7 +11535,7 @@ class PriorityTabsUiTest {
                 .isEqualTo("Harvest");
         assertThat(((JTextArea) findNamed(root[0], "activity.selectedDetail").get(0)).getText())
                 .contains("Harvest save failed", "Inventory row was locked");
-        assertThat(button(root[0], "Export CSV…").isEnabled()).isTrue();
+        assertThat(button(root[0], "Save a spreadsheet (CSV)…").isEnabled()).isTrue();
         assertThat(button(root[0], "Clear history…").isEnabled()).isTrue();
         assertThat(status.getAccessibleContext().getAccessibleDescription())
                 .contains("activity database unavailable", "Existing rows", "retry");
@@ -11580,7 +11580,7 @@ class PriorityTabsUiTest {
                 tab.startActivityCsvExport(destination.toFile(), List.of(entry)));
         assertThat(started.await(2, TimeUnit.SECONDS)).isTrue();
         SwingUtilities.invokeAndWait(() -> {
-            assertThat(button(root[0], "Export CSV…").isEnabled()).isFalse();
+            assertThat(button(root[0], "Save a spreadsheet (CSV)…").isEnabled()).isFalse();
             assertThat(button(root[0], "Export PDF…").isEnabled()).isFalse();
             assertThat(button(root[0], "Refresh").isEnabled()).isTrue();
             tab.startActivityCsvExport(destination.toFile(), List.of(entry));
@@ -11596,7 +11596,7 @@ class PriorityTabsUiTest {
                 .isEqualTo("CSV saved · 1 rows");
 
         assertThat(Files.readString(destination)).contains("harvest");
-        assertThat(button(root[0], "Export CSV…").isEnabled()).isTrue();
+        assertThat(button(root[0], "Save a spreadsheet (CSV)…").isEnabled()).isTrue();
         verify(service).exportToCsv(anyString(), anyList());
         Files.deleteIfExists(destination);
         Files.deleteIfExists(directory);

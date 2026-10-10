@@ -64,4 +64,18 @@ files and the unchanged POM. The fresh scan has 38 previously reviewed Medium
 contexts, zero High findings, zero analysis errors, and zero missing classes. No new
 finding or broader context was accepted. Hosted verification must match this evidence.
 
+The farmer-language follow-up received another fresh Windows scan and source/caller
+review on 2026-10-10. Eleven production files change displayed strings only.
+`FieldScienceTab` also adds a local, read-only source-credit visibility toggle; it
+does not invoke a host action, file operation, or network request. Chooser approval,
+cancellation, overwrite checks, destination handling, and role checks are retained.
+The existing `FieldScienceTab.saveSelectedText` finding changes only its enclosing
+class span by 13 lines; its primary location, method span, sink, bytecode offsets,
+and taint sources are unchanged. The other 37 canonical annotations match the
+preceding review. All 551 production Java bindings were renewed after reviewing
+these changes; the POM, scanner, eligibility selectors, and caller rationales are
+unchanged. The fresh scan has exactly the same 38 reviewed Medium contexts, no
+High or new findings, zero analysis errors, and zero missing classes. The source-bound
+classification gate and all 33 security evidence guard tests pass.
+
 Any new, changed, duplicate or absent reviewed finding fails. Any production Java edit/addition/removal or POM change requires a fresh source/build/caller review and an intentional manifest update; do not regenerate the manifest automatically to make a failed check pass. There are no native category/class/method exclusions in the security profile. The separate general quality profile retains its existing exclusions and Medium-or-higher zero-violation gate.
