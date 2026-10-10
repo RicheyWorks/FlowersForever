@@ -1,7 +1,11 @@
 package com.flowerfarm.gui;
 
+import javax.xml.stream.XMLOutputFactory;
+import javax.xml.stream.XMLStreamException;
+import javax.xml.stream.XMLStreamWriter;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.StringWriter;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -73,57 +77,77 @@ public final class GettingStartedGuide {
      * and bulleted lists, paragraphs, and **bold**. Everything else is escaped text.
      */
     static String toHtml(String markdown) {
-        StringBuilder html = new StringBuilder("<html><body style='font-family: sans-serif; margin: 6px'>");
-        String openList = null;
-        StringBuilder paragraph = new StringBuilder();
-        for (String raw : markdown.replace("\r\n", "\n").split("\n", -1)) {
-            String line = raw.strip();
-            Matcher numbered = NUMBERED.matcher(line);
-            String listTag = line.startsWith("- ") ? "ul" : numbered.matches() ? "ol" : null;
-            if (line.isEmpty() || line.startsWith("#") || listTag != null) {
-                flushParagraph(html, paragraph);
-            }
-            if (openList != null && !openList.equals(listTag)) {
-                html.append("</").append(openList).append('>');
-                openList = null;
-            }
-            if (line.isEmpty()) {
-                continue;
-            }
-            if (line.startsWith("## ")) {
-                html.append("<h2>").append(inline(line.substring(3))).append("</h2>");
-            } else if (line.startsWith("# ")) {
-                html.append("<h1>").append(inline(line.substring(2))).append("</h1>");
-            } else if (listTag != null) {
-                if (openList == null) {
-                    html.append('<').append(listTag).append('>');
-                    openList = listTag;
+        StringWriter output = new StringWriter();
+        try {
+            XMLStreamWriter html = XMLOutputFactory.newFactory().createXMLStreamWriter(output);
+            html.writeStartElement("html");
+            html.writeStartElement("body");
+            html.writeAttribute("style", "font-family: sans-serif; margin: 6px");
+            String openList = null;
+            StringBuilder paragraph = new StringBuilder();
+            for (String raw : markdown.replace("\r\n", "\n").split("\n", -1)) {
+                String line = raw.strip();
+                Matcher numbered = NUMBERED.matcher(line);
+                String listTag = line.startsWith("- ") ? "ul" : numbered.matches() ? "ol" : null;
+                if (line.isEmpty() || line.startsWith("#") || listTag != null) {
+                    flushParagraph(html, paragraph);
                 }
-                String item = "ul".equals(listTag) ? line.substring(2) : numbered.group(1);
-                html.append("<li>").append(inline(item)).append("</li>");
-            } else {
-                if (paragraph.length() > 0) {
-                    paragraph.append(' ');
+                if (openList != null && !openList.equals(listTag)) {
+                    html.writeEndElement();
+                    openList = null;
                 }
-                paragraph.append(inline(line));
+                if (line.isEmpty()) {
+                    continue;
+                }
+                if (line.startsWith("## ")) {
+                    writeElement(html, "h2", line.substring(3));
+                } else if (line.startsWith("# ")) {
+                    writeElement(html, "h1", line.substring(2));
+                } else if (listTag != null) {
+                    if (openList == null) {
+                        html.writeStartElement(listTag);
+                        openList = listTag;
+                    }
+                    writeElement(html, "li", "ul".equals(listTag) ? line.substring(2) : numbered.group(1));
+                } else {
+                    if (paragraph.length() > 0) {
+                        paragraph.append(' ');
+                    }
+                    paragraph.append(line);
+                }
             }
+            flushParagraph(html, paragraph);
+            if (openList != null) {
+                html.writeEndElement();
+            }
+            html.writeEndElement();
+            html.writeEndElement();
+            html.close();
+            return output.toString();
+        } catch (XMLStreamException failure) {
+            throw new IllegalStateException("The getting-started guide could not be rendered.", failure);
         }
-        flushParagraph(html, paragraph);
-        if (openList != null) {
-            html.append("</").append(openList).append('>');
-        }
-        return html.append("</body></html>").toString();
     }
 
-    private static void flushParagraph(StringBuilder html, StringBuilder paragraph) {
+    private static void flushParagraph(XMLStreamWriter html, StringBuilder paragraph) throws XMLStreamException {
         if (paragraph.length() > 0) {
-            html.append("<p>").append(paragraph).append("</p>");
+            writeElement(html, "p", paragraph.toString());
             paragraph.setLength(0);
         }
     }
 
-    private static String inline(String text) {
-        String escaped = text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
-        return BOLD.matcher(escaped).replaceAll("<b>$1</b>");
+    private static void writeElement(XMLStreamWriter html, String tag, String text) throws XMLStreamException {
+        html.writeStartElement(tag);
+        Matcher bold = BOLD.matcher(text);
+        int previous = 0;
+        while (bold.find()) {
+            html.writeCharacters(text.substring(previous, bold.start()));
+            html.writeStartElement("b");
+            html.writeCharacters(bold.group(1));
+            html.writeEndElement();
+            previous = bold.end();
+        }
+        html.writeCharacters(text.substring(previous));
+        html.writeEndElement();
     }
 }

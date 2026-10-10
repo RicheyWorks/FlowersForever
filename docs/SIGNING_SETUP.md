@@ -19,7 +19,9 @@
   [Artifact Signing operator checklist](ARTIFACT_SIGNING_CHECKLIST.md).
   Do **not** create Azure resources or store secrets until he approves spend.
 
-FlowersForever candidate builds remain private, unsigned, and non-publishing.
+FlowersForever candidate builds remain unsigned and non-publishing. This repository
+is public, and candidate Actions artifacts inherit that visibility. The private-draft
+preview helper refuses public repositories; existing previews remain drafts.
 An external pilot release requires both tagged-release signing jobs to pass in
 the GitHub `release-signing` environment. The workflow then verifies the
 Windows launcher and MSI signatures, Apple Developer ID signature, Apple
@@ -137,7 +139,7 @@ Gatekeeper, launches it in release-smoke mode, and deletes temporary key files.
 
 Create the `release-signing` environment in repository settings and store all
 values above there, not as repository-wide secrets. Restrict deployment branches
-to protected version tags, keep the repository private, and require deliberate
+to protected version tags, limit release-tag creation to maintainers, and require deliberate
 approval before a tagged signing job receives credentials when the GitHub plan
 supports that protection.
 
@@ -147,7 +149,7 @@ The release workflow intentionally behaves differently by event:
 |---|---|
 | Pull request | Unsigned Windows/macOS candidate builds and runtime smoke tests; no credentials and no publication |
 | Manual dispatch | Same non-publishing candidate bundle, optionally with an exact candidate version |
-| Manual dispatch with `preview_release_id` | Unsigned assets and completion evidence in a pre-created private draft; no publication or signing credentials |
+| Manual dispatch with `preview_release_id` | Refused on this public repository; private repositories can retain unsigned assets in a pre-created private draft without publication or signing credentials |
 | Matching stable `vX.Y.Z` tag | Protected Windows signing and macOS signing/notarization; publication only after both pass |
 
 ## 5. Enrollment acceptance checklist

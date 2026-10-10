@@ -186,7 +186,7 @@ public class InventoryService {
         ensureNameAvailable(newItem.getName(), id);
         existing.copyBusinessFieldsFrom(newItem);
         Item saved = repository.save(existing);
-        log.debug("Updated item id={}", id);
+        log.debug("Updated item id={}", LogValue.escape(id));
         return saved;
     }
 
@@ -246,7 +246,7 @@ public class InventoryService {
             throw new IndexOutOfBoundsException("No inventory item with id=" + id);
         }
         repository.deleteById(id);
-        log.debug("Deleted item id={}", id);
+        log.debug("Deleted item id={}", LogValue.escape(id));
     }
 
     /**
@@ -703,6 +703,11 @@ public class InventoryService {
     public synchronized void exportToCsv(String filename) {
         csvExporter.export(filename, repository.findAllOrdered());
 
+    }
+
+    /** Serialize an already selected snapshot to a caller-owned writer. */
+    public void writeCsv(java.io.Writer writer, List<Item> rows) throws java.io.IOException {
+        csvExporter.writeCsv(writer, rows);
     }
 
     // ── Internals ─────────────────────────────────────────────────────────────

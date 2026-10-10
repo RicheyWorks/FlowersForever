@@ -7,8 +7,8 @@ import com.flowerfarm.controller.ConnectorController;
 import com.flowerfarm.controller.TrendController;
 import com.flowerfarm.model.Item;
 import com.flowerfarm.model.SyncHistoryEntry;
-import com.flowerfarm.service.ExportPathResolver;
 import com.flowerfarm.service.SyncHistoryService;
+import com.flowerfarm.service.ServerCsvExportService;
 import com.flowerfarm.service.TrendService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -42,7 +42,7 @@ class TrendAndConnectorControllerIT {
     @MockitoBean TrendService trendService;
     @MockitoBean ConnectorRegistry connectorRegistry;
     @MockitoBean SyncHistoryService syncHistoryService;
-    @MockitoBean ExportPathResolver exportPathResolver;
+    @MockitoBean ServerCsvExportService serverCsvExportService;
 
     // ── GET /api/trends ──────────────────────────────────────────────────────
 

@@ -90,7 +90,10 @@ class UpdateInstallerHandoffTest {
     void platformDetection() {
         assertThat(UpdatePlatform.forOperatingSystem("Windows 11")).contains(UpdatePlatform.WINDOWS_MSI);
         assertThat(UpdatePlatform.forOperatingSystem("Mac OS X")).contains(UpdatePlatform.MACOS_DMG);
+        assertThat(UpdatePlatform.forOperatingSystem("Darwin")).contains(UpdatePlatform.MACOS_DMG);
+        assertThat(UpdatePlatform.forOperatingSystem("DARWIN 24.0")).contains(UpdatePlatform.MACOS_DMG);
         assertThat(UpdatePlatform.forOperatingSystem("Linux")).isEmpty();
+        assertThat(UpdatePlatform.forOperatingSystem(null)).isEmpty();
         assertThat(PlatformInstallers.forThisProcess(Optional.empty(), Optional.empty()).canInstall()).isFalse();
     }
 }

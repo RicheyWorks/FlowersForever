@@ -6,9 +6,11 @@ import com.flowerfarm.util.PathNames;
 
 import java.io.IOException;
 import java.net.URI;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.security.MessageDigest;
 import java.util.Optional;
 import java.util.function.LongConsumer;
 
@@ -84,7 +86,8 @@ public final class PackageDownloader {
                         "The downloaded file is a different size than the publisher listed."));
             }
             String sha256 = UpdateSignatures.sha256Hex(file);
-            if (!sha256.equals(info.sha256())) {
+            if (!MessageDigest.isEqual(sha256.getBytes(StandardCharsets.US_ASCII),
+                    info.sha256().getBytes(StandardCharsets.US_ASCII))) {
                 throw new UpdateVerificationException(UpdateMessages.downloadRejected(
                         "The downloaded file's checksum does not match the publisher's checksum."));
             }

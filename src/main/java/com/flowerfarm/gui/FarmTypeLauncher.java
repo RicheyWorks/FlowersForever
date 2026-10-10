@@ -122,13 +122,13 @@ final class FarmTypeLauncher extends JPanel {
         cards.setOpaque(false);
         cards.setName("farmLauncher.cards");
         int rows = (FarmWorkspace.values().length + 2) / 3;
-        cards.setPreferredSize(new Dimension(980, rows * 204 + (rows - 1) * 14));
         int number = 1;
         for (FarmWorkspace workspace : FarmWorkspace.values()) {
             JPanel farmCard = card(workspace, number++, canChange, enter);
             farmCards.put(workspace, farmCard);
             cards.add(farmCard);
         }
+        cards.setPreferredSize(new Dimension(980, rows * cardRowHeight(cards) + (rows - 1) * 14));
         JPanel cardList = new JPanel(new BorderLayout());
         cardList.setOpaque(false);
         cardList.add(cards, BorderLayout.NORTH);
@@ -215,12 +215,10 @@ final class FarmTypeLauncher extends JPanel {
                 FarmSetupDialog.workspaceLabel(workspace) + " description");
         body.add(description, BorderLayout.CENTER);
 
-        JPanel footer = new JPanel(new BorderLayout(8, 0));
-        footer.setOpaque(false);
-        footer.add(FarmUi.statusBadge(active
+        JLabel status = FarmUi.statusBadge(active
                         ? enabledWorkspaces.size() > 1 ? "Primary · in mix" : "Current type"
                         : included ? "In your mix" : scope(workspace),
-                included ? FarmUi.Tone.SUCCESS : FarmUi.Tone.NEUTRAL), BorderLayout.WEST);
+                included ? FarmUi.Tone.SUCCESS : FarmUi.Tone.NEUTRAL);
         boolean outsideMix = enabledWorkspaces.size() > 1 && !included;
         JButton button = active ? FarmUi.primaryButton(enabledWorkspaces.size() > 1
                         ? "Enter combined farm" : "Enter farm")
@@ -245,7 +243,9 @@ final class FarmTypeLauncher extends JPanel {
         button.setEnabled(included || canChange);
         button.addActionListener(event -> enter.accept(workspace));
         enterButtons.put(workspace, button);
-        footer.add(button, BorderLayout.EAST);
+        // Keep compact cards on one row when the labels fit; the toolbar measures
+        // both rows when a longer combined-farm action needs to wrap.
+        JPanel footer = FarmUi.toolbar(status, button);
         body.add(footer, BorderLayout.SOUTH);
 
         JPanel card = FarmUi.section(FarmSetupDialog.workspaceLabel(workspace), null, body);
@@ -312,9 +312,19 @@ final class FarmTypeLauncher extends JPanel {
         }
         int rows = (matches + columns - 1) / columns;
         cards.setPreferredSize(new Dimension(width,
-                rows * 204 + Math.max(0, rows - 1) * 14));
+                rows * cardRowHeight(cards) + Math.max(0, rows - 1) * 14));
         cards.revalidate();
         cards.repaint();
+    }
+
+    private static int cardRowHeight(JPanel cards) {
+        int height = 204;
+        for (Component card : cards.getComponents()) {
+            if (!"farmLauncher.spacer".equals(card.getName())) {
+                height = Math.max(height, card.getPreferredSize().height);
+            }
+        }
+        return height;
     }
 
     private static void updateCount(JLabel matchCount, int count) {

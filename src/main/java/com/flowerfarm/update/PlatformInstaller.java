@@ -26,11 +26,14 @@ public interface PlatformInstaller {
         void start(List<String> command, Path workingDirectory) throws IOException;
 
         static ProcessStarter system() {
-            return (command, workingDirectory) -> new ProcessBuilder(command)
-                    .directory(workingDirectory.toFile())
+            return (command, workingDirectory) -> {
+                InstallerProcessCommand admitted = InstallerProcessCommand.forThisSystem(command, workingDirectory);
+                new ProcessBuilder(admitted.arguments())
+                    .directory(admitted.directory().toFile())
                     .redirectErrorStream(true)
                     .redirectOutput(ProcessBuilder.Redirect.DISCARD)
                     .start();
+            };
         }
     }
 
@@ -53,6 +56,17 @@ public interface PlatformInstaller {
         String value = path.toAbsolutePath().normalize().toString();
         for (char c : value.toCharArray()) {
             if (c == '"' || c == '%' || c == '!' || c == '`' || c == '$' || c == '\n' || c == '\r' || c == '^') {
+                throw new IOException("Path contains a character the installer hand-off cannot use: " + value);
+            }
+        }
+        return value;
+    }
+
+    /** cmd /c also interprets these operators in an unquoted single script argument. */
+    static String windowsScriptSafe(Path path) throws IOException {
+        String value = scriptSafe(path);
+        for (char c : value.toCharArray()) {
+            if (c == '&' || c == '|' || c == '<' || c == '>' || c == '(' || c == ')') {
                 throw new IOException("Path contains a character the installer hand-off cannot use: " + value);
             }
         }

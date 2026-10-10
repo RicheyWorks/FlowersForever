@@ -416,7 +416,7 @@ public final class FarmUi {
 
     /** Left-aligned, wrapping-friendly action or filter row. */
     public static JPanel toolbar(Component... components) {
-        JPanel toolbar = new JPanel(new FlowLayout(FlowLayout.LEFT, CONTROL_GAP, 0));
+        JPanel toolbar = new JPanel(new ToolbarLayout());
         toolbar.setOpaque(false);
         toolbar.setName("farm.toolbar");
         for (Component component : components) {
@@ -425,6 +425,48 @@ public final class FarmUi {
             }
         }
         return toolbar;
+    }
+
+    /** FlowLayout's usual preferred height only describes one row, even after wrapping. */
+    private static final class ToolbarLayout extends FlowLayout {
+        private static final long serialVersionUID = 1L;
+
+        private ToolbarLayout() {
+            super(FlowLayout.LEFT, CONTROL_GAP, 0);
+        }
+
+        @Override public Dimension preferredLayoutSize(Container target) {
+            synchronized (target.getTreeLock()) {
+                Insets insets = target.getInsets();
+                int available = target.getWidth() > 0
+                        ? Math.max(1, target.getWidth() - insets.left - insets.right - 2 * getHgap())
+                        : Integer.MAX_VALUE;
+                int rowWidth = 0;
+                int rowHeight = 0;
+                int width = 0;
+                int height = 0;
+                for (Component component : target.getComponents()) {
+                    if (!component.isVisible()) {
+                        continue;
+                    }
+                    Dimension preferred = component.getPreferredSize();
+                    int gap = rowWidth == 0 ? 0 : getHgap();
+                    if (rowWidth > 0 && (long) rowWidth + gap + preferred.width > available) {
+                        width = Math.max(width, rowWidth);
+                        height += rowHeight + getVgap();
+                        rowWidth = 0;
+                        rowHeight = 0;
+                        gap = 0;
+                    }
+                    rowWidth += gap + preferred.width;
+                    rowHeight = Math.max(rowHeight, preferred.height);
+                }
+                width = Math.max(width, rowWidth);
+                height += rowHeight;
+                return new Dimension(width + insets.left + insets.right + 2 * getHgap(),
+                        height + insets.top + insets.bottom + 2 * getVgap());
+            }
+        }
     }
 
     public static JButton primaryButton(String text) {
@@ -529,7 +571,17 @@ public final class FarmUi {
                     for (Container parent = target.getParent(); parent != null; parent = parent.getParent()) {
                         if (parent instanceof JViewport viewport
                                 && viewport.getView() instanceof JComponent view) {
-                            view.scrollRectToVisible(SwingUtilities.convertRectangle(target, bounds, view));
+                            Rectangle visibleBounds = SwingUtilities.convertRectangle(target, bounds, view);
+                            // Include the surrounding form margin when there is room, so the last
+                            // field does not sit against the viewport edge with its context hidden.
+                            int top = Math.max(0, visibleBounds.y - CONTROL_GAP);
+                            int bottom = Math.min(view.getHeight(),
+                                    visibleBounds.y + visibleBounds.height + 2 * CONTROL_GAP);
+                            if (bottom - top <= viewport.getExtentSize().height) {
+                                visibleBounds.y = top;
+                                visibleBounds.height = bottom - top;
+                            }
+                            view.scrollRectToVisible(visibleBounds);
                         }
                     }
                 }

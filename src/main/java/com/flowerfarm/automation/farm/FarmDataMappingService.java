@@ -28,7 +28,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
-import java.util.regex.Pattern;
 
 /** Maps arbitrary spreadsheet or provider records into a discovered farm-data schema. */
 @Component
@@ -38,9 +37,9 @@ public class FarmDataMappingService {
     private static final BigDecimal MIN_LONG = BigDecimal.valueOf(Long.MIN_VALUE);
     private static final BigDecimal MAX_LONG = BigDecimal.valueOf(Long.MAX_VALUE);
     private static final BigDecimal MAX_DATE_SERIAL = BigDecimal.valueOf(3_000_000);
-    private static final Pattern DECIMAL_TEXT = Pattern.compile(
-            "\\A[+-]?(?:(?:[0-9]++|[0-9]{1,3}(?:,[0-9]{3})++)(?:\\.[0-9]*+)?"
-                    + "|\\.[0-9]++)(?:[eE][+-]?[0-9]++)?\\z");
+    // Bound conversion work as well as scanning; imported cells do not need
+    // thousands of significant digits to represent a double or long.
+    private static final int MAX_NUMERIC_TEXT_LENGTH = 4096;
     private static final List<DateTimeFormatter> DATE_FORMATS = List.of(
             DateTimeFormatter.ISO_LOCAL_DATE,
             DateTimeFormatter.ofPattern("M/d/uuuu", Locale.ROOT)
@@ -327,14 +326,20 @@ public class FarmDataMappingService {
     private static BigDecimal decimal(Object raw, String field, boolean allowNumericAffixes) {
         try {
             if (raw instanceof BigDecimal number) {
+                if (number.precision() > MAX_NUMERIC_TEXT_LENGTH) {
+                    throw new NumberFormatException("Numeric precision exceeds the supported limit");
+                }
                 return number;
             }
             if (raw instanceof Number number) {
-                return new BigDecimal(number.toString());
+                String text = number.toString();
+                checkNumericLength(text);
+                return new BigDecimal(text);
             }
             if (!(raw instanceof String text)) {
                 throw new NumberFormatException("Not a number or numeric text");
             }
+            checkNumericLength(text);
             String value = text.trim();
             // The number contract accepts a leading dollar sign OR a terminal
             // percent sign; percentages retain percentage units (50% -> 50).
@@ -348,7 +353,7 @@ public class FarmDataMappingService {
                     value = value.substring(0, value.length() - 1);
                 }
             }
-            if (!DECIMAL_TEXT.matcher(value).matches()) {
+            if (!isDecimalText(value)) {
                 throw new NumberFormatException("Invalid numeric punctuation or grouping");
             }
             return new BigDecimal(value.replace(",", ""));
@@ -356,6 +361,69 @@ public class FarmDataMappingService {
             throw new IllegalArgumentException(
                     "Field '" + field + "' must be numeric", exception);
         }
+    }
+
+    private static void checkNumericLength(String text) {
+        if (text.length() > MAX_NUMERIC_TEXT_LENGTH) {
+            throw new NumberFormatException("Numeric text exceeds the supported limit");
+        }
+    }
+
+    /** Single-pass ASCII grammar: sign, grouped integer/fraction, then exponent. */
+    private static boolean isDecimalText(String value) {
+        int length = value.length();
+        int at = 0;
+        if (at < length && (value.charAt(at) == '+' || value.charAt(at) == '-')) {
+            at++;
+        }
+        int integerStart = at;
+        while (at < length && asciiDigit(value.charAt(at))) {
+            at++;
+        }
+        int integerDigits = at - integerStart;
+        if (at < length && value.charAt(at) == ',') {
+            if (integerDigits < 1 || integerDigits > 3) {
+                return false;
+            }
+            while (at < length && value.charAt(at) == ',') {
+                at++;
+                for (int digit = 0; digit < 3; digit++) {
+                    if (at == length || !asciiDigit(value.charAt(at))) {
+                        return false;
+                    }
+                    at++;
+                }
+            }
+        }
+        int fractionDigits = 0;
+        if (at < length && value.charAt(at) == '.') {
+            int fractionStart = ++at;
+            while (at < length && asciiDigit(value.charAt(at))) {
+                at++;
+            }
+            fractionDigits = at - fractionStart;
+        }
+        if (integerDigits == 0 && fractionDigits == 0) {
+            return false;
+        }
+        if (at < length && (value.charAt(at) == 'e' || value.charAt(at) == 'E')) {
+            at++;
+            if (at < length && (value.charAt(at) == '+' || value.charAt(at) == '-')) {
+                at++;
+            }
+            int exponentStart = at;
+            while (at < length && asciiDigit(value.charAt(at))) {
+                at++;
+            }
+            if (at == exponentStart) {
+                return false;
+            }
+        }
+        return at == length;
+    }
+
+    private static boolean asciiDigit(char value) {
+        return value >= '0' && value <= '9';
     }
 
     private static boolean booleanValue(Object raw, String field) {

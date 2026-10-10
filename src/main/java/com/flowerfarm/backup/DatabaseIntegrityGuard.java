@@ -79,6 +79,9 @@ public final class DatabaseIntegrityGuard {
                     }
                 }
                 for (String table : tables) {
+                    // The identifier comes only from H2's PUBLIC base-table metadata, never a request.
+                    // Quote the entire identifier and double every embedded quote: even SQL-looking
+                    // names remain one table name. Keep direct row reads for non-admin accounts.
                     try (ResultSet rows = statement.executeQuery("SELECT * FROM \"" + table.replace("\"", "\"\"")
                             + "\"")) {
                         while (rows.next()) {

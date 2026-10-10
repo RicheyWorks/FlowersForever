@@ -2,6 +2,7 @@ package com.flowerfarm.scouting;
 
 import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.RowCallbackHandler;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionException;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -39,6 +40,8 @@ import java.util.function.Supplier;
 public final class DatabaseScoutingStore implements ScoutingLogStore {
 
     private static final int MAX_CODE = 40;
+
+    private enum ScoutingTable { FINDINGS, LAB_SAMPLES }
 
     private final JdbcTemplate jdbc;
     private final TransactionTemplate transactions;
@@ -100,7 +103,7 @@ public final class DatabaseScoutingStore implements ScoutingLogStore {
             if (lockedImportedAt() != null) {
                 return "";
             }
-            long rows = count("scouting_findings") + count("scouting_lab_samples");
+            long rows = count(ScoutingTable.FINDINGS) + count(ScoutingTable.LAB_SAMPLES);
             String note;
             if (rows > 0) {
                 note = "The database already had scouting records; the JSON log was not copied in.";
@@ -135,8 +138,11 @@ public final class DatabaseScoutingStore implements ScoutingLogStore {
                 (rs, row) -> rs.getObject(1, OffsetDateTime.class));
     }
 
-    private long count(String table) {
-        Long rows = jdbc.queryForObject("SELECT COUNT(*) FROM " + table, Long.class);
+    private long count(ScoutingTable table) {
+        Long rows = switch (table) {
+            case FINDINGS -> jdbc.queryForObject("SELECT COUNT(*) FROM scouting_findings", Long.class);
+            case LAB_SAMPLES -> jdbc.queryForObject("SELECT COUNT(*) FROM scouting_lab_samples", Long.class);
+        };
         return rows == null ? 0 : rows;
     }
 
@@ -179,7 +185,7 @@ public final class DatabaseScoutingStore implements ScoutingLogStore {
     }
 
     private void writeFindings(List<Scouting.Finding> findings) {
-        Map<String, Long> existing = ids("scouting_findings");
+        Map<String, Long> existing = ids(ScoutingTable.FINDINGS);
         Set<String> kept = new HashSet<>();
         findings.forEach(finding -> kept.add(finding.id()));
         existing.forEach((code, id) -> {
@@ -216,7 +222,7 @@ public final class DatabaseScoutingStore implements ScoutingLogStore {
     }
 
     private void writeSamples(List<Scouting.LabSample> samples) {
-        Map<String, Long> existing = ids("scouting_lab_samples");
+        Map<String, Long> existing = ids(ScoutingTable.LAB_SAMPLES);
         Set<String> kept = new HashSet<>();
         samples.forEach(sample -> kept.add(sample.id()));
         existing.forEach((code, id) -> {
@@ -243,11 +249,15 @@ public final class DatabaseScoutingStore implements ScoutingLogStore {
         }
     }
 
-    private Map<String, Long> ids(String table) {
+    private Map<String, Long> ids(ScoutingTable table) {
         Map<String, Long> ids = new LinkedHashMap<>();
-        jdbc.query("SELECT id, code FROM " + table, (ResultSet rs) -> {
+        RowCallbackHandler collect = (ResultSet rs) -> {
             ids.put(rs.getString("code"), rs.getLong("id"));
-        });
+        };
+        switch (table) {
+            case FINDINGS -> jdbc.query("SELECT id, code FROM scouting_findings", collect);
+            case LAB_SAMPLES -> jdbc.query("SELECT id, code FROM scouting_lab_samples", collect);
+        }
         return ids;
     }
 

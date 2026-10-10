@@ -3,9 +3,9 @@ name: CodeQL
 
 on:
   push:
-    branches: [main]
+    branches: [main, codex/recover-unpushed-work]
   pull_request:
-    branches: [main]
+    branches: [main, codex/recover-unpushed-work]
   schedule:
     - cron: "17 6 * * 1" # weekly Monday sweep
 
@@ -21,8 +21,8 @@ concurrency:
 jobs:
   analyze:
     name: Analyze (java)
-    # Hosted code scanning is not enabled for this private repository. Keep
-    # CodeQL ready for public mirrors or for a future explicitly enabled plan.
+    # Hosted code scanning is available for the public repository. Private
+    # copies skip this job unless their security features are configured separately.
     if: ${{ github.event.repository.private == false }}
     runs-on: ubuntu-latest
     timeout-minutes: 30

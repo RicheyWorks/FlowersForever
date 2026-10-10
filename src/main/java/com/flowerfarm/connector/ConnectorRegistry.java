@@ -234,7 +234,10 @@ public class ConnectorRegistry {
                     extractCount(result));
         } catch (Exception e) {
             // History must never break a connector operation
-            log.warn("Failed to record sync history for {} {}: {}", name, operation, e.getMessage());
+            log.warn("Failed to record sync history for {} {}: {}",
+                    com.flowerfarm.service.LogValue.escape(name),
+                    com.flowerfarm.service.LogValue.escape(operation),
+                    com.flowerfarm.service.LogValue.escape(e.getMessage()));
         }
     }
 

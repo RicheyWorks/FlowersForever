@@ -130,19 +130,27 @@ function buildDocument() {
 }
 
 function server() {
-  return { mode: "online", receipts: new Map(), attempts: [], nextKey: 1 };
+  return { mode: "online", receipts: new Map(), attempts: [], writeRequests: [],
+    csrfRequests: [], csrfToken: null, nextKey: 1 };
 }
 
-async function boot({ storage = new Map(), backend = server(), denyQueueWrites = false, denyDraftClear = false } = {}) {
+async function boot({ storage = new Map(), backend = server(), attachmentFiles = new Map(),
+  denyQueueWrites = false, denyDraftClear = false } = {}) {
   const dom = buildDocument();
   const navigator = { onLine: true };
   const fetch = async (url, options = {}) => {
     if (options.method === "POST") {
-      const body = JSON.parse(options.body);
+      const body = options.body instanceof FormData ? Object.fromEntries(options.body) : JSON.parse(options.body);
       backend.attempts.push(body);
+      backend.writeRequests.push({ url, options });
+      if (options.credentials !== "same-origin"
+          || !backend.csrfToken || options.headers?.["X-XSRF-TOKEN"] !== backend.csrfToken) {
+        return response(403, { error: "CSRF token missing or invalid." });
+      }
       if (backend.waitForResponse) await backend.waitForResponse;
       if (backend.mode === "offline") throw new TypeError("Connection unavailable");
       if (backend.mode === "reject") return response(400, { error: "Observation is required." });
+      if (backend.mode === "csrf-reject") return response(403, { error: "CSRF token rejected." });
       const replayed = backend.receipts.has(body.operationKey);
       if (!replayed) backend.receipts.set(body.operationKey, { ...body, id: backend.receipts.size + 1, summary: body.observation });
       if (backend.mode === "response-lost") throw new TypeError("Response interrupted after commit");
@@ -156,6 +164,12 @@ async function boot({ storage = new Map(), backend = server(), denyQueueWrites =
       return response(replayed ? 200 : 201, { replayed, result: backend.receipts.get(body.operationKey) });
     }
     if (backend.mode === "offline") throw new TypeError("Connection unavailable");
+    if (url === "/api/auth/csrf") {
+      backend.csrfRequests.push(options);
+      if (backend.mode === "csrf-unavailable") return response(503, { error: "Unavailable" });
+      backend.csrfToken = `masked-token-${backend.csrfRequests.length}`;
+      return response(200, { headerName: "X-XSRF-TOKEN", token: backend.csrfToken });
+    }
     if (url.startsWith("/api/worker/today")) return response(200,
       backend.today || { date: farmDate, tasks: [], openTaskTotal: 0 });
     if (url.startsWith("/api/worker/orders")) return response(200,
@@ -167,13 +181,42 @@ async function boot({ storage = new Map(), backend = server(), denyQueueWrites =
   };
   const response = (status, body) => ({ ok: status < 400, status, json: async () => body });
   class FormData {
-    constructor(form) { this.values = new Map(Object.entries(form.elements).map(([name, field]) => [name, field.value])); }
+    constructor(form) { this.values = new Map(form
+      ? Object.entries(form.elements).map(([name, field]) => [name, field.value]) : []); }
+    append(name, value) { this.values.set(name, value); }
     get(name) { return this.values.get(name); }
     [Symbol.iterator]() { return this.values[Symbol.iterator](); }
   }
   class File {}
+  const indexedDB = {
+    open() {
+      const request = { result: {
+        close() {},
+        transaction() {
+          const transaction = {
+            objectStore() {
+              return {
+                get(id) {
+                  const read = { result: attachmentFiles.get(id) };
+                  Promise.resolve().then(() => read.onsuccess?.());
+                  return read;
+                },
+                delete(id) {
+                  attachmentFiles.delete(id);
+                  Promise.resolve().then(() => transaction.oncomplete?.());
+                }
+              };
+            }
+          };
+          return transaction;
+        }
+      } };
+      Promise.resolve().then(() => request.onsuccess?.());
+      return request;
+    }
+  };
   vm.runInNewContext(script, {
-    document: dom.document, navigator, window: new Element(), FormData, File, fetch, TypeError,
+    document: dom.document, navigator, window: new Element(), FormData, File, fetch, TypeError, indexedDB,
     crypto: { randomUUID: () => `test-operation-${backend.nextKey++}` },
     localStorage: {
       getItem: key => storage.get(key) ?? null,
@@ -213,6 +256,94 @@ test("farm date initializes both capture forms; drafts survive close, form switc
   assert.equal(reload.get("field-note-form").elements.bedOrField.value, "Bed 4");
   assert.match(reload.get("field-note-message").textContent, /draft is restored/);
   assert.equal(page.backend.attempts.length, 0);
+});
+
+test("each save obtains a fresh token without caching or persisting it", async () => {
+  const page = await boot();
+  for (const observation of ["First note", "Second note"]) {
+    await page.fillNote({ observation });
+    await page.get("field-note-form").fire("submit");
+  }
+  assert.equal(page.backend.receipts.size, 2);
+  assert.equal(page.backend.csrfRequests.length, 2);
+  assert.ok(page.backend.csrfRequests.every(request => request.cache === "no-store"
+    && request.credentials === "same-origin"));
+  assert.deepEqual(page.backend.writeRequests.map(request => request.options.headers["X-XSRF-TOKEN"]),
+    ["masked-token-1", "masked-token-2"]);
+  assert.ok([...page.storage.values()].every(value => !value.includes("masked-token")
+    && !value.includes("X-XSRF-TOKEN")), "tokens must not enter saved drafts or operations");
+});
+
+test("failed token handshake dispatches no write and replay obtains a new token", async () => {
+  const page = await boot();
+  page.backend.mode = "csrf-unavailable";
+  await page.fillNote({ observation: "Keep until authorized" });
+  await page.get("field-note-form").fire("submit");
+  const [pending] = page.pending();
+  assert.ok(pending);
+  assert.equal(page.backend.attempts.length, 0);
+  assert.equal(page.backend.receipts.size, 0);
+  assert.ok(!JSON.stringify(pending).includes("token"));
+  page.backend.mode = "online";
+  await page.get("retry-sync").fire("click");
+  assert.equal(page.pending().length, 0);
+  assert.deepEqual(page.backend.attempts, [pending.body]);
+  assert.equal(page.backend.writeRequests[0].options.headers["X-XSRF-TOKEN"], "masked-token-2");
+});
+
+test("queued multipart photo obtains a fresh token without setting a JSON content type", async () => {
+  const blob = { bytes: "photo-bytes" };
+  const item = { id: "photo-operation", kind: "attachment", targetType: "PRODUCTION_TASK",
+    targetId: 12, capturedAt: "2026-09-05T12:00:00Z", fileName: "field.png",
+    url: "/api/worker/attachments" };
+  const files = new Map([[item.id, { blob, fileName: item.fileName }]]);
+  const page = await boot({ storage: new Map([[queueKey, JSON.stringify([item])]]), attachmentFiles: files });
+  assert.equal(page.pending().length, 0);
+  assert.equal(page.backend.receipts.size, 1);
+  assert.equal(page.backend.csrfRequests.length, 1);
+  const request = page.backend.writeRequests[0];
+  assert.equal(request.options.headers["X-XSRF-TOKEN"], "masked-token-1");
+  assert.equal(request.options.headers["Content-Type"], undefined,
+    "the browser must generate the multipart boundary");
+  assert.equal(request.options.body.get("operationKey"), item.id);
+  assert.equal(request.options.body.get("file"), blob);
+  assert.equal(files.size, 0, "committed photo bytes are released from durable storage");
+});
+
+test("CSRF rejection does not automatically repeat a submitted write", async () => {
+  const page = await boot();
+  page.backend.mode = "csrf-reject";
+  await page.fillNote({ observation: "Review the rejected save" });
+  await page.get("field-note-form").fire("submit");
+  assert.equal(page.backend.attempts.length, 1);
+  assert.equal(page.backend.receipts.size, 0);
+  assert.equal(page.pending().length, 0);
+  assert.equal(page.get("field-note-form").elements.observation.value, "Review the rejected save");
+  assert.match(page.get("field-note-message").textContent, /CSRF token rejected/);
+  const reload = await boot({ storage: page.storage, backend: page.backend });
+  assert.equal(page.backend.attempts.length, 1, "reload must not replay a forbidden write");
+  assert.equal(reload.get("field-note-form").elements.observation.value, "Review the rejected save");
+});
+
+test("a forbidden queued replay waits for explicit review across reload", async () => {
+  const page = await boot();
+  page.backend.mode = "offline";
+  await page.fillNote({ observation: "Review before another replay" });
+  await page.get("field-note-form").fire("submit");
+  const original = page.pending()[0].body;
+  page.backend.mode = "csrf-reject";
+  await page.get("retry-sync").fire("click");
+  assert.equal(page.backend.attempts.length, 1);
+  assert.equal(page.pending()[0].requiresReview, true);
+  page.backend.mode = "online";
+  const reload = await boot({ storage: page.storage, backend: page.backend });
+  assert.equal(page.backend.attempts.length, 1, "startup must not replay a forbidden operation");
+  assert.match(reload.get("sync-detail").textContent, /needs review/);
+  await reload.get("retry-sync").fire("click");
+  assert.equal(page.backend.attempts.length, 2);
+  assert.deepEqual(page.backend.attempts[1], original, "explicit retry retains the original business key");
+  assert.equal(reload.pending().length, 0);
+  assert.equal(page.backend.receipts.size, 1);
 });
 
 for (const mode of ["offline", "response-lost", "invalid-json"]) {

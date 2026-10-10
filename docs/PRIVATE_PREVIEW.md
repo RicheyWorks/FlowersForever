@@ -1,5 +1,11 @@
 # Private draft preview builds
 
+The public repository uses the normal **Release** workflow with an empty
+`preview_release_id` to retain unsigned candidate bundles as Actions artifacts.
+The private-draft path below deliberately refuses public repositories; it does
+not publish a draft or release there. Candidate artifacts inherit repository
+visibility and are for maintainer validation.
+
 Use this manual path when Actions artifact storage prevents Windows/macOS
 preview checks. It stores one verified JAR, its metadata, and the two tested
 installers as assets of an **unpublished private draft release**. It does not

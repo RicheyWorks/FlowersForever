@@ -1,4 +1,4 @@
-# Private pilot access
+# Pilot access
 
 FlowersForever helps a small cut-flower team connect planting plans, harvests,
 stock, customer orders, market packing, and the lessons behind the work. A
@@ -9,11 +9,10 @@ previews what you will see. RicheyWorks presenters can use the
 [presenter runbook](DEMO.md#2-five-minute-sample-farm-tour). Also review the
 [current limitations](KNOWN_LIMITATIONS.md).
 
-FlowersForever is private, proprietary RicheyWorks software. External pilot
-distribution awaits an approved signed release. Once that release is ready,
-distribution is limited to approved farms and customers under a separate
-written agreement. Repository access alone does not grant a license to use or
-redistribute it.
+FlowersForever's public source is available under the [MIT License](../LICENSE).
+Supported external pilots await an approved signed release. Once that release
+is ready, onboarding and support are coordinated with the participating farm;
+this pilot process does not restrict the permissions granted by the MIT License.
 
 Current unsigned preview installers are reserved for controlled maintainer
 validation. They are not approved for external farm distribution. The
@@ -37,14 +36,15 @@ validation. They are not approved for external farm distribution. The
    installer from the contact already working with your farm. Do not accept
    forwarded copies or links from another farm.
 2. Confirm the installer filename and version match the onboarding message.
-3. Verify its SHA-256 value against `SHA256SUMS.txt`:
+3. Verify its SHA-256 value against `SHA256SUMS.txt`. Replace `VERSION` below with
+   the approved installer version; the examples do not identify a released build:
 
    ```powershell
-   Get-FileHash .\FlowersForever-1.2.0.msi -Algorithm SHA256
+    Get-FileHash .\FlowersForever-VERSION.msi -Algorithm SHA256
    ```
 
    ```bash
-   shasum -a 256 FlowersForever-1.2.0.dmg
+    shasum -a 256 FlowersForever-VERSION.dmg
    ```
 
 4. Confirm the installer has the expected verified publisher using the
@@ -54,13 +54,12 @@ validation. They are not approved for external farm distribution. The
 5. Before upgrading an existing farm, close FlowersForever and make a verified
    off-device backup.
 
-## Keeping access private
+## Protect farm credentials
 
-- Do not forward installers, checksums, repository files, or credentials.
+- Do not forward farm credentials or private farm records.
 - Store OWNER credentials in the farm's password manager.
-- Use the application only on approved workstations and for the approved farm.
-- Report a lost device or exposed installer link to RicheyWorks promptly.
+- Use pilot builds on the workstations covered by the farm's acceptance checks.
+- Report a lost device or exposed farm credentials to RicheyWorks promptly.
 
-The repository's [proprietary license](../LICENSE) and the pilot agreement
-govern FlowersForever itself. Bundled third-party libraries remain subject to
+The repository's [MIT License](../LICENSE) governs the owned code and materials. Bundled third-party libraries remain subject to
 their own terms, recorded in [third-party notices](../THIRD_PARTY_NOTICES.md).

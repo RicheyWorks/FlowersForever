@@ -1,8 +1,8 @@
 # FlowersForever third-party software notices
 
-FlowersForever is proprietary software owned by RicheyWorks. It includes
+FlowersForever is MIT-licensed software owned by RicheyWorks. It includes
 third-party libraries that remain subject to their own licenses; the
-FlowersForever proprietary license does not replace or restrict those rights.
+FlowersForever MIT License does not replace or restrict those rights.
 
 The bundled CSRBT field-science kit is separate MIT-licensed work by the same
 owner, RicheyWorks. Its 41 offline pages, source provenance, checksum manifest,

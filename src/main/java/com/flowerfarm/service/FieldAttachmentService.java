@@ -185,7 +185,8 @@ public class FieldAttachmentService {
                         "Attachment content size does not match its metadata.");
             }
             byte[] bytes = Files.readAllBytes(contentPath);
-            if (!sha256(bytes).equals(digest)) {
+            if (!MessageDigest.isEqual(sha256(bytes).getBytes(StandardCharsets.US_ASCII),
+                    digest == null ? new byte[0] : digest.getBytes(StandardCharsets.US_ASCII))) {
                 throw new IllegalStateException(
                         "Attachment content hash does not match its metadata.");
             }
@@ -242,7 +243,8 @@ public class FieldAttachmentService {
 
     private static void verifyExisting(Path path, long size, String digest) throws IOException {
         if (!Files.isRegularFile(path) || Files.size(path) != size
-                || !sha256(Files.readAllBytes(path)).equals(digest)) {
+                || !MessageDigest.isEqual(sha256(Files.readAllBytes(path)).getBytes(StandardCharsets.US_ASCII),
+                        digest == null ? new byte[0] : digest.getBytes(StandardCharsets.US_ASCII))) {
             throw new IOException("Existing attachment content is corrupt.");
         }
     }

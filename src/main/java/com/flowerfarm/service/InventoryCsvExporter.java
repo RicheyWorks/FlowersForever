@@ -8,6 +8,7 @@ import org.springframework.stereotype.Component;
 import java.io.BufferedWriter;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.io.Writer;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 
@@ -24,17 +25,22 @@ public class InventoryCsvExporter {
         List<Item> rows = inventory == null ? List.of() : inventory;
         try (BufferedWriter writer = new BufferedWriter(
                 new FileWriter(filename.trim(), StandardCharsets.UTF_8))) {
-            writer.write(InventoryService.CSV_HEADER);
-            writer.newLine();
-            for (Item item : rows) {
-                writer.write(item.toCsv());
-                writer.newLine();
-            }
-            log.info("Inventory exported to '{}' ({} item(s)).", filename, rows.size());
+            writeCsv(writer, rows);
+            log.info("Inventory exported to '{}' ({} item(s)).", LogValue.escape(filename), rows.size());
         } catch (IOException ex) {
-            log.error("Export to '{}' failed: {}", filename, ex.getMessage());
+            log.error("Export to '{}' failed: {}", LogValue.escape(filename), LogValue.escape(ex.getMessage()));
             throw new IllegalStateException(
                     "Export to '" + filename + "' failed: " + ex.getMessage(), ex);
+        }
+    }
+    /** Serialize the inventory contract without choosing or closing the destination. */
+    public void writeCsv(Writer writer, List<Item> inventory) throws IOException {
+        List<Item> rows = inventory == null ? List.of() : inventory;
+        writer.write(InventoryService.CSV_HEADER);
+        writer.write(System.lineSeparator());
+        for (Item item : rows) {
+            writer.write(item.toCsv());
+            writer.write(System.lineSeparator());
         }
     }
 }

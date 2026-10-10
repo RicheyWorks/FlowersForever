@@ -1,7 +1,8 @@
 package com.flowerfarm.controller;
 
 import com.flowerfarm.model.CustomerOrder;
-import com.flowerfarm.model.OrderLine;
+import com.flowerfarm.controller.dto.FarmApiDtos.OrderLineRequest;
+import com.flowerfarm.controller.dto.FarmApiDtos.OrderResponse;
 import com.flowerfarm.service.OrderService;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
@@ -24,20 +25,24 @@ public class OrderController {
     }
 
     @GetMapping
-    public List<CustomerOrder> list() {
-        return orderService.getAll();
+    public List<OrderResponse> list() {
+        return orderService.getAll().stream().map(OrderResponse::from).toList();
     }
 
     @GetMapping("/range")
     public ResponseEntity<?> range(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
-        return ResponseEntity.ok(orderService.findBetween(from, to));
+        try {
+            return ResponseEntity.ok(orderService.findBetween(from, to).stream().map(OrderResponse::from).toList());
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
     }
 
     @GetMapping("/by-customer/{customerId}")
-    public List<CustomerOrder> byCustomer(@PathVariable Long customerId) {
-        return orderService.findByCustomer(customerId);
+    public List<OrderResponse> byCustomer(@PathVariable Long customerId) {
+        return orderService.findByCustomer(customerId).stream().map(OrderResponse::from).toList();
     }
 
     /**
@@ -53,26 +58,47 @@ public class OrderController {
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam(value = "to", required = false)
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
-        if (from != null && to != null && to.isBefore(from)) {
-            throw new IllegalArgumentException("to must be on or after from.");
+        try {
+            if (from != null && to != null && to.isBefore(from)) {
+                return ResponseEntity.badRequest()
+                        .body(Map.of("error", "to must be on or after from."));
+            }
+            return ResponseEntity.ok(orderService.filter(status, customer, from, to, handoff).stream().map(OrderResponse::from).toList());
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
-        return ResponseEntity.ok(orderService.filter(status, customer, from, to, handoff));
     }
 
     @PostMapping("/{id}/confirm")
     public ResponseEntity<?> confirm(@PathVariable Long id) {
-        return ResponseEntity.ok(orderService.confirm(id));
+        try {
+            return ResponseEntity.ok(OrderResponse.from(orderService.confirm(id)));
+        } catch (IndexOutOfBoundsException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", e.getMessage()));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
     }
 
     @PostMapping("/{id}/cancel")
     public ResponseEntity<?> cancel(@PathVariable Long id) {
-        return ResponseEntity.ok(orderService.cancel(id));
+        try {
+            return ResponseEntity.ok(OrderResponse.from(orderService.cancel(id)));
+        } catch (IndexOutOfBoundsException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", e.getMessage()));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
     }
 
     @PatchMapping("/{id}/notes")
     public ResponseEntity<?> notes(@PathVariable Long id, @RequestBody Map<String, String> body) {
-        String notes = body == null ? "" : body.getOrDefault("notes", "");
-        return ResponseEntity.ok(orderService.updateNotes(id, notes));
+        try {
+            String notes = body == null ? "" : body.getOrDefault("notes", "");
+            return ResponseEntity.ok(OrderResponse.from(orderService.updateNotes(id, notes)));
+        } catch (IndexOutOfBoundsException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", e.getMessage()));
+        }
     }
 
     /**
@@ -99,9 +125,10 @@ public class OrderController {
 
     @GetMapping("/{id}")
     public ResponseEntity<?> get(@PathVariable Long id) {
-        CustomerOrder order = orderService.findById(id)
-                .orElseThrow(() -> new IndexOutOfBoundsException("No order with id=" + id));
-        return ResponseEntity.ok(order);
+        return orderService.findById(id)
+                .<ResponseEntity<?>>map(order -> ResponseEntity.ok(OrderResponse.from(order)))
+                .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(Map.of("error", "No order with id=" + id)));
     }
 
     /** Wholesale invoice / packing slip PDF for one order. */
@@ -130,26 +157,36 @@ public class OrderController {
      */
     @PostMapping
     public ResponseEntity<?> create(@RequestBody CreateOrderRequest body) {
-        if (body == null || body.customerId() == null) {
-            throw new IllegalArgumentException("customerId is required.");
+        try {
+            if (body == null || body.customerId() == null) {
+                return ResponseEntity.badRequest().body(Map.of("error", "customerId is required."));
+            }
+            LocalDate date = body.orderDate() != null ? body.orderDate() : LocalDate.now();
+            CustomerOrder saved = orderService.create(
+                    body.customerId(), date, body.status(), body.notes(),
+                    body.handoffType(), body.lines() == null ? null : body.lines().stream().map(line -> line == null ? null : line.toOrderLine()).toList());
+            return ResponseEntity.status(HttpStatus.CREATED).body(OrderResponse.from(saved));
+        } catch (IndexOutOfBoundsException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", e.getMessage()));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
-        LocalDate date = body.orderDate() != null ? body.orderDate() : LocalDate.now();
-        CustomerOrder saved = orderService.create(
-                body.customerId(), date, body.status(), body.notes(),
-                body.handoffType(), body.lines());
-        return ResponseEntity.status(HttpStatus.CREATED).body(saved);
     }
 
     @PatchMapping("/{id}/status")
     public ResponseEntity<?> status(@PathVariable Long id, @RequestBody Map<String, String> body) {
-        String status = body == null ? null : body.get("status");
-        return ResponseEntity.ok(orderService.updateStatus(id, status));
+        try {
+            String status = body == null ? null : body.get("status");
+            return ResponseEntity.ok(OrderResponse.from(orderService.updateStatus(id, status)));
+        } catch (IndexOutOfBoundsException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", e.getMessage()));
+        }
     }
 
     @PatchMapping("/{id}/handoff")
     public ResponseEntity<?> handoff(@PathVariable Long id, @RequestBody Map<String, String> body) {
         String handoffType = body == null ? null : body.get("handoffType");
-        return ResponseEntity.ok(orderService.updateHandoffType(id, handoffType));
+        return ResponseEntity.ok(OrderResponse.from(orderService.updateHandoffType(id, handoffType)));
     }
 
     /**
@@ -158,12 +195,22 @@ public class OrderController {
      */
     @PostMapping("/{id}/fulfill")
     public ResponseEntity<?> fulfill(@PathVariable Long id) {
-        return ResponseEntity.ok(orderService.fulfill(id));
+        try {
+            return ResponseEntity.ok(OrderResponse.from(orderService.fulfill(id)));
+        } catch (IndexOutOfBoundsException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", e.getMessage()));
+        }
     }
 
     @PostMapping("/{id}/lines")
-    public ResponseEntity<?> addLine(@PathVariable Long id, @RequestBody OrderLine line) {
-        return ResponseEntity.ok(orderService.addLine(id, line));
+    public ResponseEntity<?> addLine(@PathVariable Long id, @RequestBody OrderLineRequest body) {
+        try {
+            return ResponseEntity.ok(OrderResponse.from(orderService.addLine(id, body.toOrderLine())));
+        } catch (IndexOutOfBoundsException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", e.getMessage()));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
     }
 
     @DeleteMapping("/{id}")
@@ -178,6 +225,6 @@ public class OrderController {
             String status,
             String notes,
             String handoffType,
-            List<OrderLine> lines
+            List<OrderLineRequest> lines
     ) {}
 }

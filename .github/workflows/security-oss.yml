@@ -1,0 +1,70 @@
+name: Security scans
+
+on:
+  push:
+    branches: [main, codex/recover-unpushed-work]
+  pull_request:
+    branches: [main, codex/recover-unpushed-work]
+  schedule:
+    - cron: "17 6 * * 1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-oss-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  security:
+    name: FindSecBugs and live OSV
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+
+      - name: Test security evidence guards
+        run: python3 -m unittest discover -s scripts/security -p 'test_*.py' -v
+
+      - name: Compile and generate resolved Maven SBOM
+        id: build
+        shell: bash
+        run: |
+          mkdir -p target/security
+          mvn -B -ntp -U package -DskipTests -Psecurity-oss | tee target/security/build.log
+          test -s target/classes/META-INF/sbom/application.cdx.json
+
+      - name: Gate Medium and High security findings
+        shell: bash
+        run: |
+          mvn -B -ntp -U -Psecurity-oss com.github.spotbugs:spotbugs-maven-plugin:4.10.4.0:spotbugs | tee target/security/findsecbugs.log
+          python3 scripts/security/classify_sast.py target/spotbugsXml.xml config/security-reviewed-findings.json --plugin "$HOME/.m2/repository/com/h3xstream/findsecbugs/findsecbugs-plugin/1.14.0/findsecbugs-plugin-1.14.0.jar" | tee target/security/sast-gate.json
+
+      - name: Gate every resolved Maven identity with the live OSV API
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        shell: bash
+        run: |
+          python3 scripts/security/security_checks.py live-osv target/classes/META-INF/sbom/application.cdx.json target/security/osv-live.json | tee target/security/inventory-receipt.json
+
+      - name: Retain repository security reports
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: security-reports
+          retention-days: 7
+          if-no-files-found: error
+          path: |
+            target/security/
+            target/spotbugsXml.xml
+            target/spotbugsSarif.json
+            target/classes/META-INF/sbom/application.cdx.json

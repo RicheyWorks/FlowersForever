@@ -671,7 +671,7 @@ jobs:
             sha256sum --check SHA256SUMS.txt
           )
 
-      - name: Preserve the private candidate bundle
+      - name: Preserve the unsigned candidate bundle
         uses: actions/upload-artifact@v7
         with:
           name: FlowersForever-${{ needs.verify.outputs.version }}-candidate
@@ -680,7 +680,7 @@ jobs:
           retention-days: 7
 
   publish:
-    name: Publish complete private release
+    name: Publish complete signed release
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     needs: [verify, windows-release, macos-release]
     runs-on: ubuntu-latest
@@ -734,7 +734,7 @@ jobs:
           body: |
             ## FlowersForever ${{ github.ref_name }}
 
-            A verified private RicheyWorks release artifact set.
+            A verified RicheyWorks release artifact set.
 
             Every attached artifact was produced from the same tested source and version.
             `SHA256SUMS.txt` verifies the JAR, installers, SBOM, and third-party notice.

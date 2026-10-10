@@ -14,7 +14,7 @@ FlowersForever brings a farm's plans, harvests, stock, customers, orders, and fi
 
 **Local desktop records · Printable farm paperwork · Optional connected phone field entry**
 
-[See a five-minute farm day](#take-a-five-minute-tour) · [Explore farm types](#one-farm-can-be-many-things) · [Ask about the private preview](docs/PILOT_ACCESS.md)
+[See a five-minute farm day](#take-a-five-minute-tour) · [Explore farm types](#one-farm-can-be-many-things) · [Ask about pilot access](docs/PILOT_ACCESS.md)
 
 </div>
 
@@ -142,7 +142,7 @@ Follow a sample cut-flower farm from the morning overview through a harvest, pac
 4. [**Day closeout:**](docs/images/app-day-closeout.png) Review finished work and open follow-ups.
 5. [**Knowledge Log:**](docs/images/app-knowledge-log.png) Find a lesson worth using next season.
 
-FlowersForever is a **private preview**. External farm distribution awaits an approved signed release. Ask your established RicheyWorks contact about a guided walkthrough, fit, and timing. [Check private pilot access](docs/PILOT_ACCESS.md).
+FlowersForever is in development. The public source is available under the MIT License; supported farm installation awaits an approved signed release. Ask your established RicheyWorks contact about a guided walkthrough, fit, and timing. [Check pilot access](docs/PILOT_ACCESS.md).
 
 ## Find your next step
 
@@ -322,19 +322,24 @@ Full setup details: [connector sandbox guide](docs/CONNECTORS_SANDBOX.md).
 | `GET` | `/api/briefing/report.pdf` | Morning briefing |
 | `GET` | `/api/closeout/report.pdf` | Day closeout |
 | `GET` | `/actuator/health` | Application health |
+| `GET` | `/api/auth/csrf` | Fresh masked token and HttpOnly cookie for HTTP writes |
 | `GET` | `/api/harness/manifest` | Opt-in AI tool and schema discovery |
 | `POST` | `/api/harness/farm-data/commands` | Opt-in canonical migration and farm operations |
 
 Printable inventory, harvest, invoice, statement, packing, weekly, and audit routes also provide PDF output. Browse `com.flowerfarm.controller` for the full API surface.
 
+HTTP `POST`, `PUT`, `PATCH`, and `DELETE` requests require a CSRF cookie/header handshake in both local open mode and authenticated mode. The worker performs it automatically before each save, including queued replays and photo uploads. External API and HTTP harness clients must retain the cookie from `GET /api/auth/csrf` and send the returned masked token in its named header. See [HTTP client writes](docs/HTTP_CLIENT_WRITES.md) for examples. Desktop, CLI, and MCP stdio calls continue to use application services directly.
+
 When the opt-in AI harness is enabled, `GET /api/harness/manifest` publishes its authenticated protocol, current policy, plug-ins, and provider-neutral JSON-Schema tools. The headless `farm-data` plugin accepts nine mappable operational types—including production templates, planting plans, and nested floral recipes—and exposes production-task attachment metadata as a tenth readable/exportable type, without driving the desktop. Its three-step suggest/preview/import intake maps arbitrary spreadsheet or provider objects, while stable source-system and row keys make migration replay durable across request changes and application restarts. Checksummed snapshots of the plugin's published canonical record types can be created, recovered, and consumed across restarts; dedicated actions upload retry-safe task photos and read their verified bytes in bounded chunks. Farm setup is recovered through a [database backup](docs/BACKUP_RESTORE.md), not those snapshots. The transport is absent in ordinary disabled and CLI modes; an explicitly enabled container deployment requires both normal HTTP authentication and the harness token.
+
+HTTP inventory/harvest/audit CSV exports accept CSV leaf filenames and write beneath `flowerfarm.exports.directory`. Configure that directory on the server. Desktop file chooser and operator-configured connector paths retain their local selection behavior.
 
 </details>
 
 <details>
 <summary><strong>Architecture, quality, and release engineering</strong></summary>
 
-FlowersForever is a Spring Boot 3.5.16 application with a modular Swing desktop interface, REST controllers, transaction-aware services, offline-first connectors, and a version-migrated local H2 store. SQLite remains a developer-preview compatibility profile.
+FlowersForever is a Spring Boot 4.1.1 application with a modular Swing desktop interface, REST controllers, transaction-aware services, offline-first connectors, and a version-migrated local H2 store. SQLite remains a developer-preview compatibility profile.
 
 ```text
 com.flowerfarm
@@ -354,7 +359,7 @@ com.flowerfarm
 | **Quality** | JaCoCo coverage gates, zero-baseline Medium+ SpotBugs, and Checkstyle |
 | **Desktop journeys** | Accessible selectors, 36 recursive routes, exhaustive option/state/scroll matrices with restoration, whole-catalog and all-connector button sweeps, async failure capture, and an opt-in native-input smoke |
 | **AI harness** | Native stdio launcher and readiness doctor; guided mapping plus canonical farm-data migration, durable exports, and operations, discoverable provider tools, and all 36 desktop routes; durable source-row receipts, nested schemas, value-redacted observations, and replay safety |
-| **Security** | Medium+ SpotBugs gate, role tests, and fail-closed container authentication |
+| **Security** | Medium+ SpotBugs, source-bound FindSecBugs and OSV gates, public CodeQL/dependency review, role tests, and fail-closed container authentication |
 | **Supply chain** | CycloneDX SBOM, bundled third-party notices, incompatible-license gates, dependency submission, and Dependabot |
 | **Releases** | One verified JAR feeds both installers; tag/POM versions must match and nothing publishes until every platform passes |
 
@@ -364,11 +369,11 @@ Read the [system architecture](docs/ARCHITECTURE.md), [backend boundaries](docs/
 
 ## Project status
 
-Current status: **v1.2.0 proprietary private preview.** The previous v1.0.19 artifacts are retired and must not be distributed to customers.
+Current source: **1.3.0-SNAPSHOT**, licensed under the [MIT License](LICENSE). The previous v1.0.19 artifacts are retired and must not be distributed to customers.
 
 The core harvest → inventory → order → market-day → closeout workflow, visual planning, Production Studio, and Farm Knowledge Log are implemented in this preview. Signed customer distribution still depends on the [release signing gate](docs/SIGNING_SETUP.md). See [known limitations](docs/KNOWN_LIMITATIONS.md), the [product roadmap](docs/PRODUCT_ROADMAP.md), and [ideas being evaluated](docs/FUTURE_IDEAS.md) for what remains.
 
-[![CI](https://github.com/RicheyWorks/FlowersForever/actions/workflows/ci.yml/badge.svg)](https://github.com/RicheyWorks/FlowersForever/actions/workflows/ci.yml) [![Proprietary — All Rights Reserved](https://img.shields.io/badge/License-Proprietary-6e2f45)](LICENSE)
+[![CI](https://github.com/RicheyWorks/FlowersForever/actions/workflows/ci.yml/badge.svg)](https://github.com/RicheyWorks/FlowersForever/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 ## Made for growers
 
@@ -378,8 +383,4 @@ Roses, compost, and Cascades mist included free of charge.
 
 ## Ownership
 
-**FlowersForever is private, proprietary software owned by RicheyWorks. Copyright © 2026 RicheyWorks. All rights reserved.**
-
-Access to this repository does not grant permission to use, copy, modify, distribute, sublicense, sell, publish, or disclose FlowersForever. Use requires a separate written agreement expressly authorized by RicheyWorks. See the [FlowersForever Proprietary License](LICENSE).
-
-Third-party components remain governed by their own licenses; those terms apply only to the applicable components and do not make FlowersForever open source.
+FlowersForever is owned by RicheyWorks. Copyright © 2026 RicheyWorks. The [MIT License](LICENSE) grants permission to use, copy, modify, and distribute the owned source and associated materials. Third-party components retain their own licenses and notices.

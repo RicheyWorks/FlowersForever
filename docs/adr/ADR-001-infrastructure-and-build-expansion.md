@@ -4,6 +4,8 @@
 **Date:** 2026-07-16
 **Deciders:** Richmond (RicheyWorks)
 
+**2026-10-03 amendment:** The repository is private under personal ownership. The original public-repository/free-CodeQL cost assumption below no longer applies. The owner approved replacing the unavailable CodeQL upload and GitHub dependency-review checks with a standalone FindSecBugs gate for unreviewed Medium/High SECURITY findings and a full resolved-Maven-SBOM offline OSV gate. The approved 21 desktop/operator-path contextual heuristics retain raw findings and require exact fingerprints plus the complete production source inventory; any production change requires re-review. See [SECURITY.md](../../SECURITY.md#security-scans) for enforced thresholds, privacy, licenses and coverage limits. Existing build/test, Docker, coverage, general quality and release jobs remain in place. Private Actions minutes/storage can incur usage charges even though these scanner licenses require no additional purchase.
+
 ## Context
 
 FlowersForever v1.0.18 ships with minimal but working automation: CI runs `mvn clean verify` on Ubuntu + Temurin 17, Dependabot files weekly PRs, and a tag push publishes the fat JAR to GitHub Releases. There is no coverage measurement, no static analysis, no container image, no vulnerability scanning beyond Dependabot version bumps, and the only install artifact is a bare JAR that requires a local JDK 17.
@@ -74,7 +76,7 @@ Rejected outright: no deployment target exists that would justify k8s/IaC, and a
 2. [x] Headless guard in `FlowerFarmGUI.run()`
 3. [x] `Dockerfile` + `.dockerignore`; GHCR publish job in release workflow
 4. [x] CI: JDK 17/21 matrix + quality-report job + coverage artifact
-5. [x] `codeql.yml` + `dependency-review.yml` workflows (both skip private repositories unless the corresponding GitHub security features are explicitly enabled)
+5. [x] Public `codeql.yml` + `dependency-review.yml` checks plus the independent `security-oss.yml` gate for public or private repositories
 6. [x] Gated `release.yml`: one verified JAR feeds jpackage MSI + DMG before publication
 7. [x] Baseline recorded and ratchet set (2026-07-16, see below)
 8. [x] Code signing evaluated — deferred with defined trigger, see [ADR-002](ADR-002-code-signing.md)

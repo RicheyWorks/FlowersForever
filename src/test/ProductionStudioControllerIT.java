@@ -1,5 +1,7 @@
 package com.flowerfarm.integration;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.flowerfarm.controller.ProductionStudioController;
 import com.flowerfarm.model.FarmSeasonSettings;
 import com.flowerfarm.model.FloralRecipe;
@@ -26,9 +28,11 @@ import java.time.Instant;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -43,6 +47,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class ProductionStudioControllerIT {
 
     @Autowired MockMvc mockMvc;
+    @Autowired ObjectMapper mapper;
     @MockitoBean ProductionStudioService service;
 
     @Test
@@ -126,6 +131,29 @@ class ProductionStudioControllerIT {
                 .andExpect(jsonPath("$.id").value(3))
                 .andExpect(jsonPath("$.cropName").value("Sunflower"))
                 .andExpect(jsonPath("$.sowDaysFromFrost").value(-42));
+    }
+
+    @Test
+    @DisplayName("null template and recipe requests return 400 without saving anything")
+    void rejectsNullProductionRequestsBeforeServiceCalls() throws Exception {
+        ProductionStudioController controller = new ProductionStudioController(service);
+        assertThatThrownBy(() -> controller.createTemplate(null))
+                .isInstanceOf(IllegalArgumentException.class).hasMessage("Growing template is required.");
+        assertThatThrownBy(() -> controller.updateTemplate(9L, null))
+                .isInstanceOf(IllegalArgumentException.class).hasMessage("Growing template is required.");
+        assertThatThrownBy(() -> controller.createRecipe(null))
+                .isInstanceOf(IllegalArgumentException.class).hasMessage("Floral recipe is required.");
+        assertThatThrownBy(() -> controller.updateRecipe(8L, null))
+                .isInstanceOf(IllegalArgumentException.class).hasMessage("Floral recipe is required.");
+        for (String resource : List.of("templates", "recipes")) {
+            mockMvc.perform(post("/api/production-studio/" + resource)
+                            .contentType(MediaType.APPLICATION_JSON).content("null"))
+                    .andExpect(status().isBadRequest());
+            mockMvc.perform(put("/api/production-studio/" + resource + "/9")
+                            .contentType(MediaType.APPLICATION_JSON).content("null"))
+                    .andExpect(status().isBadRequest());
+        }
+        verifyNoInteractions(service);
     }
 
     @Test
@@ -259,6 +287,120 @@ class ProductionStudioControllerIT {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.profit").value(474.5))
                 .andExpect(jsonPath("$.marginPercent").value(52.72));
+    }
+
+    @Test
+    @DisplayName("template create and update never bind managed fields from a request")
+    void refusesManagedTemplateFields() throws Exception {
+        GrowingTemplate saved = template();
+        ObjectNode request = mapper.valueToTree(saved);
+        request.put("id", 999).put("createdAt", "1999-01-01T00:00:00Z")
+                .put("updatedAt", "1999-01-02T00:00:00Z");
+        when(service.createTemplate(any())).thenReturn(saved);
+        when(service.updateTemplate(eq(9L), any())).thenReturn(saved);
+        mockMvc.perform(post("/api/production-studio/templates").contentType(MediaType.APPLICATION_JSON)
+                        .content(mapper.writeValueAsString(request)))
+                .andExpect(status().isCreated()).andExpect(jsonPath("$.id").value(9));
+        mockMvc.perform(put("/api/production-studio/templates/9").contentType(MediaType.APPLICATION_JSON)
+                        .content(mapper.writeValueAsString(request)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.id").value(9));
+        var created = org.mockito.ArgumentCaptor.forClass(GrowingTemplate.class);
+        var updated = org.mockito.ArgumentCaptor.forClass(GrowingTemplate.class);
+        verify(service).createTemplate(created.capture());
+        verify(service).updateTemplate(eq(9L), updated.capture());
+        for (GrowingTemplate incoming : List.of(created.getValue(), updated.getValue())) {
+            assertThat(incoming.getId()).isNull();
+            assertThat(incoming.getCreatedAt()).isNull();
+            assertThat(incoming.getUpdatedAt()).isNull();
+            assertThat(incoming.getSowDaysFromFrost()).isEqualTo(-28);
+            assertThat(incoming.getTransplantDaysFromFrost()).isEqualTo(7);
+            assertThat(incoming.getGerminationPercent()).isEqualTo(90);
+            assertThat(incoming.isActive()).isTrue();
+        }
+    }
+
+    @Test
+    @DisplayName("recipe create and update ignore nested persistence identity and back references")
+    void refusesManagedRecipeAndIngredientFields() throws Exception {
+        FloralRecipe saved = recipe();
+        ObjectNode request = mapper.valueToTree(saved);
+        request.put("id", 999).put("createdAt", "1999-01-01T00:00:00Z")
+                .put("updatedAt", "1999-01-02T00:00:00Z");
+        ObjectNode ingredient = (ObjectNode) request.withArray("ingredients").get(0);
+        ingredient.put("id", 998);
+        ingredient.putObject("recipe").put("id", 997).put("name", "Other recipe");
+        when(service.createRecipe(any())).thenReturn(saved);
+        when(service.updateRecipe(eq(8L), any())).thenReturn(saved);
+        mockMvc.perform(post("/api/production-studio/recipes").contentType(MediaType.APPLICATION_JSON)
+                        .content(mapper.writeValueAsString(request)))
+                .andExpect(status().isCreated()).andExpect(jsonPath("$.id").value(8))
+                .andExpect(jsonPath("$.ingredients[0].recipe").doesNotExist());
+        mockMvc.perform(put("/api/production-studio/recipes/8").contentType(MediaType.APPLICATION_JSON)
+                        .content(mapper.writeValueAsString(request)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.id").value(8));
+        var created = org.mockito.ArgumentCaptor.forClass(FloralRecipe.class);
+        var updated = org.mockito.ArgumentCaptor.forClass(FloralRecipe.class);
+        verify(service).createRecipe(created.capture());
+        verify(service).updateRecipe(eq(8L), updated.capture());
+        for (FloralRecipe incoming : List.of(created.getValue(), updated.getValue())) {
+            assertThat(incoming.getId()).isNull();
+            assertThat(incoming.getCreatedAt()).isNull();
+            assertThat(incoming.getUpdatedAt()).isNull();
+            assertThat(incoming.getIngredients()).hasSize(1);
+            FloralRecipeIngredient line = incoming.getIngredients().get(0);
+            assertThat(line.getId()).isNull();
+            assertThat(line.getRecipe()).isSameAs(incoming);
+            assertThat(line.getItemName()).isEqualTo("Dahlia");
+            assertThat(line.getStemsPerDesign()).isEqualTo(5);
+            assertThat(line.getPackSize()).isEqualTo(10);
+            assertThat(line.getPackCost()).isEqualTo(14);
+        }
+    }
+
+    @Test
+    @DisplayName("explicit production responses preserve complete existing template and recipe JSON")
+    void preservesProductionResponseShapes() throws Exception {
+        GrowingTemplate template = template();
+        FloralRecipe recipe = recipe();
+        when(service.listTemplates()).thenReturn(List.of(template));
+        when(service.listRecipes()).thenReturn(List.of(recipe));
+        when(service.getRecipe(8L)).thenReturn(recipe);
+        String templates = mockMvc.perform(get("/api/production-studio/templates"))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        String recipes = mockMvc.perform(get("/api/production-studio/recipes"))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        String single = mockMvc.perform(get("/api/production-studio/recipes/8"))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        // Parse both wire representations so Long IDs use the same JSON numeric node type.
+        assertThat(mapper.readTree(templates))
+                .isEqualTo(mapper.readTree(mapper.writeValueAsString(List.of(template))));
+        assertThat(mapper.readTree(recipes))
+                .isEqualTo(mapper.readTree(mapper.writeValueAsString(List.of(recipe))));
+        assertThat(mapper.readTree(single)).isEqualTo(mapper.readTree(mapper.writeValueAsString(recipe)));
+    }
+
+    private static GrowingTemplate template() {
+        GrowingTemplate template = new GrowingTemplate("Dahlia", "Dahlia", "Cafe", 12, 2,
+                -28, 7, 80, 21, 14, 6, 90, 7, 14, true, "Support early");
+        template.setId(9L);
+        org.springframework.test.util.ReflectionTestUtils.setField(template, "createdAt",
+                Instant.parse("2026-08-20T12:00:00Z"));
+        org.springframework.test.util.ReflectionTestUtils.setField(template, "updatedAt",
+                Instant.parse("2026-08-21T12:00:00Z"));
+        return template;
+    }
+
+    private static FloralRecipe recipe() {
+        FloralRecipe recipe = new FloralRecipe("Autumn event", "Centerpiece", 45, 18, 25, 15, 10, "");
+        recipe.setId(8L);
+        FloralRecipeIngredient ingredient = new FloralRecipeIngredient("Dahlia", 5, 10, 14, "Fresh");
+        ingredient.setId(11L);
+        recipe.addIngredient(ingredient);
+        org.springframework.test.util.ReflectionTestUtils.setField(recipe, "createdAt",
+                Instant.parse("2026-08-20T12:00:00Z"));
+        org.springframework.test.util.ReflectionTestUtils.setField(recipe, "updatedAt",
+                Instant.parse("2026-08-21T12:00:00Z"));
+        return recipe;
     }
 
     @Test

@@ -11,7 +11,6 @@ import org.springframework.http.HttpMethod;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -20,6 +19,7 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.provisioning.InMemoryUserDetailsManager;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -42,7 +42,7 @@ public class SecurityConfig {
     @Bean
     @ConditionalOnProperty(name = "flowerfarm.auth.enabled", havingValue = "false", matchIfMissing = true)
     public SecurityFilterChain openSecurity(HttpSecurity http) throws Exception {
-        http.csrf(AbstractHttpConfigurer::disable)
+        http.csrf(csrf -> csrf.csrfTokenRepository(csrfTokenRepository()))
                 .authorizeHttpRequests(auth -> auth.anyRequest().permitAll());
         return http.build();
     }
@@ -60,13 +60,13 @@ public class SecurityConfig {
     @Bean
     @ConditionalOnProperty(name = "flowerfarm.auth.enabled", havingValue = "true")
     public SecurityFilterChain securedSecurity(HttpSecurity http) throws Exception {
-        http.csrf(AbstractHttpConfigurer::disable)
+        http.csrf(csrf -> csrf.csrfTokenRepository(csrfTokenRepository()))
                 .sessionManagement(session -> session
                         .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/actuator/health", "/actuator/info").permitAll()
                         // Account discovery (usernames only, no passwords)
-                        .requestMatchers(HttpMethod.GET, "/api/auth/accounts").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/auth/accounts", "/api/auth/csrf").permitAll()
                         // VIEWER: read-only
                         .requestMatchers(HttpMethod.GET, "/api/**").hasAnyRole(
                                 FarmRole.OWNER.name(), FarmRole.HAND.name(), FarmRole.VIEWER.name())
@@ -85,6 +85,15 @@ public class SecurityConfig {
                         .anyRequest().authenticated())
                 .httpBasic(Customizer.withDefaults());
         return http.build();
+    }
+
+    private static CookieCsrfTokenRepository csrfTokenRepository() {
+        CookieCsrfTokenRepository repository = new CookieCsrfTokenRepository();
+        // Clients obtain the BREACH-protected token from /api/auth/csrf, rather
+        // than reading the raw token cookie. Keep the cookie HttpOnly and host-only.
+        repository.setCookiePath("/");
+        repository.setCookieCustomizer(cookie -> cookie.sameSite("Strict"));
+        return repository;
     }
 
     @Bean

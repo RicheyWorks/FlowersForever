@@ -1,6 +1,6 @@
 "use strict";
 
-const CACHE = "flowersforever-worker-v9";
+const CACHE = "flowersforever-worker-v10";
 const SHELL = [
   "/worker/",
   "/worker/worker.css",

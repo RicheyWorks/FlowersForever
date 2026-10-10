@@ -170,6 +170,28 @@ is omitted from AI-facing observations and status responses; it is audit metadat
 under the shared local harness credential, not proof of an external human
 identity.
 
+### Browser request protection
+
+Both the open loopback mode and authenticated HTTP mode protect unsafe requests
+with a CSRF token and its matching cookie. `GET /api/auth/csrf` issues the token
+and header name with a `Cache-Control: no-store` response. HTTP clients must keep
+the cookie and send the returned token in that header for writes, including
+multipart uploads. Authentication and role checks still apply separately.
+
+The field worker obtains a fresh token before each write and keeps tokens out of
+its durable offline queue. Native Swing and MCP clients that call farm services
+directly do not use this HTTP handshake. Cached browser Basic credentials are
+not sufficient to authorize a cross-site form submission.
+
+### Shopify credentials and pagination
+
+Live Shopify requests admit only the configured store's HTTPS `myshopify.com`
+address on the default HTTPS port. Pagination retains that admitted authority
+and product endpoint while preserving the opaque page query; foreign origins,
+unexpected paths, ambiguous headers and repeated pages are refused. The Shopify
+HTTP transport disables redirects so the Admin API token cannot follow one to
+another destination. Product HTML descriptions use a bounded linear scan.
+
 ### Automatic updates
 
 The desktop fetches one signed manifest over HTTPS (and, after consent, the
@@ -185,15 +207,60 @@ Default inventory DB is local **H2** (`./data/flowerfarm.mv.db`) or optional **S
 
 ## Dependency hygiene
 
-- CI runs `mvn clean verify` on every push/PR to `main`.
+- CI runs `mvn clean verify` on every push/PR to `main` and the development branch.
 - Dependabot opens weekly PRs for Maven and GitHub Actions.
 - Major framework bumps (e.g. Spring Boot 4, OpenPDF 3) are reviewed deliberately; minor/patch deps are preferred.
-- The POM overrides inherited versions with Jackson **2.21.5**, Log4j **2.25.5**,
-  Commons Lang **3.18.0**, and Tomcat **10.1.59** to address dependency advisories.
-  Tomcat's FORM authentication, DIGEST replay, and path-constraint fixes were made
-  in 10.1.58, but that release vote failed; Apache identifies **10.1.59** as the
-  released version containing those fixes. See the
-  [Apache Tomcat security advisory](https://tomcat.apache.org/security-10.html#Fixed_in_Apache_Tomcat_10.1.59).
+- Spring Boot **4.1.1** supplies Spring Framework **7.0.9**. The POM applies security
+  patches Jackson **2.21.7**, Jackson **3.1.7** and Tomcat **11.0.25** beyond that BOM.
+  H2 stays on **2.3.232** pending release of the upstream CHECK-constraint fix;
+  the POM documents the compatibility reason. The resolved SBOM is checked live.
+
+## Security scans
+
+[Security scans](.github/workflows/security-oss.yml) runs on pushes and PRs to `main` and `codex/recover-unpushed-work`, plus a weekly sweep. The public repository also runs native CodeQL and PR dependency review. These checks require no paid GitHub security subscription and do not alter application authentication.
+
+| Check | Enforced policy and limits |
+| --- | --- |
+| FindSecBugs 1.14.0 / SpotBugs 4.10.4 | Analyze compiled application classes; fail on every **unreviewed** Medium/High `SECURITY` finding and on incomplete analysis. Exact reviewed contexts remain in raw reports and are matched by a source-bound classifier. Low findings remain in XML/SARIF for review. Detector findings are not all confirmed vulnerabilities. |
+| Live OSV API | Query every resolved Maven group/artifact/version in the generated CycloneDX SBOM against OSV's current index. Fail on every known match, API error, stale HTTP response, malformed advisory, unsupported identity, unexhausted pagination or incomplete query inventory. No severity exemption or ignore policy is configured. |
+
+These checks have different rule sets and analysis models from CodeQL. The OSV gate checks the whole resolved SBOM rather than GitHub's PR dependency delta, and does not provide GitHub's native dependency-review policy or code-scanning alerts. It cannot establish the absence of vulnerabilities. Test-only dependencies, Maven build plugins, GitHub Actions, the JRE and container OS are outside this Maven application SBOM gate; Dependabot and the existing build/test jobs remain separate controls.
+
+The [reviewed contexts](config/security-reviewed-findings.md) cover desktop chooser destinations, operator-configured file locations, metadata-quoted database identifiers and the specifically admitted installer/signature commands. They are exact finding fingerprints/occurrences, not category, class or method exclusions. The manifest binds the analyzer artifact/version, **every production Java source path and content hash under `src/main/java`**, and `pom.xml`. A changed/added/removed production source, Maven configuration change, changed finding, or unused review entry fails and requires contextual re-review. Source symlinks and directory reparse points are rejected. These bindings cover the reviewed source/build inputs, not a complete runtime call graph.
+
+Source and POM hashes normalize only CRLF to LF for Windows/Linux portability. Finding hashes retain every annotation value, duplicate, message and source/bytecode location; they normalize XML formatting and attribute order, and sort only the existing unordered `String role="Unknown source"` annotation slots. All other annotation order remains significant. The observed raw instance hashes remain as provenance, and raw XML/SARIF retain all reviewed findings. A successful gate means zero unreviewed Medium/High findings, not zero raw findings.
+
+The existing CycloneDX package output is `target/classes/META-INF/sbom/application.cdx.json`. Compile, provided, runtime and system dependencies are included by the plugin defaults; test dependencies are excluded. The guard validates each full Maven PURL against its component identity, sends the full Maven namespace, requires one response per query and exhausts all pagination. Every returned advisory is fetched and strictly validated, including its ID, modification timestamp and affected Maven identity.
+
+The workflow sends public Maven dependency coordinates and versions to fixed HTTPS OSV endpoints; it sends no source, application data or credentials. Response dates must be within five minutes of the runner clock, and response hashes plus the exact SBOM hash are retained. Maven downloads build dependencies from its configured repositories. The optional offline database helpers still enforce a 24-hour advisory export limit with checksum, CRC and strict record validation; CI uses live queries because the daily export can lag advisory publication.
+
+XML, SARIF, scanner JSON, SBOM and integrity/completeness receipts are uploaded as repository Actions artifacts, including on scan failure, with seven-day retention. The full public advisory archive is not uploaded. Reports can contain source paths and dependency identities; artifact access follows repository access.
+
+### Run locally
+
+Use JDK 17+, Maven 3.9+ and Python 3.9+:
+
+```bash
+python3 -m unittest discover -s scripts/security -p 'test_*.py' -v
+mvn -B -U package -DskipTests -Psecurity-oss
+mvn -B -U -Psecurity-oss com.github.spotbugs:spotbugs-maven-plugin:4.10.4.0:spotbugs
+python3 scripts/security/classify_sast.py target/spotbugsXml.xml config/security-reviewed-findings.json --plugin "$HOME/.m2/repository/com/h3xstream/findsecbugs/findsecbugs-plugin/1.14.0/findsecbugs-plugin-1.14.0.jar"
+python3 scripts/security/security_checks.py live-osv target/classes/META-INF/sbom/application.cdx.json target/security/osv-live.json
+```
+
+The classifier requires the exact plugin artifact used by Maven. If you set `-Dmaven.repo.local`, pass `--plugin` beneath that repository instead of the default `$HOME/.m2/repository`; a leftover JAR in `target/` is not used by the recipe.
+
+The security compile skips tests; the existing CI JDK 17/21 jobs run the full test suite. The general `quality` profile's report-only policy is unchanged. The CI job has a 15-minute timeout and cancels superseded runs. Standard GitHub-hosted runners are free for this public repository; artifact retention remains seven days.
+
+### Tool and advisory licenses
+
+These tools require no additional scanner subscription. [SpotBugs 4.10.4](https://github.com/spotbugs/spotbugs/blob/4.10.4/LICENSE) is LGPL-2.1, [FindSecBugs 1.14.0](https://github.com/find-sec-bugs/find-sec-bugs/blob/version-1.14.0/LICENSE) is LGPL-3.0, and the [SpotBugs Maven integration](https://github.com/spotbugs/spotbugs-maven-plugin/blob/spotbugs-maven-plugin-4.10.4.0/pom.xml) is Apache-2.0. The optional offline [OSV Scanner 2.6.0](https://github.com/google/osv-scanner/blob/v2.6.0/LICENSE) is Apache-2.0. Analyzer binaries are CI tools, not packaged application dependencies; any later redistribution must respect their licenses.
+
+Advisory data has source-specific licenses: [OSV's data documentation](https://google.github.io/osv.dev/data/) identifies GitHub Advisory Database data as CC-BY-4.0; [OpenSSF malicious-packages](https://github.com/ossf/malicious-packages/blob/main/LICENSE) is Apache-2.0. Reports retain advisory IDs and source references. The initial validated Maven export contained those two providers; the guard decodes every record without discarding unfamiliar advisory IDs.
+
+### Server CSV exports
+
+The harvest and connector audit HTTP export routes accept a CSV leaf filename beneath `flowerfarm.exports.directory` (default `exports`). HTTP callers cannot choose an arbitrary server path. The directory **and every ancestor** must remain protected from writes or renames by untrusted local users. On filesystems without secure relative directory operations or stable file keys, path/creation metadata checks are best-effort and cannot prove safety against malicious local replacement; filesystem permissions are the trust boundary. Desktop exports require an approved file chooser selection and retain the user's selected destination; configured CSV/Excel connectors and startup seed paths are operator configuration.
 
 ## Hardening checklist (shared barn PC)
 

@@ -1,8 +1,10 @@
 package com.flowerfarm.controller;
 
 import com.flowerfarm.model.FarmSeasonSettings;
-import com.flowerfarm.model.FloralRecipe;
-import com.flowerfarm.model.GrowingTemplate;
+import com.flowerfarm.controller.dto.ProductionApiDtos.RecipeRequest;
+import com.flowerfarm.controller.dto.ProductionApiDtos.RecipeResponse;
+import com.flowerfarm.controller.dto.ProductionApiDtos.TemplateRequest;
+import com.flowerfarm.controller.dto.ProductionApiDtos.TemplateResponse;
 import com.flowerfarm.model.ProductionTaskStatus;
 import com.flowerfarm.service.ProductionStudioService;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -65,18 +67,26 @@ public class ProductionStudioController {
 
     @GetMapping("/templates")
     public ResponseEntity<?> templates() {
-        return ResponseEntity.ok(service.listTemplates());
+        return ResponseEntity.ok(service.listTemplates().stream().map(TemplateResponse::from).toList());
     }
 
     @PostMapping("/templates")
-    public ResponseEntity<?> createTemplate(@RequestBody GrowingTemplate template) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(service.createTemplate(template));
+    public ResponseEntity<?> createTemplate(@RequestBody TemplateRequest template) {
+        if (template == null) {
+            throw new IllegalArgumentException("Growing template is required.");
+        }
+        return ResponseEntity.status(HttpStatus.CREATED).body(TemplateResponse.from(
+                service.createTemplate(template.toTemplate())));
     }
 
     @PutMapping("/templates/{id}")
     public ResponseEntity<?> updateTemplate(@PathVariable Long id,
-                                            @RequestBody GrowingTemplate template) {
-        return ResponseEntity.ok(service.updateTemplate(id, template));
+                                            @RequestBody TemplateRequest template) {
+        if (template == null) {
+            throw new IllegalArgumentException("Growing template is required.");
+        }
+        return ResponseEntity.ok(TemplateResponse.from(
+                service.updateTemplate(id, template.toTemplate())));
     }
 
     @DeleteMapping("/templates/{id}")
@@ -142,23 +152,31 @@ public class ProductionStudioController {
 
     @GetMapping("/recipes")
     public ResponseEntity<?> recipes() {
-        return ResponseEntity.ok(service.listRecipes());
+        return ResponseEntity.ok(service.listRecipes().stream().map(RecipeResponse::from).toList());
     }
 
     @GetMapping("/recipes/{id}")
     public ResponseEntity<?> recipe(@PathVariable Long id) {
-        return ResponseEntity.ok(service.getRecipe(id));
+        return ResponseEntity.ok(RecipeResponse.from(service.getRecipe(id)));
     }
 
     @PostMapping("/recipes")
-    public ResponseEntity<?> createRecipe(@RequestBody FloralRecipe recipe) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(service.createRecipe(recipe));
+    public ResponseEntity<?> createRecipe(@RequestBody RecipeRequest recipe) {
+        if (recipe == null) {
+            throw new IllegalArgumentException("Floral recipe is required.");
+        }
+        return ResponseEntity.status(HttpStatus.CREATED).body(RecipeResponse.from(
+                service.createRecipe(recipe.toRecipe())));
     }
 
     @PutMapping("/recipes/{id}")
     public ResponseEntity<?> updateRecipe(@PathVariable Long id,
-                                          @RequestBody FloralRecipe recipe) {
-        return ResponseEntity.ok(service.updateRecipe(id, recipe));
+                                          @RequestBody RecipeRequest recipe) {
+        if (recipe == null) {
+            throw new IllegalArgumentException("Floral recipe is required.");
+        }
+        return ResponseEntity.ok(RecipeResponse.from(
+                service.updateRecipe(id, recipe.toRecipe())));
     }
 
     @DeleteMapping("/recipes/{id}")

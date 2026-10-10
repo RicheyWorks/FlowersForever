@@ -3,8 +3,8 @@
 ## Before installation
 
 - Use a supported 64-bit Windows 10/11 workstation at 1366×768 or larger.
-- Obtain the MSI, `bom.json`, `bom.xml`, `THIRD-PARTY.txt`, and checksum file through the approved private RicheyWorks channel.
-- Verify the MSI SHA-256 value with `Get-FileHash` and confirm its valid signature and expected publisher. Private unsigned candidates are for maintainer validation; external pilots require an approved signed release.
+- Obtain the MSI, `bom.json`, `bom.xml`, `THIRD-PARTY.txt`, and checksum file through the approved RicheyWorks channel.
+- Verify the MSI SHA-256 value with `Get-FileHash` and confirm its valid signature and expected publisher. Unsigned candidates are for maintainer validation; supported external pilots require an approved signed release.
 - Record OWNER, HAND, and VIEWER credentials in the farm's password manager. Every LAN-enabled password must be at least 12 characters.
 - Back up an existing installation with `scripts/backup-data.ps1`, verify the checksum, and copy the ZIP and `.sha256` file off the workstation before upgrading.
 
@@ -70,7 +70,10 @@ not run a permanent background process after the browser is fully closed.
 
 ## Install and accept
 
-1. Install the MSI for the current Windows user and launch FlowersForever.
+1. Install the approved MSI and launch FlowersForever. Current packaging uses the
+   default machine installation; follow the installer's Windows permission prompt.
+   Farm records remain separate for each Windows user in the location below. See
+   [JDK 17 packaging defaults](https://docs.oracle.com/en/java/javase/17/jpackage/packaging-tool-user-guide.pdf).
 2. Confirm the dashboard opens at 1366×768 without clipped primary actions.
 3. Confirm data is stored under `%LOCALAPPDATA%\FlowersForever\data`; packaged upgrades reuse this location.
 4. For an upgrade, confirm startup reports successful Flyway validation/migration before entering new work. Stop and restore the pre-upgrade backup if migration fails.
@@ -105,18 +108,19 @@ JAR, macOS, client-configuration, migration, and reconciliation details.
 
 ## Pre-release candidate validation
 
-The private GitHub Release workflow has a non-publishing candidate path. A pull
+The GitHub Release workflow has a non-publishing candidate path. A pull
 request that changes the release workflow, POM version, or local packaging
 script builds both the MSI and DMG on clean hosted runners. Each runner also
 launches a temporary app image with `--release-smoke` and must produce
 `release-smoke.ok` after the application context, database, and migrations start.
 The same clean images must pass the AI launcher's doctor and a redirected MCP
 stdio ping. Windows uses the console launcher path a real AI client uses; macOS
-uses the additional executable inside the signed app bundle.
+uses the additional executable inside the packaged app bundle. These candidate
+installers are unsigned and reserved for maintainer validation.
 The Windows desktop gate also requires a zero exit code within 90 seconds and
 valid marker contents. A marker from an earlier launch is rejected, and a hung
 smoke process is stopped before the check fails. The signed Windows release and
-private draft preview use the same gate.
+private-repository draft preview use the same gate.
 
 For a local unsigned Windows build, set the POM to its exact stable version and
 run `pwsh -File scripts/build-release.ps1` with JDK 17, Maven, and a compatible
@@ -132,9 +136,12 @@ build directories remain available for investigation and have no completed
 checksum manifest.
 
 Maintainers can also start the workflow manually and optionally provide an exact
-candidate version. Candidate runs upload a checksum-complete private bundle for
+candidate version. Candidate runs upload a checksum-complete bundle for
 7 days, but cannot create a GitHub Release or publish a container. Only an exact
 stable `vX.Y.Z` tag matching the POM can enter the publishing jobs.
+This repository is public: candidate Actions artifacts inherit that visibility.
+For the current `1.3.0-SNAPSHOT` source, the default candidate version is `1.3.0`;
+that candidate version does not establish an approved signed release.
 
 Temporary verified JAR, release metadata, and unsigned installer uploads expire
 after 1 day; the assembled candidate bundle provides the 7-day review copy.
@@ -145,11 +152,11 @@ Download a candidate before its review window ends. If intermediate artifacts
 expire before a delayed job or rerun consumes them, start a complete new run.
 These settings apply to future uploads; older artifacts require separate cleanup.
 
-When Actions artifact quota prevents preview packaging, maintainers can use the
-[private draft preview path](PRIVATE_PREVIEW.md). It transfers the single verified
-JAR and tested installers through an unpublished private draft release, preserving
-existing Actions archives. This is an explicit manual option; normal candidates
-and signed releases keep the existing path.
+This public repository uses the ordinary candidate Actions-artifact path with
+`preview_release_id` left empty. The [private draft preview helper](PRIVATE_PREVIEW.md)
+is retained for private repositories and deliberately refuses this public
+repository. Existing preview releases remain drafts; they are not approved
+signed releases.
 
 An antivirus detection is a stop condition even when the checksum matches.
 Save the alert details and send them to RicheyWorks through the private support

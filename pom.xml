@@ -21,10 +21,10 @@
 
     <licenses>
         <license>
-            <name>FlowersForever Proprietary License — All Rights Reserved</name>
+            <name>MIT License</name>
             <url>LICENSE</url>
-            <distribution>manual</distribution>
-            <comments>No permission is granted except by written agreement with RicheyWorks.</comments>
+            <distribution>repo</distribution>
+            <comments>Copyright (c) 2026 RicheyWorks; see LICENSE for permissions and terms.</comments>
         </license>
     </licenses>
 
@@ -37,6 +37,10 @@
              that connection closes (h2database#4291, fixed upstream but not yet released). Stay on
              2.3.232, which FlowersForever already ships and Flyway 12 is verified with. -->
         <h2.version>2.3.232</h2.version>
+        <!-- Security patch versions beyond the Boot 4.1.1 BOM; both Jackson generations are used. -->
+        <jackson-2-bom.version>2.21.7</jackson-2-bom.version>
+        <jackson-bom.version>3.1.7</jackson-bom.version>
+        <tomcat.version>11.0.25</tomcat.version>
     </properties>
 
     <dependencies>
@@ -251,7 +255,7 @@
                 </executions>
             </plugin>
 
-            <!-- CycloneDX — SBOM (target/bom.json / bom.xml) for supply-chain visibility -->
+            <!-- CycloneDX — Boot-packaged target/classes/META-INF/sbom/application.cdx.* -->
             <plugin>
                 <groupId>org.cyclonedx</groupId>
                 <artifactId>cyclonedx-maven-plugin</artifactId>
@@ -318,7 +322,7 @@
                                         <exclude>nz.ac.waikato.cms.weka:*</exclude>
                                     </excludes>
                                     <searchTransitive>true</searchTransitive>
-                                    <message>Weka is GPLv3 and may not be bundled in the proprietary FlowersForever distribution.</message>
+                                    <message>Weka is GPLv3 and is excluded from the FlowersForever distribution; keep third-party license review explicit.</message>
                                 </bannedDependencies>
                             </rules>
                         </configuration>
@@ -329,6 +333,39 @@
     </build>
 
     <profiles>
+        <!-- Independent security gate; general quality reports remain unchanged. -->
+        <profile>
+            <id>security-oss</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>com.github.spotbugs</groupId>
+                        <artifactId>spotbugs-maven-plugin</artifactId>
+                        <version>4.10.4.0</version>
+                        <configuration>
+                            <effort>Max</effort>
+                            <threshold>Low</threshold>
+                            <failThreshold>Medium</failThreshold>
+                            <failOnError>true</failOnError>
+                            <maxAllowedViolations>0</maxAllowedViolations>
+                            <noClassOk>false</noClassOk>
+                            <includeTests>false</includeTests>
+                            <xmlOutput>true</xmlOutput>
+                            <sarifOutput>true</sarifOutput>
+                            <timeout>300000</timeout>
+                            <includeFilterFile>${project.basedir}/config/spotbugs-security-include.xml</includeFilterFile>
+                            <plugins>
+                                <plugin>
+                                    <groupId>com.h3xstream.findsecbugs</groupId>
+                                    <artifactId>findsecbugs-plugin</artifactId>
+                                    <version>1.14.0</version>
+                                </plugin>
+                            </plugins>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
         <!-- Static analysis: zero-baseline SpotBugs and project-style Checkstyle gates. -->
         <profile>
             <id>quality</id>

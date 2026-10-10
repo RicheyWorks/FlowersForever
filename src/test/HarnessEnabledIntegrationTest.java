@@ -1,5 +1,7 @@
 package com.flowerfarm;
 
+import com.flowerfarm.testsupport.RestCsrfSupport;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.flowerfarm.automation.HarnessCommand;
 import com.flowerfarm.config.HarnessJsonConfig;
@@ -57,7 +59,7 @@ class HarnessEnabledIntegrationTest {
                 JsonNode.class);
         assertThat(unauthorized.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
 
-        HttpHeaders headers = new HttpHeaders();
+        HttpHeaders headers = RestCsrfSupport.headers(rest, url("/api/auth/csrf"));
         headers.set(HarnessController.TOKEN_HEADER, TOKEN);
         ResponseEntity<JsonNode> discovery = rest.exchange(url("/api/harness"),
                 HttpMethod.GET, new HttpEntity<>(headers), JsonNode.class);
@@ -162,7 +164,7 @@ class HarnessEnabledIntegrationTest {
 
     @Test
     void rejectsAmbiguousCommandBodiesThroughTheConfiguredRestTransport() {
-        HttpHeaders headers = new HttpHeaders();
+        HttpHeaders headers = RestCsrfSupport.headers(rest, url("/api/auth/csrf"));
         headers.set(HarnessController.TOKEN_HEADER, TOKEN);
         headers.setContentType(MediaType.APPLICATION_JSON);
         for (String body : List.of(

@@ -1,5 +1,7 @@
 package com.flowerfarm;
 
+import com.flowerfarm.testsupport.RestCsrfSupport;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.flowerfarm.automation.farm.FarmDataImportReceiptService;
 import com.flowerfarm.controller.HarnessController;
@@ -81,7 +83,7 @@ class FarmDataMappingPrecisionIntegrationTest {
     }
 
     private ResponseEntity<JsonNode> command(String action, Map<String, Object> arguments) {
-        HttpHeaders headers = new HttpHeaders();
+        HttpHeaders headers = RestCsrfSupport.headers(rest, "http://127.0.0.1:" + port + "/api/auth/csrf");
         headers.set(HarnessController.TOKEN_HEADER, "farm-data-harness-token-123456");
         headers.setContentType(MediaType.APPLICATION_JSON);
         return rest.exchange("http://127.0.0.1:" + port + "/api/harness/farm-data/commands",

@@ -212,6 +212,25 @@ $manifest = Invoke-RestMethod -Headers $headers `
 $manifest.tools | Select-Object name, risk, allowed
 ```
 
+All HTTP command posts also require the [CSRF cookie/header handshake](HTTP_CLIENT_WRITES.md).
+Keep its cookie in one client session and obtain a fresh masked token immediately
+before each command. Define this helper once for the POST examples below:
+
+```powershell
+$harnessSession = New-Object Microsoft.PowerShell.Commands.WebRequestSession
+function New-HarnessWriteHeaders {
+  $csrf = Invoke-RestMethod -WebSession $harnessSession `
+    -Uri 'http://127.0.0.1:8080/api/auth/csrf'
+  $writeHeaders = @{} + $headers
+  $writeHeaders[$csrf.headerName] = $csrf.token
+  return $writeHeaders
+}
+```
+
+Keep the returned token in memory. A `403` does not authorize an automatic command
+retry; retain the request ID and review the result before an explicit retry.
+MCP stdio transport does not use this HTTP handshake.
+
 The manifest includes protocol version `1.0`, the 256-command replay limit and
 8 MiB eviction target, strict-argument behavior, the effective operator policy for
 every risk, the 30-second physical-command TTL ceiling, the plug-in descriptors,
@@ -325,7 +344,7 @@ $body = @{
   arguments = @{ path = @('Reference & Planning', 'Event services') }
 } | ConvertTo-Json -Depth 4
 
-Invoke-RestMethod -Method Post -Headers $headers -ContentType 'application/json' `
+Invoke-RestMethod -Method Post -Headers (New-HarnessWriteHeaders) -WebSession $harnessSession -ContentType 'application/json' `
   -Uri 'http://127.0.0.1:8080/api/harness/swing-desktop/commands' `
   -Body $body
 ```
@@ -561,7 +580,7 @@ $body = @{
   ) }
 } | ConvertTo-Json -Depth 6
 
-Invoke-RestMethod -Method Post -Headers $headers -ContentType 'application/json' `
+Invoke-RestMethod -Method Post -Headers (New-HarnessWriteHeaders) -WebSession $harnessSession -ContentType 'application/json' `
   -Uri 'http://127.0.0.1:8080/api/harness/farm-data/commands' `
   -Body $body
 ```
@@ -1006,7 +1025,7 @@ $body = @{
   action = 'capture-screen'
   arguments = @{}
 } | ConvertTo-Json
-$capture = Invoke-RestMethod -Method Post -Headers $headers `
+$capture = Invoke-RestMethod -Method Post -Headers (New-HarnessWriteHeaders) -WebSession $harnessSession `
   -ContentType 'application/json' `
   -Uri 'http://127.0.0.1:8080/api/harness/swing-desktop/commands' `
   -Body $body
@@ -1390,7 +1409,7 @@ $leaseBody = @{
     'duration-seconds' = 300
   }
 } | ConvertTo-Json -Depth 4
-$lease = Invoke-RestMethod -Method Post -Headers $headers `
+$lease = Invoke-RestMethod -Method Post -Headers (New-HarnessWriteHeaders) -WebSession $harnessSession `
   -ContentType 'application/json' `
   -Uri 'http://127.0.0.1:8080/api/harness/tesla-optimus/commands' `
   -Body $leaseBody
@@ -1406,7 +1425,7 @@ $stageBody = @{
     'lease-token' = $lease.output.leaseToken
   }
 } | ConvertTo-Json -Depth 5
-$stage = Invoke-RestMethod -Method Post -Headers $headers `
+$stage = Invoke-RestMethod -Method Post -Headers (New-HarnessWriteHeaders) -WebSession $harnessSession `
   -ContentType 'application/json' `
   -Uri 'http://127.0.0.1:8080/api/harness/tesla-optimus/commands' `
   -Body $stageBody
@@ -1420,7 +1439,7 @@ $executeBody = @{
     'lease-token' = $lease.output.leaseToken
   }
 } | ConvertTo-Json -Depth 4
-$execution = Invoke-RestMethod -Method Post -Headers $headers `
+$execution = Invoke-RestMethod -Method Post -Headers (New-HarnessWriteHeaders) -WebSession $harnessSession `
   -ContentType 'application/json' `
   -Uri 'http://127.0.0.1:8080/api/harness/tesla-optimus/commands' `
   -Body $executeBody
@@ -1434,7 +1453,7 @@ $cancelBody = @{
     'lease-token' = $lease.output.leaseToken
   }
 } | ConvertTo-Json -Depth 4
-Invoke-RestMethod -Method Post -Headers $headers `
+Invoke-RestMethod -Method Post -Headers (New-HarnessWriteHeaders) -WebSession $harnessSession `
   -ContentType 'application/json' `
   -Uri 'http://127.0.0.1:8080/api/harness/tesla-optimus/commands' `
   -Body $cancelBody
@@ -1444,7 +1463,7 @@ $statusBody = @{
   action = 'get-operation'
   arguments = @{ 'command-id' = $execution.output.commandId }
 } | ConvertTo-Json -Depth 4
-Invoke-RestMethod -Method Post -Headers $headers `
+Invoke-RestMethod -Method Post -Headers (New-HarnessWriteHeaders) -WebSession $harnessSession `
   -ContentType 'application/json' `
   -Uri 'http://127.0.0.1:8080/api/harness/tesla-optimus/commands' `
   -Body $statusBody
