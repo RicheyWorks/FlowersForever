@@ -600,6 +600,141 @@ class EquipmentReadingsTabTest {
         assertThat(edt(() -> text("value").getText())).isEqualTo("21.125000001");
     }
 
+    @Test void spreadsheetCopyIncludesFullHistoryWhileLatestViewAndDraftStayIntact() throws Exception {
+        for (int i = 0; i < 205; i++) adapterAt("copy-" + i, "2026-10-10T11:00:00Z", "GOOD", "21.125000001");
+        chooseView(1);
+        await(() -> table().getRowCount() == 1 && component("view", JComboBox.class).isEnabled());
+        Path target = copyTarget();
+        var background = new AtomicBoolean();
+        doAnswer(call -> {
+            background.set(!SwingUtilities.isEventDispatchThread());
+            return new FarmReadingService(jdbc).snapshotForCopy();
+        }).when(service).snapshotForCopy();
+        click("export");
+        await(() -> !tab.hasPendingSave() && feedback().contains("Spreadsheet copy saved: 205"));
+        assertThat(Files.readString(target)).contains("21.125000001");
+        assertThat(Files.readAllLines(target)).hasSize(206);
+        assertThat(background).isTrue();
+        assertThat(edt(() -> table().getRowCount())).isEqualTo(1);
+        assertThat(edt(() -> component("view", JComboBox.class).getSelectedIndex())).isEqualTo(1);
+        assertThat(edt(() -> text("value").getText())).isEqualTo("21.125000001");
+        assertThat(edt(tab::applicationExitWarning)).contains("unfinished reading");
+        assertThat(service.count()).isEqualTo(205);
+    }
+
+    @Test void viewerCanCopyAlreadyReadableHistoryWithoutSavingOrEnablingEdits() throws Exception {
+        adapterAt("viewer", "2026-10-10T11:00:00Z", "MISSING", null);
+        when(host.canMutateData()).thenReturn(false);
+        edt(() -> { tab.applyRolePermissions(false); return null; });
+        Path target = copyTarget(); click("export");
+        await(() -> !tab.hasPendingSave() && feedback().contains("Spreadsheet copy saved: 1"));
+        assertThat(Files.readString(target)).contains("No reading");
+        assertThat(edt(() -> component("save", JButton.class).isEnabled())).isFalse();
+        assertThat(edt(() -> component("import", JButton.class).isEnabled())).isFalse();
+        assertThat(service.count()).isEqualTo(1);
+    }
+
+    @Test void declinedCopyReviewKeepsExistingFileAndExplainsReplacementAndScope() throws Exception {
+        adapterAt("review", "2026-10-10T11:00:00Z", "GOOD", "21");
+        Path target = copyTarget(); Files.writeString(target, "previous spreadsheet");
+        var reviewed = new AtomicReference<String>();
+        when(dialogs.showConfirm(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(), anyString(), anyInt(), anyInt()))
+                .thenAnswer(call -> {
+                    Component review = call.getArgument(1);
+                    reviewed.set(((javax.swing.JTextArea) find(review, "equipmentReadings.exportReview")).getText());
+                    return JOptionPane.NO_OPTION;
+                });
+        click("export");
+        await(() -> !tab.hasPendingSave() && feedback().contains("copy cancelled"));
+        assertThat(reviewed.get()).contains("1 saved readings", "all equipment and sources", "beyond the current page",
+                "replace the existing file", target.toRealPath().toString(), "not a bring-in sheet", "full farm backup");
+        assertThat(Files.readString(target)).isEqualTo("previous spreadsheet");
+        assertThat(edt(() -> text("value").getText())).isEqualTo("21.125000001");
+    }
+
+    @Test void cancelledChooserAndEmptyHistoryNeverCreateOrReplaceFile() throws Exception {
+        when(files.chooseSave(org.mockito.ArgumentMatchers.any(), anyString(), org.mockito.ArgumentMatchers.any()))
+                .thenReturn(Optional.empty());
+        click("export");
+        assertThat(edt(tab::hasPendingSave)).isFalse();
+        Path target = copyTarget(); Files.writeString(target, "old copy");
+        click("export");
+        await(() -> !tab.hasPendingSave() && feedback().contains("no saved readings"));
+        assertThat(Files.readString(target)).isEqualTo("old copy");
+        assertThat(edt(() -> text("value").getText())).isEqualTo("21.125000001");
+    }
+
+    @Test void copyFailurePreservesFileAndDraftAndAllowsReviewedRetry() throws Exception {
+        adapterAt("failure", "2026-10-10T11:00:00Z", "GOOD", "21");
+        Path target = copyTarget(); Files.writeString(target, "old copy");
+        doThrow(new IllegalStateException("database unavailable")).when(service).copyPage(
+                org.mockito.ArgumentMatchers.any(), anyLong(), anyInt());
+        click("export");
+        await(() -> !tab.hasPendingSave() && feedback().contains("not completed"));
+        assertThat(Files.readString(target)).isEqualTo("old copy");
+        assertThat(edt(() -> text("value").getText())).isEqualTo("21.125000001");
+        doAnswer(call -> new FarmReadingService(jdbc).copyPage(call.getArgument(0), call.getArgument(1), call.getArgument(2)))
+                .when(service).copyPage(org.mockito.ArgumentMatchers.any(), anyLong(), anyInt());
+        click("export");
+        await(() -> !tab.hasPendingSave() && feedback().contains("Spreadsheet copy saved: 1"));
+        assertThat(Files.readString(target)).doesNotContain("old copy");
+    }
+
+    @Test void runningCopyBlocksWritesAndExitButDoesNotBlockTheEdt() throws Exception {
+        adapterAt("pending", "2026-10-10T11:00:00Z", "GOOD", "21");
+        copyTarget();
+        var entered = new CountDownLatch(1); var release = new CountDownLatch(1);
+        doAnswer(call -> {
+            assertThat(SwingUtilities.isEventDispatchThread()).isFalse();
+            entered.countDown();
+            if (!release.await(10, TimeUnit.SECONDS)) throw new IllegalStateException("test release timed out");
+            return new FarmReadingService(jdbc).copyPage(call.getArgument(0), call.getArgument(1), call.getArgument(2));
+        }).when(service).copyPage(org.mockito.ArgumentMatchers.any(), anyLong(), anyInt());
+        try {
+            click("export"); assertThat(entered.await(10, TimeUnit.SECONDS)).isTrue();
+            assertThat(edt(tab::hasPendingSave)).isTrue();
+            assertThat(edt(tab::applicationExitWarning)).contains("copy still running");
+            for (String button : List.of("save", "new", "import", "export")) {
+                assertThat(edt(() -> component(button, JButton.class).isEnabled())).isFalse();
+            }
+            assertThat(edt(() -> text("value").isEnabled())).isFalse();
+            assertThat(service.count()).isEqualTo(1);
+        } finally { release.countDown(); }
+        await(() -> !tab.hasPendingSave() && feedback().contains("Spreadsheet copy saved"));
+    }
+
+    @Test void copyingKeepsSpreadsheetPreviewAndManualDraftAvailableForLaterSave() throws Exception {
+        adapterAt("kept", "2026-10-10T11:00:00Z", "GOOD", "21");
+        spreadsheet("38.5", "Measured");
+        when(dialogs.showConfirm(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(), anyString(), anyInt(), anyInt()))
+                .thenReturn(JOptionPane.NO_OPTION);
+        click("import"); await(() -> feedback().contains("preview kept"));
+        Path target = copyTarget();
+        when(dialogs.showConfirm(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(), anyString(), anyInt(), anyInt()))
+                .thenReturn(JOptionPane.YES_OPTION);
+        click("export"); await(() -> !tab.hasPendingSave() && feedback().contains("Spreadsheet copy saved: 1"));
+        assertThat(Files.readAllLines(target)).hasSize(2);
+        assertThat(edt(tab::applicationExitWarning)).contains("spreadsheet preview");
+        assertThat(edt(() -> text("value").getText())).isEqualTo("21.125000001");
+        click("import"); await(() -> !tab.hasPendingSave() && service.count() == 2);
+        assertThat(edt(() -> text("value").getText())).isEqualTo("21.125000001");
+    }
+
+    @Test void invalidCopyFilenameReportsProblemWithoutClearingUnfinishedEntry() throws Exception {
+        when(files.chooseSave(org.mockito.ArgumentMatchers.any(), anyString(), org.mockito.ArgumentMatchers.any()))
+                .thenReturn(Optional.of(directory.resolve("wrong.txt").toFile()));
+        click("export"); await(() -> !tab.hasPendingSave() && feedback().contains("ending in .csv"));
+        assertThat(edt(() -> text("value").getText())).isEqualTo("21.125000001");
+        assertThat(directory.resolve("wrong.txt")).doesNotExist();
+    }
+
+    private Path copyTarget() {
+        Path target = directory.resolve("saved-readings.csv");
+        when(files.chooseSave(org.mockito.ArgumentMatchers.any(), anyString(), org.mockito.ArgumentMatchers.any()))
+                .thenReturn(Optional.of(target.toFile()));
+        return target;
+    }
+
     private void chooseView(int index) throws Exception {
         edt(() -> { component("view", JComboBox.class).setSelectedIndex(index); return null; });
     }

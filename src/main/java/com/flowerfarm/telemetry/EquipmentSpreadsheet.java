@@ -25,12 +25,22 @@ public final class EquipmentSpreadsheet {
     public static final int MAX_BYTES = 1024 * 1024;
     public static final List<String> HEADINGS = List.of("Equipment", "Growing area", "Measurement",
             "Value", "Unit", "Condition", "Measured at");
-    private static final List<String> METRICS = List.of("air.temperature", "soil.temperature",
+    public static final List<String> METRICS = List.of("air.temperature", "soil.temperature",
             "soil.moisture", "air.humidity", "water.flow", "water.level", "water.ph", "light.level");
-    private static final List<String> LABELS = List.of("Air temperature", "Soil temperature",
+    public static final List<String> LABELS = List.of("Air temperature", "Soil temperature",
             "Soil moisture", "Air humidity", "Water flow", "Water level", "Water pH", "Light level");
-    private static final List<String> CONDITIONS = List.of("Measured", "Needs checking", "No reading", "Equipment error");
-    private static final List<String> QUALITIES = List.of("GOOD", "SUSPECT", "MISSING", "ERROR");
+    public static final List<String> CONDITIONS = List.of("Measured", "Needs checking", "No reading", "Equipment error");
+    public static final List<String> QUALITIES = List.of("GOOD", "SUSPECT", "MISSING", "ERROR");
+
+    public static String measurementLabel(String code) {
+        int index = METRICS.indexOf(code);
+        return index < 0 ? code : LABELS.get(index);
+    }
+
+    public static String conditionLabel(String code) {
+        int index = QUALITIES.indexOf(code);
+        return index < 0 ? code : CONDITIONS.get(index);
+    }
 
     private EquipmentSpreadsheet() { }
 

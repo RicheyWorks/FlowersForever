@@ -22,6 +22,16 @@ If a save cannot be confirmed, your draft stays in place. Check **Latest reading
 
 Changing farm types is blocked while a reading is unfinished or its save is still running. Closing or signing out asks whether you want to keep working or explicitly leave unfinished work. Drafts are held in memory; an intentional exit discards them. Saved readings remain in the farm records.
 
+## Save a copy of your readings
+
+Choose **Save readings spreadsheet…** to keep or share a readable copy of **all saved readings**, including older pages and every equipment source. It copies the full history even when **Latest reported measurements** is selected. Pick a filename ending in **.csv**, then review the count, snapshot time, and destination. If the file already exists, the review states that it will be replaced. Viewers can copy the history they can already read.
+
+The copy keeps equipment names, growing areas, measurements, exact numbers, units, conditions, measured and received times, and source/equipment/reading references. **No reading** has a blank value; measured zero remains zero. Times use a universal time format with `Z` for UTC and retain any fractions of a second. Some spreadsheet programs round long numbers or reinterpret dates when opening a file: import those columns as text when exact digits matter. The file itself keeps the original precision.
+
+The copy includes readings saved before the reviewed snapshot; new arrivals and unfinished entries are not included. Your manual draft and any kept bring-in preview stay intact. The app copies small batches in the background, writes a temporary file first, and publishes the completed copy. A detected change to the destination requires a fresh review. Wait for the result before leaving the app.
+
+This is a readable spreadsheet **(CSV)** for reference and sharing, rather than a bring-in sheet or a restoration backup. Text beginning like a spreadsheet formula is prefixed with an apostrophe. Original equipment messages are omitted; a [full farm backup](BACKUP_RESTORE.md) retains the complete stored records. Use that backup to restore your farm.
+
 ## Bring in an equipment spreadsheet
 
 Some equipment calls saving a spreadsheet **Export** or **Download readings**. In **Equipment readings**, choose **Spreadsheet layout** for the headings, then **Bring in equipment spreadsheet…**. Select a spreadsheet saved as **CSV UTF-8** (a simple spreadsheet format), up to 1 MB and 500 readings. The app checks every row before showing the review. Scroll across to check the units and measured times, then confirm to save all rows together. A bad row or a conflict saves none of this batch. Your unfinished manual reading stays intact.
@@ -36,7 +46,7 @@ The desktop stores the checked measurements, units, names, conditions, and times
 
 ## What is available now
 
-Manual entry, spreadsheet selection with review, saved history, and latest reported measurements with reading ages are available directly in the desktop app. Direct spreadsheet selection uses the headings above; arbitrary logger columns and JSON still use the optional helper. The setup instructions below are for the person helping you connect your equipment; you do not need to understand the programming terms to understand your farm readings.
+Manual entry, spreadsheet selection with review, saved history, latest reported measurements with reading ages, and a reviewed spreadsheet copy of all saved readings are available directly in the desktop app. Direct spreadsheet selection uses the headings above; arbitrary logger columns and JSON still use the optional helper. The setup instructions below are for the person helping you connect your equipment; you do not need to understand the programming terms to understand your farm readings.
 
 Bluetooth connections, automatic readings, charts, and alerts need further work. Pump and valve operation will be a separate later step. Saving a reading does not turn equipment on or off.
 
@@ -160,6 +170,10 @@ The desktop **Equipment readings** tab uses a separate bounded, descending recei
 Polling this endpoint lets an external monitor see new readings as they arrive. There is currently no built-in continuously running collector, push subscription, chart, or stale-device alarm. Data remains available after reopening and enters the normal full H2 backup; the separate farm-data export/snapshot plugin does not currently include these readings. Keep device-side buffers and original logger files until their receipts are confirmed.
 
 The desktop latest-reported view ranks all observations by their actual instant, retaining nanoseconds, within `(source_id, device_id, metric, unit, location)`. Equal observation times use the greatest receipt ID as a deterministic tie-breaker, including missing/error reports. The outer result pages by descending selected receipt ID; ranking happens before applying the cursor so earlier pages cannot revive superseded values. New or updated groups arriving after a page starts are seen on a first-page refresh. This view is a read-only H2 window query suited to the current initial local logger scale, not a sustained industrial telemetry dashboard. Ages use one clock snapshot per displayed page; no background acquisition or timed age update is implied.
+
+The desktop spreadsheet copy captures `MAX(id)` and `COUNT(*)` in one read-only query, then streams ascending receipt pages of up to 200 rows through that fence. The append-only history and serialized transactional intake ensure later commits cannot insert a lower receipt behind the fence. Rolled-back identity gaps are allowed. A count/order mismatch fails without publishing the partial copy. This is a finite receipt snapshot, not a long-running database transaction or an industrial export service.
+
+Only a locally chosen `.csv` destination with an existing, resolved parent is admitted. Existing targets must be regular non-link files. Review captures file identity/size/mtime; checks before and after staging reject detected changes. This is not an OS-level compare-and-replace guarantee against a malicious local directory owner. Staging is flushed before atomic replacement when available, with the existing file-move fallback. A new destination uses a move without replacement. Failed staging is removed. CSV uses a UTF-8 BOM, CRLF records, quoted cells, plain exact decimal strings, ISO UTC instants with nanoseconds, and apostrophe-prefixed formula-looking text after leading whitespace/BOM. Raw frames are excluded. All database/file work runs off the Swing event thread; drafts/previews are preserved and pending-copy exit/farm-change warnings use the existing shell guards. This readable copy has additional provenance columns and is deliberately not accepted by the seven-column bring-in layout.
 
 ## CSRBT and future adapters
 

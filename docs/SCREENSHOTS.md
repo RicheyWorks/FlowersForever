@@ -95,11 +95,15 @@ Record soil, water, and greenhouse measurements with familiar equipment names an
 
 The **Latest reported measurements** view chooses measurements by when they were taken and shows their age at refresh. A delayed older upload stays in the full history; it does not replace a newer observation. Missing and faulty reports remain visible, and sources, units, and areas are kept separate.
 
-[![Equipment readings with manual entry and saved sample observations.](images/app-equipment-readings.png)](images/app-equipment-readings.png)
+**Save readings spreadsheet…** copies the full saved history across all pages and sources after a review of the count and destination. It preserves unfinished work. The readable copy is for reference and sharing; a full farm backup is used for restoration.
+
+[![Equipment readings with manual entry, saved sample observations, and a button to save the full history as a spreadsheet copy.](images/app-equipment-readings.png)](images/app-equipment-readings.png)
 
 [![Latest reported measurements with measurement ages and explicit missing and needs-checking conditions; delayed old logs stay in history.](images/app-equipment-latest.png)](images/app-equipment-latest.png)
 
 [![Equipment spreadsheet review with three checked sample observations, including a missing value.](images/app-equipment-spreadsheet-review.png)](images/app-equipment-spreadsheet-review.png)
+
+[![Saved-readings spreadsheet copy review showing the count, snapshot, destination, and readable-copy scope with sample records.](images/app-equipment-export-review.png)](images/app-equipment-export-review.png)
 
 ## Plant and flower references
 

@@ -126,8 +126,11 @@ queries in the background, and rejects obsolete results before replacing rows.
 access or equipment control. The new page scroll and focus handling are local UI
 operations. Existing literal text renderers, role checks, transactional intake,
 and pending-draft boundaries remain intact. The complete source/caller review
-binds 555 production Java files and the unchanged POM; the fresh scan must retain
+binds 556 production Java files and the unchanged POM; the fresh scan must retain
 the same 38 reviewed Medium contexts with no High/new Medium findings, analysis
 errors or missing classes.
 
 Any new, changed, duplicate or absent reviewed finding fails. Any production Java edit/addition/removal or POM change requires a fresh source/build/caller review and an intentional manifest update; do not regenerate the manifest automatically to make a failed check pass. There are no native category/class/method exclusions in the security profile. The separate general quality profile retains its existing exclusions and Medium-or-higher zero-violation gate.
+
+
+The saved-readings spreadsheet increment adds one local export utility and two fixed read-only receipt queries. Source review covers the full all-source receipt fence, bounded ascending pages, count/order checks, exact decimal/instant formatting, null-as-blank semantics, and exclusion of original frames. The chooser-approved destination is resolved beneath an existing real parent; non-CSV names and non-regular/link targets are refused. A reviewed target stamp is checked before staging and again before publication, with same-folder staging, flush, complete-file publication, and cleanup on failure. These checks do not establish an atomic compare-and-replace boundary against a malicious local owner. Text cells neutralize leading formula indicators while genuine negative numbers remain numeric. No HTTP destination, hardware operation, new dependency, or process launch is added. Swing snapshot/file work remains off the event thread; viewers may copy their already-readable history, and manual drafts/import previews and pending-operation shell guards remain in force. Measurement and condition labels are immutable and shared by the entry, import, and copy paths. The fresh scan and manifest bind 556 Java sources and the unchanged POM, with no new High or unreviewed Medium context accepted.

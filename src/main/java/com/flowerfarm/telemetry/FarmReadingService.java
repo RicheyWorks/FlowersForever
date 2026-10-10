@@ -146,6 +146,32 @@ public class FarmReadingService {
         return new ReadingPage(page, next, rows.size() > limit);
     }
 
+    /** A finite receipt fence for a copy of the append-only history across every source. */
+    @Transactional(readOnly = true)
+    public ReadingSnapshot snapshotForCopy() {
+        return jdbc.queryForObject("SELECT COALESCE(MAX(id), 0) AS through_id, COUNT(*) AS reading_count FROM farm_readings",
+                (row, index) -> new ReadingSnapshot(row.getLong("through_id"), row.getLong("reading_count")));
+    }
+
+    /** New receipts after the fence do not extend a running copy. */
+    @Transactional(readOnly = true)
+    public List<FarmReading> copyPage(ReadingSnapshot snapshot, long afterId, int limit) {
+        if (snapshot == null || afterId < 0 || afterId > snapshot.throughId() || limit < 1 || limit > MAX_PAGE) {
+            throw new IllegalArgumentException("Choose a saved-reading copy page of 1 to 200 readings.");
+        }
+        return List.copyOf(jdbc.query("SELECT * FROM farm_readings WHERE id > ? AND id <= ? ORDER BY id LIMIT ?",
+                MAPPER, afterId, snapshot.throughId(), limit));
+    }
+
+    public record ReadingSnapshot(long throughId, long readingCount) {
+        public ReadingSnapshot {
+            if (throughId < 0 || readingCount < 0 || readingCount > throughId
+                    || (throughId == 0) != (readingCount == 0)) {
+                throw new IllegalArgumentException("Choose a valid saved-reading copy.");
+            }
+        }
+    }
+
     @Transactional(readOnly = true)
     public long count() {
         Long count = jdbc.queryForObject("SELECT COUNT(*) FROM farm_readings", Long.class);

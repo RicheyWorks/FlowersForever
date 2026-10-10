@@ -60,6 +60,48 @@ class FarmReadingServiceTest {
                 "location", "North house", "rawFrame", "{\"temp_c\":21.125}\r\n"));
     }
 
+    @Test void copySnapshotPagesAllSourcesPastTwoHundredAndExcludesLaterReceipts() {
+        var rows = new ArrayList<Map<String, Object>>();
+        for (int i = 0; i < 201; i++) rows.add(row("old-" + i, i));
+        ingest("one", rows);
+        ingest("two", List.of(row("other", 25)));
+        var snapshot = service.snapshotForCopy();
+        ingest("one", List.of(row("after-review", 26)));
+        var first = service.copyPage(snapshot, 0, 200);
+        var second = service.copyPage(snapshot, first.get(199).id(), 200);
+        assertThat(snapshot.readingCount()).isEqualTo(202);
+        assertThat(first).hasSize(200); assertThat(second).hasSize(2);
+        assertThat(first).extracting(FarmReading::id).isSorted();
+        assertThat(second).extracting(FarmReading::sourceId).containsExactly("one", "two");
+        assertThat(second).extracting(FarmReading::readingKey).doesNotContain("after-review");
+        assertThat(service.copyPage(snapshot, snapshot.throughId(), 200)).isEmpty();
+    }
+
+    @Test void copySnapshotRemainsValidAcrossRolledBackIdentityGaps() {
+        ingest("one", List.of(row("first", 1)));
+        assertThatThrownBy(() -> ingest("one", List.of(row("rollback", 2), row("first", 3))))
+                .isInstanceOf(IllegalArgumentException.class);
+        ingest("one", List.of(row("last", 4)));
+        var snapshot = service.snapshotForCopy();
+        assertThat(snapshot.readingCount()).isEqualTo(2);
+        assertThat(snapshot.throughId()).isGreaterThan(snapshot.readingCount());
+        assertThat(service.copyPage(snapshot, 0, 200)).extracting(FarmReading::readingKey).containsExactly("first", "last");
+    }
+
+    @Test void copyPagesRejectInvalidBoundsAndEmptySnapshotCannotAcquireNewArrivals() {
+        var empty = service.snapshotForCopy();
+        ingest("one", List.of(row("later", 1)));
+        assertThat(empty.readingCount()).isZero();
+        assertThat(service.copyPage(empty, 0, 200)).isEmpty();
+        for (int limit : List.of(0, 201)) {
+            assertThatThrownBy(() -> service.copyPage(empty, 0, limit)).isInstanceOf(IllegalArgumentException.class);
+        }
+        assertThatThrownBy(() -> service.copyPage(empty, -1, 1)).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> service.copyPage(empty, 1, 1)).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> service.copyPage(null, 0, 1)).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new FarmReadingService.ReadingSnapshot(0, 1)).isInstanceOf(IllegalArgumentException.class);
+    }
+
     @Test void preservesExactUnitsRawDataAndBothClocksThroughReplayAndNewService() {
         Map<String, Object> first = row("sample-1", new BigDecimal("21.125"));
         assertThat(ingest("ble-bridge", List.of(first)).inserted()).isEqualTo(1);

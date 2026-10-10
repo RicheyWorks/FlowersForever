@@ -4,6 +4,7 @@ import com.flowerfarm.gui.FarmDialogs;
 import com.flowerfarm.gui.FarmFileChooser;
 import com.flowerfarm.gui.FarmUi;
 import com.flowerfarm.telemetry.EquipmentSpreadsheet;
+import com.flowerfarm.telemetry.EquipmentReadingExport;
 import com.flowerfarm.telemetry.FarmReading;
 import com.flowerfarm.telemetry.FarmReadingService;
 import com.flowerfarm.telemetry.ManualFarmReading;
@@ -46,11 +47,9 @@ import java.util.concurrent.ExecutionException;
 public final class EquipmentReadingsTab implements FlowerFarmTab {
     private static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss XXX")
             .withZone(ZoneId.systemDefault());
-    private static final List<String> METRICS = List.of("air.temperature", "soil.temperature",
-            "soil.moisture", "air.humidity", "water.flow", "water.level", "water.ph", "light.level");
-    private static final List<String> LABELS = List.of("Air temperature", "Soil temperature",
-            "Soil moisture", "Air humidity", "Water flow", "Water level", "Water pH", "Light level");
-    private static final List<String> CONDITIONS = List.of("GOOD", "SUSPECT", "MISSING", "ERROR");
+    private static final List<String> METRICS = EquipmentSpreadsheet.METRICS;
+    private static final List<String> LABELS = EquipmentSpreadsheet.LABELS;
+    private static final List<String> CONDITIONS = EquipmentSpreadsheet.QUALITIES;
     private final FarmReadingService service;
     private final TabHost host;
     private final FarmDialogs dialogs;
@@ -63,8 +62,7 @@ public final class EquipmentReadingsTab implements FlowerFarmTab {
     private final JTextField value = field("value");
     private final JTextField unit = field("unit");
     private final JComboBox<String> measurement = new JComboBox<>(LABELS.toArray(String[]::new));
-    private final JComboBox<String> condition = new JComboBox<>(new String[] {
-            "Measured", "Needs checking", "No reading", "Equipment error"});
+    private final JComboBox<String> condition = new JComboBox<>(EquipmentSpreadsheet.CONDITIONS.toArray(String[]::new));
     private final JSpinner observed = new JSpinner(new SpinnerDateModel());
     private final JButton save = button("Review and save reading", "save");
     private final JButton next = button("Start a new reading", "new");
@@ -73,6 +71,7 @@ public final class EquipmentReadingsTab implements FlowerFarmTab {
     private final JButton bring = button("Bring in equipment spreadsheet…", "import");
     private final JButton leave = button("Leave spreadsheet preview", "leaveImport");
     private final JButton layout = button("Spreadsheet layout", "layout");
+    private final JButton export = button("Save readings spreadsheet…", "export");
     private final JComboBox<String> view = new JComboBox<>(new String[] {
             "All saved readings", "Latest reported measurements"});
     private final JLabel pageInfo = FarmUi.mutedLabel("All saved readings · 200 per page · Newest received first · Age at last refresh");
@@ -88,6 +87,7 @@ public final class EquipmentReadingsTab implements FlowerFarmTab {
     private volatile boolean latestRequested;
     private boolean unconfirmedSave;
     private volatile boolean importing;
+    private volatile boolean exporting;
     private boolean unconfirmedImport;
     private List<Map<String, Object>> importDraft;
     private List<Object> cleanDraft;
@@ -163,7 +163,11 @@ public final class EquipmentReadingsTab implements FlowerFarmTab {
         view.getAccessibleContext().setAccessibleName("Choose saved history or latest reported measurements");
         JPanel controls = new JPanel(new BorderLayout(0, 4));
         controls.setOpaque(false);
-        controls.add(FarmUi.toolbar(new JLabel("Show"), view, latest, older), BorderLayout.NORTH);
+        JPanel historyActions = new JPanel(new java.awt.GridLayout(2, 1, 0, 4));
+        historyActions.setOpaque(false);
+        historyActions.add(FarmUi.toolbar(new JLabel("Show"), view, latest, older));
+        historyActions.add(FarmUi.toolbar(export));
+        controls.add(historyActions, BorderLayout.NORTH);
         pageInfo.setName("equipmentReadings.pageInfo");
         controls.add(pageInfo, BorderLayout.SOUTH);
         bottom.add(controls, BorderLayout.NORTH);
@@ -185,6 +189,7 @@ public final class EquipmentReadingsTab implements FlowerFarmTab {
         bring.addActionListener(event -> bringSpreadsheet());
         leave.addActionListener(event -> leaveSpreadsheet());
         layout.addActionListener(event -> showSpreadsheetLayout());
+        export.addActionListener(event -> exportReadings());
         cleanDraft = draftState();
         updateControls();
     }
@@ -260,16 +265,17 @@ public final class EquipmentReadingsTab implements FlowerFarmTab {
     }
 
     private void updateControls() {
-        boolean edit = canWrite && !saving && !importing && importDraft == null;
+        boolean edit = canWrite && !saving && !importing && !exporting && importDraft == null;
         for (JComponent control : List.of(equipment, area, value, unit, measurement, condition, observed, save, next)) {
             control.setEnabled(edit);
         }
         latest.setEnabled(!loading);
         older.setEnabled(!loading && hasMore && displayedView == view.getSelectedIndex());
         view.setEnabled(!loading);
-        bring.setEnabled(canWrite && !saving && !importing && !unconfirmedSave);
+        bring.setEnabled(canWrite && !saving && !importing && !exporting && !unconfirmedSave);
         bring.setText(importDraft == null ? "Bring in equipment spreadsheet…" : "Review and retry spreadsheet…");
-        leave.setEnabled(importDraft != null && !importing);
+        leave.setEnabled(importDraft != null && !importing && !exporting);
+        export.setEnabled(!saving && !importing && !exporting);
     }
 
     private void message(String text) {
@@ -278,7 +284,7 @@ public final class EquipmentReadingsTab implements FlowerFarmTab {
     }
 
     private void newReading() {
-        if (saving || importing || importDraft != null || !canWrite || !host.canMutateData()) return;
+        if (saving || importing || exporting || importDraft != null || !canWrite || !host.canMutateData()) return;
         if (hasUnfinishedDraft() && dialogs.showConfirm(root,
                 "Leave this draft and start a separate reading? If a save failed, check Latest readings first.",
                 "Start a new reading", JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE)
@@ -293,9 +299,10 @@ public final class EquipmentReadingsTab implements FlowerFarmTab {
         message("Ready for a new reading. Equipment, area, measurement, and unit are kept.");
     }
 
-    public boolean hasPendingSave() { return saving || importing; }
+    public boolean hasPendingSave() { return saving || importing || exporting; }
 
     public String applicationExitWarning() {
+        if (exporting) return "Equipment readings has a spreadsheet copy still running. Wait for its result before leaving.";
         if (saving) return "Equipment readings has a save still running. Wait for its result before leaving.";
         if (importing) return "Equipment readings has a spreadsheet being read or saved. Wait for its result before leaving.";
         if (unconfirmedImport) return "Equipment readings has a spreadsheet save that could not be confirmed. Check Latest readings, then review and retry the kept preview.";
@@ -316,7 +323,7 @@ public final class EquipmentReadingsTab implements FlowerFarmTab {
     }
 
     private void saveReading() {
-        if (saving || importing || importDraft != null || !canWrite || !host.canMutateData()) {
+        if (saving || importing || exporting || importDraft != null || !canWrite || !host.canMutateData()) {
             message("This session can review readings but cannot save them.");
             return;
         }
@@ -396,6 +403,102 @@ public final class EquipmentReadingsTab implements FlowerFarmTab {
                         "Use a growing area name on one line, up to 180 characters.");
     }
 
+    private record ReadingCopy(EquipmentReadingExport.Destination destination,
+            FarmReadingService.ReadingSnapshot snapshot, java.time.Instant reviewedAt) { }
+
+    private void exportReadings() {
+        if (saving || importing || exporting) return;
+        exporting = true;
+        updateControls();
+        final java.util.Optional<java.io.File> selected;
+        try {
+            selected = files.chooseSave(root, "Save equipment readings spreadsheet (CSV)",
+                    java.nio.file.Path.of("equipment-readings.csv").toFile());
+        } catch (RuntimeException failed) {
+            exporting = false;
+            updateControls();
+            message("Could not choose a spreadsheet file. Your unfinished work is kept.");
+            return;
+        }
+        if (selected.isEmpty()) {
+            exporting = false;
+            updateControls();
+            message("Spreadsheet copy cancelled. Your unfinished work is kept.");
+            return;
+        }
+        message("Counting all saved readings for your spreadsheet copy…");
+        new SwingWorker<ReadingCopy, Void>() {
+            @Override protected ReadingCopy doInBackground() throws java.io.IOException {
+                var destination = EquipmentReadingExport.inspect(selected.get().toPath());
+                return new ReadingCopy(destination, service.snapshotForCopy(), clock.instant());
+            }
+            @Override protected void done() {
+                try {
+                    ReadingCopy copy = get();
+                    if (copy.snapshot().readingCount() == 0) {
+                        finishCopy("There are no saved readings to copy. Your unfinished work is kept.");
+                        return;
+                    }
+                    JTextArea review = new JTextArea(copy.snapshot().readingCount() + " saved readings from all equipment and sources.\n"
+                            + "Includes older readings beyond the current page, as saved at " + TIME.format(copy.reviewedAt()) + ".\n"
+                            + "Readings saved after this snapshot and unfinished entries are not included.\n\n"
+                            + "Keeps exact numbers, units, conditions, measured and received times, and equipment references.\n"
+                            + "This readable spreadsheet (CSV) omits original equipment messages. Use a full farm backup to restore records.\n"
+                            + "Formula-looking text is made safe for spreadsheets; this copy is not a bring-in sheet.\n\n"
+                            + "Save to: " + copy.destination().path() + "\n"
+                            + (copy.destination().replacesExisting() ? "This will replace the existing file. Save this copy?"
+                                    : "Save this new spreadsheet copy?"), 14, 64);
+                    review.setName("equipmentReadings.exportReview");
+                    review.setEditable(false);
+                    review.setLineWrap(true);
+                    review.setWrapStyleWord(true);
+                    review.getAccessibleContext().setAccessibleName("Saved readings spreadsheet copy to review");
+                    if (dialogs.showConfirm(root, new JScrollPane(review), "Review readings spreadsheet copy",
+                            JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE) != JOptionPane.YES_OPTION) {
+                        finishCopy("Spreadsheet copy cancelled. No file was saved; your unfinished work is kept.");
+                        return;
+                    }
+                    writeCopy(copy);
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                    finishCopy("Spreadsheet check interrupted. No file was saved; your unfinished work is kept.");
+                } catch (ExecutionException failed) {
+                    String reason = failed.getCause() instanceof java.io.IOException
+                            ? failed.getCause().getMessage() : "Could not read saved readings.";
+                    finishCopy(reason + " No file was saved; your unfinished work is kept.");
+                }
+            }
+        }.execute();
+    }
+
+    private void writeCopy(ReadingCopy copy) {
+        message("Saving " + copy.snapshot().readingCount() + " readings to your spreadsheet copy…");
+        new SwingWorker<Long, Void>() {
+            @Override protected Long doInBackground() throws java.io.IOException {
+                return EquipmentReadingExport.write(copy.destination(), copy.snapshot(), service);
+            }
+            @Override protected void done() {
+                try {
+                    finishCopy("Spreadsheet copy saved: " + get() + " readings as saved at "
+                            + TIME.format(copy.reviewedAt()) + ". Your unfinished work is kept.");
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                    finishCopy("Could not confirm the spreadsheet copy. Check the selected file; your unfinished work is kept.");
+                } catch (ExecutionException failed) {
+                    String reason = failed.getCause() instanceof java.io.IOException
+                            ? failed.getCause().getMessage() : "Could not copy saved readings.";
+                    finishCopy(reason + " The copy was not completed; your unfinished work is kept.");
+                }
+            }
+        }.execute();
+    }
+
+    private void finishCopy(String result) {
+        exporting = false;
+        updateControls();
+        message(result);
+    }
+
     private void showSpreadsheetLayout() {
         JTextArea guide = new JTextArea("Save your equipment sheet as CSV UTF-8, up to 1 MB and 500 readings.\n"
                 + "Use these headings (any order):\n" + String.join(", ", EquipmentSpreadsheet.HEADINGS)
@@ -416,7 +519,7 @@ public final class EquipmentReadingsTab implements FlowerFarmTab {
     }
 
     private void bringSpreadsheet() {
-        if (saving || importing || unconfirmedSave || !canWrite || !host.canMutateData()) return;
+        if (saving || importing || exporting || unconfirmedSave || !canWrite || !host.canMutateData()) return;
         if (importDraft != null) { reviewSpreadsheet(); return; }
         var selected = files.chooseEquipmentSpreadsheet(root, "Bring in equipment spreadsheet (CSV)");
         if (selected.isEmpty()) return;
@@ -447,7 +550,7 @@ public final class EquipmentReadingsTab implements FlowerFarmTab {
     }
 
     private void leaveSpreadsheet() {
-        if (importing || importDraft == null) return;
+        if (importing || exporting || importDraft == null) return;
         JTextArea warning = new JTextArea(unconfirmedImport
                 ? "The last save could not be confirmed. Leaving this preview does not undo saved readings. Check Latest readings first. Leave the preview?"
                 : "Leave this spreadsheet preview without saving it? Your manual reading stays intact.", 4, 48);

@@ -212,11 +212,15 @@ Choose **Latest reported measurements** to see the last measured observation for
 
 Choose **Bring in equipment spreadsheet…** to select a spreadsheet (CSV), check all its readings, and review them before saving. **Spreadsheet layout** explains the headings using farm language. Up to 500 readings save together; an unchanged retry adds no duplicates, and your manual draft stays intact. Other logger layouts and readings files (JSON) can use the optional helper. Automatic readings, Bluetooth pairing, charts, and pump operation still need further work. [Read the farmer's guide to equipment readings](docs/FARM_READINGS.md).
 
-[![Equipment readings: familiar equipment names, reviewed manual entry, and saved measurement history using sample records.](docs/images/app-equipment-readings.png)](docs/images/app-equipment-readings.png)
+Choose **Save readings spreadsheet…** to review and save a readable copy of the full history, including older pages and every source. Exact values, units, conditions, and measured times stay together; unfinished entries stay in the app. The copy is for reference and sharing. Use a full farm backup for restoration.
+
+[![Equipment readings: familiar equipment names, reviewed manual entry, saved measurement history, and a button to save a spreadsheet copy, using sample records.](docs/images/app-equipment-readings.png)](docs/images/app-equipment-readings.png)
 
 [![Latest reported measurements: measurement ages, a missing tank reading, and soil moisture that needs checking; an older uploaded soil log does not replace it.](docs/images/app-equipment-latest.png)](docs/images/app-equipment-latest.png)
 
 [![Review an equipment spreadsheet before saving: equipment names, growing areas, exact values, units, conditions, and measured times using sample records.](docs/images/app-equipment-spreadsheet-review.png)](docs/images/app-equipment-spreadsheet-review.png)
+
+[![Review a saved-readings spreadsheet copy: full-history count, snapshot, destination, and explanation of what is included, using sample records.](docs/images/app-equipment-export-review.png)](docs/images/app-equipment-export-review.png)
 
 ## Take a five-minute tour
 
