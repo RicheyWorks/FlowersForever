@@ -36,11 +36,11 @@ public enum UpdatePlatform {
     /** The installer kind for this operating system, or empty when there is none. */
     public static Optional<UpdatePlatform> forOperatingSystem(String osName) {
         String os = osName == null ? "" : osName.toLowerCase(Locale.ROOT);
-        if (os.contains("win")) {
-            return Optional.of(WINDOWS_MSI);
-        }
         if (os.contains("mac") || os.contains("darwin")) {
             return Optional.of(MACOS_DMG);
+        }
+        if (os.contains("win")) {
+            return Optional.of(WINDOWS_MSI);
         }
         return Optional.empty();
     }

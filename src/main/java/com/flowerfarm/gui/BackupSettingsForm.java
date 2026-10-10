@@ -15,7 +15,6 @@ import javax.swing.SpinnerNumberModel;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.Insets;
-import java.io.File;
 import java.nio.file.Path;
 import java.util.Optional;
 
@@ -25,6 +24,7 @@ final class BackupSettingsForm {
     private final JPanel panel = new JPanel(new GridBagLayout());
     private final JCheckBox automatic = new JCheckBox("Back up my farm records automatically");
     private final JTextField folder = new JTextField(32);
+    private Path selectedFolder;
     private final JButton chooseFolder = new JButton("Choose folder…");
     private final JComboBox<BackupSchedule> schedule = new JComboBox<>(BackupSchedule.values());
     private final JSpinner keep = new JSpinner(new SpinnerNumberModel(BackupPreferences.DEFAULT_KEEP, 1,
@@ -36,12 +36,12 @@ final class BackupSettingsForm {
         automatic.setSelected(current.automatic());
         folder.setName("backup.folder");
         folder.setEditable(false);
-        folder.setText(current.folder().orElse(suggestedFolder).toString());
+        setFolder(current.folder().orElse(suggestedFolder));
         folder.getAccessibleContext().setAccessibleName("Backup folder");
         chooseFolder.setName("backup.chooseFolder");
         chooseFolder.setMnemonic('C');
         chooseFolder.addActionListener(event -> chooser.chooseDirectory(panel,
-                        "Choose a folder for automatic backups", new File(folder.getText()))
+                        "Choose a folder for automatic backups", selectedFolder.toFile())
                 .ifPresent(chosen -> setFolder(chosen.toPath())));
         schedule.setName("backup.schedule");
         schedule.setSelectedItem(current.schedule());
@@ -96,7 +96,8 @@ final class BackupSettingsForm {
     }
 
     void setFolder(Path chosen) {
-        folder.setText(chosen.toAbsolutePath().normalize().toString());
+        selectedFolder = chosen.toAbsolutePath().normalize();
+        folder.setText(selectedFolder.toString());
     }
 
     void setSchedule(BackupSchedule chosen) {
@@ -112,8 +113,7 @@ final class BackupSettingsForm {
     }
 
     Optional<Path> folder() {
-        String text = folder.getText();
-        return text == null || text.isBlank() ? Optional.empty() : Optional.of(Path.of(text.trim()));
+        return Optional.of(selectedFolder);
     }
 
     BackupSchedule schedule() {

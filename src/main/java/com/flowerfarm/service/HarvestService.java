@@ -890,7 +890,7 @@ public class HarvestService {
     }
 
     /** Serialize rows to a caller-owned writer using the same desktop CSV contract. */
-    public void writeCsv(java.io.BufferedWriter writer, List<HarvestEntry> entries) throws java.io.IOException {
+    public void writeCsv(java.io.Writer writer, List<HarvestEntry> entries) throws java.io.IOException {
         csvExporter.writeCsv(writer, entries);
     }
 }

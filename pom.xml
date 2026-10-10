@@ -37,6 +37,10 @@
              that connection closes (h2database#4291, fixed upstream but not yet released). Stay on
              2.3.232, which FlowersForever already ships and Flyway 12 is verified with. -->
         <h2.version>2.3.232</h2.version>
+        <!-- Security patch versions beyond the Boot 4.1.1 BOM; both Jackson generations are used. -->
+        <jackson-2-bom.version>2.21.7</jackson-2-bom.version>
+        <jackson-bom.version>3.1.7</jackson-bom.version>
+        <tomcat.version>11.0.25</tomcat.version>
     </properties>
 
     <dependencies>

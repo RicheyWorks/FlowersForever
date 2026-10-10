@@ -20,6 +20,18 @@ class FarmDataMappingNumericTextTest {
 
     private final FarmDataMappingService service = new FarmDataMappingService(new ObjectMapper());
 
+    @Test
+    void boundsLongNumericCellsAndScansMalformedGroupsWithoutBacktracking() {
+        assertTimeoutPreemptively(Duration.ofSeconds(2), () -> {
+            assertRejected("number", "0".repeat(4097), "numeric");
+            assertRejected("number", "1" + ",000".repeat(1000) + ",00x", "numeric");
+            assertRejected("number", "0e" + "0".repeat(4000) + "x", "numeric");
+            var withinLimit = preview("number", "0".repeat(4096));
+            assertThat(withinLimit.ready()).isTrue();
+            assertThat(withinLimit.records().get(0)).containsEntry("value", 0.0);
+        });
+    }
+
     @ParameterizedTest
     @CsvSource(delimiter = '|', value = {
             "1200.50 | 1200.5", "1,200.50 | 1200.5", "$1,200.50 | 1200.5",

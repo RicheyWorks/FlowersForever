@@ -1,6 +1,7 @@
 package com.flowerfarm.gui;
 
 import com.flowerfarm.update.UpdateCheckResult;
+import com.flowerfarm.update.InstalledAppLauncher;
 import com.flowerfarm.update.UpdateCoordinator;
 import com.flowerfarm.update.UpdateFirstLaunchVerifier;
 import com.flowerfarm.update.UpdateLaunchGuard;
@@ -18,7 +19,6 @@ import javax.swing.JOptionPane;
 import javax.swing.SwingUtilities;
 import java.io.IOException;
 import java.nio.file.Path;
-import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
@@ -240,13 +240,8 @@ public class DesktopUpdateController {
             return;
         }
         try {
-            Path directory = launcher.get().toAbsolutePath().getParent();
-            ProcessBuilder builder = new ProcessBuilder(List.of(launcher.get().toString()));
-            if (directory != null) {
-                builder.directory(directory.toFile());
-            }
-            builder.start();
-        } catch (IOException ignored) {
+            InstalledAppLauncher.relaunch(launcher.get());
+        } catch (IOException | IllegalArgumentException ignored) {
             // The farm can reopen FlowersForever from the Start menu.
         }
     }

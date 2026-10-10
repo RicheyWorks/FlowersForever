@@ -185,57 +185,52 @@ Default inventory DB is local **H2** (`./data/flowerfarm.mv.db`) or optional **S
 
 ## Dependency hygiene
 
-- CI runs `mvn clean verify` on every push/PR to `main`.
+- CI runs `mvn clean verify` on every push/PR to `main` and the development branch.
 - Dependabot opens weekly PRs for Maven and GitHub Actions.
 - Major framework bumps (e.g. Spring Boot 4, OpenPDF 3) are reviewed deliberately; minor/patch deps are preferred.
-- The POM overrides inherited versions with Jackson **2.21.5**, Log4j **2.25.5**,
-  Commons Lang **3.18.0**, and Tomcat **10.1.59** to address dependency advisories.
-  Tomcat's FORM authentication, DIGEST replay, and path-constraint fixes were made
-  in 10.1.58, but that release vote failed; Apache identifies **10.1.59** as the
-  released version containing those fixes. See the
-  [Apache Tomcat security advisory](https://tomcat.apache.org/security-10.html#Fixed_in_Apache_Tomcat_10.1.59).
+- Spring Boot **4.1.1** supplies Spring Framework **7.0.9**. The POM applies security
+  patches Jackson **2.21.7**, Jackson **3.1.7** and Tomcat **11.0.25** beyond that BOM.
+  H2 stays on **2.3.232** pending release of the upstream CHECK-constraint fix;
+  the POM documents the compatibility reason. The resolved SBOM is checked live.
 
 ## Security scans
 
-[Security scans](.github/workflows/security-oss.yml) runs on pushes and PRs to `main`, plus a weekly sweep. It replaces the unavailable private-repository CodeQL upload and PR dependency-review workflows under the owner's approved standalone scanning policy. It does not enable paid security features or alter repository visibility, access, or application authentication.
+[Security scans](.github/workflows/security-oss.yml) runs on pushes and PRs to `main` and `codex/recover-unpushed-work`, plus a weekly sweep. The public repository also runs native CodeQL and PR dependency review. These checks require no paid GitHub security subscription and do not alter application authentication.
 
 | Check | Enforced policy and limits |
 | --- | --- |
-| FindSecBugs 1.14.0 / SpotBugs 4.8.6 | Analyze compiled application classes; fail on every **unreviewed** Medium/High `SECURITY` finding and on incomplete analysis. Exactly 21 reviewed desktop/operator-path heuristics are retained in raw reports and matched by a source-bound classifier. Low findings remain in XML/SARIF for review. Detector findings are not all confirmed vulnerabilities. |
-| OSV Scanner 2.6.0 | Match every resolved Maven component in the generated CycloneDX SBOM against a locally validated public Maven advisory snapshot. Fail on every known match, scanner error, stale/incomplete database, unsupported identity, or incomplete inventory. No severity exemption or ignore policy is configured. |
+| FindSecBugs 1.14.0 / SpotBugs 4.10.4 | Analyze compiled application classes; fail on every **unreviewed** Medium/High `SECURITY` finding and on incomplete analysis. Exact reviewed contexts remain in raw reports and are matched by a source-bound classifier. Low findings remain in XML/SARIF for review. Detector findings are not all confirmed vulnerabilities. |
+| Live OSV API | Query every resolved Maven group/artifact/version in the generated CycloneDX SBOM against OSV's current index. Fail on every known match, API error, stale HTTP response, malformed advisory, unsupported identity, unexhausted pagination or incomplete query inventory. No severity exemption or ignore policy is configured. |
 
 These checks have different rule sets and analysis models from CodeQL. The OSV gate checks the whole resolved SBOM rather than GitHub's PR dependency delta, and does not provide GitHub's native dependency-review policy or code-scanning alerts. It cannot establish the absence of vulnerabilities. Test-only dependencies, Maven build plugins, GitHub Actions, the JRE and container OS are outside this Maven application SBOM gate; Dependabot and the existing build/test jobs remain separate controls.
 
 The [reviewed contexts](config/security-reviewed-findings.md) preserve desktop chooser destinations and operator-configured file locations. They are exact finding fingerprints/occurrences, not category, class or method exclusions. The manifest binds the analyzer artifact/version, **every production Java source path and content hash under `src/main/java`**, and `pom.xml`. A changed/added/removed production source, Maven configuration change, changed finding, or unused review entry fails and requires contextual re-review. Source symlinks and directory reparse points are rejected. These bindings cover the reviewed source/build inputs, not a complete runtime call graph. Hashes normalize only CRLF to LF for Windows/Linux portability. Raw XML/SARIF retain all reviewed findings; a successful gate means zero unreviewed Medium/High findings, not zero raw findings.
 
-The existing CycloneDX package output is `target/classes/META-INF/sbom/application.cdx.json`. Compile, provided, runtime and system dependencies are included by the plugin defaults; test dependencies are excluded. The guard validates each full Maven PURL against its component identity and checks the scanner's complete output inventory. OSV's JSON report omits Maven namespaces, so ambiguous same-artifact/version identities in different groups fail the guard rather than receiving a partial-coverage pass.
+The existing CycloneDX package output is `target/classes/META-INF/sbom/application.cdx.json`. Compile, provided, runtime and system dependencies are included by the plugin defaults; test dependencies are excluded. The guard validates each full Maven PURL against its component identity, sends the full Maven namespace, requires one response per query and exhausts all pagination. Every returned advisory is fetched and strictly validated, including its ID, modification timestamp and affected Maven identity.
 
-The workflow downloads only the fixed public Maven advisory export and the checksum-pinned scanner binary. It validates the export's generation, publication time (at most 24 hours old, with five minutes of future clock tolerance), size, public-object checksum, ZIP CRC and every advisory JSON record before matching. Matching uses `--offline --no-resolve` and an explicitly empty scanner configuration; source code and dependency inventory are not sent to the OSV API. Maven still downloads build dependencies from the configured Maven repositories.
+The workflow sends public Maven dependency coordinates and versions to fixed HTTPS OSV endpoints; it sends no source, application data or credentials. Response dates must be within five minutes of the runner clock, and response hashes plus the exact SBOM hash are retained. Maven downloads build dependencies from its configured repositories. The optional offline database helpers still enforce a 24-hour advisory export limit with checksum, CRC and strict record validation; CI uses live queries because the daily export can lag advisory publication.
 
 XML, SARIF, scanner JSON, SBOM and integrity/completeness receipts are uploaded as repository Actions artifacts, including on scan failure, with seven-day retention. The full public advisory archive is not uploaded. Reports can contain source paths and dependency identities; artifact access follows repository access.
 
 ### Run locally
 
-Use JDK 17+, Maven 3.9+, Python 3.9+ and the pinned OSV Scanner 2.6.0 binary for your platform:
+Use JDK 17+, Maven 3.9+ and Python 3.9+:
 
 ```bash
 python3 -m unittest discover -s scripts/security -p 'test_*.py' -v
 mvn -B -U package -DskipTests -Psecurity-oss
-mvn -B -U -Psecurity-oss com.github.spotbugs:spotbugs-maven-plugin:4.8.6.6:spotbugs
+mvn -B -U -Psecurity-oss com.github.spotbugs:spotbugs-maven-plugin:4.10.4.0:spotbugs
 python3 scripts/security/classify_sast.py target/spotbugsXml.xml config/security-reviewed-findings.json --plugin "$HOME/.m2/repository/com/h3xstream/findsecbugs/findsecbugs-plugin/1.14.0/findsecbugs-plugin-1.14.0.jar"
-export OSV_SCANNER_LOCAL_DB_CACHE_DIRECTORY="$(mktemp -d)"
-python3 scripts/security/security_checks.py prepare-db "$OSV_SCANNER_LOCAL_DB_CACHE_DIRECTORY" target/security/database-receipt.json
-osv-scanner scan source --offline --no-ignore --no-resolve --config=config/osv-scanner-empty.toml --all-packages --all-vulns --format=json --output-file=target/security/osv.json -L target/classes/META-INF/sbom/application.cdx.json
-python3 scripts/security/security_checks.py inventory target/classes/META-INF/sbom/application.cdx.json target/security/osv.json
+python3 scripts/security/security_checks.py live-osv target/classes/META-INF/sbom/application.cdx.json target/security/osv-live.json
 ```
 
 The classifier requires the exact plugin artifact used by Maven. If you set `-Dmaven.repo.local`, pass `--plugin` beneath that repository instead of the default `$HOME/.m2/repository`; a leftover JAR in `target/` is not used by the recipe.
 
-The security compile skips tests; the existing CI JDK 17/21 jobs still run the test suite. The general `quality` profile's report-only policy is unchanged. The CI job has a 15-minute timeout and cancellation of superseded runs; private Actions minutes and artifact storage remain subject to the account's quota and billing.
+The security compile skips tests; the existing CI JDK 17/21 jobs run the full test suite. The general `quality` profile's report-only policy is unchanged. The CI job has a 15-minute timeout and cancels superseded runs. Standard GitHub-hosted runners are free for this public repository; artifact retention remains seven days.
 
 ### Tool and advisory licenses
 
-Standalone private use requires no additional scanner license. [SpotBugs 4.8.6](https://github.com/spotbugs/spotbugs/blob/4.8.6/LICENSE) is LGPL-2.1, [FindSecBugs 1.14.0](https://github.com/find-sec-bugs/find-sec-bugs/blob/version-1.14.0/LICENSE) is LGPL-3.0, and [OSV Scanner 2.6.0](https://github.com/google/osv-scanner/blob/v2.6.0/LICENSE) and the [SpotBugs Maven integration](https://github.com/spotbugs/spotbugs-maven-plugin/blob/spotbugs-maven-plugin-4.8.6.6/pom.xml) are Apache-2.0. Analyzer binaries are CI tools, not packaged application dependencies; any later redistribution must respect their licenses.
+These tools require no additional scanner subscription. [SpotBugs 4.10.4](https://github.com/spotbugs/spotbugs/blob/4.10.4/LICENSE) is LGPL-2.1, [FindSecBugs 1.14.0](https://github.com/find-sec-bugs/find-sec-bugs/blob/version-1.14.0/LICENSE) is LGPL-3.0, and the [SpotBugs Maven integration](https://github.com/spotbugs/spotbugs-maven-plugin/blob/spotbugs-maven-plugin-4.10.4.0/pom.xml) is Apache-2.0. The optional offline [OSV Scanner 2.6.0](https://github.com/google/osv-scanner/blob/v2.6.0/LICENSE) is Apache-2.0. Analyzer binaries are CI tools, not packaged application dependencies; any later redistribution must respect their licenses.
 
 Advisory data has source-specific licenses: [OSV's data documentation](https://google.github.io/osv.dev/data/) identifies GitHub Advisory Database data as CC-BY-4.0; [OpenSSF malicious-packages](https://github.com/ossf/malicious-packages/blob/main/LICENSE) is Apache-2.0. Reports retain advisory IDs and source references. The initial validated Maven export contained those two providers; the guard decodes every record without discarding unfamiliar advisory IDs.
 

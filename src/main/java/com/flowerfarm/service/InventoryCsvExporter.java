@@ -8,6 +8,7 @@ import org.springframework.stereotype.Component;
 import java.io.BufferedWriter;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.io.Writer;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 
@@ -33,13 +34,13 @@ public class InventoryCsvExporter {
         }
     }
     /** Serialize the inventory contract without choosing or closing the destination. */
-    public void writeCsv(BufferedWriter writer, List<Item> inventory) throws IOException {
+    public void writeCsv(Writer writer, List<Item> inventory) throws IOException {
         List<Item> rows = inventory == null ? List.of() : inventory;
         writer.write(InventoryService.CSV_HEADER);
-        writer.newLine();
+        writer.write(System.lineSeparator());
         for (Item item : rows) {
             writer.write(item.toCsv());
-            writer.newLine();
+            writer.write(System.lineSeparator());
         }
     }
 }

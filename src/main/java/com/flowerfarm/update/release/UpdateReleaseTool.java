@@ -25,6 +25,7 @@ import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.security.GeneralSecurityException;
 import java.security.KeyPair;
+import java.security.MessageDigest;
 import java.security.PrivateKey;
 import java.security.PublicKey;
 import java.time.Clock;
@@ -349,7 +350,8 @@ public final class UpdateReleaseTool {
             String sha = UpdateSignatures.sha256Hex(file);
             boolean matched = manifest.releases().stream().flatMap(release -> release.packages().values().stream())
                     .anyMatch(info -> fileName != null && info.fileName().equals(fileName.toString())
-                            && info.sha256().equals(sha) && info.size() == sizeOf(file));
+                            && MessageDigest.isEqual(info.sha256().getBytes(StandardCharsets.US_ASCII),
+                                    sha.getBytes(StandardCharsets.US_ASCII)) && info.size() == sizeOf(file));
             failures += matched ? 0 : 1;
             out.println("  local " + file + " " + (matched ? "matches the manifest" : "DOES NOT match the manifest"));
         }

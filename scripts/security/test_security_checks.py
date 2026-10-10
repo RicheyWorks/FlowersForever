@@ -1,11 +1,13 @@
 """Failure controls for the security evidence guards; no network is required."""
 import base64
 from datetime import datetime, timedelta, timezone
+from email.utils import format_datetime
 import hashlib
 import json
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 import zipfile
 
 import security_checks as checks
@@ -203,6 +205,95 @@ class EvidenceChecksTest(unittest.TestCase):
         self.write_json("osv.json", data)
         with self.assertRaises(ValueError):
             checks.inventory_complete(sbom, report)
+
+    def test_live_exact_group_identity_and_paginated_full_advisories(self):
+        sbom, _ = self.inventory([self.component(group="g", name="a"),
+                                 self.component(group="other", name="a")])
+        calls = []
+        def fetch(url, payload):
+            calls.append((url, payload))
+            if url.endswith("querybatch"):
+                if len(payload["queries"]) == 2:
+                    self.assertEqual([q["package"]["name"] for q in payload["queries"]], ["g:a", "other:a"])
+                    return {"results": [{"next_page_token": "page-2"}, {}]}, {}
+                self.assertEqual(payload["queries"][0]["page_token"], "page-2")
+                return {"results": [{"vulns": [{"id": "GHSA-test", "modified": self.advisory()["modified"]}]}]}, {}
+            return self.advisory(), {}
+        report = self.root / "live.json"
+        result = checks.live_osv(sbom, report, fetch=fetch)
+        self.assertEqual(result["scanned_packages"], 2)
+        self.assertEqual(result["vulnerability_ids"], ["GHSA-test"])
+        self.assertEqual(len(calls), 3)
+        self.assertEqual(json.loads(report.read_text())["advisories"], [self.advisory()])
+        with self.assertRaises(ValueError):
+            checks.live_osv(sbom, report, fail_on_findings=True, fetch=fetch)
+        self.assertTrue(json.loads(report.read_text())["completed"])
+
+    def test_live_incomplete_malformed_duplicate_and_repeated_pages_fail(self):
+        sbom, _ = self.inventory([self.component()])
+        cases = ({}, {"results": []}, {"results": [{"unknown": True}]},
+                 {"results": [{"vulns": "not-a-list"}]},
+                 {"results": [{"vulns": [{"id": "../../other", "modified": "x"}]}]},
+                 {"results": [{"vulns": [{"id": "GHSA-test"}]}]},
+                 {"results": [{"next_page_token": "repeat"}]})
+        for response in cases:
+            with self.subTest(response=response), self.assertRaises(ValueError):
+                checks.live_osv(sbom, self.root / "live.json", fetch=lambda *_: (response, {}))
+        with self.assertRaises(OSError):
+            checks.live_osv(sbom, self.root / "live.json", fetch=lambda *_: (_ for _ in ()).throw(OSError("offline")))
+
+    def test_live_advisory_mismatch_and_invalid_sbom_fail(self):
+        sbom, _ = self.inventory([self.component(group="g", name="a")])
+        for mutation in ({"id": "different"}, {"modified": "2026-01-01T00:00:00Z"},
+                         {"affected": []}, {"affected": "bad"}):
+            def fetch(url, payload):
+                if url.endswith("querybatch"):
+                    return {"results": [{"vulns": [{"id": "GHSA-test", "modified": self.advisory()["modified"]}]}]}, {}
+                return dict(self.advisory(), **mutation), {}
+            with self.subTest(mutation=mutation), self.assertRaises(ValueError):
+                checks.live_osv(sbom, self.root / "live.json", fetch=fetch)
+        for components in ([], [self.component(), self.component()],
+                           [dict(self.component(), version="wrong")], [dict(self.component(), purl="")]):
+            sbom, _ = self.inventory(components)
+            with self.subTest(components=components), self.assertRaises(ValueError):
+                checks.live_osv(sbom, self.root / "live.json", fetch=lambda *_: ({"results": [{}]}, {}))
+
+    def test_live_api_rejects_stale_http_evidence_and_bad_json(self):
+        class Response:
+            status = 200
+            def __enter__(self): return self
+            def __exit__(self, *_): pass
+            def geturl(self): return "https://api.osv.dev/v1/querybatch"
+            def read(self, _): return self.payload
+        response = Response()
+        response.payload = b'{"results":[]}'
+        response.headers = {"Date": "Fri, 03 Oct 2025 00:00:00 GMT"}
+        with patch.object(checks, "urlopen", return_value=response), self.assertRaises(ValueError):
+            checks.live_api_json(response.geturl(), {"queries": []})
+        with self.assertRaises(ValueError):
+            checks.live_api_json("https://example.org/querybatch", {})
+        response.headers = {"Date": format_datetime(datetime.now(timezone.utc), usegmt=True)}
+        with patch.object(checks, "urlopen", return_value=response):
+            self.assertEqual(checks.live_api_json(response.geturl(), {})[0], {"results": []})
+            response.payload = b'{"results":[],"results":[]}'
+            with self.assertRaises(ValueError):
+                checks.live_api_json(response.geturl(), {})
+            response.payload = b'{"results":[]}'
+            response.status = 503
+            with self.assertRaises(ValueError):
+                checks.live_api_json(response.geturl(), {})
+
+    def test_live_batches_cover_every_full_maven_identity(self):
+        sbom, _ = self.inventory([self.component(group="g" + str(i)) for i in range(101)])
+        sizes = []
+        def fetch(url, payload):
+            self.assertTrue(url.endswith("querybatch"))
+            sizes.append(len(payload["queries"]))
+            return {"results": [{} for _ in payload["queries"]]}, {}
+        result = checks.live_osv(sbom, self.root / "live.json", fail_on_findings=True, fetch=fetch)
+        self.assertEqual(sizes, [100, 1])
+        self.assertEqual(result["scanned_packages"], 101)
+        self.assertEqual(result["vulnerability_ids"], [])
 
 
 if __name__ == "__main__":

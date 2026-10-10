@@ -26,9 +26,10 @@ class VersionMirrorTest {
             Pattern.compile("flowerfarm-manager-(\\d+\\.\\d+\\.\\d+(?:-SNAPSHOT)?)\\.jar");
 
     @Test
-    @DisplayName("the POM is on the 1.3.0 development line")
+    @DisplayName("the POM is on the current development or release candidate line")
     void pomIsOnTheDevelopmentLine() throws Exception {
-        assertThat(pomVersion()).isEqualTo(DEVELOPMENT_VERSION);
+        // Release verification replaces the snapshot with its exact candidate version.
+        assertThat(pomVersion()).isIn(DEVELOPMENT_VERSION, DEVELOPMENT_VERSION.replace("-SNAPSHOT", ""));
     }
 
     @Test
@@ -40,7 +41,8 @@ class VersionMirrorTest {
     @Test
     @DisplayName("README and the demo runbook point at the JAR the build really produces")
     void docsReferenceTheCurrentJar() throws Exception {
-        String version = pomVersion();
+        // These runbooks describe the development checkout, including during candidate packaging.
+        String version = DEVELOPMENT_VERSION;
         for (Path doc : new Path[] {Path.of("README.md"), Path.of("docs", "DEMO.md")}) {
             Matcher matcher = JAR_REFERENCE.matcher(Files.readString(doc, StandardCharsets.UTF_8));
             int found = 0;

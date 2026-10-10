@@ -12,6 +12,7 @@ import com.flowerfarm.backup.LiveBackupService;
 import com.flowerfarm.backup.RestoreRecords;
 import com.flowerfarm.backup.RestoreService;
 import com.flowerfarm.update.UpdateFirstLaunchVerifier;
+import com.flowerfarm.update.InstalledAppLauncher;
 import com.flowerfarm.update.UpdateSettings;
 import com.flowerfarm.update.UpdateState;
 import com.flowerfarm.update.UpdateStateStore;
@@ -396,7 +397,12 @@ public class DesktopBackupController {
 
     private static boolean hasInstalledLauncher() {
         String launcher = System.getProperty("jpackage.app-path");
-        return launcher != null && !launcher.isBlank();
+        try {
+            return launcher != null && !launcher.isBlank()
+                    && InstalledAppLauncher.canRelaunch(Path.of(launcher));
+        } catch (IllegalArgumentException unavailable) {
+            return false;
+        }
     }
 
     private static boolean updateInProgress(UpdateSettings settings) {
@@ -412,15 +418,9 @@ public class DesktopBackupController {
             return false;
         }
         try {
-            Path path = Path.of(launcher).toAbsolutePath();
-            ProcessBuilder builder = new ProcessBuilder(List.of(path.toString()));
-            Path directory = path.getParent();
-            if (directory != null) {
-                builder.directory(directory.toFile());
-            }
-            builder.start();
+            InstalledAppLauncher.relaunch(Path.of(launcher));
             return true;
-        } catch (IOException cannotStart) {
+        } catch (IOException | IllegalArgumentException cannotStart) {
             return false;
         }
     }

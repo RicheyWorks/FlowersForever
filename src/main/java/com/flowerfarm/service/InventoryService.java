@@ -706,7 +706,7 @@ public class InventoryService {
     }
 
     /** Serialize an already selected snapshot to a caller-owned writer. */
-    public void writeCsv(java.io.BufferedWriter writer, List<Item> rows) throws java.io.IOException {
+    public void writeCsv(java.io.Writer writer, List<Item> rows) throws java.io.IOException {
         csvExporter.writeCsv(writer, rows);
     }
 

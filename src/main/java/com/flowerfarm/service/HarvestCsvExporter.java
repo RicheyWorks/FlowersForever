@@ -9,6 +9,7 @@ import org.springframework.stereotype.Component;
 import java.io.BufferedWriter;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.io.Writer;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 
@@ -33,10 +34,10 @@ public class HarvestCsvExporter {
     }
 
     /** Serialize the current harvest contract without choosing or closing the destination. */
-    public void writeCsv(BufferedWriter writer, List<HarvestEntry> entries) throws IOException {
+    public void writeCsv(Writer writer, List<HarvestEntry> entries) throws IOException {
         List<HarvestEntry> rows = entries == null ? List.of() : entries;
         writer.write("Id,Date,Crop,MarketableQuantity,Unit,BedOrField,Notes,LotCode,Grade,LossQuantity,GrossQuantity,StorageLocation");
-        writer.newLine();
+        writer.write(System.lineSeparator());
         for (HarvestEntry entry : rows) {
             writer.write(String.format(java.util.Locale.ROOT,
                     "%s,%s,%s,%.2f,%s,%s,\"%s\",%s,%s,%.2f,%.2f,%s",
@@ -53,7 +54,7 @@ public class HarvestCsvExporter {
                     entry.getLossQuantity(),
                     entry.getGrossQuantity(),
                     CsvSupport.escape(entry.getStorageLocation(), ',')));
-            writer.newLine();
+            writer.write(System.lineSeparator());
         }
     }
 }

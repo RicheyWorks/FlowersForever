@@ -10,8 +10,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.MessageDigest;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -242,7 +244,8 @@ public class ScoutingService {
         FieldAttachmentService.StoredContent stored = content.store(name == null ? "" : name.toString(),
                 Files.readAllBytes(file));
         Optional<Scouting.Photo> already = finding.photos().stream()
-                .filter(photo -> photo.sha256().equals(stored.sha256())).findFirst();
+                .filter(photo -> MessageDigest.isEqual(photo.sha256().getBytes(StandardCharsets.US_ASCII),
+                        stored.sha256().getBytes(StandardCharsets.US_ASCII))).findFirst();
         if (already.isPresent()) {
             return already.get();
         }
@@ -275,8 +278,10 @@ public class ScoutingService {
         ScoutingStore.Log log = store.load();
         Scouting.Finding finding = log.finding(findingId)
                 .orElseThrow(() -> new IllegalArgumentException("That finding no longer exists."));
+        byte[] requestedDigest = sha256 == null ? new byte[0] : sha256.getBytes(StandardCharsets.US_ASCII);
         Scouting.Finding updated = finding.withPhotos(finding.photos().stream()
-                .filter(photo -> !photo.sha256().equals(sha256)).toList());
+                .filter(photo -> !MessageDigest.isEqual(photo.sha256().getBytes(StandardCharsets.US_ASCII),
+                        requestedDigest)).toList());
         store.save(new ScoutingStore.Log(log.version(), log.overdueDays(),
                 ScoutingStore.replace(log.findings(), existing -> existing.id().equals(finding.id()), updated),
                 log.samples()));

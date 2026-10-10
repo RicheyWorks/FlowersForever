@@ -1,6 +1,7 @@
 package com.flowerfarm.controller;
 
-import com.flowerfarm.model.KnowledgeEntry;
+import com.flowerfarm.controller.dto.KnowledgeApiDtos.KnowledgeRequest;
+import com.flowerfarm.controller.dto.KnowledgeApiDtos.KnowledgeResponse;
 import com.flowerfarm.service.KnowledgeService;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
@@ -30,7 +31,7 @@ public class KnowledgeController {
     }
 
     @GetMapping
-    public List<KnowledgeEntry> search(
+    public List<KnowledgeResponse> search(
             @RequestParam(value = "q", required = false) String query,
             @RequestParam(value = "crop", required = false) String crop,
             @RequestParam(value = "bed", required = false) String bed,
@@ -42,7 +43,8 @@ public class KnowledgeController {
             @RequestParam(value = "followUpDue", defaultValue = "false") boolean followUpDue,
             @RequestParam(value = "limit", defaultValue = "200") int limit) {
         return knowledgeService.search(new KnowledgeService.SearchRequest(
-                query, crop, bed, tag, from, to, followUpDue, limit));
+                query, crop, bed, tag, from, to, followUpDue, limit)).stream()
+                .map(KnowledgeResponse::from).toList();
     }
 
     @GetMapping("/tags")
@@ -51,20 +53,21 @@ public class KnowledgeController {
     }
 
     @GetMapping("/{id}")
-    public KnowledgeEntry get(@PathVariable Long id) {
-        return knowledgeService.findById(id)
+    public KnowledgeResponse get(@PathVariable Long id) {
+        return knowledgeService.findById(id).map(KnowledgeResponse::from)
                 .orElseThrow(() -> new IndexOutOfBoundsException(
                         "No knowledge entry with id=" + id));
     }
 
     @PostMapping
-    public ResponseEntity<KnowledgeEntry> create(@RequestBody KnowledgeEntry entry) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(knowledgeService.create(entry));
+    public ResponseEntity<KnowledgeResponse> create(@RequestBody KnowledgeRequest entry) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(KnowledgeResponse.from(
+                knowledgeService.create(entry == null ? null : entry.toEntry())));
     }
 
     @PutMapping("/{id}")
-    public KnowledgeEntry update(@PathVariable Long id, @RequestBody KnowledgeEntry entry) {
-        return knowledgeService.update(id, entry);
+    public KnowledgeResponse update(@PathVariable Long id, @RequestBody KnowledgeRequest entry) {
+        return KnowledgeResponse.from(knowledgeService.update(id, entry == null ? null : entry.toEntry()));
     }
 
     @DeleteMapping("/{id}")

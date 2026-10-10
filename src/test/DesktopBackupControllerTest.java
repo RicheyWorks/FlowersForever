@@ -18,11 +18,11 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import javax.swing.Icon;
+import javax.swing.JButton;
 import javax.swing.JCheckBox;
 import javax.swing.JComboBox;
 import javax.swing.JPanel;
 import javax.swing.JSpinner;
-import javax.swing.JTextField;
 import java.awt.Component;
 import java.awt.Container;
 import java.io.File;
@@ -82,6 +82,7 @@ class DesktopBackupControllerTest {
     };
 
     private Optional<File> chosenBackup = Optional.empty();
+    private Optional<File> chosenDirectory = Optional.empty();
     private final FarmFileChooser files = new FarmFileChooser() {
         @Override
         public Optional<File> chooseSave(Component parent, String title, File suggestedFile) {
@@ -91,6 +92,11 @@ class DesktopBackupControllerTest {
         @Override
         public Optional<File> chooseBackup(Component parent, String title, File folder) {
             return chosenBackup;
+        }
+
+        @Override
+        public Optional<File> chooseDirectory(Component parent, String title, File folder) {
+            return chosenDirectory;
         }
     };
 
@@ -228,9 +234,10 @@ class DesktopBackupControllerTest {
     void automaticBackupsOn() {
         Path usb = temp.resolve("USB");
         usb.toFile().mkdirs();
+        chosenDirectory = Optional.of(usb.toFile());
         panelEditor = panel -> {
             find(panel, "backup.automatic", JCheckBox.class).setSelected(true);
-            find(panel, "backup.folder", JTextField.class).setText(usb.toString());
+            find(panel, "backup.chooseFolder", JButton.class).doClick();
             find(panel, "backup.schedule", JComboBox.class).setSelectedItem(BackupSchedule.WEEKLY);
             find(panel, "backup.keep", JSpinner.class).setValue(3);
         };
@@ -249,9 +256,10 @@ class DesktopBackupControllerTest {
     @Test
     @DisplayName("a backup folder inside the records folder is refused")
     void folderInsideRecordsRefused() {
+        chosenDirectory = Optional.of(settings.dataDirectory().resolve("x").toFile());
         panelEditor = panel -> {
             find(panel, "backup.automatic", JCheckBox.class).setSelected(true);
-            find(panel, "backup.folder", JTextField.class).setText(settings.dataDirectory().resolve("x").toString());
+            find(panel, "backup.chooseFolder", JButton.class).doClick();
         };
         answers.add(0);
         answers.add(1);

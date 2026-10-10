@@ -99,6 +99,23 @@ class GettingStartedGuideTest {
     }
 
     @Test
+    @DisplayName("guide text cannot insert elements, attributes, or entities into generated markup")
+    void rendererKeepsHostileMarkupAsText() {
+        String html = GettingStartedGuide.toHtml("""
+                # </h1><script>bad()</script>
+                ## **<img src='file:///private'>**
+                - </li><a href='https://example.invalid'>click</a>
+                1. **&lt;script&gt;** & raw
+                Paragraph <iframe src='file:///private'></iframe>.
+                """);
+
+        assertThat(html).contains("&lt;/h1&gt;&lt;script&gt;bad()&lt;/script&gt;");
+        assertThat(html).contains("<b>&lt;img src='file:///private'&gt;</b>");
+        assertThat(html).contains("&amp;lt;script&amp;gt;");
+        assertThat(html).doesNotContain("<script", "<img", "<a ", "<iframe");
+    }
+
+    @Test
     @DisplayName("menu paths are read from bold arrow references only")
     void menuPathsAreParsed() {
         List<GettingStartedGuide.MenuPath> paths = GettingStartedGuide.menuPaths(

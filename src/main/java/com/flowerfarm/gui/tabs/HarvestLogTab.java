@@ -1204,6 +1204,7 @@ public class HarvestLogTab implements FlowerFarmTab {
         setEntryToolChoices(true);
         entryTools.setName("harvest.entryTools");
         entryTools.getAccessibleContext().setAccessibleName("More harvest entry actions");
+        FarmUi.entryControl(entryTools, null, "Choose another harvest entry action, then run it.");
         entryTools.addActionListener(event -> updateEntryToolActions());
         runEntryToolBtn = FarmUi.secondaryButton("Run entry action");
         runEntryToolBtn.addActionListener(e -> runEntryTool((String) entryTools.getSelectedItem()));
