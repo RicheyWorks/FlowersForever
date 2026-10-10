@@ -146,6 +146,27 @@ public class FarmReadingService {
         return new ReadingPage(page, next, rows.size() > limit);
     }
 
+    /** One saved reading anchors the exact channel; observations, not upload order, define the timeline. */
+    @Transactional(readOnly = true)
+    public MeasurementHistory measurementHistory(long savedReadingId) {
+        if (savedReadingId < 1) throw new IllegalArgumentException("Select a saved reading first.");
+        List<FarmReading> descending = jdbc.query("SELECT r.* FROM farm_readings r "
+                        + "JOIN farm_readings selected ON selected.id = ? "
+                        + "AND r.source_id = selected.source_id AND r.device_id = selected.device_id "
+                        + "AND r.metric = selected.metric AND r.unit = selected.unit AND r.location = selected.location "
+                        + "ORDER BY CAST(r.observed_at AS TIMESTAMP(9) WITH TIME ZONE) DESC, r.id DESC LIMIT ?",
+                MAPPER, savedReadingId, MAX_PAGE + 1);
+        if (descending.isEmpty()) throw new IllegalArgumentException("This saved reading is no longer available.");
+        boolean older = descending.size() > MAX_PAGE;
+        List<FarmReading> chronological = new ArrayList<>(descending.subList(0, Math.min(descending.size(), MAX_PAGE)));
+        java.util.Collections.reverse(chronological);
+        return new MeasurementHistory(chronological, older);
+    }
+
+    public record MeasurementHistory(List<FarmReading> readings, boolean hasOlderReadings) {
+        public MeasurementHistory { readings = List.copyOf(readings); }
+    }
+
     /** A finite receipt fence for a copy of the append-only history across every source. */
     @Transactional(readOnly = true)
     public ReadingSnapshot snapshotForCopy() {

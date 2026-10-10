@@ -100,6 +100,88 @@ class EquipmentReadingsTabTest {
 
     @AfterEach void close() { jdbc.execute("SHUTDOWN"); }
 
+    @Test void changesReadsSelectedModelRowInBackgroundForViewerAndKeepsDraft() throws Exception {
+        adapter("z-probe", "one"); adapter("a-probe", "two");
+        edt(() -> { tab.applyRolePermissions(false); tab.refreshData(); return null; });
+        await(() -> table().getRowCount() == 2);
+        AtomicReference<Component> popup = new AtomicReference<>();
+        doAnswer(call -> { assertThat(SwingUtilities.isEventDispatchThread()).isTrue(); popup.set(call.getArgument(1)); return null; })
+                .when(dialogs).showMessage(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(), anyString(), anyInt());
+        AtomicBoolean background = new AtomicBoolean();
+        doAnswer(call -> { background.set(!SwingUtilities.isEventDispatchThread()); return call.callRealMethod(); })
+                .when(service).measurementHistory(anyLong());
+        assertThat(edt(() -> component("changes", JButton.class).isEnabled())).isFalse();
+        edt(() -> {
+            table().setAutoCreateRowSorter(true);
+            table().getRowSorter().toggleSortOrder(0);
+            table().setRowSelectionInterval(1, 1);
+            return null;
+        });
+        click("changes");
+        await(() -> popup.get() != null && component("changes", JButton.class).isEnabled());
+        var description = (javax.swing.JTextArea) find(popup.get(), "equipmentReadings.changesDescription");
+        assertThat(description.getText()).contains("z-probe").doesNotContain("a-probe");
+        assertThat(background).isTrue();
+        assertThat(edt(() -> text("value").getText())).isEqualTo("21.125000001");
+        assertThat(service.count()).isEqualTo(2);
+    }
+
+    @Test void changesDropsObsoleteResultAfterSelectionChangesWithoutBlockingRefresh() throws Exception {
+        adapter("probe-1", "one"); adapter("probe-2", "two");
+        edt(() -> { tab.refreshData(); return null; }); await(() -> table().getRowCount() == 2);
+        CountDownLatch entered = new CountDownLatch(1); CountDownLatch release = new CountDownLatch(1);
+        AtomicBoolean returned = new AtomicBoolean();
+        doAnswer(call -> {
+            entered.countDown(); assertThat(release.await(10, TimeUnit.SECONDS)).isTrue();
+            var result = call.callRealMethod(); returned.set(true); return result;
+        }).when(service).measurementHistory(anyLong());
+        edt(() -> { table().setRowSelectionInterval(0, 0); return null; }); click("changes");
+        assertThat(entered.await(10, TimeUnit.SECONDS)).isTrue();
+        try {
+            assertThat(edt(() -> component("changes", JButton.class).isEnabled())).isFalse();
+            edt(() -> { table().setRowSelectionInterval(1, 1); return null; });
+        } finally { release.countDown(); }
+        await(() -> returned.get() && component("changes", JButton.class).isEnabled());
+        org.mockito.Mockito.verify(dialogs, org.mockito.Mockito.never()).showMessage(
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(), anyString(), anyInt());
+    }
+
+    @Test void changesFailureAllowsRetryAndDoesNotResetManualWork() throws Exception {
+        adapter("probe", "one");
+        edt(() -> { tab.refreshData(); return null; }); await(() -> table().getRowCount() == 1);
+        edt(() -> { table().setRowSelectionInterval(0, 0); return null; });
+        doThrow(new IllegalStateException("offline")).when(service).measurementHistory(anyLong());
+        click("changes"); await(() -> feedback().contains("Could not read") && component("changes", JButton.class).isEnabled());
+        assertThat(edt(() -> text("value").getText())).isEqualTo("21.125000001");
+        org.mockito.Mockito.doCallRealMethod().when(service).measurementHistory(anyLong());
+        AtomicBoolean opened = new AtomicBoolean();
+        doAnswer(call -> { opened.set(true); return null; }).when(dialogs).showMessage(
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(), anyString(), anyInt());
+        click("changes"); await(opened::get);
+        assertThat(edt(this::feedback)).contains("Measurement history loaded");
+        assertThat(service.count()).isEqualTo(1);
+    }
+
+    @Test void changesLoadingDisablesSelectionActionAndFailedRefreshKeepsCorrectIdentity() throws Exception {
+        adapter("probe", "one");
+        edt(() -> { tab.refreshData(); return null; }); await(() -> table().getRowCount() == 1);
+        edt(() -> { table().setRowSelectionInterval(0, 0); return null; });
+        CountDownLatch entered = new CountDownLatch(1); CountDownLatch release = new CountDownLatch(1);
+        doAnswer(call -> {
+            entered.countDown(); assertThat(release.await(10, TimeUnit.SECONDS)).isTrue();
+            throw new IllegalStateException("offline");
+        }).when(service).recent(anyLong(), anyInt());
+        edt(() -> { tab.refreshData(); return null; }); assertThat(entered.await(10, TimeUnit.SECONDS)).isTrue();
+        try { assertThat(edt(() -> component("changes", JButton.class).isEnabled())).isFalse(); }
+        finally { release.countDown(); }
+        await(() -> feedback().contains("Could not refresh") && component("changes", JButton.class).isEnabled());
+        AtomicReference<Component> popup = new AtomicReference<>();
+        doAnswer(call -> { popup.set(call.getArgument(1)); return null; }).when(dialogs).showMessage(
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(), anyString(), anyInt());
+        click("changes"); await(() -> popup.get() != null);
+        assertThat(((JTable) find(popup.get(), "equipmentReadings.changesHistory")).getRowCount()).isEqualTo(1);
+    }
+
     @Test void reviewedSavePersistsExactValueNameAreaAndTimeWithoutBlockingEdt() throws Exception {
         AtomicBoolean background = new AtomicBoolean();
         doAnswer(call -> {

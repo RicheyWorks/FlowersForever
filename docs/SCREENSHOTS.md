@@ -99,11 +99,17 @@ The **Latest reported measurements** view chooses measurements by when they were
 
 [![Equipment readings with manual entry, saved sample observations, and a button to save the full history as a spreadsheet copy.](images/app-equipment-readings.png)](images/app-equipment-readings.png)
 
-[![Latest reported measurements with measurement ages and explicit missing and needs-checking conditions; delayed old logs stay in history.](images/app-equipment-latest.png)](images/app-equipment-latest.png)
+[![Latest reported measurements with measurement ages, soil moisture, and an explicit missing tank reading, using isolated sample records.](images/app-equipment-latest.png)](images/app-equipment-latest.png)
 
 [![Equipment spreadsheet review with three checked sample observations, including a missing value.](images/app-equipment-spreadsheet-review.png)](images/app-equipment-spreadsheet-review.png)
 
 [![Saved-readings spreadsheet copy review showing the count, snapshot, destination, and readable-copy scope with sample records.](images/app-equipment-export-review.png)](images/app-equipment-export-review.png)
+
+**See changes…** follows one selected measurement in measured-time order. Measured points, needs-checking squares, and missing/error gaps accompany an exact table. It keeps sources, equipment, areas, and units separate and displays up to the latest 200 observations. These pictures render actual Swing components with isolated sample records; they are not a claim of a connected sensor or live monitoring.
+
+[![Selected soil moisture history showing measured points, a needs-checking square, missing and equipment-error gaps, and exact saved observations.](images/app-equipment-changes.png)](images/app-equipment-changes.png)
+
+[![The same soil moisture history at a narrower width, with wrapped explanations and horizontally scrollable exact readings.](images/app-equipment-changes-compact.png)](images/app-equipment-changes-compact.png)
 
 ## Plant and flower references
 

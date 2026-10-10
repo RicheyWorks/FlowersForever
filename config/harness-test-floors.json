@@ -124,7 +124,7 @@
   "unit:com.flowerfarm.gui.tabs.CrmCustomerDraftSafetyTest": 53,
   "unit:com.flowerfarm.gui.tabs.CrmOrderReviewVisualTest": 8,
   "unit:com.flowerfarm.gui.tabs.DashboardDailySheetVisualTest": 9,
-  "unit:com.flowerfarm.gui.tabs.EquipmentReadingsTabTest": 43,
+  "unit:com.flowerfarm.gui.tabs.EquipmentReadingsTabTest": 47,
   "unit:com.flowerfarm.gui.tabs.EventServicesTabTest": 7,
   "unit:com.flowerfarm.gui.tabs.HarvestDraftSafetyTest": 16,
   "unit:com.flowerfarm.gui.tabs.HarvestEntryVisualContractTest": 4,
@@ -211,10 +211,12 @@
   "unit:com.flowerfarm.service.TrendServiceTest": 13,
   "unit:com.flowerfarm.telemetry.EquipmentReadingExportTest": 14,
   "unit:com.flowerfarm.telemetry.EquipmentSpreadsheetTest": 13,
-  "unit:com.flowerfarm.telemetry.FarmReadingServiceTest": 17,
+  "unit:com.flowerfarm.telemetry.FarmReadingServiceTest": 20,
   "unit:com.flowerfarm.telemetry.ManualFarmReadingTest": 3,
   "unit:com.flowerfarm.telemetry.ReadingAgeTest": 13,
   "unit:com.flowerfarm.update.UpdateDatabaseRollbackTest": 2,
   "unit:com.flowerfarm.update.UpdateInstallAndRollbackTest": 11,
-  "unit:com.flowerfarm.update.UpdatePackageAndBackupTest": 9
+  "unit:com.flowerfarm.update.UpdatePackageAndBackupTest": 9,
+  "unit:com.flowerfarm.telemetry.ReadingTrendTest": 7,
+  "unit:com.flowerfarm.gui.tabs.EquipmentChangesPanelTest": 3
 }

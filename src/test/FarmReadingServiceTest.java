@@ -60,6 +60,51 @@ class FarmReadingServiceTest {
                 "location", "North house", "rawFrame", "{\"temp_c\":21.125}\r\n"));
     }
 
+    @Test void measurementHistorySeparatesEveryChannelDimensionAndKeepsPreciseMeasuredOrder() {
+        var newest = row("new", new BigDecimal("999999999999999999.000000000002"));
+        newest.put("observedAt", "2026-10-10T11:59:00.000000002Z");
+        var delayed = row("delayed", new BigDecimal("999999999999999999.000000000001"));
+        delayed.put("observedAt", "2026-10-10T04:59:00.000000001-07:00");
+        long selected = ingest("logger", List.of(newest, delayed)).readingIds().get(0);
+        for (var change : List.of(Map.entry("deviceId", "other"), Map.entry("metric", "soil.temperature"),
+                Map.entry("unit", "°C"), Map.entry("location", "South house"))) {
+            var other = row("other-" + change.getKey(), 5);
+            other.put(change.getKey(), change.getValue());
+            ingest("logger", List.of(other));
+        }
+        ingest("another-source", List.of(row("other-source", 6)));
+        var history = service.measurementHistory(selected);
+        assertThat(history.hasOlderReadings()).isFalse();
+        assertThat(history.readings()).extracting(FarmReading::readingKey).containsExactly("delayed", "new");
+        assertThat(history.readings().get(1).value()).isEqualByComparingTo("999999999999999999.000000000002");
+        assertThat(service.count()).isEqualTo(7);
+    }
+
+    @Test void measurementHistoryCapsLatestObservationsAndBreaksEqualTimeTiesByReceipt() {
+        List<Map<String, Object>> entries = new ArrayList<>();
+        for (int i = 0; i < 202; i++) entries.add(row("sample-" + i, i));
+        long selected = ingest("logger", entries).readingIds().get(0);
+        var history = service.measurementHistory(selected);
+        assertThat(history.hasOlderReadings()).isTrue();
+        assertThat(history.readings()).hasSize(200);
+        assertThat(history.readings()).extracting(FarmReading::id).isSorted();
+        assertThat(history.readings().get(0).readingKey()).isEqualTo("sample-2");
+        assertThat(history.readings().get(199).readingKey()).isEqualTo("sample-201");
+    }
+
+    @Test void measurementHistoryRetainsMissingAndFaultValuesAndRejectsMissingAnchors() {
+        var missing = row("missing", 0); missing.remove("value"); missing.put("quality", "MISSING");
+        var fault = row("fault", 999); fault.put("quality", "ERROR");
+        long selected = ingest("logger", List.of(missing, fault)).readingIds().get(0);
+        var history = service.measurementHistory(selected);
+        assertThat(history.readings()).extracting(FarmReading::quality).containsExactly("MISSING", "ERROR");
+        assertThat(history.readings().get(0).value()).isNull();
+        assertThat(history.readings().get(1).value()).isEqualByComparingTo("999");
+        for (long id : List.of(-1L, 0L, Long.MAX_VALUE)) {
+            assertThatThrownBy(() -> service.measurementHistory(id)).isInstanceOf(IllegalArgumentException.class);
+        }
+    }
+
     @Test void copySnapshotPagesAllSourcesPastTwoHundredAndExcludesLaterReceipts() {
         var rows = new ArrayList<Map<String, Object>>();
         for (int i = 0; i < 201; i++) rows.add(row("old-" + i, i));

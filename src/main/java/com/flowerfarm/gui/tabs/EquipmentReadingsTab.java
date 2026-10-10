@@ -72,6 +72,7 @@ public final class EquipmentReadingsTab implements FlowerFarmTab {
     private final JButton leave = button("Leave spreadsheet preview", "leaveImport");
     private final JButton layout = button("Spreadsheet layout", "layout");
     private final JButton export = button("Save readings spreadsheet…", "export");
+    private final JButton changes = button("See changes…", "changes");
     private final JComboBox<String> view = new JComboBox<>(new String[] {
             "All saved readings", "Latest reported measurements"});
     private final JLabel pageInfo = FarmUi.mutedLabel("All saved readings · 200 per page · Newest received first · Age at last refresh");
@@ -88,12 +89,16 @@ public final class EquipmentReadingsTab implements FlowerFarmTab {
     private boolean unconfirmedSave;
     private volatile boolean importing;
     private volatile boolean exporting;
+    private boolean charting;
+    private long historyRevision;
+    private List<FarmReading> displayedReadings = List.of();
     private boolean unconfirmedImport;
     private List<Map<String, Object>> importDraft;
     private List<Object> cleanDraft;
     private long nextCursor;
     private boolean hasMore;
     private int displayedView;
+    private final JTable table = new JTable(rows);
     private String readingKey = UUID.randomUUID().toString();
 
     public EquipmentReadingsTab(FarmReadingService service, TabHost host, FarmDialogs dialogs) {
@@ -142,7 +147,6 @@ public final class EquipmentReadingsTab implements FlowerFarmTab {
         top.add(FarmUi.section("Record a measurement",
                 "Use the equipment's unit. Leave the value blank for No reading.", entry), BorderLayout.CENTER);
         root.add(top, BorderLayout.NORTH);
-        JTable table = new JTable(rows);
         table.setName("equipmentReadings.history");
         FarmUi.configureTable(table, "Saved equipment readings");
         table.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
@@ -166,7 +170,7 @@ public final class EquipmentReadingsTab implements FlowerFarmTab {
         JPanel historyActions = new JPanel(new java.awt.GridLayout(2, 1, 0, 4));
         historyActions.setOpaque(false);
         historyActions.add(FarmUi.toolbar(new JLabel("Show"), view, latest, older));
-        historyActions.add(FarmUi.toolbar(export));
+        historyActions.add(FarmUi.toolbar(changes, export));
         controls.add(historyActions, BorderLayout.NORTH);
         pageInfo.setName("equipmentReadings.pageInfo");
         controls.add(pageInfo, BorderLayout.SOUTH);
@@ -190,6 +194,14 @@ public final class EquipmentReadingsTab implements FlowerFarmTab {
         leave.addActionListener(event -> leaveSpreadsheet());
         layout.addActionListener(event -> showSpreadsheetLayout());
         export.addActionListener(event -> exportReadings());
+        changes.addActionListener(event -> showChanges());
+        table.getSelectionModel().addListSelectionListener(event -> {
+            if (!event.getValueIsAdjusting()) { historyRevision++; updateControls(); }
+        });
+        page.addHierarchyListener(event -> {
+            if ((event.getChangeFlags() & (java.awt.event.HierarchyEvent.SHOWING_CHANGED
+                    | java.awt.event.HierarchyEvent.DISPLAYABILITY_CHANGED)) != 0) historyRevision++;
+        });
         cleanDraft = draftState();
         updateControls();
     }
@@ -276,6 +288,51 @@ public final class EquipmentReadingsTab implements FlowerFarmTab {
         bring.setText(importDraft == null ? "Bring in equipment spreadsheet…" : "Review and retry spreadsheet…");
         leave.setEnabled(importDraft != null && !importing && !exporting);
         export.setEnabled(!saving && !importing && !exporting);
+        changes.setEnabled(!charting && !loading && !saving && !importing && !exporting
+                && displayedView == view.getSelectedIndex() && selectedReading() != null);
+    }
+
+    private FarmReading selectedReading() {
+        int selected = table.getSelectedRow();
+        if (selected < 0) return null;
+        int index = table.convertRowIndexToModel(selected);
+        return index < displayedReadings.size() ? displayedReadings.get(index) : null;
+    }
+
+    private void showChanges() {
+        FarmReading selected = selectedReading();
+        if (charting || loading || saving || importing || exporting || selected == null
+                || displayedView != view.getSelectedIndex()) return;
+        final long revision = historyRevision;
+        charting = true;
+        updateControls();
+        new SwingWorker<FarmReadingService.MeasurementHistory, Void>() {
+            @Override protected FarmReadingService.MeasurementHistory doInBackground() {
+                return service.measurementHistory(selected.id());
+            }
+            @Override protected void done() {
+                try {
+                    var history = get();
+                    if (revision == historyRevision) {
+                        if (feedback.getText().startsWith("Could not read this measurement's history.")
+                                || feedback.getText().startsWith("Reading history interrupted.")) {
+                            message("Measurement history loaded. Your unfinished work is kept.");
+                        }
+                        dialogs.showMessage(root, FarmUi.dialogScroll(page,
+                                new EquipmentChangesPanel(history, selected.id(), clock.instant()),
+                                new Dimension(1000, 660)), "See changes in a measurement", JOptionPane.PLAIN_MESSAGE);
+                    }
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                    if (revision == historyRevision) message("Reading history interrupted. Your unfinished work is kept; try See changes again.");
+                } catch (ExecutionException failed) {
+                    if (revision == historyRevision) message("Could not read this measurement's history. Your unfinished work is kept; try See changes again.");
+                } finally {
+                    charting = false;
+                    updateControls();
+                }
+            }
+        }.execute();
     }
 
     private void message(String text) {
@@ -646,6 +703,7 @@ public final class EquipmentReadingsTab implements FlowerFarmTab {
             return;
         }
         loading = true;
+        historyRevision++;
         final int requestedView = view.getSelectedIndex();
         updateControls();
         new SwingWorker<FarmReadingService.ReadingPage, Void>() {
@@ -659,6 +717,7 @@ public final class EquipmentReadingsTab implements FlowerFarmTab {
                     FarmReadingService.ReadingPage page = get();
                     if (requestedView == view.getSelectedIndex()) {
                         java.time.Instant shownAt = clock.instant();
+                        displayedReadings = page.readings();
                         rows.setRowCount(0);
                         for (FarmReading reading : page.readings()) {
                             int metric = METRICS.indexOf(reading.metric());

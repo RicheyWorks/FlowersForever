@@ -22,6 +22,16 @@ If a save cannot be confirmed, your draft stays in place. Check **Latest reading
 
 Changing farm types is blocked while a reading is unfinished or its save is still running. Closing or signing out asks whether you want to keep working or explicitly leave unfinished work. Drafts are held in memory; an intentional exit discards them. Saved readings remain in the farm records.
 
+## See how a measurement changed
+
+Select a saved row, then choose **See changes…**. The view follows that exact equipment, measurement, unit, growing area, and source. For example, it can show soil moisture changing at your seedling bench without combining another probe's readings. Viewers can open it too. Your unfinished entry and any kept spreadsheet preview stay intact.
+
+The chart runs from oldest to newest **measured time**, with actual time intervals. A delayed upload goes where its measured time belongs. Green dots show **Measured** values; green lines join only adjacent measured observations. Amber squares mark **Needs checking**. Gray crosses mark **No reading**, and red crosses mark **Equipment error**. These are gaps, never zero; an error's reported number remains in the table but is not plotted. Lines connect saved points and do not establish continuous monitoring. The displayed value range fits the points and is not a recommended operating range.
+
+The table underneath keeps exact numbers, complete UTC measured and received times (including fractions of a second), conditions, and saved references. Scroll across for the additional columns. It is a read-only view, with no unit conversions, corrections, calibration, automatic health alarms, or equipment operation.
+
+Each view loads **up to the latest 200 measured observations** for the selected measurement. It states when older history exists or the selected old reading lies outside that window. Use **Save readings spreadsheet…** for the full history. This is a snapshot: close it and choose **See changes…** again for new arrivals. Changing the selected row, refreshing history, or leaving the tab while the view is loading discards that obsolete result.
+
 ## Save a copy of your readings
 
 Choose **Save readings spreadsheet…** to keep or share a readable copy of **all saved readings**, including older pages and every equipment source. It copies the full history even when **Latest reported measurements** is selected. Pick a filename ending in **.csv**, then review the count, snapshot time, and destination. If the file already exists, the review states that it will be replaced. Viewers can copy the history they can already read.
@@ -46,9 +56,9 @@ The desktop stores the checked measurements, units, names, conditions, and times
 
 ## What is available now
 
-Manual entry, spreadsheet selection with review, saved history, latest reported measurements with reading ages, and a reviewed spreadsheet copy of all saved readings are available directly in the desktop app. Direct spreadsheet selection uses the headings above; arbitrary logger columns and JSON still use the optional helper. The setup instructions below are for the person helping you connect your equipment; you do not need to understand the programming terms to understand your farm readings.
+Manual entry, spreadsheet selection with review, saved history, latest reported measurements with reading ages, a selected-measurement history chart with exact readings, and a reviewed spreadsheet copy of all saved readings are available directly in the desktop app. Direct spreadsheet selection uses the headings above; arbitrary logger columns and JSON still use the optional helper. The setup instructions below are for the person helping you connect your equipment; you do not need to understand the programming terms to understand your farm readings.
 
-Bluetooth connections, automatic readings, charts, and alerts need further work. Pump and valve operation will be a separate later step. Saving a reading does not turn equipment on or off.
+Bluetooth connections, automatic readings, live chart refresh, and health alerts need further work. Pump and valve operation will be a separate later step. Saving a reading does not turn equipment on or off.
 
 The soil and greenhouse tools in **Field science** are available now. They open in your web browser and keep their work separate until you save a copy in FlowersForever.
 
@@ -67,7 +77,7 @@ flowchart LR
     A --> I[Protected readings intake]
     I --> H[(Local reading history)]
     H --> R[Readings API and external monitoring tools]
-    H -. future work .-> D[Charts, alerts, and reviewed decisions]
+    H --> D[Saved measurement charts and exact readings]
     D -. separate future control layer .-> P[Pump or valve controller]
 ```
 
@@ -181,8 +191,10 @@ The bundled Greenhouse Monitor already supports controller CSV/JSON files, a loc
 
 Implement adapters against published device formats. A future adapter should declare device identity, sampling interval, units, calibration/version information, timestamp handling, quality mapping, buffering, and retry keys. For an analog sensor, the ADC/gateway performs acquisition; Bluetooth or a network connection transports the resulting digital records. Keep original voltage/count readings when useful and label derived measurements and their calibration separately.
 
-Beyond the current reading ages, future work should add sensor health and time-series charts, with explicit metric/unit definitions and retention/export policies before sustained high-rate collection. The present H2 append store and global intake lock suit initial local logger intake, not an unbounded industrial telemetry fleet.
+Beyond the current reading ages and bounded saved-history charts, future work should add sensor health and live refresh, with explicit metric/unit definitions and retention policies before sustained high-rate collection. The present H2 append store and global intake lock suit initial local logger intake, not an unbounded industrial telemetry fleet.
 
 Equipment operation is a separate future adapter capability. A pump controller needs reviewed commands, feedback that distinguishes requested from actual state, bounded run time, local stop/override, and defined behavior when data or connectivity is lost. Measurement receipt alone must never imply authorization to run a pump.
+
+The desktop history chart uses a fixed prepared query anchored to a saved receipt ID. It joins source/device/metric/unit/location exactly, orders by a nanosecond-capable timestamp cast and receipt ID, and reads at most 201 rows (200 displayed plus a truncation check). Delayed uploads and equal-time events remain deterministic. It normalizes exact `BigDecimal` value differences and seconds-plus-nanoseconds time differences before converting bounded fractions to chart pixels. Stored/table values are never converted to floating point. Raw equipment frames are not displayed. This adds no HTTP operation, device credential, hardware action, background timer, schema, or dependency.
 
 </details>
