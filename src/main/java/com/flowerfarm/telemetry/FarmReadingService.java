@@ -146,6 +146,54 @@ public class FarmReadingService {
         return new ReadingPage(page, next, rows.size() > limit);
     }
 
+    /** One stored receipt anchors source/device identity; all its units, areas and measurements remain visible. */
+    @Transactional(readOnly = true)
+    public ReadingPage recentForEquipment(long savedReadingId, long beforeId, int limit) {
+        checkEquipmentPage(beforeId, limit);
+        EquipmentIdentity equipment = equipmentIdentity(savedReadingId);
+        List<FarmReading> rows = beforeId == 0
+                ? jdbc.query("SELECT * FROM farm_readings WHERE source_id = ? AND device_id = ? ORDER BY id DESC LIMIT ?",
+                        MAPPER, equipment.source(), equipment.device(), limit + 1)
+                : jdbc.query("SELECT * FROM farm_readings WHERE source_id = ? AND device_id = ? AND id < ? ORDER BY id DESC LIMIT ?",
+                        MAPPER, equipment.source(), equipment.device(), beforeId, limit + 1);
+        return equipmentPage(rows, beforeId, limit);
+    }
+
+    /** Rank before receipt paging so filtering cannot revive a superseded measurement. */
+    @Transactional(readOnly = true)
+    public ReadingPage latestForEquipment(long savedReadingId, long beforeId, int limit) {
+        checkEquipmentPage(beforeId, limit);
+        EquipmentIdentity equipment = equipmentIdentity(savedReadingId);
+        List<FarmReading> rows = beforeId == 0
+                ? jdbc.query(LATEST_REPORTED + " AND source_id = ? AND device_id = ? ORDER BY id DESC LIMIT ?",
+                        MAPPER, equipment.source(), equipment.device(), limit + 1)
+                : jdbc.query(LATEST_REPORTED + " AND source_id = ? AND device_id = ? AND id < ? ORDER BY id DESC LIMIT ?",
+                        MAPPER, equipment.source(), equipment.device(), beforeId, limit + 1);
+        return equipmentPage(rows, beforeId, limit);
+    }
+
+    private static void checkEquipmentPage(long beforeId, int limit) {
+        if (beforeId < 0 || limit < 1 || limit > MAX_PAGE) {
+            throw new IllegalArgumentException("Choose an equipment history page of 1 to 200 readings.");
+        }
+    }
+
+    private EquipmentIdentity equipmentIdentity(long savedReadingId) {
+        if (savedReadingId < 1) throw new IllegalArgumentException("Select a saved reading first.");
+        List<EquipmentIdentity> found = jdbc.query("SELECT source_id, device_id FROM farm_readings WHERE id = ?",
+                (row, index) -> new EquipmentIdentity(row.getString("source_id"), row.getString("device_id")), savedReadingId);
+        if (found.isEmpty()) throw new IllegalArgumentException("This saved equipment reading is no longer available.");
+        return found.get(0);
+    }
+
+    private static ReadingPage equipmentPage(List<FarmReading> rows, long beforeId, int limit) {
+        List<FarmReading> page = List.copyOf(rows.subList(0, Math.min(rows.size(), limit)));
+        long next = page.isEmpty() ? beforeId : page.get(page.size() - 1).id();
+        return new ReadingPage(page, next, rows.size() > limit);
+    }
+
+    private record EquipmentIdentity(String source, String device) { }
+
     /** One saved reading anchors the exact channel; observations, not upload order, define the timeline. */
     @Transactional(readOnly = true)
     public MeasurementHistory measurementHistory(long savedReadingId) {

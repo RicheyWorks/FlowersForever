@@ -22,6 +22,14 @@ If a save cannot be confirmed, your draft stays in place. Check **Latest reading
 
 Changing farm types is blocked while a reading is unfinished or its save is still running. Closing or signing out asks whether you want to keep working or explicitly leave unfinished work. Drafts are held in memory; an intentional exit discards them. Saved readings remain in the farm records.
 
+## Find readings from one piece of equipment
+
+Select a saved row, then choose **Show this equipment**. The saved list follows that equipment and its source in either **All saved readings** or **Latest reported measurements**. **Older readings** stays within that selection; **Latest readings** refreshes it. Choose **Show all equipment** to return to the whole farm. Viewers can use these controls too, without changing an unfinished entry or kept spreadsheet preview.
+
+The caption states which equipment and source are actually displayed. **Entered on this farm** means a manual entry, and **Equipment spreadsheet** means a desktop sheet brought into this farm. Other sources retain their supplied names. Two devices with similar names, or the same displayed name from different sources, are kept separate. All of the selected equipment's measurements, growing areas, and units are included; the list still keeps each measurement's identity and condition. A failed refresh retains the previous rows and their actual caption; use **Latest readings** to retry or **Show all equipment** to return.
+
+**See changes…** still follows just the selected measurement, area, and unit. **Save readings spreadsheet…** still copies the full farm history across **all equipment and sources**, even while this filter is active. The review states the complete count before you confirm. Source codes in that reference copy are preserved for your equipment helper.
+
 ## See how a measurement changed
 
 Select a saved row, then choose **See changes…**. The view follows that exact equipment, measurement, unit, growing area, and source. For example, it can show soil moisture changing at your seedling bench without combining another probe's readings. Viewers can open it too. Your unfinished entry and any kept spreadsheet preview stay intact.
@@ -198,3 +206,5 @@ Equipment operation is a separate future adapter capability. A pump controller n
 The desktop history chart uses a fixed prepared query anchored to a saved receipt ID. It joins source/device/metric/unit/location exactly, orders by a nanosecond-capable timestamp cast and receipt ID, and reads at most 201 rows (200 displayed plus a truncation check). Delayed uploads and equal-time events remain deterministic. It normalizes exact `BigDecimal` value differences and seconds-plus-nanoseconds time differences before converting bounded fractions to chart pixels. Stored/table values are never converted to floating point. Raw equipment frames are not displayed. This adds no HTTP operation, device credential, hardware action, background timer, schema, or dependency.
 
 </details>
+
+Equipment-focused paging resolves source/device identity from a saved receipt with fixed prepared queries. It reads at most 201 rows per page, uses receipt cursors in saved history, and ranks latest measurements before applying that cursor. Display labels do not change stored source codes or copy identities. This adds no schema, HTTP operation, continuous collector, or equipment command.

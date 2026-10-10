@@ -60,6 +60,91 @@ class FarmReadingServiceTest {
                 "location", "North house", "rawFrame", "{\"temp_c\":21.125}\r\n"));
     }
 
+    @Test void equipmentHistoryUsesStoredSourceAndDeviceWhileKeepingAllItsMeasurementsAreasAndUnits() {
+        long anchor = ingest("logger", List.of(row("first", 21))).readingIds().get(0);
+        for (var change : List.of(Map.entry("metric", "soil.temperature"), Map.entry("unit", "°C"),
+                Map.entry("location", "South house"))) {
+            var another = row("same-equipment-" + change.getKey(), 22); another.put(change.getKey(), change.getValue());
+            ingest("logger", List.of(another));
+        }
+        var otherDevice = row("other-device", 23); otherDevice.put("deviceId", "other");
+        ingest("logger", List.of(otherDevice)); ingest("other-source", List.of(row("other-source", 24)));
+        var history = service.recentForEquipment(anchor, 0, 200);
+        assertThat(history.readings()).hasSize(4).allSatisfy(saved -> {
+            assertThat(saved.sourceId()).isEqualTo("logger"); assertThat(saved.deviceId()).isEqualTo("greenhouse-1");
+        });
+        assertThat(history.readings()).extracting(FarmReading::unit).contains("C", "°C");
+        assertThat(history.readings()).extracting(FarmReading::location).contains("North house", "South house");
+        assertThat(history.readings()).extracting(FarmReading::metric).contains("air.temperature", "soil.temperature");
+        assertThat(history.hasMore()).isFalse(); assertThat(service.count()).isEqualTo(6);
+    }
+
+    @Test void equipmentReceiptPagingPastTwoHundredDoesNotShiftWithNewArrivals() {
+        var rows = new ArrayList<Map<String, Object>>();
+        for (int i = 0; i < 205; i++) rows.add(row("sample-" + i, i));
+        long anchor = ingest("logger", rows).readingIds().get(0);
+        ingest("another-source", List.of(row("outsider", 9)));
+        var first = service.recentForEquipment(anchor, 0, 200);
+        assertThat(first.readings()).hasSize(200); assertThat(first.hasMore()).isTrue();
+        ingest("logger", List.of(row("new-arrival", 99)));
+        var last = service.recentForEquipment(anchor, first.nextAfterId(), 200);
+        assertThat(last.readings()).extracting(FarmReading::readingKey)
+                .containsExactly("sample-4", "sample-3", "sample-2", "sample-1", "sample-0");
+        assertThat(last.hasMore()).isFalse();
+        assertThat(service.recentForEquipment(anchor, last.nextAfterId(), 200).readings()).isEmpty();
+        assertThat(service.recentForEquipment(anchor, 0, 1).readings().get(0).readingKey()).isEqualTo("new-arrival");
+    }
+
+    @Test void equipmentLatestRanksPreciseObservationsBeforePagingAndKeepsMissingAndFaultReports() {
+        var older = row("older", 21); older.put("observedAt", "2026-10-10T11:00:00Z");
+        long anchor = ingest("logger", List.of(older)).readingIds().get(0);
+        var newer = row("newer", 22); newer.put("observedAt", "2026-10-10T11:00:00.000000001Z");
+        ingest("logger", List.of(newer));
+        var delayed = row("delayed", 20); delayed.put("observedAt", "2026-10-10T10:00:00Z");
+        ingest("logger", List.of(delayed));
+        var missing = row("missing", 0); missing.remove("value"); missing.put("quality", "MISSING"); missing.put("metric", "water.level");
+        var fault = row("fault", 999); fault.put("quality", "ERROR"); fault.put("location", "South house");
+        ingest("logger", List.of(missing, fault)); ingest("other-source", List.of(row("outsider", 5)));
+        var first = service.latestForEquipment(anchor, 0, 2);
+        assertThat(first.readings()).extracting(FarmReading::readingKey).containsExactly("fault", "missing");
+        assertThat(first.readings().get(1).value()).isNull(); assertThat(first.hasMore()).isTrue();
+        var last = service.latestForEquipment(anchor, first.nextAfterId(), 2);
+        assertThat(last.readings()).extracting(FarmReading::readingKey).containsExactly("newer");
+        assertThat(last.hasMore()).isFalse();
+        assertThat(service.latestForEquipment(anchor, last.nextAfterId(), 2).readings()).isEmpty();
+    }
+
+    @Test void equipmentLatestPagesMoreThanTwoHundredDistinctMeasurementsWithoutRevivingOlderValues() {
+        var rows = new ArrayList<Map<String, Object>>();
+        for (int i = 0; i < 201; i++) {
+            var entry = row("metric-" + i, i); entry.put("metric", "measurement-" + i); rows.add(entry);
+        }
+        long anchor = ingest("logger", rows).readingIds().get(0);
+        var newer = row("supersedes-old-anchor", 500); newer.put("metric", "measurement-0");
+        ingest("logger", List.of(newer));
+        var first = service.latestForEquipment(anchor, 0, 200);
+        assertThat(first.readings()).hasSize(200); assertThat(first.hasMore()).isTrue();
+        assertThat(first.readings().get(0).readingKey()).isEqualTo("supersedes-old-anchor");
+        var last = service.latestForEquipment(anchor, first.nextAfterId(), 200);
+        assertThat(last.readings()).extracting(FarmReading::readingKey).containsExactly("metric-1");
+        assertThat(last.hasMore()).isFalse();
+    }
+
+    @Test void equipmentPagesRejectInvalidOrMissingAnchorsAndBoundsWithoutWriting() {
+        long anchor = ingest("logger", List.of(row("one", 21))).readingIds().get(0);
+        for (long id : List.of(-1L, 0L, Long.MAX_VALUE)) {
+            assertThatThrownBy(() -> service.recentForEquipment(id, 0, 1)).isInstanceOf(IllegalArgumentException.class);
+            assertThatThrownBy(() -> service.latestForEquipment(id, 0, 1)).isInstanceOf(IllegalArgumentException.class);
+        }
+        for (int limit : List.of(0, 201)) {
+            assertThatThrownBy(() -> service.recentForEquipment(anchor, 0, limit)).isInstanceOf(IllegalArgumentException.class);
+            assertThatThrownBy(() -> service.latestForEquipment(anchor, 0, limit)).isInstanceOf(IllegalArgumentException.class);
+        }
+        assertThatThrownBy(() -> service.recentForEquipment(anchor, -1, 1)).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> service.latestForEquipment(anchor, -1, 1)).isInstanceOf(IllegalArgumentException.class);
+        assertThat(service.count()).isEqualTo(1);
+    }
+
     @Test void measurementHistorySeparatesEveryChannelDimensionAndKeepsPreciseMeasuredOrder() {
         var newest = row("new", new BigDecimal("999999999999999999.000000000002"));
         newest.put("observedAt", "2026-10-10T11:59:00.000000002Z");

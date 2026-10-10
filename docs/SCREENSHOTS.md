@@ -111,6 +111,12 @@ The **Latest reported measurements** view chooses measurements by when they were
 
 [![The same soil moisture history at a narrower width, with wrapped explanations and horizontally scrollable exact readings.](images/app-equipment-changes-compact.png)](images/app-equipment-changes-compact.png)
 
+**Show this equipment** narrows saved history or latest measurements to the selected equipment and its source. **Show all equipment** returns to the whole farm. Measurements from different growing areas and units stay distinct, and unfinished entries remain intact. Familiar source labels distinguish **Entered on this farm** from **Equipment spreadsheet**.
+
+[![Saved soil-probe history focused on one source, with a clear equipment caption and Show all equipment control.](images/app-equipment-focused.png)](images/app-equipment-focused.png)
+
+[![The same filtered history on a smaller window, scrolled down to show equipment controls and the source caption.](images/app-equipment-focused-compact.png)](images/app-equipment-focused-compact.png)
+
 ## Plant and flower references
 
 <table>

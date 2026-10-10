@@ -73,6 +73,9 @@ public final class EquipmentReadingsTab implements FlowerFarmTab {
     private final JButton layout = button("Spreadsheet layout", "layout");
     private final JButton export = button("Save readings spreadsheet…", "export");
     private final JButton changes = button("See changes…", "changes");
+    private final JButton focus = button("Show this equipment", "focus");
+    private final JButton clearFocus = button("Show all equipment", "clearFocus");
+    private final JTextArea scope = new JTextArea("Showing all equipment. Select a saved row to focus on that equipment.");
     private final JComboBox<String> view = new JComboBox<>(new String[] {
             "All saved readings", "Latest reported measurements"});
     private final JLabel pageInfo = FarmUi.mutedLabel("All saved readings · 200 per page · Newest received first · Age at last refresh");
@@ -98,6 +101,8 @@ public final class EquipmentReadingsTab implements FlowerFarmTab {
     private long nextCursor;
     private boolean hasMore;
     private int displayedView;
+    private FarmReading equipmentFocus;
+    private long displayedEquipmentId;
     private final JTable table = new JTable(rows);
     private String readingKey = UUID.randomUUID().toString();
 
@@ -170,10 +175,21 @@ public final class EquipmentReadingsTab implements FlowerFarmTab {
         JPanel historyActions = new JPanel(new java.awt.GridLayout(2, 1, 0, 4));
         historyActions.setOpaque(false);
         historyActions.add(FarmUi.toolbar(new JLabel("Show"), view, latest, older));
-        historyActions.add(FarmUi.toolbar(changes, export));
+        historyActions.add(FarmUi.toolbar(focus, clearFocus, changes, export));
         controls.add(historyActions, BorderLayout.NORTH);
         pageInfo.setName("equipmentReadings.pageInfo");
-        controls.add(pageInfo, BorderLayout.SOUTH);
+        scope.setName("equipmentReadings.scope");
+        scope.setEditable(false);
+        scope.setOpaque(false);
+        scope.setLineWrap(true);
+        scope.setWrapStyleWord(true);
+        scope.setColumns(70);
+        scope.getAccessibleContext().setAccessibleName("Equipment shown in saved readings");
+        JPanel captions = new JPanel(new BorderLayout(0, 4));
+        captions.setOpaque(false);
+        captions.add(scope, BorderLayout.NORTH);
+        captions.add(pageInfo, BorderLayout.SOUTH);
+        controls.add(captions, BorderLayout.SOUTH);
         bottom.add(controls, BorderLayout.NORTH);
         feedback.setName("equipmentReadings.feedback");
         bottom.add(feedback, BorderLayout.CENTER);
@@ -195,6 +211,8 @@ public final class EquipmentReadingsTab implements FlowerFarmTab {
         layout.addActionListener(event -> showSpreadsheetLayout());
         export.addActionListener(event -> exportReadings());
         changes.addActionListener(event -> showChanges());
+        focus.addActionListener(event -> focusEquipment());
+        clearFocus.addActionListener(event -> showAllEquipment());
         table.getSelectionModel().addListSelectionListener(event -> {
             if (!event.getValueIsAdjusting()) { historyRevision++; updateControls(); }
         });
@@ -282,14 +300,38 @@ public final class EquipmentReadingsTab implements FlowerFarmTab {
             control.setEnabled(edit);
         }
         latest.setEnabled(!loading);
-        older.setEnabled(!loading && hasMore && displayedView == view.getSelectedIndex());
+        older.setEnabled(!loading && hasMore && displayedView == view.getSelectedIndex()
+                && displayedEquipmentId == focusedId());
         view.setEnabled(!loading);
         bring.setEnabled(canWrite && !saving && !importing && !exporting && !unconfirmedSave);
         bring.setText(importDraft == null ? "Bring in equipment spreadsheet…" : "Review and retry spreadsheet…");
         leave.setEnabled(importDraft != null && !importing && !exporting);
         export.setEnabled(!saving && !importing && !exporting);
         changes.setEnabled(!charting && !loading && !saving && !importing && !exporting
-                && displayedView == view.getSelectedIndex() && selectedReading() != null);
+                && displayedView == view.getSelectedIndex() && displayedEquipmentId == focusedId() && selectedReading() != null);
+        focus.setEnabled(!loading && !saving && !importing && !exporting && selectedReading() != null);
+        clearFocus.setEnabled(!loading && !saving && !importing && !exporting && equipmentFocus != null);
+    }
+
+    private long focusedId() { return equipmentFocus == null ? 0 : equipmentFocus.id(); }
+
+    private void focusEquipment() {
+        FarmReading selected = selectedReading();
+        if (loading || saving || importing || exporting || selected == null) return;
+        equipmentFocus = selected;
+        load(0);
+    }
+
+    private void showAllEquipment() {
+        if (loading || saving || importing || exporting || equipmentFocus == null) return;
+        equipmentFocus = null;
+        load(0);
+    }
+
+    private static String equipmentScope(FarmReading reading) {
+        return reading == null ? "Showing all equipment. Select a saved row to focus on that equipment."
+                : "Showing: " + ManualFarmReading.equipmentName(reading) + " · Source: " + ManualFarmReading.sourceName(reading)
+                + "\nIncludes this equipment's measurements across all growing areas and units.";
     }
 
     private FarmReading selectedReading() {
@@ -302,7 +344,7 @@ public final class EquipmentReadingsTab implements FlowerFarmTab {
     private void showChanges() {
         FarmReading selected = selectedReading();
         if (charting || loading || saving || importing || exporting || selected == null
-                || displayedView != view.getSelectedIndex()) return;
+                || displayedView != view.getSelectedIndex() || displayedEquipmentId != focusedId()) return;
         final long revision = historyRevision;
         charting = true;
         updateControls();
@@ -705,9 +747,15 @@ public final class EquipmentReadingsTab implements FlowerFarmTab {
         loading = true;
         historyRevision++;
         final int requestedView = view.getSelectedIndex();
+        final FarmReading requestedEquipment = equipmentFocus;
+        final long requestedEquipmentId = focusedId();
         updateControls();
         new SwingWorker<FarmReadingService.ReadingPage, Void>() {
             @Override protected FarmReadingService.ReadingPage doInBackground() {
+                if (requestedEquipment != null) {
+                    return requestedView == 1 ? service.latestForEquipment(requestedEquipmentId, beforeId, FarmReadingService.MAX_PAGE)
+                            : service.recentForEquipment(requestedEquipmentId, beforeId, FarmReadingService.MAX_PAGE);
+                }
                 return requestedView == 1 ? service.latestReported(beforeId, FarmReadingService.MAX_PAGE)
                         : service.recent(beforeId, FarmReadingService.MAX_PAGE);
             }
@@ -715,7 +763,7 @@ public final class EquipmentReadingsTab implements FlowerFarmTab {
                 loading = false;
                 try {
                     FarmReadingService.ReadingPage page = get();
-                    if (requestedView == view.getSelectedIndex()) {
+                    if (requestedView == view.getSelectedIndex() && requestedEquipmentId == focusedId()) {
                         java.time.Instant shownAt = clock.instant();
                         displayedReadings = page.readings();
                         rows.setRowCount(0);
@@ -727,11 +775,12 @@ public final class EquipmentReadingsTab implements FlowerFarmTab {
                                     reading.value() == null ? "No value" : reading.value().stripTrailingZeros().toPlainString(),
                                     reading.unit(), quality < 0 ? reading.quality() : condition.getItemAt(quality),
                                     TIME.format(reading.observedAt()),
-                                    ManualFarmReading.SOURCE.equals(reading.sourceId()) ? "Entered on this farm"
-                                            : EquipmentSpreadsheet.SOURCE.equals(reading.sourceId()) ? "Equipment spreadsheet" : reading.sourceId(),
+                                    ManualFarmReading.sourceName(reading),
                                     ReadingAge.describe(reading.observedAt(), shownAt)});
                         }
                         displayedView = requestedView;
+                        displayedEquipmentId = requestedEquipmentId;
+                        scope.setText(equipmentScope(requestedEquipment));
                         pageInfo.setText(requestedView == 1
                                 ? "Latest reported measurements · Sources, units and areas stay separate · Age at " + TIME.format(shownAt)
                                 : "All saved readings · Newest received first · Age at " + TIME.format(shownAt));

@@ -40,7 +40,7 @@ final class EquipmentChangesPanel extends JPanel {
                 : "Plotted value range: " + exact(trend.minimum()) + " to " + exact(trend.maximum()) + " " + channel.unit();
         JTextArea description = plainText(ManualFarmReading.equipmentName(channel) + " · " + channel.location()
                 + "\n" + EquipmentSpreadsheet.measurementLabel(channel.metric()) + " · Unit: " + channel.unit()
-                + " · Source: " + channel.sourceId() + "\n"
+                + " · Source: " + ManualFarmReading.sourceName(channel) + "\n"
                 + trend.readings().size() + " saved readings · Oldest measured first · Snapshot at " + shownAt
                 + (history.hasOlderReadings() ? "\nLatest 200 observations only. More older readings are saved; use Save readings spreadsheet for the full history." : "\nAll saved observations for this measurement.")
                 + (includesSelection ? "" : "\nYour selected older reading is outside these latest 200 observations.")

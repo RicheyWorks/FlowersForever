@@ -212,6 +212,8 @@ Choose **Latest reported measurements** to see the last measured observation for
 
 Choose **Bring in equipment spreadsheet…** to select a spreadsheet (CSV), check all its readings, and review them before saving. **Spreadsheet layout** explains the headings using farm language. Up to 500 readings save together; an unchanged retry adds no duplicates, and your manual draft stays intact. Other logger layouts and readings files (JSON) can use the optional helper. Automatic readings, Bluetooth pairing, health alarms, and pump operation still need further work. [Read the farmer's guide to equipment readings](docs/FARM_READINGS.md).
 
+**Show this equipment** narrows saved history or latest measurements to the selected equipment and its source. **Show all equipment** returns to the whole farm. Measurements from different growing areas and units stay distinct, and unfinished entries remain intact. Familiar source labels distinguish **Entered on this farm** from **Equipment spreadsheet**.
+
 **See changes…** opens a chart for a selected measurement, with exact readings underneath. Review soil moisture or greenhouse temperature over time without mixing equipment, growing areas, sources, or units. Missing and faulted readings appear as gaps; values needing checking are marked separately. The view shows up to the latest 200 observations and preserves unfinished entries.
 
 Choose **Save readings spreadsheet…** to review and save a readable copy of the full history, including older pages and every source. Exact values, units, conditions, and measured times stay together; unfinished entries stay in the app. The copy is for reference and sharing. Use a full farm backup for restoration.
@@ -221,6 +223,8 @@ Choose **Save readings spreadsheet…** to review and save a readable copy of th
 [![Latest reported measurements: measurement ages, soil moisture, and an explicitly missing tank reading, using isolated sample records.](docs/images/app-equipment-latest.png)](docs/images/app-equipment-latest.png)
 
 [![See changes: sample soil moisture history with measured points, a needs-checking square, missing and equipment-error gaps, and the exact saved readings underneath.](docs/images/app-equipment-changes.png)](docs/images/app-equipment-changes.png)
+
+[![Saved soil-probe readings focused on one equipment source, with clear scope and Show all equipment controls.](docs/images/app-equipment-focused.png)](docs/images/app-equipment-focused.png)
 
 [![Review an equipment spreadsheet before saving: equipment names, growing areas, exact values, units, conditions, and measured times using sample records.](docs/images/app-equipment-spreadsheet-review.png)](docs/images/app-equipment-spreadsheet-review.png)
 

@@ -59,4 +59,11 @@ public final class ManualFarmReading {
         }
         return reading.deviceId();
     }
+
+    /** Familiar desktop origins; adapter attribution labels keep their original identity. */
+    public static String sourceName(FarmReading reading) {
+        if (SOURCE.equals(reading.sourceId())) return "Entered on this farm";
+        if (EquipmentSpreadsheet.SOURCE.equals(reading.sourceId())) return "Equipment spreadsheet";
+        return reading.sourceId();
+    }
 }

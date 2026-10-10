@@ -100,6 +100,128 @@ class EquipmentReadingsTabTest {
 
     @AfterEach void close() { jdbc.execute("SHUTDOWN"); }
 
+    @Test void viewerFocusUsesSortedModelIdentityAndSurvivesBothViewsWithoutChangingDraft() throws Exception {
+        adapter("z-probe", "one"); adapter("a-probe", "two"); adapter("z-probe", "three");
+        when(host.canMutateData()).thenReturn(false);
+        edt(() -> { tab.applyRolePermissions(false); tab.refreshData(); return null; });
+        await(() -> table().getRowCount() == 3);
+        AtomicBoolean background = new AtomicBoolean();
+        doAnswer(call -> { background.set(!SwingUtilities.isEventDispatchThread()); return call.callRealMethod(); })
+                .when(service).recentForEquipment(anyLong(), anyLong(), anyInt());
+        assertThat(edt(() -> component("focus", JButton.class).isEnabled())).isFalse();
+        edt(() -> { table().setAutoCreateRowSorter(true); table().getRowSorter().toggleSortOrder(0);
+            table().setRowSelectionInterval(1, 1); return null; });
+        click("focus"); await(() -> table().getRowCount() == 2 && component("latest", JButton.class).isEnabled());
+        assertThat(edt(() -> component("scope", javax.swing.JTextArea.class).getText())).contains("z-probe", "farm-bridge", "all growing areas");
+        assertThat(background).isTrue();
+        assertThat(edt(() -> table().getValueAt(0, 0))).isEqualTo("z-probe");
+        chooseView(1); await(() -> table().getRowCount() == 1 && component("latest", JButton.class).isEnabled());
+        chooseView(0); await(() -> table().getRowCount() == 2 && component("latest", JButton.class).isEnabled());
+        click("clearFocus"); await(() -> table().getRowCount() == 3 && component("latest", JButton.class).isEnabled());
+        assertThat(edt(() -> component("scope", javax.swing.JTextArea.class).getText())).startsWith("Showing all equipment");
+        assertThat(edt(() -> component("save", JButton.class).isEnabled())).isFalse();
+        assertThat(edt(() -> text("value").getText())).isEqualTo("21.125000001"); assertThat(service.count()).isEqualTo(3);
+    }
+
+    @Test void focusedReceiptPagesStayStableWhenAnotherReadingArrives() throws Exception {
+        for (int i = 0; i < 205; i++) adapterAt("focused-" + i, "2026-10-10T11:00:00Z", "GOOD", "21.125000001");
+        adapter("another-probe", "outsider");
+        click("latest"); await(() -> table().getRowCount() == 200 && component("latest", JButton.class).isEnabled());
+        edt(() -> { table().setRowSelectionInterval(1, 1); return null; }); click("focus");
+        await(() -> component("scope", javax.swing.JTextArea.class).getText().contains("Showing: probe-1") && component("older", JButton.class).isEnabled());
+        adapterAt("new-arrival", "2026-10-10T11:59:00Z", "GOOD", "23");
+        click("older"); await(() -> table().getRowCount() == 5 && component("latest", JButton.class).isEnabled());
+        assertThat(edt(() -> component("older", JButton.class).isEnabled())).isFalse();
+        click("latest"); await(() -> table().getRowCount() == 200 && component("latest", JButton.class).isEnabled());
+        assertThat(edt(() -> table().getValueAt(0, 3))).isEqualTo("23");
+        assertThat(edt(() -> text("value").getText())).isEqualTo("21.125000001");
+    }
+
+    @Test void failedFocusKeepsActualScopeAndRowsUntilSuccessfulRetry() throws Exception {
+        adapter("one-probe", "one"); adapter("two-probe", "two");
+        click("latest"); await(() -> table().getRowCount() == 2 && component("latest", JButton.class).isEnabled());
+        edt(() -> { table().setRowSelectionInterval(0, 0); return null; });
+        doThrow(new IllegalStateException("offline")).when(service).recentForEquipment(anyLong(), anyLong(), anyInt());
+        click("focus"); await(() -> feedback().contains("Could not refresh history") && component("latest", JButton.class).isEnabled());
+        assertThat(edt(() -> table().getRowCount())).isEqualTo(2);
+        assertThat(edt(() -> component("scope", javax.swing.JTextArea.class).getText())).startsWith("Showing all equipment");
+        assertThat(edt(() -> component("changes", JButton.class).isEnabled())).isFalse();
+        assertThat(edt(() -> component("clearFocus", JButton.class).isEnabled())).isTrue();
+        org.mockito.Mockito.doCallRealMethod().when(service).recentForEquipment(anyLong(), anyLong(), anyInt());
+        click("latest"); await(() -> table().getRowCount() == 1 && component("latest", JButton.class).isEnabled());
+        assertThat(edt(() -> component("scope", javax.swing.JTextArea.class).getText())).contains("Showing: two-probe");
+        assertThat(edt(this::feedback)).isEqualTo("Readings refreshed.");
+        assertThat(edt(() -> text("value").getText())).isEqualTo("21.125000001");
+    }
+
+    @Test void focusPreservesKeptPreviewAndCopyStillIncludesEveryEquipment() throws Exception {
+        adapter("one-probe", "one"); adapter("two-probe", "two");
+        spreadsheet("38.5", "Measured");
+        when(dialogs.showConfirm(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(), anyString(), anyInt(), anyInt()))
+                .thenReturn(JOptionPane.NO_OPTION);
+        click("import"); await(() -> feedback().contains("preview kept") && component("import", JButton.class).isEnabled());
+        click("latest"); await(() -> table().getRowCount() == 2 && component("latest", JButton.class).isEnabled());
+        edt(() -> { table().setRowSelectionInterval(0, 0); return null; }); click("focus");
+        await(() -> table().getRowCount() == 1 && component("latest", JButton.class).isEnabled());
+        assertThat(edt(tab::applicationExitWarning)).contains("spreadsheet preview");
+        Path target = copyTarget();
+        when(dialogs.showConfirm(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(), anyString(), anyInt(), anyInt()))
+                .thenReturn(JOptionPane.YES_OPTION);
+        click("export"); await(() -> !tab.hasPendingSave() && feedback().contains("Spreadsheet copy saved: 2"));
+        assertThat(Files.readString(target)).contains("one-probe", "two-probe");
+        assertThat(edt(() -> table().getRowCount())).isEqualTo(1);
+        click("import"); await(() -> service.count() == 3 && !tab.hasPendingSave() && component("latest", JButton.class).isEnabled());
+        assertThat(edt(() -> table().getRowCount())).isEqualTo(1);
+        assertThat(edt(() -> text("value").getText())).isEqualTo("21.125000001");
+        click("clearFocus"); await(() -> table().getRowCount() == 3 && component("latest", JButton.class).isEnabled());
+    }
+
+    @Test void sameHumanNameFromDesktopOriginsRemainsSeparateWithLiteralFriendlyScopeAndChart() throws Exception {
+        var entry = ManualFarmReading.draft("same", "<html>North probe", "House", "soil.moisture", "%", "38.5", "GOOD", Instant.parse("2026-10-01T12:00:00Z"));
+        transaction.executeWithoutResult(s -> { service.ingest(ManualFarmReading.SOURCE, List.of(entry));
+            service.ingest(EquipmentSpreadsheet.SOURCE, List.of(entry)); });
+        click("latest"); await(() -> table().getRowCount() == 2 && component("latest", JButton.class).isEnabled());
+        edt(() -> { table().setRowSelectionInterval(0, 0); return null; }); click("focus");
+        await(() -> table().getRowCount() == 1 && component("latest", JButton.class).isEnabled());
+        assertThat(edt(() -> component("scope", javax.swing.JTextArea.class).getText())).contains("<html>North probe", "Equipment spreadsheet").doesNotContain("desktop.spreadsheet");
+        AtomicReference<Component> popup = new AtomicReference<>();
+        doAnswer(call -> { popup.set(call.getArgument(1)); return null; }).when(dialogs).showMessage(
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(), anyString(), anyInt());
+        edt(() -> { table().setRowSelectionInterval(0, 0); return null; }); click("changes");
+        await(() -> popup.get() != null && component("changes", JButton.class).isEnabled());
+        assertThat(((javax.swing.JTextArea) find(popup.get(), "equipmentReadings.changesDescription")).getText())
+                .contains("Equipment spreadsheet", "<html>North probe").doesNotContain("desktop.spreadsheet");
+        click("clearFocus"); await(() -> table().getRowCount() == 2 && component("latest", JButton.class).isEnabled());
+        edt(() -> { table().setRowSelectionInterval(1, 1); return null; }); click("focus");
+        await(() -> table().getRowCount() == 1 && component("latest", JButton.class).isEnabled());
+        assertThat(edt(() -> component("scope", javax.swing.JTextArea.class).getText())).contains("Entered on this farm").doesNotContain("desktop.manual");
+        popup.set(null);
+        edt(() -> { table().setRowSelectionInterval(0, 0); return null; }); click("changes");
+        await(() -> popup.get() != null && component("changes", JButton.class).isEnabled());
+        assertThat(((javax.swing.JTextArea) find(popup.get(), "equipmentReadings.changesDescription")).getText())
+                .contains("Entered on this farm").doesNotContain("desktop.manual");
+        assertThat(service.recent(0, 200).readings()).extracting(com.flowerfarm.telemetry.FarmReading::sourceId)
+                .containsExactly(EquipmentSpreadsheet.SOURCE, ManualFarmReading.SOURCE);
+        assertThat(edt(() -> text("value").getText())).isEqualTo("21.125000001");
+    }
+
+    @Test void changedEquipmentScopeDiscardsPendingChartResult() throws Exception {
+        adapter("one-probe", "one"); adapter("two-probe", "two");
+        click("latest"); await(() -> table().getRowCount() == 2 && component("latest", JButton.class).isEnabled());
+        edt(() -> { table().setRowSelectionInterval(0, 0); return null; });
+        var entered = new CountDownLatch(1); var release = new CountDownLatch(1);
+        doAnswer(call -> { entered.countDown(); assertThat(release.await(10, TimeUnit.SECONDS)).isTrue(); return call.callRealMethod(); })
+                .when(service).measurementHistory(anyLong());
+        click("changes"); assertThat(entered.await(10, TimeUnit.SECONDS)).isTrue();
+        try {
+            click("focus"); await(() -> table().getRowCount() == 1 && component("latest", JButton.class).isEnabled());
+            edt(() -> { table().setRowSelectionInterval(0, 0); return null; });
+        } finally { release.countDown(); }
+        await(() -> component("changes", JButton.class).isEnabled());
+        org.mockito.Mockito.verify(dialogs, org.mockito.Mockito.never()).showMessage(
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(), anyString(), anyInt());
+    }
+
     @Test void changesReadsSelectedModelRowInBackgroundForViewerAndKeepsDraft() throws Exception {
         adapter("z-probe", "one"); adapter("a-probe", "two");
         edt(() -> { tab.applyRolePermissions(false); tab.refreshData(); return null; });

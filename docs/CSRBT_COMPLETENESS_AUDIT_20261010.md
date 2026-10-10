@@ -70,3 +70,5 @@ The full Git-tree comparison also found four HTML files outside that artifact ma
 - Bluetooth, serial/USB, MQTT, and vendor systems need adapters that identify the source and translate their published data formats. Device-specific adapters, streaming subscriptions, live charts/health alerts, retention, calibration workflows, and reviewed pump control remain follow-up work. No direct equipment control is introduced by this data-intake change.
 
 The desktop follow-up adds a bounded chart of a selected saved measurement with an exact table, keeping channel identities, units, and quality gaps intact. This does not add a device adapter, live subscription, calibration, alarm, or equipment control.
+
+A further desktop follow-up lets growers focus saved history or latest measurements on equipment and its stored source, across growing areas and units. It uses familiar manual/spreadsheet source labels while preserving the original identities. Full-history spreadsheet copies remain farm-wide. This does not introduce another device adapter, continuous collection, or hardware control.
