@@ -156,7 +156,7 @@ Interactive Lab to see the whole run drawn as charts — the loop closes.</p>
   <h3>Keywords</h3>
   <div class="cols">
     <a href="#header">header</a><a href="#phase">phase</a><a href="#factor">factor</a>
-    <a href="#model">model</a><a href="#data">data</a><a href="#note">note</a>
+    <a href="#model">model</a><a href="#data">data</a><a href="#dwc">dwc</a><a href="#note">note</a>
     <a href="#tree">tree</a><a href="#cross">cross</a><a href="#expect">expect</a>
     <a href="#grading">grading</a><a href="#outputs">outputs</a><a href="#run">how to run</a>
   </div>
@@ -165,6 +165,11 @@ Interactive Lab to see the whole run drawn as charts — the loop closes.</p>
 <p>Every line is <code>keyword: arguments</code>. Blank lines are ignored, and <code>#</code> starts a
 comment (to end of line). A malformed line is reported and skipped — never guessed at — and the run
 continues with what parsed.</p>
+<p id="numbers">A number is written as a decimal: <code>0.15</code>, <code>120</code>, <code>6e1</code>. It must be
+finite — not-a-number, infinity and a number too large to hold (<code>1e400</code>) are refused, and the
+refusal quotes what was typed — and a count or a step count must be whole: a genotype census, a
+mark–recapture's three counts, and every model's <code>steps</code>. <code>60.7</code> steps is a
+reported problem, not 60 steps.</p>
 
 <!-- HEADER -->
 <section class="kw" id="header">
@@ -255,6 +260,30 @@ continues with what parsed.</p>
 <span class="k">data:</span> coop  peck peck peck flap strut peck dustbathe flap</pre>
 </section>
 
+<!-- DWC -->
+<section class="kw" id="dwc">
+  <div class="kw-head"><span class="tag">published records</span><h2>dwc — a Darwin Core file as a dataset</h2></div>
+  <p>Name a Darwin Core occurrence file — the CSV the kit's field sheets export, and the shape GBIF,
+  iNaturalist and the herbarium portals publish — and the runner reads it as a dataset under the
+  label you give, beside your <code>data:</code> lines. Notes and hypotheses address it by that label.</p>
+  <table>
+    <tr><th>Form</th><th>Meaning</th></tr>
+    <tr><td><code>dwc:</code> &lt;label&gt; &lt;path&gt;</td><td>Read the file at &lt;path&gt; as dataset &lt;label&gt;. The label is the
+    first word and the path is the rest of the line, so a path may hold spaces. A relative path is read
+    the way <code>-Pspec</code> is: from the folder <code>./gradlew</code> is in, not the folder the
+    protocol is in.</td></tr>
+  </table>
+  <p>Cover and counts are different quantities. A file whose <code>organismQuantityType</code> says
+  <code>% cover</code> is read as cover: Shannon, evenness and Bray–Curtis apply, and Chao1 is withheld,
+  because it estimates unseen species from counts of individuals and cover has none. A <code>chao1</code>
+  hypothesis about a cover dataset is graded UNGRADEABLE, with that reason. A file the runner cannot
+  read is reported, and the rest of the run still happens. The Interactive Lab reads a
+  <code>dwc:</code> line and lists it, but a page cannot open a path on your disk: the file is read
+  when the engine runs.</p>
+<pre><span class="k">dwc:</span> canopy     docs/tahoe-canopy-dwc.csv        <span class="c"># percent cover: read as cover</span>
+<span class="k">dwc:</span> understory docs/tahoe-understory-dwc.csv</pre>
+</section>
+
 <!-- NOTE -->
 <section class="kw" id="note">
   <div class="kw-head"><span class="tag">field notebook</span><h2>note — qualitative observations</h2></div>
@@ -333,7 +362,7 @@ continues with what parsed.</p>
   <div class="legend">
     <div class="verdict ok"><b>✅ CONFIRMED</b><br><span>The run matched your prediction.</span></div>
     <div class="verdict no"><b>❌ REFUTED</b><br><span>The run contradicted it — a real result, not a failure.</span></div>
-    <div class="verdict un"><b>⚠ UNGRADEABLE</b><br><span>The claim can't be judged honestly (e.g. a survivorship claim with no census, or a phase compared to a dataset). Flagged, never guessed.</span></div>
+    <div class="verdict un"><b>⚠ UNGRADEABLE</b><br><span>The claim can't be judged honestly (e.g. a survivorship claim with no census, a phase compared to a dataset, or Chao1 claimed about cover data). Flagged, never guessed.</span></div>
   </div>
 </section>
 
@@ -365,7 +394,7 @@ continues with what parsed.</p>
 
 <footer>
   <p>Grammar provenance: ADR-019 (protocols), ADR-020 (entered data, notes, phylogenies, crosses),
-  ADR-027 (reading a protocol back into the Workbench). The complete worked example is
+  ADR-027 (reading a protocol back into the Workbench), ADR-108 (Darwin Core files). The complete worked example is
   <code>docs/sample-experiment.eco</code>; the instruments it grades against are catalogued in the
   <a href="ecology-field-guide.html">Field Guide</a>. Every number is seeded and oracle-tested, so a
   protocol regrades identically. MIT-licensed · © 2026 Richmond.</p>

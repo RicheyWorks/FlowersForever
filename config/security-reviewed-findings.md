@@ -1,6 +1,6 @@
 # Reviewed security contexts
 
-Source and caller review on 2026-10-09 classified exactly 38 FindSecBugs 1.14.0 Medium findings from the complete hosted SpotBugs 4.10.4 report as the specific contexts below. Raw XML and SARIF retain every finding. The [manifest](security-reviewed-findings.json) is checked by [classify_sast.py](../scripts/security/classify_sast.py); it does not suppress scanner output.
+Source and caller review on 2026-10-10 classified exactly 38 FindSecBugs 1.14.0 Medium findings from the complete SpotBugs 4.10.4 report as the specific contexts below. Raw XML and SARIF retain every finding. The [manifest](security-reviewed-findings.json) is checked by [classify_sast.py](../scripts/security/classify_sast.py); it does not suppress scanner output.
 
 | Context | Findings | Reviewed boundary |
 | --- | ---: | --- |
@@ -48,5 +48,20 @@ hashes remain exact. The final two general-quality cleanups affect no security f
 annotation. The manifest binds all 548 production Java files and the unchanged POM.
 The fresh scan reports zero analysis errors and zero missing classes; all 33 security
 evidence guard tests pass. Hosted verification must still match this exact renewed evidence.
+
+The CSRBT completeness and readings change received a fresh Windows scan and
+source/caller review on 2026-10-10. The new library button opens the fixed bundled
+`library.html` through the existing manifest-verified extraction and desktop browser
+boundary. The chooser-selected export path and cancellation behavior are unchanged.
+Only the existing `FieldScienceTab.saveSelectedText` finding annotations changed:
+source lines moved by four and the enclosing class span grew; its sink, bytecode
+offsets, and taint sources remain the same. The other 37 canonical annotations match.
+The three new telemetry Java files use static prepared JDBC statements and bounded
+values; raw frames never become SQL identifiers, file paths, or commands. The opt-in
+workflow uses the existing token, CSRF, mutation, and sensitive-read boundaries and
+introduces no physical action. The source manifest now binds all 551 production Java
+files and the unchanged POM. The fresh scan has 38 previously reviewed Medium
+contexts, zero High findings, zero analysis errors, and zero missing classes. No new
+finding or broader context was accepted. Hosted verification must match this evidence.
 
 Any new, changed, duplicate or absent reviewed finding fails. Any production Java edit/addition/removal or POM change requires a fresh source/build/caller review and an intentional manifest update; do not regenerate the manifest automatically to make a failed check pass. There are no native category/class/method exclusions in the security profile. The separate general quality profile retains its existing exclusions and Medium-or-higher zero-violation gate.

@@ -1,6 +1,6 @@
 {
   "schema": 2,
-  "reviewed_on": "2026-10-09",
+  "reviewed_on": "2026-10-10",
   "policy": "Only 38 explicitly source/caller-reviewed Medium contexts: 34 operator paths, one quoted H2 metadata identifier and three fixed/admitted local process boundaries. Exact canonical annotations/locations must match; observed raw hashes remain as provenance. Every production Java or Maven change requires re-review.",
   "source_hash_algorithm": "sha256-utf8-lf",
   "analyzer": {
@@ -200,7 +200,7 @@
     "src/main/java/com/flowerfarm/gui/tabs/DraftDecisionGuard.java": "edb9357101e4fa81244bfe495544c32ac6ac754acd1991ca176abe56d589f18d",
     "src/main/java/com/flowerfarm/gui/tabs/EggCollectionTab.java": "73d685084ba45c072f6d79956e0a73d9ec7e5432ecbda570e193a2c912e858f0",
     "src/main/java/com/flowerfarm/gui/tabs/EventServicesTab.java": "6bc723454315d9c26696c9e3fec55b2e0c5b8d7da0657e862ce6a7092d0c186e",
-    "src/main/java/com/flowerfarm/gui/tabs/FieldScienceTab.java": "863712e48790042bca8261f87c5c9db7c716fed53e9907c8b8b3d3751f2fef67",
+    "src/main/java/com/flowerfarm/gui/tabs/FieldScienceTab.java": "ba09801ce93fd3844a08d9e52180c7ee5743cd111cdf4dad73b7352b824d4de6",
     "src/main/java/com/flowerfarm/gui/tabs/FlowerFarmTab.java": "946c407c8835b7ab5f4a02b0bf24fe33e65a3d09f8481d6223b4a6d32539aa36",
     "src/main/java/com/flowerfarm/gui/tabs/GrainFieldPlanTab.java": "b98106f431368ca8d69fba148a35c82139f0798ec0fa7f6e52df88803892bb6e",
     "src/main/java/com/flowerfarm/gui/tabs/HarvestLogTab.java": "fed5661fbd548466cd0b5d1e513eff2e4f6402e722f009520b442e34d304c330",
@@ -329,7 +329,7 @@
     "src/main/java/com/flowerfarm/model/VineyardDestination.java": "e03fd473fa0d1a4a71ea6f086e99f15cc23565f27f5291542bca90d51dbc8c9b",
     "src/main/java/com/flowerfarm/model/WorkerActionReceipt.java": "94b70eecb729fc060e5a5d77e391cafe5bc7ea2362382894e8b71bd4ee8265bf",
     "src/main/java/com/flowerfarm/reference/EventServiceCatalog.java": "bc5da2fcb8ddf7f8d815ebc28e7d7e5ec90161dcec3cb2589af6ab246a84da3e",
-    "src/main/java/com/flowerfarm/reference/FieldScienceBundle.java": "053a6375f7e22fd074eb9ad7a480aed791f54b7ee85b08f1091e2ded6f952c2f",
+    "src/main/java/com/flowerfarm/reference/FieldScienceBundle.java": "235145b9f8aff517ead3a776574ec780385b08e575ba2e409a99a1a50ccbbf5e",
     "src/main/java/com/flowerfarm/reference/FieldScienceCatalog.java": "4f7d20c6a8a573b7abac0dc13463660231f9dd50c9b8bb26262b3808bc6733fa",
     "src/main/java/com/flowerfarm/reference/PnwPlantCatalog.java": "95d2dc27e105c8335d9578575f4b5c35a1e7ace64b77d584350317d19423d2f7",
     "src/main/java/com/flowerfarm/repository/AquaticCohortPlanJpaRepository.java": "4b75ddb5c4a60ae57639311ce5ececfe5f580613340f14cb4f5a03caf8906ab4",
@@ -509,6 +509,9 @@
     "src/main/java/com/flowerfarm/service/WorkerOrderConflictException.java": "6468851f5993e7fa6433a1ab1a8cc581a1ac0d78c85da67d310df04c46a2acbf",
     "src/main/java/com/flowerfarm/service/WorkerWorkflowService.java": "df9b4651c45263de7689043a0e6ca66970f48fa12cb372928a218936620dfe3d",
     "src/main/java/com/flowerfarm/support/SupportGuide.java": "30cb4c9c4670384598f4c7855c8f3a1351b5d52e44d02f9fb4611c6ed739fb48",
+    "src/main/java/com/flowerfarm/telemetry/FarmReading.java": "b52c6fb6769001af983a10def784b5c2bc9e455f29808a2246dfb4170c613dea",
+    "src/main/java/com/flowerfarm/telemetry/FarmReadingService.java": "ef35fd4f2db79703178dbf637d94541c20f9d92d1899934a989d14a7ead5af25",
+    "src/main/java/com/flowerfarm/telemetry/FarmReadingsHarnessPlugin.java": "0646c972e5932cc3126546769781c53e8e308ba8c0a7a114e5df9d22e47c3da3",
     "src/main/java/com/flowerfarm/update/AppVersion.java": "d0e99a7d48cbd7bfbb5458167c36964b338bd9fd2bff5ba1cc93b39585b4eb07",
     "src/main/java/com/flowerfarm/update/AuthenticodePublisherVerifier.java": "a42b539e822fd48786b0e2501e2d61f851521ab4e0f7e1aa53bc94a677500729",
     "src/main/java/com/flowerfarm/update/DataBackupService.java": "258347d90ca4cf93dc45343d38e4a81e77c7534953cd5a49caa667d09d2e4479",
@@ -609,7 +612,7 @@
     {
       "type": "PATH_TRAVERSAL_IN",
       "priority": 2,
-      "instance_hash": "de18ac292b6111fff6c3142e04ad30ea",
+      "instance_hash": "e399b827724de51df6f9a66727308f06",
       "occurrence": 0,
       "occurrence_max": 0,
       "source": "src/main/java/com/flowerfarm/connector/LocalJsonMirror.java",
@@ -636,7 +639,7 @@
     {
       "type": "PATH_TRAVERSAL_IN",
       "priority": 2,
-      "instance_hash": "641e81e77a0152a680535326bee7ce1c",
+      "instance_hash": "419658fece6cb6f6eb04f9a52adbf131",
       "occurrence": 0,
       "occurrence_max": 0,
       "source": "src/main/java/com/flowerfarm/connector/impl/CsvInventoryConnector.java",
@@ -659,7 +662,7 @@
     {
       "type": "PATH_TRAVERSAL_IN",
       "priority": 2,
-      "instance_hash": "8a42aa5cc23930762e1aa568dd73830",
+      "instance_hash": "2d2bbacc24b44af33c3602a667964d9a",
       "occurrence": 0,
       "occurrence_max": 0,
       "source": "src/main/java/com/flowerfarm/connector/impl/CsvInventoryConnector.java",
@@ -682,7 +685,7 @@
     {
       "type": "PATH_TRAVERSAL_IN",
       "priority": 2,
-      "instance_hash": "6b7bbfdd94d13dc84d18e865a2a09930",
+      "instance_hash": "28b0f17fb8f128a2a2e1fe50c88a63ed",
       "occurrence": 0,
       "occurrence_max": 0,
       "source": "src/main/java/com/flowerfarm/connector/impl/CsvInventoryConnector.java",
@@ -1016,7 +1019,7 @@
     {
       "type": "PATH_TRAVERSAL_IN",
       "priority": 2,
-      "instance_hash": "60ef8f8dd783a7d07b120a236279e510",
+      "instance_hash": "9c727946a45594adcadf5d01983a6b04",
       "occurrence": 0,
       "occurrence_max": 0,
       "source": "src/main/java/com/flowerfarm/gui/tabs/FieldScienceTab.java",
@@ -1033,7 +1036,7 @@
         "src/main/java/com/flowerfarm/gui/automation/SwingHarnessBridge.java"
       ],
       "method_signature": "()V",
-      "canonical_hash": "2db3f0eb71aa515e40f693217bd1fa07da5c1a53174c835829dd2f5a9c61e9fb"
+      "canonical_hash": "faf2b4da06ab75a02653b7a27d4a18edbda305b572f68fb16db050666afd840e"
     },
     {
       "type": "PATH_TRAVERSAL_IN",
@@ -1399,7 +1402,7 @@
     {
       "type": "COMMAND_INJECTION",
       "priority": 2,
-      "instance_hash": "48241c869852960ac967e9c05c264719",
+      "instance_hash": "e1ec03077f4782bac8896aa5d60650fd",
       "occurrence": 0,
       "occurrence_max": 0,
       "source": "src/main/java/com/flowerfarm/update/PlatformInstaller.java",

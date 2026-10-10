@@ -64,7 +64,9 @@ class FieldScienceBundleTest {
             files.filter(file -> file.getFileName().toString().endsWith(".html"))
                     .forEach(file -> pages.add(file.getFileName().toString()));
         }
-        assertThat(pages).hasSize(41);
+        assertThat(pages).hasSize(42);
+        assertThat(Files.readString(bundle.resolve("library.html")))
+                .contains("soil-bench.html", "greenhouse.html", "deployment-log.html");
         for (String page : pages) {
             Matcher links = LOCAL_DOCUMENT_LINK.matcher(Files.readString(bundle.resolve(page)));
             while (links.find()) {

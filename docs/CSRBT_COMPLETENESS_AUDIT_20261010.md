@@ -1,0 +1,70 @@
+# CSRBT completeness audit · October 10, 2026
+
+Compared the complete upstream artifact map and Git tree at [`5990b9c21e419f5836c9f0a22f15d993403557a3`](https://github.com/RicheyWorks/CSRBT/tree/5990b9c21e419f5836c9f0a22f15d993403557a3) with the FlowersForever bundle previously pinned to `f4c9a25c287ac98b96efb38b99a9d95b281434de`.
+
+All **41 mapped field-kit HTML pages** were already included. **11 pages had upstream changes**, including Soil Bench and Soil Recipes; this change refreshes the full bundle from committed Git bytes. Greenhouse Monitor was already current. The repaired ADR-011 link is retained and every local HTML/Markdown link resolves.
+
+Only **12 instruments** had farm-specific desktop cards. The remaining guides and specialist tools could be reached through original navigation, but they were easy to miss. The new **Browse complete CSRBT library** button opens a searchable local index of all 41 pages; crop-specific cards keep their existing placement. This is an offline browser port with attributed sources, not full database integration of every tool.
+
+## Every field-kit page
+
+| Upstream page | Bundled file | Discovery after this change | Snapshot status |
+|---|---|---|---|
+| [ADR-031 Entry Layer and Suites](https://github.com/RicheyWorks/CSRBT/blob/5990b9c21e419f5836c9f0a22f15d993403557a3/docs/adr-031.html) | `adr-031.html` | Complete library + original navigation | Updated from previous snapshot |
+| [Breeding Bench](https://github.com/RicheyWorks/CSRBT/blob/5990b9c21e419f5836c9f0a22f15d993403557a3/docs/breeding-bench.html) | `breeding-bench.html` | Farm card + complete library | Already current |
+| [Vegetable breeding — a CSRBT suite](https://github.com/RicheyWorks/CSRBT/blob/5990b9c21e419f5836c9f0a22f15d993403557a3/docs/breeding-suite.html) | `breeding-suite.html` | Complete library + original navigation | Already current |
+| [Cell Bench — counting, culture, standard curves & mitotic index](https://github.com/RicheyWorks/CSRBT/blob/5990b9c21e419f5836c9f0a22f15d993403557a3/docs/cell-bench.html) | `cell-bench.html` | Complete library + original navigation | Already current |
+| [Collection Sheet — macrofungi records, spore prints & guild](https://github.com/RicheyWorks/CSRBT/blob/5990b9c21e419f5836c9f0a22f15d993403557a3/docs/collection-sheet.html) | `collection-sheet.html` | Farm card + complete library | Updated from previous snapshot |
+| [CP Bench](https://github.com/RicheyWorks/CSRBT/blob/5990b9c21e419f5836c9f0a22f15d993403557a3/docs/cp-bench.html) | `cp-bench.html` | Farm card + complete library | Already current |
+| [CP Characters — carnivorous plants, drawn](https://github.com/RicheyWorks/CSRBT/blob/5990b9c21e419f5836c9f0a22f15d993403557a3/docs/cp-characters.html) | `cp-characters.html` | Complete library + original navigation | Already current |
+| [Carnivorous plants — a CSRBT suite](https://github.com/RicheyWorks/CSRBT/blob/5990b9c21e419f5836c9f0a22f15d993403557a3/docs/cp-suite.html) | `cp-suite.html` | Complete library + original navigation | Updated from previous snapshot |
+| [Deployment Log — recorders, loggers and flights, with what they can and cannot measure](https://github.com/RicheyWorks/CSRBT/blob/5990b9c21e419f5836c9f0a22f15d993403557a3/docs/deployment-log.html) | `deployment-log.html` | Complete library + original navigation | Already current |
+| [Douglas Explorer Mode — CSRBT](https://github.com/RicheyWorks/CSRBT/blob/5990b9c21e419f5836c9f0a22f15d993403557a3/docs/douglas-explorer.html) | `douglas-explorer.html` | Complete library + original navigation | Already current |
+| [Protocol Library — ready-made .eco experiments](https://github.com/RicheyWorks/CSRBT/blob/5990b9c21e419f5836c9f0a22f15d993403557a3/docs/eco-protocol-library.html) | `eco-protocol-library.html` | Complete library + original navigation | Updated from previous snapshot |
+| [The .eco Protocol — CSRBT](https://github.com/RicheyWorks/CSRBT/blob/5990b9c21e419f5836c9f0a22f15d993403557a3/docs/eco-protocol-reference.html) | `eco-protocol-reference.html` | Complete library + original navigation | Updated from previous snapshot |
+| [The Ecology of a Tree — CSRBT](https://github.com/RicheyWorks/CSRBT/blob/5990b9c21e419f5836c9f0a22f15d993403557a3/docs/ecology-essay.html) | `ecology-essay.html` | Complete library + original navigation | Already current |
+| [Ecology Field Card — CSRBT](https://github.com/RicheyWorks/CSRBT/blob/5990b9c21e419f5836c9f0a22f15d993403557a3/docs/ecology-field-card.html) | `ecology-field-card.html` | Complete library + original navigation | Already current |
+| [The Ecology Field Guide — CSRBT](https://github.com/RicheyWorks/CSRBT/blob/5990b9c21e419f5836c9f0a22f15d993403557a3/docs/ecology-field-guide.html) | `ecology-field-guide.html` | Complete library + original navigation | Already current |
+| [Ecology Glossary — CSRBT](https://github.com/RicheyWorks/CSRBT/blob/5990b9c21e419f5836c9f0a22f15d993403557a3/docs/ecology-glossary.html) | `ecology-glossary.html` | Complete library + original navigation | Already current |
+| [Field & Lab Manual — Ecology Field Day](https://github.com/RicheyWorks/CSRBT/blob/5990b9c21e419f5836c9f0a22f15d993403557a3/docs/ecology-lab-manual.html) | `ecology-lab-manual.html` | Complete library + original navigation | Already current |
+| [Ecology Field Day — CSRBT Living-Systems Lab](https://github.com/RicheyWorks/CSRBT/blob/5990b9c21e419f5836c9f0a22f15d993403557a3/docs/ecology-lab.html) | `ecology-lab.html` | Complete library + original navigation | Updated from previous snapshot |
+| [The Teacher's Guide — running a term on the ecology kit](https://github.com/RicheyWorks/CSRBT/blob/5990b9c21e419f5836c9f0a22f15d993403557a3/docs/ecology-teachers-guide.html) | `ecology-teachers-guide.html` | Complete library + original navigation | Already current |
+| [The Living-Systems Lab — CSRBT](https://github.com/RicheyWorks/CSRBT/blob/5990b9c21e419f5836c9f0a22f15d993403557a3/docs/ecology.html) | `ecology.html` | Complete library + original navigation | Already current |
+| [Ethogram — behaviour sampling, time budgets & reliability](https://github.com/RicheyWorks/CSRBT/blob/5990b9c21e419f5836c9f0a22f15d993403557a3/docs/ethogram.html) | `ethogram.html` | Farm card + complete library | Already current |
+| [The Experiment Guider — how to run an experiment in this ecosystem](https://github.com/RicheyWorks/CSRBT/blob/5990b9c21e419f5836c9f0a22f15d993403557a3/docs/experiment-guide.html) | `experiment-guide.html` | Complete library + original navigation | Updated from previous snapshot |
+| [Farm Scout — field science for growers](https://github.com/RicheyWorks/CSRBT/blob/5990b9c21e419f5836c9f0a22f15d993403557a3/docs/farm-scout.html) | `farm-scout.html` | Farm card + complete library | Already current |
+| [Field Notebook — tap-to-tally field data](https://github.com/RicheyWorks/CSRBT/blob/5990b9c21e419f5836c9f0a22f15d993403557a3/docs/field-notebook.html) | `field-notebook.html` | Complete library + original navigation | Already current |
+| [Field Season — the sampling game](https://github.com/RicheyWorks/CSRBT/blob/5990b9c21e419f5836c9f0a22f15d993403557a3/docs/field-season.html) | `field-season.html` | Complete library + original navigation | Already current |
+| [Food Web Builder — tap a web into being](https://github.com/RicheyWorks/CSRBT/blob/5990b9c21e419f5836c9f0a22f15d993403557a3/docs/food-web.html) | `food-web.html` | Farm card + complete library | Updated from previous snapshot |
+| [Fungal Characters — the keying vocabulary, drawn](https://github.com/RicheyWorks/CSRBT/blob/5990b9c21e419f5836c9f0a22f15d993403557a3/docs/fungal-characters.html) | `fungal-characters.html` | Farm card + complete library | Already current |
+| [Greenhouse Monitor — VPD, DLI, kWh and grams per kilowatt hour](https://github.com/RicheyWorks/CSRBT/blob/5990b9c21e419f5836c9f0a22f15d993403557a3/docs/greenhouse.html) | `greenhouse.html` | Farm card + complete library | Already current |
+| [Micro Bench — plate counts, dilutions, growth rate & zones](https://github.com/RicheyWorks/CSRBT/blob/5990b9c21e419f5836c9f0a22f15d993403557a3/docs/micro-bench.html) | `micro-bench.html` | Complete library + original navigation | Already current |
+| [Ordination — NMDS, PCoA, and what the stress is worth](https://github.com/RicheyWorks/CSRBT/blob/5990b9c21e419f5836c9f0a22f15d993403557a3/docs/ordination.html) | `ordination.html` | Complete library + original navigation | Already current |
+| [Pheno Tracker — the breeder's selection bench](https://github.com/RicheyWorks/CSRBT/blob/5990b9c21e419f5836c9f0a22f15d993403557a3/docs/pheno-tracker.html) | `pheno-tracker.html` | Farm card + complete library | Already current |
+| [Plant Characters — the botanist's keying card](https://github.com/RicheyWorks/CSRBT/blob/5990b9c21e419f5836c9f0a22f15d993403557a3/docs/plant-characters.html) | `plant-characters.html` | Complete library + original navigation | Already current |
+| [Relevé — vegetation plot & floristic quality](https://github.com/RicheyWorks/CSRBT/blob/5990b9c21e419f5836c9f0a22f15d993403557a3/docs/releve.html) | `releve.html` | Farm card + complete library | Already current |
+| [Selection Log — marked individuals, traits & measured selection](https://github.com/RicheyWorks/CSRBT/blob/5990b9c21e419f5836c9f0a22f15d993403557a3/docs/selection-log.html) | `selection-log.html` | Complete library + original navigation | Already current |
+| [Soil Bench — compost, C:N, mixes & texture](https://github.com/RicheyWorks/CSRBT/blob/5990b9c21e419f5836c9f0a22f15d993403557a3/docs/soil-bench.html) | `soil-bench.html` | Farm card + complete library | Updated from previous snapshot |
+| [Grower's Soil Recipes — Super Soil, TLO, Coot's](https://github.com/RicheyWorks/CSRBT/blob/5990b9c21e419f5836c9f0a22f15d993403557a3/docs/soil-recipes.html) | `soil-recipes.html` | Farm card + complete library | Updated from previous snapshot |
+| [Soil & compost — a CSRBT suite](https://github.com/RicheyWorks/CSRBT/blob/5990b9c21e419f5836c9f0a22f15d993403557a3/docs/soil-suite.html) | `soil-suite.html` | Complete library + original navigation | Updated from previous snapshot |
+| [Stand Sheet — field tree ID & plot recorder](https://github.com/RicheyWorks/CSRBT/blob/5990b9c21e419f5836c9f0a22f15d993403557a3/docs/stand-sheet.html) | `stand-sheet.html` | Complete library + original navigation | Already current |
+| [Survey Design — Event Core, Humboldt, and the difference between absent and not looked for](https://github.com/RicheyWorks/CSRBT/blob/5990b9c21e419f5836c9f0a22f15d993403557a3/docs/survey-design.html) | `survey-design.html` | Complete library + original navigation | Already current |
+| [The Bounds, Drawn — CSRBT](https://github.com/RicheyWorks/CSRBT/blob/5990b9c21e419f5836c9f0a22f15d993403557a3/docs/tree-proofs.html) | `tree-proofs.html` | Complete library + original navigation | Already current |
+| [CSRBT — Interactive Tree Visualizer](https://github.com/RicheyWorks/CSRBT/blob/5990b9c21e419f5836c9f0a22f15d993403557a3/docs/tree-visualizer.html) | `tree-visualizer.html` | Complete library + original navigation | Already current |
+
+## Other parts of the ecosystem
+
+- `csrbt-core`: 62 main-source files inspected in the upstream Git inventory. Ordered trees, persistence, strategies, ensembles, and adaptive search infrastructure. These Java engines are not dependencies of FlowersForever; H2 and the existing services remain its store. They are future integration candidates, not ported farm tools.
+- `csrbt-experimental`: 31 main-source files inspected in the upstream Git inventory. Experimental ecology, evolution, cache, laboratory, and command-line components. Their browser counterparts are bundled where mapped; the Java implementations and CLI are not ported into farm services.
+
+The upstream publication/harness tooling, benchmarks, build scripts, historical ADRs, test suites, and generated experiment reports are development or evidence assets. Their original repository is retained as the source; they are not copied wholesale into the farm application. The portable selection is the explicit 41-page upstream artifact map plus its required license and ADR dependency. This audit covers the named CSRBT repository, not an assertion that every separate RicheyWorks repository has been merged.
+
+The full Git-tree comparison also found four HTML files outside that artifact map: `demo/visualizer.html` (tree-engine demo), `tools/harness_board.html` (developer harness board), and the generated `docs/experiment-out/report.html` and `docs/tahoe-westshore-out/report.html`. These are explicitly excluded development/example artifacts; the published `docs/tree-visualizer.html` is included in the farm library. There are no other unmapped HTML files at the audited commit.
+
+## Database and device gaps
+
+- Soil Bench and Greenhouse Monitor retain browser-local working state and export files. FlowersForever archives reviewed text with its source and checksum, but does not parse every `.eco` record into operational measurements.
+- Greenhouse Monitor already has a source/adapter seam for logger files and supported browser connections. Bundling the page preserves that code; it does not pair a sensor, continuously poll equipment, or authenticate a device to the farm database.
+- The existing application harness exposes typed plugin contracts, independent token authentication, read/write policy, and physical-action boundaries. The missing first piece is durable, typed readings intake and history.
+- The new `farm-readings` workflow accepts adapter-normalized observations, retains reported units and raw frames, deduplicates retries, and exposes bounded history. It does not infer a sensor from a filename or treat a missing reading as zero. See [the working contract](FARM_READINGS.md).
+- Bluetooth, serial/USB, MQTT, and vendor systems need adapters that identify the source and translate their published data formats. Device-specific adapters, streaming subscriptions, charts/alerts, retention, calibration workflows, and reviewed pump control remain follow-up work. No direct equipment control is introduced by this data-intake change.

@@ -2026,7 +2026,11 @@ expect: evenness(pondA) is moderate"></textarea>
      it. The pair is held to that claim by a differential test the same way `parseCounts` is
      held to `FieldData.parseLines` (seventh pass, item B): a comment cannot keep a mirror
      in place, so this one is measured against the compiled oracle over the sample protocol,
-     a hand-built protocol per directive, and a randomized corpus of malformed lines.
+     a hand-built protocol per directive, and a randomized corpus of malformed lines. ADR-027
+     ran that test once and kept nothing; ADR-108 gave the engine `dwc:` and this page called
+     it an unknown directive for a month. The test is now tools/verify/verify_eco_mirror.py,
+     on every run (ADR-278), and it lifts the text between this comment's section and the
+     end marker below, so what it measures is what ships.
 
      Deliberate difference from the oracle, and the only one: `ExperimentSpec` catches
      `RuntimeException` around each directive, which would also swallow a genuine bug in the
@@ -2257,6 +2261,19 @@ expect: evenness(pondA) is moderate"></textarea>
 
   const stripEcoComment = l => { const h = l.indexOf("#"); return h < 0 ? l : l.slice(0, h); };
 
+  /* ExperimentSpec.finite / whole (ADR-279): a number is finite, and a count or a step count
+     is whole. jParseDouble first, so a malformed number still fails in parseDouble's words. */
+  function specFinite(raw, what) {
+    const v = jParseDouble(raw);
+    if (!Number.isFinite(v)) jFail(what + " must be a finite number, got '" + raw + "'");
+    return v;
+  }
+  function specWhole(raw, what) {
+    const v = specFinite(raw, what);
+    if (v !== Math.trunc(v)) jFail(what + " must be a whole number, got '" + raw + "'");
+    return v;
+  }
+
   function specWholeNumber(v, what) {
     const t = jTrimJ(v);
     if (t === "") jFail(what + " needs a whole number");
@@ -2314,7 +2331,8 @@ expect: evenness(pondA) is moderate"></textarea>
       for (let i = 1; i < p.length; i++) {
         const pair = jSplit(p[i], ":");
         if (pair.length !== 2) jFail("pairs are lx:mx, got '" + p[i] + "'");
-        params.push(jParseDouble(pair[0]), jParseDouble(pair[1]));
+        params.push(specFinite(pair[0], "eulerlotka lx at age " + (i - 1)),
+                    specFinite(pair[1], "eulerlotka mx at age " + (i - 1)));
       }
       const ages = params.length / 2, lx = [], mx = [];
       for (let i = 0; i < ages; i++) { lx.push(params[i * 2]); mx.push(params[i * 2 + 1]); }
@@ -2324,9 +2342,12 @@ expect: evenness(pondA) is moderate"></textarea>
     const want = own(SPEC_MODEL_ARITY, kind);
     if (want === undefined) jFail("unknown model '" + p[0] + "'");
     if (p.length !== want + 1) jFail("model " + p[0] + " needs " + want + " parameters");
-    const params = [];
-    for (let i = 0; i < want; i++) params.push(jParseDouble(p[i + 1]));
     const hasSteps = kind !== "hardyweinberg" && kind !== "markrecapture";
+    const params = [];
+    for (let i = 0; i < want; i++) {
+      const what = "model " + p[0] + (hasSteps && i === want - 1 ? " steps" : " parameter " + (i + 1));
+      params.push((!hasSteps || i === want - 1) ? specWhole(p[i + 1], what) : specFinite(p[i + 1], what));
+    }
     if (hasSteps && (params[want - 1] < 0 || params[want - 1] > 100000)) {
       jFail("steps out of range [0, 100000]");
     }
@@ -2418,7 +2439,7 @@ expect: evenness(pondA) is moderate"></textarea>
     if (args.length !== wantArgs) {
       jFail(metric + " takes " + wantArgs + " community name(s)");
     }
-    return { raw: val, metric, phaseArgs: args, op, value: jParseDouble(tail[1]), word: null };
+    return { raw: val, metric, phaseArgs: args, op, value: specFinite(tail[1], "expect value"), word: null };
   }
 
   function specQualitative(val, isAt) {
@@ -2458,6 +2479,16 @@ expect: evenness(pondA) is moderate"></textarea>
     return { name: parts[0], counts: parsed.counts, order: parsed.order };
   }
 
+  /* dwc: <label> <path> — a Darwin Core file the engine reads as a dataset when it runs.
+     ExperimentSpec.parseDwc: the label, then everything after the first run of whitespace,
+     trimmed — a path may hold spaces. The parser stays pure on both sides: nothing here
+     opens the file, and the engine reports an unreadable one at run time. */
+  function specDwc(val) {
+    const parts = jSplitWs2(val);
+    if (parts.length < 2) jFail("dwc needs: <label> <path>");
+    return { label: parts[0], path: jTrimJ(parts[1]) };
+  }
+
   function specTree(val) {
     const parts = jSplitWs2(val);
     if (parts.length < 2) jFail("tree needs: <label> <newick>");
@@ -2467,7 +2498,7 @@ expect: evenness(pondA) is moderate"></textarea>
   function parseEco(lines) {
     let name = "unnamed experiment", keys = 100, window = 250, seed = 42n;
     const phases = [], models = [], crosses = [], expectations = [],
-          datasets = [], notes = [], trees = [], problems = [];
+          datasets = [], dwcSources = [], notes = [], trees = [], problems = [];
     let area = 1, temperature = 1, wind = 1, distance = 0;
 
     for (const raw of lines) {
@@ -2503,11 +2534,12 @@ expect: evenness(pondA) is moderate"></textarea>
           case "cross": crosses.push(specCross(val)); break;
           case "expect": expectations.push(specExpect(val)); break;
           case "data": datasets.push(specData(val, problems)); break;
+          case "dwc": dwcSources.push(specDwc(val)); break;
           case "tree": trees.push(specTree(val)); break;
           case "factor": {
             const f = jSplitWs(val);
             if (f.length !== 2) jFail("factor needs: <name> <value>");
-            const fv = jParseDouble(f[1]);
+            const fv = specFinite(f[1], "factor " + f[0]);
             switch (f[0].toLowerCase()) {
               case "area": area = fv; break;
               case "temperature": temperature = fv; break;
@@ -2535,6 +2567,17 @@ expect: evenness(pondA) is moderate"></textarea>
     }
     const phaseNames = new Set(phases.map(p => p.name));
     const datasetNames = new Set();
+    /* A dwc: label names a dataset that will exist at run time, so notes and hypotheses may
+       address it — checked first, as the engine checks it. */
+    for (const w of dwcSources) {
+      if (phaseNames.has(w.label)) {
+        problems.push("dwc source '" + w.label + "' collides with a phase name");
+      } else if (datasetNames.has(w.label)) {
+        problems.push("duplicate dataset name '" + w.label + "'");
+      } else {
+        datasetNames.add(w.label);
+      }
+    }
     for (const d of datasets) {
       if (phaseNames.has(d.name)) {
         problems.push("dataset '" + d.name + "' collides with a phase name");
@@ -2562,8 +2605,15 @@ expect: evenness(pondA) is moderate"></textarea>
       environment = { area: 1, temperature: 1, wind: 1, distance: 0 };
     }
     return { name, keys, seed, window, phases, models, crosses, expectations,
-             datasets, notes, trees, problems, environment };
+             datasets, dwcSources, notes, trees, problems, environment };
   }
+  /* A file's lines the way the engine reads them: Files.readAllLines ends a line at LF, at
+     CR, or at CR LF. Splitting on LF alone read a file with CR line ends as ONE line: the
+     whole file became the protocol's name, CRs and all, and keys and seed stayed at their
+     defaults (ADR-278).
+     Files.readAllLines is where the engine's lines come from, so this is part of the mirror. */
+  const ecoLines = text => String(text).split(/\r\n|\r|\n/);
+
   /* ══ end of the ExperimentSpec mirror ═════════════════════════════════════════════ */
 
   /* ══ the import path: a .eco protocol back into the Workbench (ADR-027) ══════════════ */
@@ -2608,7 +2658,7 @@ expect: evenness(pondA) is moderate"></textarea>
     const out = document.getElementById("wb-eco-in-out");
     let spec;
     try {
-      spec = parseEco(String(text).split("\n"));
+      spec = parseEco(ecoLines(text));
     } catch (bad) {
       /* parseEco only escapes like this for a shape the oracle does not catch either. */
       out.innerHTML = `<p class="wb-error">that protocol could not be read at all — ${esc(bad.message)}</p>`;
@@ -2619,7 +2669,7 @@ expect: evenness(pondA) is moderate"></textarea>
        Carrying the reason separately is what lets three phases share one sentence instead of
        printing it three times — the list still names all three. */
     const shown = [];
-    const lineCount = String(text).split("\n").filter(l => jTrimJ(stripEcoComment(l)) !== "").length;
+    const lineCount = ecoLines(text).filter(l => jTrimJ(stripEcoComment(l)) !== "").length;
 
     /* ── the protocol header: read, and honestly not ours ── */
     shown.push([`<b>name:</b> ${esc(spec.name)}`,
@@ -2740,7 +2790,7 @@ expect: evenness(pondA) is moderate"></textarea>
                    depth ${treeDepth(t.tree)}`);
     });
 
-    /* ── the three kinds the Workbench has no control for, listed rather than dropped ── */
+    /* ── the four kinds the Workbench has no control for, listed rather than dropped ── */
     for (const p of spec.phases) {
       shown.push([`<b>phase: ${esc(p.name)} ${esc(p.kind.toLowerCase())} ${p.ops}</b>`,
                   "a phase is traffic against a live tree, and there is no tree in a browser; "
@@ -2750,6 +2800,11 @@ expect: evenness(pondA) is moderate"></textarea>
       shown.push([`<b>note${n.about === null ? "" : "(" + esc(n.about) + ")"}:</b> ${esc(n.text)}`,
                   "the field notebook travels with the file and with the run; the Workbench has "
                   + "no notebook of its own"]);
+    }
+    for (const w of spec.dwcSources) {
+      shown.push([`<b>dwc: ${esc(w.label)}</b> ${esc(w.path)}`,
+                  "a Darwin Core file the engine reads as a dataset when it runs; a page cannot "
+                  + "open a path on your disk"]);
     }
     for (const e of spec.expectations) {
       shown.push([`<b>expect: ${esc(e.raw)}</b>`,
@@ -3638,7 +3693,7 @@ addEventListener("drop", ev => {
     catch (e) {
       /* "Unexpected token 'n'" is true and useless when what was dropped is plainly a
          protocol that simply was not named `.eco`. Say which door it wants. */
-      const looksEco = /^[ \t]*(name|keys|seed|window|phase|model|cross|expect|data|note|tree|factor)\b[^:\n]*:/m.test(t);
+      const looksEco = /^[ \t]*(name|keys|seed|window|phase|model|cross|expect|data|dwc|note|tree|factor)\b[^:\n]*:/m.test(t);
       document.getElementById("main").insertAdjacentHTML("afterbegin",
         `<section class="card" role="alert"><h2>⚠️ Could not read that file</h2><p class="reading">${esc(e.message)}</p>`
         + (looksEco ? `<p class="reading">It reads like an <code>.eco</code> protocol rather than a session.

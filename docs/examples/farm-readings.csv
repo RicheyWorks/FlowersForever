@@ -1,0 +1,5 @@
+readingKey,deviceId,metric,unit,value,quality,observedAt,location
+house-1-temp-20261001T120000Z,house-1,air.temperature,C,21.125,GOOD,2026-10-01T12:00:00Z,North greenhouse
+house-1-rh-20261001T120000Z,house-1,air.relative_humidity,%,67.5,GOOD,2026-10-01T12:00:00Z,North greenhouse
+bed-a-moisture-20261001T120000Z,bed-a,soil.moisture,%,31.25,SUSPECT,2026-10-01T12:00:00Z,Bed A
+bed-b-offline-20261001T120000Z,bed-b,soil.moisture,%,,MISSING,2026-10-01T12:00:00Z,Bed B

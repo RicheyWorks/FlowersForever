@@ -502,8 +502,11 @@
   function copyText(text,msg){
     function done(){ toast(msg); buzz(); }
     function fb(){ var ta=document.createElement("textarea"); ta.value=text; ta.style.position="fixed"; ta.style.opacity="0";
-      document.body.appendChild(ta); ta.select(); try{document.execCommand("copy");done();}catch(e){toast("Select & copy manually");}
-      document.body.removeChild(ta); }
+      document.body.appendChild(ta); ta.select();
+      /* execCommand says no by RETURNING false (ADR-280, as ADR-203 found on the outbox pages). */
+      var okc=false; try{okc=document.execCommand("copy");}catch(e){}
+      document.body.removeChild(ta);
+      if(okc) done(); else toast("Select & copy manually"); }
     try{ if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done,fb); else fb(); }catch(e){ fb(); }
   }
   function csvCell(s){ s=String(s); return /[",\n]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s; }

@@ -3,7 +3,7 @@ name: Dependency review
 
 on:
   pull_request:
-    branches: [main, codex/recover-unpushed-work]
+    branches: [main, "codex/**"]
 
 permissions:
   contents: read

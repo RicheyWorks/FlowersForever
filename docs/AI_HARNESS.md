@@ -1109,6 +1109,19 @@ a unique request ID outside the model, and stamp a fresh expiry for physical
 tools. The gateway remains authoritative if a client ignores those hints.
 Provider prompts and tool names therefore do not become a security boundary.
 
+### Persistent measurement intake
+
+The optional `farm-readings` workflow stores adapter-reported measurements independently
+of inventory and production records. Enable `flowerfarm.readings.enabled=true` alongside
+the harness to discover `get-reading-contract`, `record-readings`, and `list-readings`.
+Ingestion requires mutation permission; history requires sensitive-read permission.
+Exact source/key retries survive reopening through the H2 readings store. It does not
+advertise physical sensing or actuation: a separate adapter performs hardware acquisition.
+The [readings contract](FARM_READINGS.md) includes a CSV/JSON importer, examples, limits,
+cursor behavior, and the current gaps in continuous collection and equipment control.
+
+### Physical device extensions
+
 Device and robot plugins use the same `HarnessPlugin` interface. Declare kind
 `DEVICE` or `ROBOT`, add `PHYSICAL_SENSING` and/or `PHYSICAL_ACTUATION`, and
 describe stable sensor keys with `HarnessObservationSpec`. The gateway checks

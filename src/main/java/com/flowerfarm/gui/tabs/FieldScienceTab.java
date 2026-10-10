@@ -337,7 +337,11 @@ public final class FieldScienceTab implements FlowerFarmTab {
             host.setStatus("Opened Knowledge Log to record an observation manually. "
                     + "No field science content was copied.");
         });
-        boundary.add(FarmUi.toolbar(knowledge), BorderLayout.SOUTH);
+        JButton library = FarmUi.secondaryButton("Browse complete CSRBT library");
+        library.setName("fieldScience.library");
+        library.setToolTipText("Open all 41 bundled tools and references, with offline search.");
+        library.addActionListener(event -> open("library.html", "Complete CSRBT field kit", library));
+        boundary.add(FarmUi.toolbar(knowledge, library), BorderLayout.SOUTH);
         row = addRow(body, row, FarmUi.section("Separate browser workspace",
                 "Read before using or exporting an instrument.", boundary));
         if (exportService != null) {
@@ -1436,12 +1440,16 @@ public final class FieldScienceTab implements FlowerFarmTab {
     private record ExportDraft(String title, String filename, String note, String content) { }
 
     private void open(Instrument instrument, JButton button) {
+        open(instrument.fileName(), instrument.title(), button);
+    }
+
+    private void open(String fileName, String title, JButton button) {
         button.setEnabled(false);
         FarmUi.updateStatusBadge(status,
-                "Opening " + instrument.title() + " in your browser…", FarmUi.Tone.INFO);
+                "Opening " + title + " in your browser…", FarmUi.Tone.INFO);
         new SwingWorker<Void, Void>() {
             @Override protected Void doInBackground() throws IOException {
-                Path page = materializer.materialize(instrument.fileName());
+                Path page = materializer.materialize(fileName);
                 opener.open(page);
                 return null;
             }
@@ -1450,22 +1458,22 @@ public final class FieldScienceTab implements FlowerFarmTab {
                 button.setEnabled(true);
                 try {
                     get();
-                    String message = instrument.title()
+                    String message = title
                             + " opened as a separate browser page. Export work from that page.";
                     FarmUi.updateStatusBadge(status, message, FarmUi.Tone.SUCCESS);
                     host.setStatus(message);
                 } catch (InterruptedException exception) {
                     Thread.currentThread().interrupt();
-                    showOpenFailure(instrument);
+                    showOpenFailure(title);
                 } catch (ExecutionException exception) {
-                    showOpenFailure(instrument);
+                    showOpenFailure(title);
                 }
             }
         }.execute();
     }
 
-    private void showOpenFailure(Instrument instrument) {
-        String message = "Could not open " + instrument.title()
+    private void showOpenFailure(String title) {
+        String message = "Could not open " + title
                 + ". Check that a browser is available, then retry.";
         FarmUi.updateStatusBadge(status, message, FarmUi.Tone.DANGER);
         host.setStatus(message);

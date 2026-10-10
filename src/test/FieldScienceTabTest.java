@@ -170,6 +170,33 @@ class FieldScienceTabTest {
     }
 
     @Test
+    void viewerCanBrowseTheCompleteLibraryWithoutWritingFarmRecords() throws Exception {
+        RecordingHost host = new RecordingHost();
+        List<String> materialized = new ArrayList<>();
+        List<Path> opened = new ArrayList<>();
+        CountDownLatch called = new CountDownLatch(1);
+        FieldScienceTab tab = new FieldScienceTab(Set.of(FarmWorkspace.CANNABIS_FARM),
+                host, fileName -> {
+                    materialized.add(fileName);
+                    return Path.of("offline", fileName);
+                }, page -> {
+                    opened.add(page);
+                    called.countDown();
+                });
+        JComponent root = onEdt(tab::getUIComponent);
+        onEdt(() -> tab.applyRolePermissions(false));
+        JButton library = named(root, "fieldScience.library", JButton.class);
+        assertThat(library.isEnabled()).isTrue();
+        onEdt((Runnable) library::doClick);
+        assertThat(called.await(5, TimeUnit.SECONDS)).isTrue();
+        await(() -> library.isEnabled() && host.lastStatus != null);
+        assertThat(materialized).containsExactly("library.html");
+        assertThat(opened).containsExactly(Path.of("offline", "library.html"));
+        assertThat(host.lastStatus).contains("Complete CSRBT field kit", "separate browser page");
+        assertThat(host.selected).isEmpty();
+    }
+
+    @Test
     void opensOnlyTheChosenLocalPageAndReportsFailureForRetry() throws Exception {
         RecordingHost host = new RecordingHost();
         List<String> materialized = new ArrayList<>();
