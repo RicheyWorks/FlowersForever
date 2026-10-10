@@ -86,7 +86,7 @@
   "unit:com.flowerfarm.gui.InteractionRoutingTest": 7,
   "unit:com.flowerfarm.gui.InventoryItemInteractionTest": 9,
   "unit:com.flowerfarm.gui.KnowledgeLogTabTest": 1,
-  "unit:com.flowerfarm.gui.ProductionReadinessUiTest": 52,
+  "unit:com.flowerfarm.gui.ProductionReadinessUiTest": 57,
   "unit:com.flowerfarm.gui.SeasonPlannerTabTest": 3,
   "unit:com.flowerfarm.gui.SwingSelectorWorkflowTest": 5,
   "unit:com.flowerfarm.gui.UserJourneyHarnessTest": 69,

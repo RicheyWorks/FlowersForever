@@ -67,9 +67,11 @@ public final class EquipmentReadingsTab implements FlowerFarmTab {
         @Override public boolean isCellEditable(int row, int column) { return false; }
     };
     private volatile boolean canWrite;
-    private boolean saving;
-    private boolean loading;
-    private boolean latestRequested;
+    private volatile boolean saving;
+    private volatile boolean loading;
+    private volatile boolean latestRequested;
+    private boolean unconfirmedSave;
+    private List<Object> cleanDraft;
     private long nextCursor;
     private boolean hasMore;
     private String readingKey = UUID.randomUUID().toString();
@@ -132,6 +134,7 @@ public final class EquipmentReadingsTab implements FlowerFarmTab {
         next.addActionListener(event -> newReading());
         latest.addActionListener(event -> load(0));
         older.addActionListener(event -> load(nextCursor));
+        cleanDraft = draftState();
         updateControls();
     }
 
@@ -196,7 +199,7 @@ public final class EquipmentReadingsTab implements FlowerFarmTab {
 
     private void newReading() {
         if (saving || !canWrite || !host.canMutateData()) return;
-        if (!value.getText().isBlank() && dialogs.showConfirm(root,
+        if (hasUnfinishedDraft() && dialogs.showConfirm(root,
                 "Leave this draft and start a separate reading? If a save failed, check Latest readings first.",
                 "Start a new reading", JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE)
                 != JOptionPane.YES_OPTION) return;
@@ -205,7 +208,28 @@ public final class EquipmentReadingsTab implements FlowerFarmTab {
         value.setText("");
         observed.setValue(new Date());
         condition.setSelectedIndex(0);
+        unconfirmedSave = false;
+        cleanDraft = draftState();
         message("Ready for a new reading. Equipment, area, measurement, and unit are kept.");
+    }
+
+    public boolean hasPendingSave() { return saving; }
+
+    public String applicationExitWarning() {
+        if (saving) return "Equipment readings has a save still running. Wait for its result before leaving.";
+        if (unconfirmedSave) return "Equipment readings has a save that could not be confirmed. Check Latest readings before retrying or leaving.";
+        return hasUnfinishedDraft() ? "Equipment readings has an unfinished reading. Save it or explicitly start a new reading before changing farm types." : null;
+    }
+
+    private boolean hasUnfinishedDraft() {
+        return unconfirmedSave || !draftState().equals(cleanDraft);
+    }
+
+    private List<Object> draftState() {
+        return List.of(equipment.getText(), area.getText(), value.getText(), unit.getText(),
+                measurement.getSelectedIndex(), condition.getSelectedIndex(),
+                ((Date) observed.getValue()).getTime(),
+                ((JSpinner.DateEditor) observed.getEditor()).getTextField().getText());
     }
 
     private void saveReading() {
@@ -258,13 +282,17 @@ public final class EquipmentReadingsTab implements FlowerFarmTab {
                     readingKey = UUID.randomUUID().toString();
                     value.setText("");
                     observed.setValue(new Date());
+                    unconfirmedSave = false;
+                    cleanDraft = draftState();
                     message(result.replayed() > 0 ? "This reading was already saved. No duplicate was added."
                             : "Equipment reading saved.");
                     load(0);
                 } catch (InterruptedException interrupted) {
+                    unconfirmedSave = true;
                     Thread.currentThread().interrupt();
                     message("Save interrupted. Your draft is kept; refresh history before retrying.");
                 } catch (ExecutionException failed) {
+                    unconfirmedSave = true;
                     message("Could not confirm the save. Your draft is kept; refresh history before retrying.");
                 }
                 updateControls();

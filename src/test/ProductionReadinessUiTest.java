@@ -721,6 +721,49 @@ class ProductionReadinessUiTest {
         assertThat(button(connectors, "Export Shopify").isEnabled()).isTrue();
     }
 
+    @ParameterizedTest
+    @CsvSource({"false, 0", "false, 1", "true, 0", "true, 1"})
+    void equipmentDraftAndPendingSaveRequireExplicitShellExitDecision(boolean pending, int choice) throws Exception {
+        FarmDialogs dialogs = mock(FarmDialogs.class);
+        when(dialogs.showOption(any(), any(), anyString(), anyInt(), anyInt(), any(), any(), any()))
+                .thenAnswer(invocation -> {
+                    assertThat(String.valueOf((Object) invocation.getArgument(1))).contains("Equipment readings");
+                    assertThat((Object[]) invocation.getArgument(6)).containsExactly(
+                            "Keep working", pending ? "Exit before result" : "Discard and exit");
+                    return choice;
+                });
+        var equipment = mock(com.flowerfarm.gui.tabs.EquipmentReadingsTab.class);
+        when(equipment.applicationExitWarning()).thenReturn(pending
+                ? "Equipment readings has a save still running." : "Equipment readings has an unfinished reading.");
+        when(equipment.hasPendingSave()).thenReturn(pending);
+        FlowerFarmGUI gui = gui(mock(GuiLoginGate.class), new DesktopSession(), dialogs,
+                new SwingFileHarness().cancelUnscripted());
+        ReflectionTestUtils.setField(gui, "equipmentReadingsTab", equipment);
+        SwingUtilities.invokeAndWait(() -> {
+            gui.buildSouthBar();
+            assertThat(gui.confirmApplicationClose(false)).isEqualTo(choice == 1);
+        });
+    }
+
+    @Test
+    void equipmentDraftBlocksChangingFarmTypeBeforeAnySettingsWrite() throws Exception {
+        FarmDialogs dialogs = mock(FarmDialogs.class);
+        var settings = mock(com.flowerfarm.service.FarmOperationSettingsService.class);
+        var equipment = mock(com.flowerfarm.gui.tabs.EquipmentReadingsTab.class);
+        when(equipment.applicationExitWarning()).thenReturn("Equipment readings has an unfinished reading.");
+        FlowerFarmGUI gui = gui(mock(GuiLoginGate.class), new DesktopSession(), dialogs,
+                new SwingFileHarness().cancelUnscripted());
+        ReflectionTestUtils.setField(gui, "equipmentReadingsTab", equipment);
+        ReflectionTestUtils.setField(gui, "farmOperationSettingsService", settings);
+        SwingUtilities.invokeAndWait(() -> {
+            gui.buildSouthBar();
+            gui.selectFarmType(com.flowerfarm.model.FarmWorkspace.CANNABIS_FARM);
+        });
+        verify(dialogs).showMessage(any(), org.mockito.ArgumentMatchers.contains("Equipment readings"),
+                eq("Farm type unchanged"), eq(JOptionPane.INFORMATION_MESSAGE));
+        verify(settings, never()).saveSettings(any());
+    }
+
     private static FlowerFarmGUI gui(GuiLoginGate gate, DesktopSession session) {
         return gui(gate, session, FarmDialogs.swing(), FarmFileChooser.swing());
     }

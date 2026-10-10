@@ -160,7 +160,7 @@
     "src/main/java/com/flowerfarm/gui/FarmTabNavigator.java": "8834c9543d24d0d17467539f788c9500545257db8f75840d2147c78bdf91cfe7",
     "src/main/java/com/flowerfarm/gui/FarmTypeLauncher.java": "11f557e42ee95fccad1a872e5d68e08c5f7a81c2ac83c91c5acf8247e4ae835b",
     "src/main/java/com/flowerfarm/gui/FarmUi.java": "e99abc579c7b004bb3bb1e2aeae835e4b8405df87fa2afbb9f203425bbdd28bd",
-    "src/main/java/com/flowerfarm/gui/FlowerFarmGUI.java": "b3d82346588f4d385ff28d088b9ca48ec299c2b0271c018c21ce9e52f49855d5",
+    "src/main/java/com/flowerfarm/gui/FlowerFarmGUI.java": "c5902e7f6be758bef7812cd377126caa20d8b588db034680da995e1341500618",
     "src/main/java/com/flowerfarm/gui/GettingStartedGuide.java": "d91b5ff82b44d5d1ea78bd062820dbd683f749591f6f1ea893f624faaa324d5f",
     "src/main/java/com/flowerfarm/gui/GuiLoginGate.java": "cd782ed9e5c8e4320bffe74c0471b2ebf6bc63ba0caf2e13c1ddf24825c8d8db",
     "src/main/java/com/flowerfarm/gui/GuiPermissions.java": "319adcdb59fa012f428d0fced1b990898431bdfe033fc13938f5a2f6dd4a0b9f",
@@ -199,7 +199,7 @@
     "src/main/java/com/flowerfarm/gui/tabs/DashboardTab.java": "6802dd47a09713b844883e4eb338058b3eae7cef6f659f6b2f521f22dfdcb9ec",
     "src/main/java/com/flowerfarm/gui/tabs/DraftDecisionGuard.java": "edb9357101e4fa81244bfe495544c32ac6ac754acd1991ca176abe56d589f18d",
     "src/main/java/com/flowerfarm/gui/tabs/EggCollectionTab.java": "73d685084ba45c072f6d79956e0a73d9ec7e5432ecbda570e193a2c912e858f0",
-    "src/main/java/com/flowerfarm/gui/tabs/EquipmentReadingsTab.java": "db148fddd8ebc2da6142f14916ba92d47fe536b3b82c9c81a83616a9a0f4e050",
+    "src/main/java/com/flowerfarm/gui/tabs/EquipmentReadingsTab.java": "3f0815dded82e5883828e30fc46a3dc16a0235826f3094dac39d4e0604a88697",
     "src/main/java/com/flowerfarm/gui/tabs/EventServicesTab.java": "6bc723454315d9c26696c9e3fec55b2e0c5b8d7da0657e862ce6a7092d0c186e",
     "src/main/java/com/flowerfarm/gui/tabs/FieldScienceTab.java": "392df688a758ed7e4eb084a548918c266066da9e96aaff03ebb76575a05c5fdd",
     "src/main/java/com/flowerfarm/gui/tabs/FlowerFarmTab.java": "946c407c8835b7ab5f4a02b0bf24fe33e65a3d09f8481d6223b4a6d32539aa36",
@@ -641,7 +641,7 @@
     {
       "type": "PATH_TRAVERSAL_IN",
       "priority": 2,
-      "instance_hash": "8fc5fef5e5fc4ef9329fde5745a585f9",
+      "instance_hash": "5f9b84feaa5c78f0f20a20c4a62ff609",
       "occurrence": 0,
       "occurrence_max": 0,
       "source": "src/main/java/com/flowerfarm/connector/impl/CsvInventoryConnector.java",
@@ -664,7 +664,7 @@
     {
       "type": "PATH_TRAVERSAL_IN",
       "priority": 2,
-      "instance_hash": "11fa648eaac044f4a926f94a69015675",
+      "instance_hash": "1c59343f09628d8aea418ff1c8d06956",
       "occurrence": 0,
       "occurrence_max": 0,
       "source": "src/main/java/com/flowerfarm/connector/impl/CsvInventoryConnector.java",
@@ -687,7 +687,7 @@
     {
       "type": "PATH_TRAVERSAL_IN",
       "priority": 2,
-      "instance_hash": "83dbec08dfdad5e72503f64f37d36d65",
+      "instance_hash": "6944c11ba5d3929bf1becfa911498ad4",
       "occurrence": 0,
       "occurrence_max": 0,
       "source": "src/main/java/com/flowerfarm/connector/impl/CsvInventoryConnector.java",
@@ -823,7 +823,7 @@
     {
       "type": "PATH_TRAVERSAL_IN",
       "priority": 2,
-      "instance_hash": "3c0d594ab4e5a4a7e6ccdb6309368217",
+      "instance_hash": "86c72c5e91a85e82a9d6829449561050",
       "occurrence": 0,
       "occurrence_max": 0,
       "source": "src/main/java/com/flowerfarm/gui/DesktopScoutingController.java",
@@ -1021,7 +1021,7 @@
     {
       "type": "PATH_TRAVERSAL_IN",
       "priority": 2,
-      "instance_hash": "9c727946a45594adcadf5d01983a6b04",
+      "instance_hash": "60ef8f8dd783a7d07b120a236279e510",
       "occurrence": 0,
       "occurrence_max": 0,
       "source": "src/main/java/com/flowerfarm/gui/tabs/FieldScienceTab.java",
@@ -1404,7 +1404,7 @@
     {
       "type": "COMMAND_INJECTION",
       "priority": 2,
-      "instance_hash": "e1ec03077f4782bac8896aa5d60650fd",
+      "instance_hash": "48241c869852960ac967e9c05c264719",
       "occurrence": 0,
       "occurrence_max": 0,
       "source": "src/main/java/com/flowerfarm/update/PlatformInstaller.java",

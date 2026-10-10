@@ -92,4 +92,11 @@ production Java files and the unchanged POM are bound. The complete scan retains
 exactly the same 38 reviewed Medium canonical annotations and caller contexts, no
 High or new Medium findings, zero analysis errors, and zero missing classes.
 
+The follow-up shell integration includes equipment drafts, unconfirmed saves, and
+pending saves in existing farm-change and exit decisions. Successful saves and
+explicitly discarded drafts establish a clean form baseline. Loading/save state
+flags use volatile visibility across asynchronous callbacks. These changes add no
+new file, process, SQL-construction, network, or authorization transport boundary;
+the complete scan and source fingerprints were renewed after this caller review.
+
 Any new, changed, duplicate or absent reviewed finding fails. Any production Java edit/addition/removal or POM change requires a fresh source/build/caller review and an intentional manifest update; do not regenerate the manifest automatically to make a failed check pass. There are no native category/class/method exclusions in the security profile. The separate general quality profile retains its existing exclusions and Medium-or-higher zero-violation gate.

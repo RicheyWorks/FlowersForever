@@ -162,6 +162,7 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
     private PumpkinPatchTab pumpkinPatchTab;
     private KnowledgeLogTab knowledgeTab;
     private FieldScienceTab fieldScienceTab;
+    private EquipmentReadingsTab equipmentReadingsTab;
     private EventServicesTab eventServicesTab;
 
     private DesktopUpdateController updateController;
@@ -1464,6 +1465,9 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
         pumpkinPatchTab = catalog.pumpkinPatches();
         knowledgeTab = catalog.knowledge();
         fieldScienceTab = catalog.fieldScience();
+        equipmentReadingsTab = catalog.tabs().stream()
+                .filter(EquipmentReadingsTab.class::isInstance)
+                .map(EquipmentReadingsTab.class::cast).findFirst().orElse(null);
         eventServicesTab = catalog.eventServices();
         tabs.clear();
         tabs.addAll(catalog.tabs());
@@ -2057,6 +2061,7 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
                 pumpkinPatchTab == null ? null : pumpkinPatchTab.applicationExitWarning(),
                 knowledgeTab == null ? null : knowledgeTab.applicationExitWarning(),
                 fieldScienceTab == null ? null : fieldScienceTab.applicationExitWarning(),
+                equipmentReadingsTab == null ? null : equipmentReadingsTab.applicationExitWarning(),
                 eventServicesTab == null ? null : eventServicesTab.applicationExitWarning());
     }
 
@@ -2182,6 +2187,7 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
                 pumpkinPatchTab == null ? null : pumpkinPatchTab.applicationExitWarning(),
                 knowledgeTab == null ? null : knowledgeTab.applicationExitWarning(),
                 fieldScienceTab == null ? null : fieldScienceTab.applicationExitWarning(),
+                equipmentReadingsTab == null ? null : equipmentReadingsTab.applicationExitWarning(),
                 eventServicesTab == null ? null : eventServicesTab.applicationExitWarning());
         if (warning != null) {
             boolean savePending = (productionStudioTab != null && productionStudioTab.hasPendingSave())
@@ -2215,6 +2221,7 @@ public class FlowerFarmGUI implements ApplicationRunner, TabHost {
                     || (seasonPlannerTab != null && seasonPlannerTab.hasPendingSave())
                     || (knowledgeTab != null && knowledgeTab.hasPendingSave())
                     || (fieldScienceTab != null && fieldScienceTab.hasPendingSave())
+                    || (equipmentReadingsTab != null && equipmentReadingsTab.hasPendingSave())
                     || (crmTab != null && crmTab.hasPendingSave())
                     || (marketDayTab != null && marketDayTab.hasPendingSave());
             Object[] options = {"Keep working", savePending ? "Exit before result"

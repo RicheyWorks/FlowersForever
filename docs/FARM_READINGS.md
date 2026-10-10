@@ -16,6 +16,8 @@ Open **Equipment readings** in your farm workspace. To record a reading yourself
 
 If a save cannot be confirmed, your draft stays in place. Check **Latest readings**, then retry the unchanged draft if needed: the app reuses its identity to avoid a duplicate. To enter a separate observation, use **Start a new reading**. Changing a saved reading is not an overwrite; history stays intact.
 
+Changing farm types is blocked while a reading is unfinished or its save is still running. Closing or signing out asks whether you want to keep working or explicitly leave unfinished work. Drafts are held in memory; an intentional exit discards them. Saved readings remain in the farm records.
+
 ## Bring in an equipment file
 
 Ask the person who set up your sensor or recorder to save a spreadsheet or readings file. Some equipment calls this **Export** or **Download readings**. Supported file types are called “CSV” (a simple spreadsheet) and “JSON” (a readings file used by some equipment).

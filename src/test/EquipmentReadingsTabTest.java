@@ -102,6 +102,7 @@ class EquipmentReadingsTabTest {
         assertThat(ManualFarmReading.equipmentName(saved)).isEqualTo("North greenhouse probe");
         assertThat(background).isTrue();
         assertThat(edt(() -> table().getValueAt(0, 3))).isEqualTo("21.125000001");
+        assertThat(edt(tab::applicationExitWarning)).isNull();
     }
 
     @Test void cancelledReviewKeepsDraftAndWritesNothing() throws Exception {
@@ -110,6 +111,7 @@ class EquipmentReadingsTabTest {
         click("save");
         assertThat(service.count()).isZero();
         assertThat(edt(() -> text("value").getText())).isEqualTo("21.125000001");
+        assertThat(edt(tab::applicationExitWarning)).contains("unfinished reading");
     }
 
     @Test void missingObservationIsNotConvertedToZero() throws Exception {
@@ -183,6 +185,7 @@ class EquipmentReadingsTabTest {
         }).when(service).ingest(anyString(), anyCollection());
         click("save");
         await(() -> feedback().contains("Could not confirm") && component("save", JButton.class).isEnabled());
+        assertThat(edt(tab::applicationExitWarning)).contains("could not be confirmed");
         assertThat(service.count()).isEqualTo(1);
         assertThat(edt(() -> text("value").getText())).isEqualTo("21.125000001");
         click("save");
@@ -201,6 +204,8 @@ class EquipmentReadingsTabTest {
         try {
             click("save");
             assertThat(edt(() -> component("save", JButton.class).isEnabled())).isFalse();
+            assertThat(edt(tab::hasPendingSave)).isTrue();
+            assertThat(edt(tab::applicationExitWarning)).contains("save still running");
             click("save");
         } finally { release.countDown(); }
         await(() -> service.count() == 1 && component("save", JButton.class).isEnabled());
@@ -253,6 +258,7 @@ class EquipmentReadingsTabTest {
         assertThat(edt(() -> text("area").getText())).isEqualTo("Tomato house");
         assertThat(edt(() -> text("unit").getText())).isEqualTo("°C");
         assertThat(edt(this::feedback)).contains("new reading");
+        assertThat(edt(tab::applicationExitWarning)).isNull();
     }
 
     @Test void cancelledNewReadingKeepsTheWholeDraft() throws Exception {
