@@ -5,7 +5,6 @@ import com.flowerfarm.controller.dto.FarmApiDtos.OrderLineRequest;
 import com.flowerfarm.controller.dto.FarmApiDtos.OrderResponse;
 import com.flowerfarm.service.OrderService;
 import org.springframework.format.annotation.DateTimeFormat;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -54,6 +53,7 @@ public class OrderController {
     public ResponseEntity<?> filter(
             @RequestParam(value = "status", required = false) String status,
             @RequestParam(value = "customer", required = false) String customer,
+            @RequestParam(value = "handoff", required = false) String handoff,
             @RequestParam(value = "from", required = false)
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam(value = "to", required = false)
@@ -63,7 +63,7 @@ public class OrderController {
                 return ResponseEntity.badRequest()
                         .body(Map.of("error", "to must be on or after from."));
             }
-            return ResponseEntity.ok(orderService.filter(status, customer, from, to).stream().map(OrderResponse::from).toList());
+            return ResponseEntity.ok(orderService.filter(status, customer, from, to, handoff).stream().map(OrderResponse::from).toList());
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
@@ -134,37 +134,22 @@ public class OrderController {
     /** Wholesale invoice / packing slip PDF for one order. */
     @GetMapping(value = "/{id}/invoice.pdf", produces = MediaType.APPLICATION_PDF_VALUE)
     public ResponseEntity<?> invoicePdf(@PathVariable Long id) {
-        try {
-            byte[] pdf = orderService.generateInvoicePdf(id);
-            String filename = "invoice-order-" + id + ".pdf";
-            return ResponseEntity.ok()
-                    .header(HttpHeaders.CONTENT_DISPOSITION,
-                            "attachment; filename=\"" + filename + "\"")
-                    .contentType(MediaType.APPLICATION_PDF)
-                    .body(pdf);
-        } catch (IndexOutOfBoundsException e) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(null);
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().body(null);
-        }
+        byte[] pdf = orderService.generateInvoicePdf(id);
+        String filename = "invoice-order-" + id + ".pdf";
+        return DownloadResponse.pdf(pdf, filename);
     }
 
     /** Plain-text invoice for quick CLI / curl. */
     @GetMapping(value = "/{id}/invoice.txt", produces = MediaType.TEXT_PLAIN_VALUE)
     public ResponseEntity<String> invoiceText(@PathVariable Long id) {
-        try {
-            return ResponseEntity.ok(orderService.formatInvoiceText(id));
-        } catch (IndexOutOfBoundsException e) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().body(e.getMessage());
-        }
+        return ResponseEntity.ok(orderService.formatInvoiceText(id));
     }
 
     /**
      * Create order body example:
      * <pre>
      * { "customerId": 1, "orderDate": "2026-07-10", "status": "CONFIRMED",
+     *   "handoffType": "MARKET",
      *   "notes": "Saturday market", "lines": [
      *     { "productName": "Nootka Rose", "quantity": 20, "unit": "bunch", "unitPrice": 12.0 }
      *   ] }
@@ -179,7 +164,7 @@ public class OrderController {
             LocalDate date = body.orderDate() != null ? body.orderDate() : LocalDate.now();
             CustomerOrder saved = orderService.create(
                     body.customerId(), date, body.status(), body.notes(),
-                    body.lines() == null ? null : body.lines().stream().map(OrderLineRequest::toOrderLine).toList());
+                    body.handoffType(), body.lines() == null ? null : body.lines().stream().map(line -> line == null ? null : line.toOrderLine()).toList());
             return ResponseEntity.status(HttpStatus.CREATED).body(OrderResponse.from(saved));
         } catch (IndexOutOfBoundsException e) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", e.getMessage()));
@@ -196,6 +181,12 @@ public class OrderController {
         } catch (IndexOutOfBoundsException e) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", e.getMessage()));
         }
+    }
+
+    @PatchMapping("/{id}/handoff")
+    public ResponseEntity<?> handoff(@PathVariable Long id, @RequestBody Map<String, String> body) {
+        String handoffType = body == null ? null : body.get("handoffType");
+        return ResponseEntity.ok(OrderResponse.from(orderService.updateHandoffType(id, handoffType)));
     }
 
     /**
@@ -224,12 +215,8 @@ public class OrderController {
 
     @DeleteMapping("/{id}")
     public ResponseEntity<?> delete(@PathVariable Long id) {
-        try {
-            orderService.delete(id);
-            return ResponseEntity.noContent().build();
-        } catch (IndexOutOfBoundsException e) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", e.getMessage()));
-        }
+        orderService.delete(id);
+        return ResponseEntity.noContent().build();
     }
 
     public record CreateOrderRequest(
@@ -237,6 +224,7 @@ public class OrderController {
             LocalDate orderDate,
             String status,
             String notes,
+            String handoffType,
             List<OrderLineRequest> lines
     ) {}
 }

@@ -1,5 +1,6 @@
 package com.flowerfarm.service;
 
+import com.flowerfarm.model.FarmProfile;
 import com.flowerfarm.model.CustomerOrder;
 import com.flowerfarm.model.HarvestEntry;
 import com.flowerfarm.model.Item;
@@ -25,7 +26,6 @@ import java.awt.Color;
 import java.io.ByteArrayOutputStream;
 import java.time.LocalDate;
 import java.time.LocalTime;
-import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -35,27 +35,29 @@ import java.util.Locale;
 import java.util.Map;
 
 /**
- * End-of-day Kitsap farm closeout — bookend to {@link MorningBriefingService}.
+ * End-of-day farm closeout — bookend to {@link MorningBriefingService}.
  * Summarizes today's fulfilled sales, harvest, leftover pipeline, and stock.
  */
 @Service
 public class DayCloseoutService {
 
     private static final Logger log = LoggerFactory.getLogger(DayCloseoutService.class);
-    private static final ZoneId PNW = ZoneId.of("America/Los_Angeles");
     private static final int DEFAULT_LOW_STOCK = 10;
     private static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("HH:mm");
 
     private final InventoryService inventoryService;
     private final HarvestService harvestService;
     private final OrderService orderService;
+    private final FarmProfile farmProfile;
 
     public DayCloseoutService(InventoryService inventoryService,
                               HarvestService harvestService,
-                              OrderService orderService) {
+                              OrderService orderService,
+                              FarmProfile farmProfile) {
         this.inventoryService = inventoryService;
         this.harvestService = harvestService;
         this.orderService = orderService;
+        this.farmProfile = farmProfile;
     }
 
     public record FulfilledLine(long orderId, String customer, double total, int lineCount) {}
@@ -123,8 +125,8 @@ public class DayCloseoutService {
 
     @Transactional(readOnly = true)
     public DayCloseout build() {
-        LocalDate today = LocalDate.now(PNW);
-        String when = LocalTime.now(PNW).format(TIME);
+        LocalDate today = LocalDate.now(farmProfile.zoneId());
+        String when = LocalTime.now(farmProfile.zoneId()).format(TIME);
 
         List<CustomerOrder> dayOrders = orderService.findBetween(today, today);
         List<FulfilledLine> fulfilled = new ArrayList<>();
@@ -185,7 +187,7 @@ public class DayCloseoutService {
         return new DayCloseout(
                 today,
                 when,
-                "Port Orchard / Kitsap County, WA",
+                farmProfile.locationLabel(),
                 fulfilled.size(),
                 fulfilledRev,
                 List.copyOf(fulfilled),
@@ -227,7 +229,7 @@ public class DayCloseoutService {
             PdfPTable bannerTable = new PdfPTable(1);
             bannerTable.setWidthPercentage(100);
             PdfPCell bannerCell = new PdfPCell(new Phrase(
-                    "FlowersForever  ·  Port Orchard / Kitsap  ·  Day Closeout",
+                    farmProfile.documentBanner("Day Closeout"),
                     banner));
             bannerCell.setBackgroundColor(brandGreen);
             bannerCell.setPadding(10);
@@ -239,7 +241,7 @@ public class DayCloseoutService {
             doc.add(new Paragraph("End-of-Day Farm Closeout", titleFont));
             doc.add(new Paragraph(
                     closeout.date() + "  ·  " + closeout.generatedAt()
-                            + " America/Los_Angeles  ·  " + closeout.location(),
+                            + " " + farmProfile.zoneId() + "  ·  " + closeout.location(),
                     small));
             doc.add(Chunk.NEWLINE);
 
@@ -348,8 +350,7 @@ public class DayCloseoutService {
             }
 
             doc.add(Chunk.NEWLINE);
-            doc.add(new Paragraph(
-                    "FlowersForever · practical tools for PNW flower growers", small));
+            doc.add(new Paragraph(farmProfile.softwareFooter(), small));
 
             doc.close();
             log.info("Generated day closeout PDF for {} (fulfilled={}, harvestQty={})",
@@ -395,24 +396,25 @@ public class DayCloseoutService {
         return next;
     }
 
-    private static String formatPlainText(LocalDate date, String time,
-                                          List<FulfilledLine> fulfilled,
-                                          double fulfilledRev,
-                                          int cancelled,
-                                          int remainingConfirmed,
-                                          double remainingPipe,
-                                          double todayHarvest,
-                                          int harvestEntries,
-                                          double weekHarvest,
-                                          OrderService.WeekRevenueSummary rev,
-                                          double invValue,
-                                          List<LowStockLine> low,
-                                          List<String> next) {
+    private String formatPlainText(LocalDate date, String time,
+                                   List<FulfilledLine> fulfilled,
+                                   double fulfilledRev,
+                                   int cancelled,
+                                   int remainingConfirmed,
+                                   double remainingPipe,
+                                   double todayHarvest,
+                                   int harvestEntries,
+                                   double weekHarvest,
+                                   OrderService.WeekRevenueSummary rev,
+                                   double invValue,
+                                   List<LowStockLine> low,
+                                   List<String> next) {
         StringBuilder sb = new StringBuilder();
-        sb.append("DAY CLOSEOUT — Port Orchard / Kitsap County\n");
+        sb.append(farmProfile.documentBanner("Day Closeout").toUpperCase(Locale.ROOT))
+                .append('\n');
         sb.append("═══════════════════════════════════════════\n");
         sb.append("Date: ").append(date).append("  ·  ").append(time)
-                .append(" America/Los_Angeles\n");
+                .append(' ').append(farmProfile.zoneId()).append('\n');
         sb.append(String.format(Locale.US,
                 "Today: fulfilled %d ($%,.2f)  ·  harvest %,.0f  ·  open CONFIRMED %d%n",
                 fulfilled.size(), fulfilledRev, todayHarvest, remainingConfirmed));

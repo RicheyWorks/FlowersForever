@@ -12,7 +12,8 @@ import java.time.LocalDate;
  */
 @Entity
 @Table(name = "harvest_log", indexes = {
-        @Index(name = "idx_harvest_date", columnList = "harvestDate")
+        @Index(name = "idx_harvest_date", columnList = "harvestDate"),
+        @Index(name = "uq_harvest_lot_code", columnList = "lot_code", unique = true)
 })
 public class HarvestEntry {
 
@@ -38,12 +39,40 @@ public class HarvestEntry {
     @Column(length = 2000)
     private String notes;
 
+    @Column(name = "lot_code", nullable = false, length = 64, unique = true)
+    private String lotCode;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "harvest_grade", nullable = false, length = 32)
+    private HarvestGrade grade = HarvestGrade.UNGRADED;
+
+    @Column(name = "loss_quantity", nullable = false)
+    private double lossQuantity;
+
+    @Column(name = "storage_location", nullable = false, length = 128)
+    private String storageLocation = "";
+
     protected HarvestEntry() {
     }
 
     public HarvestEntry(LocalDate harvestDate, String cropName, double quantity,
                         String unit, String bedOrField, String notes) {
-        this(null, harvestDate, cropName, quantity, unit, bedOrField, notes);
+        this(null, harvestDate, cropName, quantity, unit, bedOrField, notes,
+                null, HarvestGrade.UNGRADED, 0, "");
+    }
+
+    public HarvestEntry(Long id, LocalDate harvestDate, String cropName, double quantity,
+                        String unit, String bedOrField, String notes) {
+        this(id, harvestDate, cropName, quantity, unit, bedOrField, notes,
+                null, HarvestGrade.UNGRADED, 0, "");
+    }
+
+    public HarvestEntry(LocalDate harvestDate, String cropName, double quantity,
+                        String unit, String bedOrField, String notes,
+                        String lotCode, HarvestGrade grade, double lossQuantity,
+                        String storageLocation) {
+        this(null, harvestDate, cropName, quantity, unit, bedOrField, notes,
+                lotCode, grade, lossQuantity, storageLocation);
     }
 
     @JsonCreator
@@ -54,7 +83,11 @@ public class HarvestEntry {
             @JsonProperty("quantity") double quantity,
             @JsonProperty("unit") String unit,
             @JsonProperty("bedOrField") String bedOrField,
-            @JsonProperty("notes") String notes) {
+            @JsonProperty("notes") String notes,
+            @JsonProperty("lotCode") String lotCode,
+            @JsonProperty("grade") HarvestGrade grade,
+            @JsonProperty("lossQuantity") double lossQuantity,
+            @JsonProperty("storageLocation") String storageLocation) {
         this.id = id;
         setHarvestDate(harvestDate);
         setCropName(cropName);
@@ -62,6 +95,10 @@ public class HarvestEntry {
         setUnit(unit);
         setBedOrField(bedOrField);
         setNotes(notes);
+        setLotCode(lotCode);
+        setGrade(grade);
+        setLossQuantity(lossQuantity);
+        setStorageLocation(storageLocation);
     }
 
     public Long getId() { return id; }
@@ -71,6 +108,11 @@ public class HarvestEntry {
     public String getUnit() { return unit; }
     public String getBedOrField() { return bedOrField; }
     public String getNotes() { return notes; }
+    public String getLotCode() { return lotCode; }
+    public HarvestGrade getGrade() { return grade; }
+    public double getLossQuantity() { return lossQuantity; }
+    public String getStorageLocation() { return storageLocation; }
+    public double getGrossQuantity() { return quantity + lossQuantity; }
 
     public void setId(Long id) { this.id = id; }
 
@@ -85,25 +127,65 @@ public class HarvestEntry {
         if (cropName == null || cropName.isBlank()) {
             throw new IllegalArgumentException("Crop name is required.");
         }
-        this.cropName = cropName.trim();
+        this.cropName = requireMaxLength(cropName.trim(), 255, "Crop name");
     }
 
     public void setQuantity(double quantity) {
-        if (quantity < 0) {
-            throw new IllegalArgumentException("Quantity cannot be negative.");
+        if (!Double.isFinite(quantity) || quantity <= 0 || quantity > Integer.MAX_VALUE) {
+            throw new IllegalArgumentException(
+                    "Quantity must be a finite number greater than 0 and no more than "
+                            + Integer.MAX_VALUE + ".");
         }
         this.quantity = quantity;
     }
 
     public void setUnit(String unit) {
-        this.unit = (unit == null || unit.isBlank()) ? "stems" : unit.trim();
+        String normalized = (unit == null || unit.isBlank()) ? "stems" : unit.trim();
+        this.unit = requireMaxLength(normalized, 64, "Unit");
     }
 
     public void setBedOrField(String bedOrField) {
-        this.bedOrField = bedOrField == null ? "" : bedOrField.trim();
+        this.bedOrField = requireMaxLength(
+                bedOrField == null ? "" : bedOrField.trim(), 128, "Bed or field");
     }
 
     public void setNotes(String notes) {
-        this.notes = notes == null ? "" : notes.trim();
+        this.notes = requireMaxLength(notes == null ? "" : notes.trim(), 2000, "Notes");
+    }
+
+    public void setLotCode(String lotCode) {
+        String normalized = lotCode == null ? "" : lotCode.trim().toUpperCase(java.util.Locale.ROOT);
+        if (!normalized.isEmpty() && !normalized.matches("[A-Z0-9][A-Z0-9._/-]{0,63}")) {
+            throw new IllegalArgumentException(
+                    "Lot code must contain 1 to 64 letters, numbers, '.', '_', '/', or '-' characters.");
+        }
+        this.lotCode = normalized;
+    }
+
+    public void setGrade(HarvestGrade grade) {
+        this.grade = grade == null ? HarvestGrade.UNGRADED : grade;
+    }
+
+    public void setLossQuantity(double lossQuantity) {
+        if (!Double.isFinite(lossQuantity) || lossQuantity < 0
+                || lossQuantity > Integer.MAX_VALUE) {
+            throw new IllegalArgumentException(
+                    "Loss quantity must be a finite number from 0 through "
+                            + Integer.MAX_VALUE + ".");
+        }
+        this.lossQuantity = lossQuantity;
+    }
+
+    public void setStorageLocation(String storageLocation) {
+        this.storageLocation = requireMaxLength(
+                storageLocation == null ? "" : storageLocation.trim(),
+                128, "Storage location");
+    }
+
+    private static String requireMaxLength(String value, int max, String field) {
+        if (value.length() > max) {
+            throw new IllegalArgumentException(field + " cannot exceed " + max + " characters.");
+        }
+        return value;
     }
 }

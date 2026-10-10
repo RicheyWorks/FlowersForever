@@ -74,27 +74,36 @@ public class Customer {
         if (name == null || name.isBlank()) {
             throw new IllegalArgumentException("Customer name is required.");
         }
-        this.name = name.trim();
+        this.name = requireMaxLength(name.trim(), 255, "Customer name");
     }
 
     public void setContactName(String contactName) {
-        this.contactName = contactName == null ? "" : contactName.trim();
+        this.contactName = requireMaxLength(
+                contactName == null ? "" : contactName.trim(), 255, "Contact name");
     }
 
     public void setEmail(String email) {
-        this.email = email == null ? "" : email.trim();
+        this.email = requireMaxLength(email == null ? "" : email.trim(), 255, "Email");
     }
 
     public void setPhone(String phone) {
-        this.phone = phone == null ? "" : phone.trim();
+        this.phone = requireMaxLength(phone == null ? "" : phone.trim(), 64, "Phone");
     }
 
     public void setCustomerType(String customerType) {
-        this.customerType = (customerType == null || customerType.isBlank())
-                ? "OTHER" : customerType.trim().toUpperCase();
+        String normalized = (customerType == null || customerType.isBlank())
+                ? "OTHER" : customerType.trim().toUpperCase(java.util.Locale.ROOT);
+        this.customerType = requireMaxLength(normalized, 32, "Customer type");
     }
 
     public void setNotes(String notes) {
-        this.notes = notes == null ? "" : notes.trim();
+        this.notes = requireMaxLength(notes == null ? "" : notes.trim(), 2000, "Notes");
+    }
+
+    private static String requireMaxLength(String value, int max, String field) {
+        if (value.length() > max) {
+            throw new IllegalArgumentException(field + " cannot exceed " + max + " characters.");
+        }
+        return value;
     }
 }

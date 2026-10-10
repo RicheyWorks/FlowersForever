@@ -1,7 +1,7 @@
 package com.flowerfarm.service;
 
 import com.flowerfarm.model.Customer;
-import com.flowerfarm.repository.CustomerJpaRepository;
+import com.flowerfarm.repository.CustomerRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -12,15 +12,15 @@ import java.util.Optional;
 @Service
 public class CustomerService {
 
-    private final CustomerJpaRepository repository;
+    private final CustomerRepository repository;
 
-    public CustomerService(CustomerJpaRepository repository) {
+    public CustomerService(CustomerRepository repository) {
         this.repository = repository;
     }
 
     @Transactional(readOnly = true)
     public List<Customer> getAll() {
-        return new ArrayList<>(repository.findAllByOrderByNameAsc());
+        return new ArrayList<>(repository.findAllByName());
     }
 
     @Transactional(readOnly = true)
@@ -54,8 +54,34 @@ public class CustomerService {
         if (customer == null) {
             throw new IllegalArgumentException("Customer must not be null.");
         }
+        ensureNameAvailable(customer.getName(), null);
         customer.setId(null);
         return repository.save(customer);
+    }
+
+    /**
+     * Idempotent import boundary used by connectors and AI-assisted migrations.
+     * Customer names are the current canonical natural key.
+     */
+    @Transactional
+    public Customer upsertByName(Customer incoming) {
+        if (incoming == null) {
+            throw new IllegalArgumentException("Customer must not be null.");
+        }
+        Optional<Customer> matched = repository.findByNameIgnoreCaseForUpdate(
+                incoming.getName());
+        if (matched.isEmpty()) {
+            incoming.setId(null);
+            return repository.save(incoming);
+        }
+        Customer existing = matched.get();
+        existing.setName(incoming.getName());
+        existing.setContactName(incoming.getContactName());
+        existing.setEmail(incoming.getEmail());
+        existing.setPhone(incoming.getPhone());
+        existing.setCustomerType(incoming.getCustomerType());
+        existing.setNotes(incoming.getNotes());
+        return repository.save(existing);
     }
 
     @Transactional
@@ -63,8 +89,9 @@ public class CustomerService {
         if (incoming == null) {
             throw new IllegalArgumentException("Customer must not be null.");
         }
-        Customer existing = repository.findById(id)
+        Customer existing = repository.findByIdForUpdate(id)
                 .orElseThrow(() -> new IndexOutOfBoundsException("No customer with id=" + id));
+        ensureNameAvailable(incoming.getName(), id);
         existing.setName(incoming.getName());
         existing.setContactName(incoming.getContactName());
         existing.setEmail(incoming.getEmail());
@@ -76,9 +103,36 @@ public class CustomerService {
 
     @Transactional
     public void delete(Long id) {
-        if (repository.findById(id).isEmpty()) {
+        if (repository.findByIdForUpdate(id).isEmpty()) {
             throw new IndexOutOfBoundsException("No customer with id=" + id);
         }
         repository.deleteById(id);
+    }
+
+    private void ensureNameAvailable(String name, Long excludedId) {
+        repository.findByNameIgnoreCaseForUpdate(name).ifPresent(existing -> {
+            if (excludedId == null || !excludedId.equals(existing.getId())) {
+                throw new DuplicateCustomerNameException(existing.getId(), existing.getName());
+            }
+        });
+    }
+
+    public static final class DuplicateCustomerNameException extends IllegalArgumentException {
+        private final Long existingId;
+        private final String customerName;
+
+        public DuplicateCustomerNameException(Long existingId, String customerName) {
+            super("A customer named “" + customerName + "” already exists.");
+            this.existingId = existingId;
+            this.customerName = customerName;
+        }
+
+        public Long existingId() {
+            return existingId;
+        }
+
+        public String customerName() {
+            return customerName;
+        }
     }
 }

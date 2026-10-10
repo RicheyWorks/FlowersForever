@@ -39,6 +39,25 @@ public class InMemoryInventoryRepository implements InventoryRepository {
     }
 
     @Override
+    public synchronized Optional<Item> findByIdForUpdate(Long id) {
+        return findById(id);
+    }
+
+    @Override
+    public synchronized List<Item> findAllByNameIgnoreCaseForUpdate(String name) {
+        if (name == null || name.isBlank()) {
+            return List.of();
+        }
+        return items.stream()
+                .filter(i -> i.getName() != null && i.getName().equalsIgnoreCase(name.trim()))
+                .sorted((a, b) -> Long.compare(
+                        a.getId() == null ? 0L : a.getId(),
+                        b.getId() == null ? 0L : b.getId()))
+                .map(this::copy)
+                .collect(Collectors.toCollection(ArrayList::new));
+    }
+
+    @Override
     public synchronized long count() {
         return items.size();
     }

@@ -3,9 +3,12 @@ package com.flowerfarm.integration;
 import com.flowerfarm.connector.ConnectorRegistry;
 import com.flowerfarm.controller.ConnectorController;
 import com.flowerfarm.controller.HarvestController;
+import com.flowerfarm.controller.InventoryController;
+import com.flowerfarm.controller.ApiExceptionHandler;
 import com.flowerfarm.model.HarvestEntry;
 import com.flowerfarm.model.SyncHistoryEntry;
 import com.flowerfarm.service.HarvestService;
+import com.flowerfarm.service.InventoryService;
 import com.flowerfarm.service.ServerCsvExportService;
 import com.flowerfarm.service.SyncHistoryService;
 import org.junit.jupiter.api.BeforeEach;
@@ -34,6 +37,7 @@ class FarmRestCsvExportIT {
     private Path exportRoot;
     private MockMvc mvc;
     private HarvestService harvest;
+    private InventoryService inventory;
     private SyncHistoryService history;
 
     @BeforeEach
@@ -41,6 +45,8 @@ class FarmRestCsvExportIT {
         exportRoot = temporaryDirectory.resolve("exports");
         ServerCsvExportService writer = new ServerCsvExportService(exportRoot.toString());
         harvest = mock(HarvestService.class);
+        inventory = mock(InventoryService.class);
+        when(inventory.getAllItems()).thenReturn(List.of());
         history = mock(SyncHistoryService.class);
         when(harvest.getAll()).thenReturn(List.of());
         when(harvest.filter(any(), any(), any(), any(), any())).thenReturn(List.of());
@@ -49,12 +55,20 @@ class FarmRestCsvExportIT {
                 .when(harvest).writeCsv(any(), any());
         doAnswer(call -> { ((BufferedWriter) call.getArgument(0)).write("history,import\n"); return null; })
                 .when(history).writeCsv(any(), any());
-        mvc = MockMvcBuilders.standaloneSetup(new HarvestController(harvest, writer),
-                new ConnectorController(mock(ConnectorRegistry.class), history, writer)).build();
+        doAnswer(call -> { ((BufferedWriter) call.getArgument(0)).write("inventory,rosé\n"); return null; })
+                .when(inventory).writeCsv(any(), any());
+        mvc = MockMvcBuilders.standaloneSetup(new InventoryController(inventory, writer),
+                new HarvestController(harvest, writer),
+                new ConnectorController(mock(ConnectorRegistry.class), history, writer))
+                .setControllerAdvice(new ApiExceptionHandler()).build();
     }
 
     @Test
     void defaultNamesWriteOnlyInsideExportRootWithExistingResponseKeys() throws Exception {
+        mvc.perform(post("/api/inventory/export"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.message").value("Exported inventory to exported_inventory.csv"));
+        assertEquals("inventory,rosé\n", Files.readString(exportRoot.resolve("exported_inventory.csv"), StandardCharsets.UTF_8));
+        verify(inventory, never()).exportToCsv(anyString());
         mvc.perform(post("/api/harvest/export"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.message").value("Exported harvest log to harvest_log.csv"));
         mvc.perform(post("/api/connectors/history/export"))
@@ -73,11 +87,12 @@ class FarmRestCsvExportIT {
         Files.writeString(outside, "keep me", StandardCharsets.UTF_8);
         for (String filename : List.of("../outside.csv", "..\\outside.csv", outside.toAbsolutePath().toString(),
                 "nested/escape.csv", "nested\\escape.csv", "wrong.txt")) {
-            for (String endpoint : List.of("/api/harvest/export", "/api/connectors/history/export")) {
+            for (String endpoint : List.of("/api/inventory/export", "/api/harvest/export", "/api/connectors/history/export")) {
                 mvc.perform(post(endpoint).param("filename", filename)).andExpect(status().isBadRequest());
             }
         }
         assertEquals("keep me", Files.readString(outside, StandardCharsets.UTF_8));
+        verify(inventory, never()).writeCsv(any(), any());
         verify(harvest, never()).writeCsv(any(), any());
         verify(history, never()).writeCsv(any(), any());
     }
@@ -96,6 +111,17 @@ class FarmRestCsvExportIT {
                 .andExpect(status().isOk()).andExpect(jsonPath("$.rows").value("1"));
         verify(harvest).writeCsv(any(), same(rows));
         verify(history).writeCsv(any(), same(audits));
+    }
+
+    @Test
+    void inventoryWriterFailureKeepsThePreviousCompleteExport() throws Exception {
+        Files.createDirectories(exportRoot);
+        Path destination = exportRoot.resolve("exported_inventory.csv");
+        Files.writeString(destination, "previous complete export", StandardCharsets.UTF_8);
+        doThrow(new IOException("fixture inventory writer failure")).when(inventory).writeCsv(any(), any());
+        mvc.perform(post("/api/inventory/export")).andExpect(status().isInternalServerError());
+        assertEquals("previous complete export", Files.readString(destination, StandardCharsets.UTF_8));
+        verify(inventory, never()).exportToCsv(anyString());
     }
 
     @Test

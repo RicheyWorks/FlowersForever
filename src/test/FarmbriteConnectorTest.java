@@ -137,5 +137,26 @@ class FarmbriteConnectorTest {
             assertThat(item.getQuantity()).isEqualTo(50);
             assertThat(connector.mapFromItem(item).get("source")).isEqualTo("FlowersForever");
         }
+
+        @Test
+        @DisplayName("sync POSTs only new and changed records")
+        void syncWritesOnlyChanges() {
+            when(restTemplate.exchange(contains("/inventory"), eq(HttpMethod.GET), any(HttpEntity.class), eq(Object.class)))
+                    .thenReturn(new ResponseEntity<>(Map.of("data", List.of(
+                            Map.of("name", "Same", "quantity_on_hand", 2, "unit_price", 3.0, "unit", "each"),
+                            Map.of("name", "Changed", "quantity_on_hand", 2, "unit_price", 3.0, "unit", "each")
+                    )), HttpStatus.OK));
+
+            ConnectorResult<SyncSummary> result = connector.syncUpdates(List.of(
+                    new Item("Same", "Other", 3.0, "each", 0, 2, ""),
+                    new Item("Changed", "Other", 3.0, "each", 0, 9, ""),
+                    new Item("New", "Other", 5.0, "each", 0, 1, "")
+            ));
+
+            assertThat(result.isSuccess()).isTrue();
+            assertThat(result.getPayload().skipped()).isEqualTo(1);
+            verify(restTemplate, times(2)).exchange(
+                    contains("/inventory"), eq(HttpMethod.POST), any(HttpEntity.class), eq(Map.class));
+        }
     }
 }

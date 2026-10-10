@@ -1,0 +1,292 @@
+# Called only by the explicit manual draft mode in Release.
+name: Private draft preview
+
+on:
+  workflow_call:
+    inputs:
+      release_id:
+        required: true
+        type: string
+      expected_sha:
+        required: true
+        type: string
+      version:
+        required: false
+        default: ""
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Verify one JAR for the private draft
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      manifest_asset_id: ${{ steps.inputs.outputs.manifest_asset_id }}
+      manifest_sha256: ${{ steps.inputs.outputs.manifest_sha256 }}
+    steps:
+      - name: Checkout the exact requested source
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.expected_sha }}
+          persist-credentials: false
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          package-manager-cache: false
+
+      - name: Lock the source and candidate version
+        id: version
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+          REQUESTED_VERSION: ${{ inputs.version }}
+        run: |
+          test "$GITHUB_SHA" = "$EXPECTED_SHA"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          POM_VERSION="$(mvn -q help:evaluate -Dexpression=project.version -DforceStdout)"
+          VERSION="${REQUESTED_VERSION:-${POM_VERSION%-SNAPSHOT}}"
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          if test "$POM_VERSION" != "$VERSION" && test "$POM_VERSION" != "$VERSION-SNAPSHOT"; then
+            echo "Candidate version does not match the source POM" >&2
+            exit 1
+          fi
+          if test "$POM_VERSION" != "$VERSION"; then
+            mvn -B versions:set -DnewVersion="$VERSION" -DgenerateBackupPoms=false
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Require the exact private unpublished draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PREVIEW_RELEASE_ID: ${{ inputs.release_id }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: node scripts/preview-release-assets.mjs validate
+
+      - name: Verify draft transport behavior
+        run: node --test scripts/preview-release-assets.test.mjs
+
+      - name: Verify bounded native smoke behavior
+        run: node --test scripts/test-macos-launchers.test.mjs
+
+      - name: Build and run every application verification gate
+        run: mvn -B clean verify
+
+      - name: Verify field forms and offline replay
+        run: node --test scripts/worker-ui.test.mjs
+
+      - name: Require the exact verified inputs
+        shell: bash
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          test -s "target/flowerfarm-manager-${VERSION}.jar"
+          test -s target/bom.json
+          test -s target/bom.xml
+          test -s target/generated-resources/licenses/THIRD-PARTY.txt
+          test "$(find target -maxdepth 1 -type f -name 'flowerfarm-manager-*.jar' ! -name '*.original' | wc -l | tr -d ' ')" = "1"
+          mkdir -p target/release-metadata
+          cp target/bom.json target/bom.xml target/generated-resources/licenses/THIRD-PARTY.txt target/release-metadata/
+
+      - name: Store the verified inputs in the private draft
+        id: inputs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PREVIEW_RELEASE_ID: ${{ inputs.release_id }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: node scripts/preview-release-assets.mjs publish-inputs
+
+  installers:
+    name: ${{ matrix.label }}
+    if: github.event_name == 'workflow_dispatch'
+    needs: verify
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 35
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            label: Windows MSI
+            type: msi
+            extra: --win-menu --win-shortcut --win-dir-chooser
+            ai_config: packaging/FlowersForeverAI-windows.properties
+            app_image: smoke-dist/FlowersForever
+            ai_launcher: smoke-dist/FlowersForever/FlowersForeverAI.exe
+            launcher: smoke-dist/FlowersForever/FlowersForever.exe
+          - os: macos-latest
+            label: macOS DMG
+            type: dmg
+            extra: ""
+            ai_config: packaging/FlowersForeverAI.properties
+            app_image: smoke-dist/FlowersForever.app
+            ai_launcher: smoke-dist/FlowersForever.app/Contents/MacOS/FlowersForeverAI
+            launcher: smoke-dist/FlowersForever.app/Contents/MacOS/FlowersForever
+
+    steps:
+      - name: Checkout verified launcher configuration and smoke scripts
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.expected_sha }}
+          persist-credentials: false
+
+      - name: Set up JDK 17 packaging tools
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Node.js for verified draft assets
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          package-manager-cache: false
+
+      - name: Download the exact verified JAR from the private draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PREVIEW_RELEASE_ID: ${{ inputs.release_id }}
+          VERSION: ${{ needs.verify.outputs.version }}
+          VERIFIED_INPUTS_ASSET_ID: ${{ needs.verify.outputs.manifest_asset_id }}
+          VERIFIED_INPUTS_SHA256: ${{ needs.verify.outputs.manifest_sha256 }}
+        run: node scripts/preview-release-assets.mjs download-jar
+      - name: Build and smoke-test the candidate app image
+        shell: bash
+        run: |
+          VERSION="${{ needs.verify.outputs.version }}"
+          JAR="flowerfarm-manager-${VERSION}.jar"
+          test -s "target/jpackage-input/$JAR"
+          test "$(find target/jpackage-input -maxdepth 1 -type f | wc -l | tr -d ' ')" = "1"
+          SMOKE_DATA="target/release-smoke-data-${{ matrix.type }}"
+          mkdir -p "$SMOKE_DATA" smoke-dist
+          jpackage \
+            --type app-image \
+            --name FlowersForever \
+            --app-version "$VERSION" \
+            --vendor RicheyWorks \
+            --description "Flower farm operations and knowledge, kept in one place" \
+            --input target/jpackage-input \
+            --main-jar "$JAR" \
+            --add-launcher FlowersForeverAI=${{ matrix.ai_config }} \
+            --java-options "-Djava.awt.headless=false" \
+            --java-options "-Dflowerfarm.packaged=true" \
+            --dest smoke-dist
+          test -x "${{ matrix.launcher }}"
+          test -x "${{ matrix.ai_launcher }}"
+          export FLOWERFARM_DATA_DIR="$SMOKE_DATA"
+          if test "${{ matrix.type }}" = "msi"; then
+            pwsh -File scripts/test-mcp-launcher.ps1 \
+              -Launcher "${{ matrix.ai_launcher }}" -DataDir "$SMOKE_DATA"
+            pwsh -File scripts/test-desktop-launcher.ps1 \
+              -Launcher "${{ matrix.launcher }}" -DataDir "$SMOKE_DATA"
+          else
+            export FLOWERFARM_HARNESS_TOKEN="candidate-mcp-doctor-token-123456"
+            export FLOWERFARM_HARNESS_ALLOW_SENSITIVE_READ=true
+            export FLOWERFARM_HARNESS_ALLOW_MUTATIONS=true
+            bash scripts/test-macos-launchers.sh \
+              --ai-launcher "${{ matrix.ai_launcher }}" \
+              --launcher "${{ matrix.launcher }}" --data-dir "$SMOKE_DATA"
+          fi
+
+      - name: Package the smoke-tested app image
+        shell: bash
+        run: |
+          VERSION="${{ needs.verify.outputs.version }}"
+          test -d "${{ matrix.app_image }}"
+          mkdir -p dist
+          jpackage \
+            --type ${{ matrix.type }} \
+            --name FlowersForever \
+            --app-version "$VERSION" \
+            --vendor RicheyWorks \
+            --description "Flower farm operations and knowledge, kept in one place" \
+            --app-image "${{ matrix.app_image }}" \
+            --dest dist \
+            ${{ matrix.extra }}
+          test "$(find dist -maxdepth 1 -type f | wc -l | tr -d ' ')" = "1"
+
+      - name: Store the tested installer in the private draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PREVIEW_RELEASE_ID: ${{ inputs.release_id }}
+          VERSION: ${{ needs.verify.outputs.version }}
+          VERIFIED_INPUTS_ASSET_ID: ${{ needs.verify.outputs.manifest_asset_id }}
+          VERIFIED_INPUTS_SHA256: ${{ needs.verify.outputs.manifest_sha256 }}
+        run: node scripts/preview-release-assets.mjs publish-installer ${{ matrix.type }}
+
+  candidate:
+    name: Verify complete private preview without publishing
+    if: github.event_name == 'workflow_dispatch'
+    needs: [verify, installers]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    env:
+      PREVIEW_RELEASE_ID: ${{ inputs.release_id }}
+      VERSION: ${{ needs.verify.outputs.version }}
+      VERIFIED_INPUTS_ASSET_ID: ${{ needs.verify.outputs.manifest_asset_id }}
+      VERIFIED_INPUTS_SHA256: ${{ needs.verify.outputs.manifest_sha256 }}
+    steps:
+      - name: Checkout the exact requested source
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.expected_sha }}
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          package-manager-cache: false
+
+      - name: Collect and verify the exact inputs and tested installers
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/preview-release-assets.mjs collect-candidate
+
+      - name: Require the complete candidate and generate checksums
+        shell: bash
+        run: |
+          VERSION="${{ needs.verify.outputs.version }}"
+          test -s "candidate-assets/flowerfarm-manager-${VERSION}.jar"
+          test -s candidate-assets/bom.json
+          test -s candidate-assets/bom.xml
+          test -s candidate-assets/THIRD-PARTY.txt
+          test "$(find candidate-assets -maxdepth 1 -type f -name '*.msi' | wc -l | tr -d ' ')" = "1"
+          test "$(find candidate-assets -maxdepth 1 -type f -name '*.dmg' | wc -l | tr -d ' ')" = "1"
+          (
+            cd candidate-assets
+            find . -maxdepth 1 -type f ! -name SHA256SUMS.txt -print0 \
+              | sort -z | xargs -0 sha256sum --binary -- > SHA256SUMS.txt
+            sha256sum --check SHA256SUMS.txt
+          )
+
+      - name: Record the completed preview in the private draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/preview-release-assets.mjs publish-completion
+
+      - name: Record preview status
+        shell: bash
+        run: |
+          echo 'Private preview complete; the release remains an unpublished draft.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Unsigned previews are for maintainer validation. Customer distribution still requires signing and platform acceptance.' >> "$GITHUB_STEP_SUMMARY"
+

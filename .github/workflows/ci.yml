@@ -3,15 +3,38 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, codex/recover-unpushed-work]
   pull_request:
-    branches: [main]
+    branches: [main, codex/recover-unpushed-work]
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
+  worker:
+    name: Field entry and offline replay
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          package-manager-cache: false
+      - name: Test field forms and durable device queue
+        run: node --test scripts/worker-ui.test.mjs
+      - name: Test private preview asset integrity and permissions
+        run: node --test scripts/preview-release-assets.test.mjs
+      - name: Test bounded native smoke behavior
+        run: node --test scripts/test-macos-launchers.test.mjs
+      - name: Test isolated Windows packaging and clean desktop shutdown
+        run: node --test scripts/build-release.test.mjs scripts/test-desktop-launcher.test.mjs
+      - name: Test harness evidence failure detection
+        run: python3 -B -m unittest discover -s scripts -p test_verify_harness.py
+
   verify:
     name: mvn clean verify (JDK ${{ matrix.java }})
     runs-on: ubuntu-latest
@@ -20,7 +43,7 @@ jobs:
       fail-fast: false
       matrix:
         java: ["17", "21"]
-    # JDK 17 is the supported baseline; 21 is advisory forward-compat (Boot 4.x prep)
+    # JDK 17 is the supported baseline; 21 is advisory forward compatibility
     continue-on-error: ${{ matrix.java == '21' }}
 
     steps:
@@ -34,7 +57,12 @@ jobs:
           java-version: ${{ matrix.java }}
           cache: maven
 
-      - name: Build and test
+      - name: Verify harness and source-bound evidence (JDK 17)
+        if: matrix.java == '17'
+        run: python3 -B scripts/verify_harness.py
+
+      - name: Build and test (advisory JDK 21)
+        if: matrix.java == '21'
         run: mvn -B clean verify
 
       - name: Upload coverage report (JDK 17 only)
@@ -44,6 +72,7 @@ jobs:
           name: jacoco-report
           path: target/site/jacoco/
           if-no-files-found: ignore
+          retention-days: 7
 
       - name: Upload SBOM (JDK 17 only)
         if: matrix.java == '17'
@@ -51,7 +80,8 @@ jobs:
         with:
           name: sbom
           path: target/bom.*
-          if-no-files-found: ignore
+          if-no-files-found: error
+          retention-days: 7
 
       - name: Upload Surefire reports on failure
         if: failure()
@@ -60,9 +90,19 @@ jobs:
           name: surefire-reports-jdk${{ matrix.java }}
           path: target/surefire-reports/
           if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Upload packaged MCP reports on failure
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: packaged-mcp-reports-jdk${{ matrix.java }}
+          path: target/failsafe-reports/
+          if-no-files-found: ignore
+          retention-days: 7
 
   quality:
-    name: Static analysis (report-only)
+    name: Static analysis (Medium gate)
     runs-on: ubuntu-latest
     timeout-minutes: 25
 
@@ -88,6 +128,7 @@ jobs:
             target/spotbugsXml.xml
             target/checkstyle-result.xml
           if-no-files-found: ignore
+          retention-days: 7
 
   docker:
     name: Docker image builds
@@ -100,3 +141,31 @@ jobs:
 
       - name: Build image (no push)
         run: docker build -t flowersforever:ci .
+
+      - name: Smoke-test authenticated container profile
+        run: |
+          docker run -d --name flowersforever-ci -p 18080:8080 \
+            -e FLOWERFARM_AUTH_USERS='owner:a-long-ci-password:OWNER' \
+            flowersforever:ci
+          for attempt in {1..45}; do
+            health="$(docker inspect --format='{{.State.Health.Status}}' flowersforever-ci)"
+            if [ "$health" = "healthy" ]; then
+              break
+            fi
+            if [ "$health" = "unhealthy" ]; then
+              docker logs flowersforever-ci
+              exit 1
+            fi
+            sleep 2
+          done
+          test "$(docker inspect --format='{{.State.Health.Status}}' flowersforever-ci)" = "healthy"
+          test "$(curl --silent --output /dev/null --write-out '%{http_code}' \
+            http://127.0.0.1:18080/api/inventory)" = "401"
+
+      - name: Container logs on failure
+        if: failure()
+        run: docker logs flowersforever-ci || true
+
+      - name: Remove smoke container
+        if: always()
+        run: docker rm --force flowersforever-ci || true

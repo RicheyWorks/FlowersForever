@@ -1,10 +1,10 @@
 package com.flowerfarm.service;
 
 import com.flowerfarm.model.HarvestEntry;
+import com.flowerfarm.model.FarmProfile;
 import com.flowerfarm.model.SyncHistoryEntry;
-import com.flowerfarm.repository.HarvestJpaRepository;
-import com.flowerfarm.repository.SyncHistoryJpaRepository;
-import org.junit.jupiter.api.Assumptions;
+import com.flowerfarm.repository.HarvestRepository;
+import com.flowerfarm.repository.SyncHistoryRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -91,36 +91,46 @@ class ServerCsvExportServiceTest {
     }
 
     @Test
-    void existingSymbolicLinkNeverWritesItsOutsideTarget() throws IOException {
+    void existingRedirectNeverWritesItsOutsideTarget() throws Exception {
         Files.createDirectories(root());
-        Path outside = Files.writeString(temporary.resolve("outside.csv"), "outside sentinel");
-        createSymbolicLinkOrSkip(root().resolve("history.csv"), outside);
-        assertThatIllegalStateException().isThrownBy(
-                () -> service().exportCsv("history.csv", writer -> writer.write("replacement")));
-        assertThat(Files.isSymbolicLink(root().resolve("history.csv"))).isTrue();
-        assertThat(Files.readString(outside)).isEqualTo("outside sentinel");
-        assertOnlyExportRemains("history.csv");
+        Path outsideDirectory = Files.createDirectory(temporary.resolve("outside"));
+        Path outside = Files.writeString(outsideDirectory.resolve("history.csv"), "outside sentinel");
+        Path redirect = root().resolve("history.csv");
+        createCsvRedirect(redirect, outside);
+        try {
+            assertThatIllegalStateException().isThrownBy(
+                    () -> service().exportCsv("history.csv", writer -> writer.write("replacement")));
+            assertThat(Files.exists(redirect, java.nio.file.LinkOption.NOFOLLOW_LINKS)).isTrue();
+            assertThat(Files.readString(outside)).isEqualTo("outside sentinel");
+            assertOnlyExportRemains("history.csv");
+        } finally {
+            Files.delete(redirect); // Delete the redirect entry, never its target.
+        }
     }
 
     @Test
-    void symbolicLinkInsertedDuringSerializationIsRejected() throws IOException {
+    void redirectInsertedDuringSerializationIsRejected() throws Exception {
         Files.createDirectories(root());
-        Path outside = Files.writeString(temporary.resolve("outside.csv"), "outside sentinel");
-        Path probe = root().resolve("probe.csv");
-        createSymbolicLinkOrSkip(probe, outside);
-        Files.delete(probe);
-        assertThatIllegalStateException().isThrownBy(() -> service().exportCsv("history.csv", writer -> {
-            Files.createSymbolicLink(root().resolve("history.csv"), outside);
-            writer.write("replacement");
-        }));
-        assertThat(Files.readString(outside)).isEqualTo("outside sentinel");
-        assertOnlyExportRemains("history.csv");
+        Path outsideDirectory = Files.createDirectory(temporary.resolve("outside"));
+        Path outside = Files.writeString(outsideDirectory.resolve("history.csv"), "outside sentinel");
+        Path redirect = root().resolve("history.csv");
+        try {
+            assertThatIllegalStateException().isThrownBy(() -> service().exportCsv("history.csv", writer -> {
+                createCsvRedirect(redirect, outside);
+                writer.write("replacement");
+            }));
+            assertThat(Files.exists(redirect, java.nio.file.LinkOption.NOFOLLOW_LINKS)).isTrue();
+            assertThat(Files.readString(outside)).isEqualTo("outside sentinel");
+            assertOnlyExportRemains("history.csv");
+        } finally {
+            Files.deleteIfExists(redirect);
+        }
     }
 
     @Test
-    void symbolicLinkConfiguredRootIsRejectedWithoutOutsideWrites() throws IOException {
+    void directoryRedirectConfiguredRootIsRejectedWithoutOutsideWrites() throws IOException {
         Path outside = Files.createDirectory(temporary.resolve("outside"));
-        createSymbolicLinkOrSkip(root(), outside);
+        createDirectoryRedirect(root(), outside);
         assertThatIllegalStateException().isThrownBy(
                 () -> service().exportCsv("history.csv", writer -> writer.write("replacement")));
         try (var files = Files.list(outside)) {
@@ -129,10 +139,10 @@ class ServerCsvExportServiceTest {
     }
 
     @Test
-    void symbolicLinkAncestorIsRejectedBeforeCreatingExportDirectory() throws IOException {
+    void directoryRedirectAncestorIsRejectedBeforeCreatingExportDirectory() throws IOException {
         Path outside = Files.createDirectory(temporary.resolve("outside"));
         Path ancestor = temporary.resolve("linked-parent");
-        createSymbolicLinkOrSkip(ancestor, outside);
+        createDirectoryRedirect(ancestor, outside);
         ServerCsvExportService service = new ServerCsvExportService(ancestor.resolve("exports").toString());
         assertThatIllegalStateException().isThrownBy(
                 () -> service.exportCsv("history.csv", writer -> writer.write("replacement")));
@@ -142,10 +152,10 @@ class ServerCsvExportServiceTest {
     }
 
     @Test
-    void windowsJunctionConfiguredRootCannotRedirectOutsideExportWrites() throws Exception {
+    void directoryRedirectConfiguredRootCannotWriteOutsideExports() throws Exception {
         Path outside = Files.createDirectory(temporary.resolve("outside"));
         Path sentinel = Files.writeString(outside.resolve("history.csv"), "outside sentinel");
-        createJunctionOrSkip(root(), outside);
+        createDirectoryRedirect(root(), outside);
         try {
             assertThatIllegalStateException().isThrownBy(
                     () -> service().exportCsv("history.csv", writer -> writer.write("replacement")));
@@ -159,11 +169,11 @@ class ServerCsvExportServiceTest {
     }
 
     @Test
-    void windowsJunctionAncestorIsRejectedBeforeCreatingDirectoryOutsideRoot() throws Exception {
+    void directoryRedirectAncestorCannotCreateExportsOutsideRoot() throws Exception {
         Path outside = Files.createDirectory(temporary.resolve("outside"));
         Path sentinel = Files.writeString(outside.resolve("sentinel.csv"), "outside sentinel");
         Path ancestor = temporary.resolve("junction-parent");
-        createJunctionOrSkip(ancestor, outside);
+        createDirectoryRedirect(ancestor, outside);
         try {
             ServerCsvExportService service = new ServerCsvExportService(ancestor.resolve("exports").toString());
             assertThatIllegalStateException().isThrownBy(
@@ -179,11 +189,7 @@ class ServerCsvExportServiceTest {
     void replacingHardLinkEntryLeavesOutsideFileContentsUnchanged() throws IOException {
         Files.createDirectories(root());
         Path outside = Files.writeString(temporary.resolve("outside.csv"), "outside sentinel");
-        try {
-            Files.createLink(root().resolve("history.csv"), outside);
-        } catch (UnsupportedOperationException | IOException e) {
-            Assumptions.assumeTrue(false, "Hard-link creation unavailable: " + e.getMessage());
-        }
+        Files.createLink(root().resolve("history.csv"), outside);
         service().exportCsv("history.csv", writer -> writer.write("new export"));
         assertThat(Files.readString(outside)).isEqualTo("outside sentinel");
         assertThat(Files.readString(root().resolve("history.csv"))).isEqualTo("new export");
@@ -191,13 +197,15 @@ class ServerCsvExportServiceTest {
     }
 
     @Test
-    void fallbackRejectsObservedRootReplacementWithoutPublishingInNewDirectory() throws IOException {
+    void observedRootReplacementCannotPublishInTheReplacementDirectory() throws IOException {
         Files.createDirectories(root());
+        boolean secureProvider;
         try (var stream = Files.newDirectoryStream(root())) {
-            Assumptions.assumeFalse(stream instanceof SecureDirectoryStream<?>,
-                    "Directory-relative provider uses a bound handle, not this fallback.");
+            secureProvider = stream instanceof SecureDirectoryStream<?>;
         }
-        Files.setAttribute(root(), "basic:creationTime", FileTime.from(Instant.parse("2000-01-01T00:00:00Z")));
+        if (!secureProvider) {
+            Files.setAttribute(root(), "basic:creationTime", FileTime.from(Instant.parse("2000-01-01T00:00:00Z")));
+        }
         Path retired = temporary.resolve("retired-root");
         Path outside = Files.writeString(temporary.resolve("outside.csv"), "outside sentinel");
         AtomicBoolean replaced = new AtomicBoolean();
@@ -213,11 +221,19 @@ class ServerCsvExportServiceTest {
             replaced.set(true);
             writer.write("replacement");
         }));
-        // Abort outside AssertJ's throwable capture so unavailable OS capability is reported as skipped.
-        Assumptions.assumeTrue(renameUnavailable.get() == null,
-                "Open directory cannot be renamed on this provider: " + renameUnavailable.get());
-        assertThat(failure).isInstanceOf(IllegalStateException.class).hasMessageContaining("directory changed");
-        assertThat(replaced).isTrue();
+        if (renameUnavailable.get() != null) {
+            // Windows may deny moving an open directory. That denial must still abort the export.
+            assertThat(failure).isInstanceOf(IllegalStateException.class);
+            assertThat(replaced).isFalse();
+        } else if (secureProvider) {
+            // Unix binds writes to the original directory handle, even after its path is replaced.
+            assertThat(failure).isNull();
+            assertThat(replaced).isTrue();
+            assertThat(Files.readString(retired.resolve("history.csv"))).isEqualTo("replacement");
+        } else {
+            assertThat(failure).isInstanceOf(IllegalStateException.class).hasMessageContaining("directory changed");
+            assertThat(replaced).isTrue();
+        }
         assertThat(Files.exists(root().resolve("history.csv"))).isFalse();
         try (var files = Files.list(root())) {
             assertThat(files.toList()).isEmpty();
@@ -230,12 +246,13 @@ class ServerCsvExportServiceTest {
         Files.createDirectories(root());
         Path outside = Files.writeString(temporary.resolve("outside.csv"), "outside sentinel");
         String selectedLocalPath = root().resolve("../outside.csv").toString();
-        HarvestService harvest = new HarvestService(mock(HarvestJpaRepository.class),
-                mock(InventoryService.class), mock(SyncHistoryService.class));
-        SyncHistoryService history = new SyncHistoryService(mock(SyncHistoryJpaRepository.class));
+        HarvestService harvest = new HarvestService(mock(HarvestRepository.class),
+                mock(InventoryService.class), mock(SyncHistoryService.class),
+                new HarvestReportGenerator(new FarmProfile()), new HarvestCsvExporter(), new FarmProfile());
+        SyncHistoryService history = new SyncHistoryService(mock(SyncHistoryRepository.class), new FarmProfile());
         // These unchanged local APIs are the original HTTP sinks documented in the baseline caller receipt.
         harvest.exportToCsv(selectedLocalPath, List.of());
-        assertThat(Files.readString(outside)).startsWith("Id,Date,Crop,Quantity,Unit,BedOrField,Notes");
+        assertThat(Files.readString(outside)).startsWith("Id,Date,Crop,MarketableQuantity,Unit,BedOrField,Notes");
         history.exportToCsv(selectedLocalPath, List.of());
         assertThat(Files.readString(outside)).startsWith("Id,When,Connector,Operation,Success,RecordCount,Message,Detail");
         Files.writeString(outside, "outside sentinel");
@@ -248,8 +265,9 @@ class ServerCsvExportServiceTest {
 
     @Test
     void localHarvestSelectedPathAndServerExportKeepIdenticalCsv() throws IOException {
-        HarvestService harvest = new HarvestService(mock(HarvestJpaRepository.class),
-                mock(InventoryService.class), mock(SyncHistoryService.class));
+        HarvestService harvest = new HarvestService(mock(HarvestRepository.class),
+                mock(InventoryService.class), mock(SyncHistoryService.class),
+                new HarvestReportGenerator(new FarmProfile()), new HarvestCsvExporter(), new FarmProfile());
         HarvestEntry entry = new HarvestEntry(LocalDate.of(2026, 7, 10), "Rose, red", 12.5,
                 "stems", "Bed \"A\"", "été \"notes\"");
         entry.setId(42L);
@@ -257,13 +275,25 @@ class ServerCsvExportServiceTest {
         harvest.exportToCsv(selected.toString(), List.of(entry));
         service().exportCsv("harvest.csv", writer -> harvest.writeCsv(writer, List.of(entry)));
         assertThat(Files.readAllBytes(root().resolve("harvest.csv"))).isEqualTo(Files.readAllBytes(selected));
-        assertThat(Files.readString(selected)).startsWith("Id,Date,Crop,Quantity,Unit,BedOrField,Notes")
+        assertThat(Files.readString(selected)).startsWith("Id,Date,Crop,MarketableQuantity,Unit,BedOrField,Notes")
                 .contains("42,2026-07-10,\"Rose, red\",12.50,stems,\"Bed \"\"A\"\"\",\"été \"\"notes\"\"\"");
     }
 
     @Test
+    void localInventorySelectedPathAndServerExportKeepIdenticalCsv() throws IOException {
+        InventoryCsvExporter exporter = new InventoryCsvExporter();
+        com.flowerfarm.model.Item row = new com.flowerfarm.model.Item(
+                "Rose, red", "Flowers", 2.5, "stems", 1, 12, "été notes");
+        Path selected = temporary.resolve("desktop-inventory.csv");
+        exporter.export(selected.toString(), List.of(row));
+        service().exportCsv("inventory.csv", writer -> exporter.writeCsv(writer, List.of(row)));
+        assertThat(Files.readAllBytes(root().resolve("inventory.csv"))).isEqualTo(Files.readAllBytes(selected));
+        assertThat(Files.readString(selected)).startsWith(InventoryService.CSV_HEADER).contains("été notes");
+    }
+
+    @Test
     void localHistorySelectedPathAndServerExportKeepIdenticalCsv() throws IOException {
-        SyncHistoryService history = new SyncHistoryService(mock(SyncHistoryJpaRepository.class));
+        SyncHistoryService history = new SyncHistoryService(mock(SyncHistoryRepository.class), new FarmProfile());
         SyncHistoryEntry entry = new SyncHistoryEntry("csv", "export", true, "été \"message\"", "detail", 2);
         Path selected = temporary.resolve("desktop-selected.csv");
         history.exportToCsv(selected.toString(), List.of(entry));
@@ -279,29 +309,45 @@ class ServerCsvExportServiceTest {
         }
     }
 
-    private static void createSymbolicLinkOrSkip(Path link, Path target) {
+    private static void createCsvRedirect(Path link, Path target) throws IOException {
         try {
             Files.createSymbolicLink(link, target);
-        } catch (UnsupportedOperationException | IOException e) {
-            Assumptions.assumeTrue(false, "Symbolic-link creation unavailable on this runtime: " + e.getMessage());
+        } catch (UnsupportedOperationException | IOException unavailable) {
+            if (!System.getProperty("os.name").startsWith("Windows")) {
+                throw new IOException("Required symbolic-link fixture is unavailable", unavailable);
+            }
+            // Directory junctions need no symlink privilege and still exercise redirected-target rejection.
+            createDirectoryRedirect(link, target.getParent());
         }
     }
 
-    private static void createJunctionOrSkip(Path link, Path target) throws Exception {
-        Assumptions.assumeTrue(System.getProperty("os.name").startsWith("Windows"), "NTFS junction fixture requires Windows.");
+    private static void createDirectoryRedirect(Path link, Path target) throws IOException {
+        if (!System.getProperty("os.name").startsWith("Windows")) {
+            Files.createSymbolicLink(link, target);
+            return;
+        }
         // Literal PowerShell quoting and encoded command prevent path text becoming shell syntax.
         String command = "New-Item -ItemType Junction -Path '" + link.toString().replace("'", "''")
                 + "' -Target '" + target.toString().replace("'", "''") + "' -ErrorAction Stop | Out-Null";
         String encoded = Base64.getEncoder().encodeToString(command.getBytes(StandardCharsets.UTF_16LE));
         Process process = new ProcessBuilder("powershell.exe", "-NoProfile", "-NonInteractive", "-EncodedCommand", encoded)
                 .redirectErrorStream(true).start();
-        boolean completed = process.waitFor(10, TimeUnit.SECONDS);
+        boolean completed;
+        try {
+            completed = process.waitFor(10, TimeUnit.SECONDS);
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            process.destroyForcibly();
+            throw new IOException("Directory junction fixture interrupted", interrupted);
+        }
         if (!completed) {
             process.descendants().forEach(ProcessHandle::destroyForcibly);
             process.destroyForcibly();
+            throw new IOException("Directory junction creation exceeded fixture budget");
         }
-        Assumptions.assumeTrue(completed, "NTFS junction creation exceeded fixture budget.");
         String output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
-        Assumptions.assumeTrue(process.exitValue() == 0, "NTFS junction creation unavailable: " + output);
+        if (process.exitValue() != 0) {
+            throw new IOException("Directory junction fixture unavailable: " + output);
+        }
     }
 }

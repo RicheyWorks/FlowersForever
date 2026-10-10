@@ -1,9 +1,11 @@
 package com.flowerfarm.connector.impl;
 
+import com.flowerfarm.connector.ConnectorHttpClient;
 import com.flowerfarm.connector.*;
 import com.flowerfarm.model.Item;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.stereotype.Component;
@@ -50,6 +52,7 @@ public class GoogleSheetsConnector implements ExternalConnector<List<Object>>, D
     private final String colQuantity;
     private final String colNotes;
 
+    @Autowired
     public GoogleSheetsConnector(
             @Value("${connector.google-sheets.spreadsheet-id:}") String spreadsheetId,
             @Value("${connector.google-sheets.sheet-name:Inventory}") String sheetName,
@@ -65,7 +68,7 @@ public class GoogleSheetsConnector implements ExternalConnector<List<Object>>, D
             @Value("${connector.google-sheets.col.notes:Notes}") String colNotes) {
         this(spreadsheetId, sheetName, apiKey, accessToken, localFile,
                 colName, colCategory, colPrice, colUnit, colCost, colQuantity, colNotes,
-                new RestTemplate());
+                ConnectorHttpClient.create());
     }
 
     /** Package-private for unit tests (remote mode — empty local-file). */
@@ -282,7 +285,7 @@ public class GoogleSheetsConnector implements ExternalConnector<List<Object>>, D
             body.put("values", values);
 
             String url = UriComponentsBuilder
-                    .fromHttpUrl(SHEETS_API + "/" + config.get("spreadsheet-id") + "/values/"
+                    .fromUriString(SHEETS_API + "/" + config.get("spreadsheet-id") + "/values/"
                             + encodeRange(sheetRange()))
                     .queryParam("valueInputOption", "USER_ENTERED")
                     .toUriString();
@@ -447,7 +450,7 @@ public class GoogleSheetsConnector implements ExternalConnector<List<Object>>, D
 
     private String valuesUrl(String ignoredMethod) {
         UriComponentsBuilder b = UriComponentsBuilder
-                .fromHttpUrl(SHEETS_API + "/" + config.get("spreadsheet-id") + "/values/"
+                .fromUriString(SHEETS_API + "/" + config.get("spreadsheet-id") + "/values/"
                         + encodeRange(sheetRange()));
         if (config.has("api-key") && !config.has("access-token")) {
             b.queryParam("key", config.get("api-key"));

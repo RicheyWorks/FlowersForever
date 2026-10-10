@@ -1,8 +1,11 @@
 package com.flowerfarm.model;
 
+import com.flowerfarm.util.CsvSupport;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.persistence.*;
+
+import java.util.Locale;
 
 /**
  * Represents a single inventory item in the flower farm.
@@ -13,6 +16,8 @@ import jakarta.persistence.*;
 @Entity
 @Table(name = "inventory_items")
 public class Item {
+
+    private static final double MAX_MONEY_VALUE = 1_000_000_000.0;
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -119,24 +124,36 @@ public class Item {
         if (name == null || name.trim().isEmpty()) {
             throw new IllegalArgumentException("Item name cannot be null or empty.");
         }
-        return name.trim();
+        return requireMaxLength(name.trim(), 255, "Item name");
     }
 
     private static String normalizeCategory(String category) {
-        return (category != null && !category.trim().isEmpty()) ? category.trim() : "Other";
+        String normalized = (category != null && !category.trim().isEmpty())
+                ? category.trim() : "Other";
+        return requireMaxLength(normalized, 128, "Category");
     }
 
     private static String normalizeUnit(String unit) {
-        return (unit != null && !unit.trim().isEmpty()) ? unit.trim() : "Per Unit";
+        String normalized = (unit != null && !unit.trim().isEmpty())
+                ? unit.trim() : "Per Unit";
+        return requireMaxLength(normalized, 64, "Unit");
     }
 
     private static String normalizeNotes(String notes) {
-        return (notes != null) ? notes.trim() : "";
+        return requireMaxLength(notes != null ? notes.trim() : "", 2000, "Notes");
     }
 
     private static double requireNonNegative(double value, String field) {
-        if (value < 0) {
-            throw new IllegalArgumentException(field + " cannot be negative.");
+        if (!Double.isFinite(value) || value < 0 || value > MAX_MONEY_VALUE) {
+            throw new IllegalArgumentException(field + " must be a finite number between 0 and "
+                    + (long) MAX_MONEY_VALUE + ".");
+        }
+        return value;
+    }
+
+    private static String requireMaxLength(String value, int max, String field) {
+        if (value.length() > max) {
+            throw new IllegalArgumentException(field + " cannot exceed " + max + " characters.");
         }
         return value;
     }
@@ -151,14 +168,14 @@ public class Item {
     // ── CSV ────────────────────────────────────────────────────────────────────
 
     public String toCsv() {
-        return String.format("%s,%s,%.2f,%s,%.2f,%d,\"%s\"",
+        return CsvSupport.row(',',
                 name,
                 category,
-                price,
+                String.format(Locale.ROOT, "%.2f", price),
                 unit,
-                cost,
+                String.format(Locale.ROOT, "%.2f", cost),
                 quantity,
-                notes.replace("\"", "\"\""));
+                notes);
     }
 
     @Override

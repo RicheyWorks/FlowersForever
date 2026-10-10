@@ -1,23 +1,67 @@
-# Build and publish the fat JAR + SBOM + GHCR image when a version tag is pushed (ADR-001)
+# Verified, all-or-nothing FlowersForever release pipeline (ADR-001)
 name: Release
 
 on:
   push:
     tags:
       - "v*"
+  pull_request:
+    paths:
+      - ".github/workflows/release.yml"
+      - ".github/workflows/private-preview.yml"
+      - "pom.xml"
+      - "scripts/build-release.ps1"
+      - "scripts/build-release.test.mjs"
+      - "scripts/test-desktop-launcher.ps1"
+      - "scripts/test-desktop-launcher.test.mjs"
+      - "scripts/test-mcp-launcher.ps1"
+      - "scripts/test-macos-launchers.sh"
+      - "scripts/test-macos-launchers.test.mjs"
+      - "scripts/preview-release-assets.mjs"
+      - "scripts/preview-release-assets.test.mjs"
+      - "scripts/worker-ui.test.mjs"
+      - "src/main/resources/static/worker/**"
+      - "packaging/**"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Candidate version (blank uses the POM version without -SNAPSHOT)"
+        required: false
+        type: string
+      preview_release_id:
+        description: "Optional private draft release ID for preview storage instead of Actions artifacts"
+        required: false
+        type: string
 
 permissions:
-  contents: write
-  packages: write
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
-  release:
-    name: Build JAR + GitHub Release
+  private-preview:
+    name: Build an unpublished private draft preview
+    if: github.event_name == 'workflow_dispatch' && inputs.preview_release_id != ''
+    permissions:
+      contents: write
+    uses: ./.github/workflows/private-preview.yml
+    with:
+      release_id: ${{ inputs.preview_release_id }}
+      expected_sha: ${{ github.sha }}
+      version: ${{ inputs.version }}
+
+  verify:
+    name: Verify version, tests, JAR, SBOM, and notices
+    if: github.event_name != 'workflow_dispatch' || inputs.preview_release_id == ''
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
+    outputs:
+      version: ${{ steps.version.outputs.version }}
 
     steps:
-      - name: Checkout
+      - name: Checkout release source
         uses: actions/checkout@v7
 
       - name: Set up JDK 17
@@ -27,60 +71,697 @@ jobs:
           java-version: "17"
           cache: maven
 
-      - name: Build and test
+      - name: Resolve and lock the candidate version
+        id: version
+        shell: bash
+        env:
+          REQUESTED_VERSION: ${{ inputs.version }}
+        run: |
+          POM_VERSION="$(mvn -q help:evaluate -Dexpression=project.version -DforceStdout)"
+          if test "$GITHUB_EVENT_NAME" = "push"; then
+            TAG_VERSION="${GITHUB_REF_NAME#v}"
+            [[ "$TAG_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+            test "$POM_VERSION" = "$TAG_VERSION"
+            case "$POM_VERSION" in
+              *-SNAPSHOT) echo "Snapshot versions cannot be released" >&2; exit 1 ;;
+            esac
+            VERSION="$TAG_VERSION"
+          else
+            VERSION="${REQUESTED_VERSION:-${POM_VERSION%-SNAPSHOT}}"
+            [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+            if test "$POM_VERSION" != "$VERSION" && test "$POM_VERSION" != "$VERSION-SNAPSHOT"; then
+              echo "Candidate $VERSION does not match POM version $POM_VERSION" >&2
+              exit 1
+            fi
+            if test "$POM_VERSION" != "$VERSION"; then
+              mvn -B versions:set -DnewVersion="$VERSION" -DgenerateBackupPoms=false
+            fi
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Build and run every verification gate
         run: mvn -B clean verify
 
-      - name: Locate fat JAR
-        id: jar
-        run: |
-          JAR=$(ls target/flowerfarm-manager-*.jar | grep -v '\.original$' | head -n1)
-          echo "path=$JAR" >> "$GITHUB_OUTPUT"
-          echo "name=$(basename "$JAR")" >> "$GITHUB_OUTPUT"
-          ls -la "$JAR"
+      - name: Set up Node.js for field-entry checks
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          package-manager-cache: false
 
-      - name: Create GitHub Release
+      - name: Verify field forms and offline replay
+        run: node --test scripts/worker-ui.test.mjs
+
+      - name: Require the exact release artifacts
+        shell: bash
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          JAR="target/flowerfarm-manager-${VERSION}.jar"
+          test -s "$JAR"
+          test -s target/bom.json
+          test -s target/bom.xml
+          test -s target/generated-resources/licenses/THIRD-PARTY.txt
+          test "$(find target -maxdepth 1 -type f -name 'flowerfarm-manager-*.jar' ! -name '*.original' | wc -l | tr -d ' ')" = "1"
+          mkdir -p target/release-metadata
+          cp target/bom.json target/bom.xml \
+            target/generated-resources/licenses/THIRD-PARTY.txt \
+            target/release-metadata/
+
+      - name: Preserve the verified executable
+        uses: actions/upload-artifact@v7
+        with:
+          name: verified-jar
+          path: target/flowerfarm-manager-${{ steps.version.outputs.version }}.jar
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Preserve release metadata
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-metadata
+          path: target/release-metadata/*
+          if-no-files-found: error
+          retention-days: 1
+
+  installers:
+    name: ${{ matrix.label }}
+    if: github.event_name != 'push'
+    needs: verify
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            label: Windows MSI
+            type: msi
+            extra: --win-menu --win-shortcut --win-dir-chooser
+            ai_config: packaging/FlowersForeverAI-windows.properties
+            app_image: smoke-dist/FlowersForever
+            ai_launcher: smoke-dist/FlowersForever/FlowersForeverAI.exe
+            launcher: smoke-dist/FlowersForever/FlowersForever.exe
+          - os: macos-latest
+            label: macOS DMG
+            type: dmg
+            extra: ""
+            ai_config: packaging/FlowersForeverAI.properties
+            app_image: smoke-dist/FlowersForever.app
+            ai_launcher: smoke-dist/FlowersForever.app/Contents/MacOS/FlowersForeverAI
+            launcher: smoke-dist/FlowersForever.app/Contents/MacOS/FlowersForever
+
+    steps:
+      - name: Checkout verified launcher configuration and smoke scripts
+        uses: actions/checkout@v7
+
+      - name: Set up JDK 17 packaging tools
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Download the verified executable only
+        uses: actions/download-artifact@v8
+        with:
+          name: verified-jar
+          path: target/jpackage-input
+
+      - name: Build and smoke-test the candidate app image
+        shell: bash
+        run: |
+          VERSION="${{ needs.verify.outputs.version }}"
+          JAR="flowerfarm-manager-${VERSION}.jar"
+          test -s "target/jpackage-input/$JAR"
+          test "$(find target/jpackage-input -maxdepth 1 -type f | wc -l | tr -d ' ')" = "1"
+          SMOKE_DATA="target/release-smoke-data-${{ matrix.type }}"
+          mkdir -p "$SMOKE_DATA" smoke-dist
+          jpackage \
+            --type app-image \
+            --name FlowersForever \
+            --app-version "$VERSION" \
+            --vendor RicheyWorks \
+            --description "Flower farm operations and knowledge, kept in one place" \
+            --input target/jpackage-input \
+            --main-jar "$JAR" \
+            --add-launcher FlowersForeverAI=${{ matrix.ai_config }} \
+            --java-options "-Djava.awt.headless=false" \
+            --java-options "-Dflowerfarm.packaged=true" \
+            --dest smoke-dist
+          test -x "${{ matrix.launcher }}"
+          test -x "${{ matrix.ai_launcher }}"
+          export FLOWERFARM_DATA_DIR="$SMOKE_DATA"
+          if test "${{ matrix.type }}" = "msi"; then
+            pwsh -File scripts/test-mcp-launcher.ps1 \
+              -Launcher "${{ matrix.ai_launcher }}" -DataDir "$SMOKE_DATA"
+            pwsh -File scripts/test-desktop-launcher.ps1 \
+              -Launcher "${{ matrix.launcher }}" -DataDir "$SMOKE_DATA"
+          else
+            export FLOWERFARM_HARNESS_TOKEN="candidate-mcp-doctor-token-123456"
+            export FLOWERFARM_HARNESS_ALLOW_SENSITIVE_READ=true
+            export FLOWERFARM_HARNESS_ALLOW_MUTATIONS=true
+            bash scripts/test-macos-launchers.sh \
+              --ai-launcher "${{ matrix.ai_launcher }}" \
+              --launcher "${{ matrix.launcher }}" --data-dir "$SMOKE_DATA"
+          fi
+
+      - name: Package the smoke-tested app image
+        shell: bash
+        run: |
+          VERSION="${{ needs.verify.outputs.version }}"
+          test -d "${{ matrix.app_image }}"
+          mkdir -p dist
+          jpackage \
+            --type ${{ matrix.type }} \
+            --name FlowersForever \
+            --app-version "$VERSION" \
+            --vendor RicheyWorks \
+            --description "Flower farm operations and knowledge, kept in one place" \
+            --app-image "${{ matrix.app_image }}" \
+            --dest dist \
+            ${{ matrix.extra }}
+          test "$(find dist -maxdepth 1 -type f | wc -l | tr -d ' ')" = "1"
+
+      - name: Preserve native installer
+        uses: actions/upload-artifact@v7
+        with:
+          name: installer-${{ matrix.type }}
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 1
+
+  windows-release:
+    name: Signed Windows MSI
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs: verify
+    runs-on: windows-2025
+    timeout-minutes: 40
+    environment: release-signing
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout verified launcher configuration and smoke scripts
+        uses: actions/checkout@v7
+
+      - name: Require Windows signing configuration
+        shell: pwsh
+        env:
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          SIGNING_ENDPOINT: ${{ vars.AZURE_ARTIFACT_SIGNING_ENDPOINT }}
+          SIGNING_ACCOUNT: ${{ vars.AZURE_ARTIFACT_SIGNING_ACCOUNT }}
+          SIGNING_PROFILE: ${{ vars.AZURE_ARTIFACT_SIGNING_PROFILE }}
+        run: |
+          $required = @{
+            AZURE_CLIENT_ID = $env:AZURE_CLIENT_ID
+            AZURE_TENANT_ID = $env:AZURE_TENANT_ID
+            AZURE_SUBSCRIPTION_ID = $env:AZURE_SUBSCRIPTION_ID
+            AZURE_ARTIFACT_SIGNING_ENDPOINT = $env:SIGNING_ENDPOINT
+            AZURE_ARTIFACT_SIGNING_ACCOUNT = $env:SIGNING_ACCOUNT
+            AZURE_ARTIFACT_SIGNING_PROFILE = $env:SIGNING_PROFILE
+          }
+          $missing = $required.GetEnumerator() |
+            Where-Object { [string]::IsNullOrWhiteSpace($_.Value) } |
+            ForEach-Object Key
+          if ($missing) {
+            throw "Missing release-signing configuration: $($missing -join ', ')"
+          }
+
+      - name: Set up JDK 17 packaging tools
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Download the verified executable only
+        uses: actions/download-artifact@v8
+        with:
+          name: verified-jar
+          path: target/jpackage-input
+
+      - name: Build the Windows app image
+        shell: bash
+        run: |
+          VERSION="${{ needs.verify.outputs.version }}"
+          JAR="flowerfarm-manager-${VERSION}.jar"
+          test -s "target/jpackage-input/$JAR"
+          test "$(find target/jpackage-input -maxdepth 1 -type f | wc -l | tr -d ' ')" = "1"
+          mkdir -p signed-app-image dist
+          jpackage \
+            --type app-image \
+            --name FlowersForever \
+            --app-version "$VERSION" \
+            --vendor RicheyWorks \
+            --description "Flower farm operations and knowledge, kept in one place" \
+            --input target/jpackage-input \
+            --main-jar "$JAR" \
+            --add-launcher FlowersForeverAI=packaging/FlowersForeverAI-windows.properties \
+            --java-options "-Djava.awt.headless=false" \
+            --java-options "-Dflowerfarm.packaged=true" \
+            --dest signed-app-image
+          test -f signed-app-image/FlowersForever/FlowersForever.exe
+          test -f signed-app-image/FlowersForever/FlowersForeverAI.exe
+
+      - name: Log in to Azure with GitHub OIDC
+        uses: azure/login@v3
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Sign the FlowersForever launchers
+        uses: azure/artifact-signing-action@v2
+        with:
+          endpoint: ${{ vars.AZURE_ARTIFACT_SIGNING_ENDPOINT }}
+          signing-account-name: ${{ vars.AZURE_ARTIFACT_SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ vars.AZURE_ARTIFACT_SIGNING_PROFILE }}
+          files: |
+            ${{ github.workspace }}\signed-app-image\FlowersForever\FlowersForever.exe
+            ${{ github.workspace }}\signed-app-image\FlowersForever\FlowersForeverAI.exe
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+          description: FlowersForever
+          description-url: https://github.com/${{ github.repository }}
+
+      - name: Require valid launcher signatures
+        shell: pwsh
+        run: |
+          $launchers = @(
+            'signed-app-image\FlowersForever\FlowersForever.exe',
+            'signed-app-image\FlowersForever\FlowersForeverAI.exe'
+          )
+          foreach ($relative in $launchers) {
+            $launcher = Join-Path $env:GITHUB_WORKSPACE $relative
+            $signature = Get-AuthenticodeSignature -LiteralPath $launcher
+            if ($signature.Status -ne 'Valid' -or $null -eq $signature.SignerCertificate) {
+              throw "$relative signature is not valid: $($signature.Status)"
+            }
+            $signature.SignerCertificate | Format-List Subject, Issuer, NotBefore, NotAfter, Thumbprint
+          }
+
+      - name: Package the signed app image as MSI
+        shell: bash
+        run: |
+          VERSION="${{ needs.verify.outputs.version }}"
+          jpackage \
+            --type msi \
+            --name FlowersForever \
+            --app-version "$VERSION" \
+            --vendor RicheyWorks \
+            --description "Flower farm operations and knowledge, kept in one place" \
+            --app-image signed-app-image/FlowersForever \
+            --win-menu \
+            --win-shortcut \
+            --win-dir-chooser \
+            --dest dist
+          test "$(find dist -maxdepth 1 -type f -name '*.msi' | wc -l | tr -d ' ')" = "1"
+          MSI="$(find dist -maxdepth 1 -type f -name '*.msi')"
+          test -s "$MSI"
+          EXPECTED="dist/FlowersForever-${VERSION}.msi"
+          if test "$MSI" != "$EXPECTED"; then mv "$MSI" "$EXPECTED"; fi
+
+      - name: Sign the MSI
+        uses: azure/artifact-signing-action@v2
+        with:
+          endpoint: ${{ vars.AZURE_ARTIFACT_SIGNING_ENDPOINT }}
+          signing-account-name: ${{ vars.AZURE_ARTIFACT_SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ vars.AZURE_ARTIFACT_SIGNING_PROFILE }}
+          files: ${{ github.workspace }}\dist\FlowersForever-${{ needs.verify.outputs.version }}.msi
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+          description: FlowersForever installer
+          description-url: https://github.com/${{ github.repository }}
+
+      - name: Require a valid MSI signature and launch the signed runtime
+        shell: pwsh
+        run: |
+          $version = '${{ needs.verify.outputs.version }}'
+          $msi = Join-Path $env:GITHUB_WORKSPACE "dist\FlowersForever-$version.msi"
+          $signature = Get-AuthenticodeSignature -LiteralPath $msi
+          if ($signature.Status -ne 'Valid' -or $null -eq $signature.SignerCertificate) {
+            throw "FlowersForever MSI signature is not valid: $($signature.Status)"
+          }
+          $publisher = $signature.SignerCertificate.Subject
+          foreach ($name in @('FlowersForever.exe', 'FlowersForeverAI.exe')) {
+            $signedLauncher = Join-Path $env:GITHUB_WORKSPACE "signed-app-image\FlowersForever\$name"
+            $launcherSignature = Get-AuthenticodeSignature -LiteralPath $signedLauncher
+            if ($launcherSignature.Status -ne 'Valid' -or $null -eq $launcherSignature.SignerCertificate) {
+              throw "$name signature is not valid: $($launcherSignature.Status)"
+            }
+            # Artifact Signing certificates rotate; the verified publisher must stay the same.
+            if ($launcherSignature.SignerCertificate.Subject -cne $publisher) {
+              throw "$name and the MSI have different signing publishers."
+            }
+          }
+          $smokeData = Join-Path $env:GITHUB_WORKSPACE 'target\release-smoke-data-msi'
+          New-Item -ItemType Directory -Path $smokeData -Force | Out-Null
+          $aiLauncher = Join-Path $env:GITHUB_WORKSPACE 'signed-app-image\FlowersForever\FlowersForeverAI.exe'
+          & scripts/test-mcp-launcher.ps1 -Launcher $aiLauncher -DataDir $smokeData
+          $launcher = Join-Path $env:GITHUB_WORKSPACE 'signed-app-image\FlowersForever\FlowersForever.exe'
+          & scripts/test-desktop-launcher.ps1 -Launcher $launcher -DataDir $smokeData
+
+      - name: Preserve signed Windows installer
+        uses: actions/upload-artifact@v7
+        with:
+          name: installer-msi
+          path: dist/*.msi
+          if-no-files-found: error
+          retention-days: 14
+
+  macos-release:
+    name: Signed and notarized macOS DMG
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs: verify
+    runs-on: macos-latest
+    timeout-minutes: 45
+    environment: release-signing
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout verified launcher configuration and smoke scripts
+        uses: actions/checkout@v7
+
+      - name: Require Apple signing configuration
+        shell: bash
+        env:
+          APPLE_DEVELOPER_ID_P12_BASE64: ${{ secrets.APPLE_DEVELOPER_ID_P12_BASE64 }}
+          APPLE_DEVELOPER_ID_P12_PASSWORD: ${{ secrets.APPLE_DEVELOPER_ID_P12_PASSWORD }}
+          APPLE_NOTARY_KEY_BASE64: ${{ secrets.APPLE_NOTARY_KEY_BASE64 }}
+          APPLE_NOTARY_KEY_ID: ${{ secrets.APPLE_NOTARY_KEY_ID }}
+          APPLE_NOTARY_ISSUER_ID: ${{ secrets.APPLE_NOTARY_ISSUER_ID }}
+          APPLE_SIGNING_IDENTITY: ${{ vars.APPLE_SIGNING_IDENTITY }}
+        run: |
+          for name in APPLE_DEVELOPER_ID_P12_BASE64 APPLE_DEVELOPER_ID_P12_PASSWORD \
+              APPLE_NOTARY_KEY_BASE64 APPLE_NOTARY_KEY_ID APPLE_NOTARY_ISSUER_ID \
+              APPLE_SIGNING_IDENTITY; do
+            test -n "${!name}" || { echo "Missing release-signing configuration: $name" >&2; exit 1; }
+          done
+
+      - name: Set up JDK 17 packaging tools
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Download the verified executable only
+        uses: actions/download-artifact@v8
+        with:
+          name: verified-jar
+          path: target/jpackage-input
+
+      - name: Import the Developer ID certificate into an ephemeral keychain
+        shell: bash
+        env:
+          APPLE_DEVELOPER_ID_P12_BASE64: ${{ secrets.APPLE_DEVELOPER_ID_P12_BASE64 }}
+          APPLE_DEVELOPER_ID_P12_PASSWORD: ${{ secrets.APPLE_DEVELOPER_ID_P12_PASSWORD }}
+        run: |
+          CERTIFICATE_PATH="$RUNNER_TEMP/flowersforever-developer-id.p12"
+          KEYCHAIN_PATH="$RUNNER_TEMP/flowersforever-signing.keychain-db"
+          KEYCHAIN_PASSWORD="$(openssl rand -base64 32)"
+          export CERTIFICATE_PATH
+          python3 - <<'PY'
+          import base64
+          import os
+          from pathlib import Path
+          Path(os.environ['CERTIFICATE_PATH']).write_bytes(
+              base64.b64decode(os.environ['APPLE_DEVELOPER_ID_P12_BASE64']))
+          PY
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$CERTIFICATE_PATH" -P "$APPLE_DEVELOPER_ID_P12_PASSWORD" \
+            -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security set-key-partition-list -S apple-tool:,apple: -s \
+            -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security list-keychain -d user -s "$KEYCHAIN_PATH"
+          security find-identity -v -p codesigning "$KEYCHAIN_PATH"
+          echo "FLOWERSFOREVER_KEYCHAIN=$KEYCHAIN_PATH" >> "$GITHUB_ENV"
+          echo "FLOWERSFOREVER_CERTIFICATE=$CERTIFICATE_PATH" >> "$GITHUB_ENV"
+
+      - name: Build a Developer ID-signed DMG
+        shell: bash
+        env:
+          APPLE_SIGNING_IDENTITY: ${{ vars.APPLE_SIGNING_IDENTITY }}
+        run: |
+          VERSION="${{ needs.verify.outputs.version }}"
+          JAR="flowerfarm-manager-${VERSION}.jar"
+          test -s "target/jpackage-input/$JAR"
+          test "$(find target/jpackage-input -maxdepth 1 -type f | wc -l | tr -d ' ')" = "1"
+          mkdir -p dist
+          jpackage \
+            --type dmg \
+            --name FlowersForever \
+            --app-version "$VERSION" \
+            --vendor RicheyWorks \
+            --description "Flower farm operations and knowledge, kept in one place" \
+            --input target/jpackage-input \
+            --main-jar "$JAR" \
+            --add-launcher FlowersForeverAI=packaging/FlowersForeverAI.properties \
+            --java-options "-Djava.awt.headless=false" \
+            --java-options "-Dflowerfarm.packaged=true" \
+            --mac-package-identifier com.richeyworks.flowersforever \
+            --mac-package-signing-prefix com.richeyworks.flowersforever. \
+            --mac-sign \
+            --mac-signing-keychain "$FLOWERSFOREVER_KEYCHAIN" \
+            --mac-signing-key-user-name "$APPLE_SIGNING_IDENTITY" \
+            --dest dist
+          test "$(find dist -maxdepth 1 -type f -name '*.dmg' | wc -l | tr -d ' ')" = "1"
+          DMG="$(find dist -maxdepth 1 -type f -name '*.dmg')"
+          test -s "$DMG"
+          EXPECTED="dist/FlowersForever-${VERSION}.dmg"
+          if test "$DMG" != "$EXPECTED"; then mv "$DMG" "$EXPECTED"; fi
+          hdiutil verify "$EXPECTED"
+
+      - name: Notarize, staple, verify, and launch the signed macOS runtime
+        shell: bash
+        env:
+          APPLE_NOTARY_KEY_BASE64: ${{ secrets.APPLE_NOTARY_KEY_BASE64 }}
+          APPLE_NOTARY_KEY_ID: ${{ secrets.APPLE_NOTARY_KEY_ID }}
+          APPLE_NOTARY_ISSUER_ID: ${{ secrets.APPLE_NOTARY_ISSUER_ID }}
+        run: |
+          VERSION="${{ needs.verify.outputs.version }}"
+          DMG="dist/FlowersForever-${VERSION}.dmg"
+          NOTARY_KEY="$RUNNER_TEMP/AuthKey_${APPLE_NOTARY_KEY_ID}.p8"
+          export NOTARY_KEY
+          python3 - <<'PY'
+          import base64
+          import os
+          from pathlib import Path
+          Path(os.environ['NOTARY_KEY']).write_bytes(
+              base64.b64decode(os.environ['APPLE_NOTARY_KEY_BASE64']))
+          PY
+          chmod 600 "$NOTARY_KEY"
+          xcrun notarytool submit "$DMG" \
+            --key "$NOTARY_KEY" \
+            --key-id "$APPLE_NOTARY_KEY_ID" \
+            --issuer "$APPLE_NOTARY_ISSUER_ID" \
+            --wait --timeout 30m --output-format json | tee target/notary-result.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          result = json.loads(Path('target/notary-result.json').read_text())
+          if result.get('status') != 'Accepted':
+              raise SystemExit(f"Notarization was not accepted: {result}")
+          print(result['id'])
+          PY
+          SUBMISSION_ID="$(python3 -c "import json; print(json.load(open('target/notary-result.json'))['id'])")"
+          xcrun notarytool log "$SUBMISSION_ID" \
+            --key "$NOTARY_KEY" \
+            --key-id "$APPLE_NOTARY_KEY_ID" \
+            --issuer "$APPLE_NOTARY_ISSUER_ID" \
+            target/notary-log.json
+          xcrun stapler staple "$DMG"
+          xcrun stapler validate "$DMG"
+          hdiutil verify "$DMG"
+
+          MOUNT_POINT="$RUNNER_TEMP/flowersforever-dmg"
+          mkdir -p "$MOUNT_POINT"
+          hdiutil attach "$DMG" -nobrowse -readonly -mountpoint "$MOUNT_POINT"
+          trap 'hdiutil detach "$MOUNT_POINT" || true' EXIT
+          APP="$(find "$MOUNT_POINT" -maxdepth 1 -type d -name '*.app' | head -n 1)"
+          test -d "$APP"
+          codesign --verify --deep --strict --verbose=2 "$APP"
+          spctl --assess --type execute --verbose=2 "$APP"
+
+          SMOKE_DATA="target/release-smoke-data-dmg"
+          mkdir -p "$SMOKE_DATA"
+          export FLOWERFARM_DATA_DIR="$SMOKE_DATA"
+          export FLOWERFARM_HARNESS_TOKEN="signed-mcp-doctor-token-123456"
+          export FLOWERFARM_HARNESS_ALLOW_SENSITIVE_READ=true
+          export FLOWERFARM_HARNESS_ALLOW_MUTATIONS=true
+          AI_LAUNCHER="$APP/Contents/MacOS/FlowersForeverAI"
+          test -x "$AI_LAUNCHER"
+          bash scripts/test-macos-launchers.sh \
+            --ai-launcher "$AI_LAUNCHER" \
+            --launcher "$APP/Contents/MacOS/FlowersForever" --data-dir "$SMOKE_DATA"
+          hdiutil detach "$MOUNT_POINT"
+          trap - EXIT
+
+      - name: Preserve notarization evidence
+        uses: actions/upload-artifact@v7
+        with:
+          name: notarization-evidence
+          path: |
+            target/notary-result.json
+            target/notary-log.json
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Preserve signed and notarized macOS installer
+        uses: actions/upload-artifact@v7
+        with:
+          name: installer-dmg
+          path: dist/*.dmg
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Remove ephemeral Apple signing material
+        if: always()
+        shell: bash
+        run: |
+          test -z "$FLOWERSFOREVER_KEYCHAIN" || security delete-keychain "$FLOWERSFOREVER_KEYCHAIN" || true
+          test -z "$FLOWERSFOREVER_CERTIFICATE" || rm -f "$FLOWERSFOREVER_CERTIFICATE"
+          rm -f "$RUNNER_TEMP"/AuthKey_*.p8
+
+  candidate:
+    name: Validate complete candidate bundle (no release)
+    if: github.event_name != 'push'
+    needs: [verify, installers]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Collect verified JAR
+        uses: actions/download-artifact@v8
+        with:
+          name: verified-jar
+          path: candidate-assets
+
+      - name: Collect SBOM and third-party notices
+        uses: actions/download-artifact@v8
+        with:
+          name: release-metadata
+          path: candidate-assets
+
+      - name: Collect both native installers
+        uses: actions/download-artifact@v8
+        with:
+          pattern: installer-*
+          path: candidate-assets
+          merge-multiple: true
+
+      - name: Require the complete candidate and generate checksums
+        shell: bash
+        run: |
+          VERSION="${{ needs.verify.outputs.version }}"
+          test -s "candidate-assets/flowerfarm-manager-${VERSION}.jar"
+          test -s candidate-assets/bom.json
+          test -s candidate-assets/bom.xml
+          test -s candidate-assets/THIRD-PARTY.txt
+          test "$(find candidate-assets -maxdepth 1 -type f -name '*.msi' | wc -l | tr -d ' ')" = "1"
+          test "$(find candidate-assets -maxdepth 1 -type f -name '*.dmg' | wc -l | tr -d ' ')" = "1"
+          (
+            cd candidate-assets
+            find . -maxdepth 1 -type f ! -name SHA256SUMS.txt -print0 \
+              | sort -z | xargs -0 sha256sum --binary -- > SHA256SUMS.txt
+            sha256sum --check SHA256SUMS.txt
+          )
+
+      - name: Preserve the unsigned candidate bundle
+        uses: actions/upload-artifact@v7
+        with:
+          name: FlowersForever-${{ needs.verify.outputs.version }}-candidate
+          path: candidate-assets/*
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    name: Publish complete signed release
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs: [verify, windows-release, macos-release]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+
+    steps:
+      - name: Collect verified JAR
+        uses: actions/download-artifact@v8
+        with:
+          name: verified-jar
+          path: release-assets
+
+      - name: Collect SBOM and third-party notices
+        uses: actions/download-artifact@v8
+        with:
+          name: release-metadata
+          path: release-assets
+
+      - name: Collect both native installers
+        uses: actions/download-artifact@v8
+        with:
+          pattern: installer-*
+          path: release-assets
+          merge-multiple: true
+
+      - name: Require the complete release and generate checksums
+        shell: bash
+        run: |
+          VERSION="${{ needs.verify.outputs.version }}"
+          test -s "release-assets/flowerfarm-manager-${VERSION}.jar"
+          test -s release-assets/bom.json
+          test -s release-assets/bom.xml
+          test -s release-assets/THIRD-PARTY.txt
+          test "$(find release-assets -maxdepth 1 -type f -name '*.msi' | wc -l | tr -d ' ')" = "1"
+          test "$(find release-assets -maxdepth 1 -type f -name '*.dmg' | wc -l | tr -d ' ')" = "1"
+          (
+            cd release-assets
+            find . -maxdepth 1 -type f ! -name SHA256SUMS.txt -print0 \
+              | sort -z | xargs -0 sha256sum --binary -- > SHA256SUMS.txt
+            sha256sum --check SHA256SUMS.txt
+          )
+
+      - name: Create the release only after every platform passed
         uses: softprops/action-gh-release@v3
         with:
           generate_release_notes: true
-          files: |
-            ${{ steps.jar.outputs.path }}
-            target/bom.json
-            target/bom.xml
+          fail_on_unmatched_files: true
+          files: release-assets/*
           body: |
             ## FlowersForever ${{ github.ref_name }}
 
-            Runnable fat JAR (Spring Boot + Swing GUI + embedded API on :8080).
+            A verified RicheyWorks release artifact set.
 
-            ```bash
-            java -jar ${{ steps.jar.outputs.name }}
-            # optional barn auth:
-            java -jar ${{ steps.jar.outputs.name }} --spring.profiles.active=auth
-            ```
+            Every attached artifact was produced from the same tested source and version.
+            `SHA256SUMS.txt` verifies the JAR, installers, SBOM, and third-party notice.
 
-            Headless REST-only container:
-
-            ```bash
-            docker run -p 8080:8080 ghcr.io/${{ github.repository_owner }}/flowersforever:${{ github.ref_name }}
-            ```
-
-            Native installers (MSI / DMG) are attached by the Installers workflow.
-            SBOM (CycloneDX `bom.json` / `bom.xml`) attached below.
-
-            See [docs/DEMO.md](docs/DEMO.md) for a walkthrough.
+            The Windows launcher and MSI passed Authenticode verification. The macOS
+            application and DMG passed Developer ID signing, Apple notarization,
+            stapling, and Gatekeeper checks. Do not bypass an operating-system or
+            antivirus threat block; report any warning to RicheyWorks for review.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  docker:
-    name: Publish image to GHCR
+  container:
+    name: Publish private GHCR image
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs: [verify, windows-release, macos-release]
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    permissions:
+      contents: read
+      packages: write
 
     steps:
-      - name: Checkout
+      - name: Checkout tagged source
         uses: actions/checkout@v7
 
       - name: Log in to GHCR
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -88,15 +769,15 @@ jobs:
 
       - name: Image metadata
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: ghcr.io/${{ github.repository_owner }}/flowersforever
           tags: |
             type=semver,pattern={{version}}
             type=raw,value=latest
 
-      - name: Build and push
-        uses: docker/build-push-action@v6
+      - name: Build and publish after all release gates pass
+        uses: docker/build-push-action@v7
         with:
           context: .
           push: true

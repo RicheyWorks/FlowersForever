@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 270" role="img" aria-labelledby="title description">
+  <title id="title">Every stem has a next step</title>
+  <desc id="description">FlowersForever connects planning, harvest, stock, confirmed orders, packing, completion, and closeout. Harvest increases inventory; completing an order deducts it.</desc>
+  <defs>
+    <style>
+      text { font-family: 'Segoe UI', Arial, sans-serif; }
+      .label { font-size: 17px; font-weight: 700; fill: #214c38; text-anchor: middle; }
+      .note { font-size: 12px; fill: #536759; text-anchor: middle; }
+      .icon { fill: none; stroke: #286447; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+      .card { fill: #fffdf8; stroke: #d9e2d3; }
+    </style>
+    <marker id="arrow" viewBox="0 0 6 6" refX="5" refY="3" markerWidth="6" markerHeight="6" orient="auto"><path d="M1 1 5 3 1 5" fill="none" stroke="#9bab8c" stroke-width="1.2"/></marker>
+    <g id="sprout" class="icon"><path d="M0 14V-6M0 1C-13 2-16-7-15-12-5-12 0-6 0 1ZM0-5C0-14 9-17 15-15 15-7 8-3 0-5M-13 15H13"/></g>
+    <g id="flower" class="icon"><path d="M0 16V-3M0 10 10 4M0 13-9 7"/><circle cy="-9" r="4" fill="#e7b65d" stroke="none"/><path d="M-4-10C-14-18-16-5-5-5M4-10C14-18 16-5 5-5M-3-13C-7-25 7-25 3-13" stroke="#b45b71"/></g>
+    <g id="stock" class="icon"><path d="M-14-5H14L11 16H-11ZM-7-5V-16M0-5V-19M7-5V-14M-15 2H15"/><path d="M-11-16H-3M-4-19H4M3-14H11" stroke="#b45b71"/></g>
+    <g id="order" class="icon"><rect x="-12" y="-16" width="24" height="34" rx="3"/><path d="M-5-16V-20H5V-16M-6-5H6M-6 2H6M-6 9H1"/></g>
+    <g id="box" class="icon"><path d="M-16-6 0-14 16-6V11L0 19-16 11ZM-16-6 0 2 16-6M0 2V19M-8-10 8-2"/></g>
+    <g id="check" class="icon"><circle r="17" fill="#e5efdf" stroke="none"/><path d="m-9 0 6 6 13-13" stroke-width="3"/></g>
+    <g id="receipt" class="icon"><path d="M-12-18H12V18L6 14 0 18-6 14-12 18ZM-6-9H6M-6-2H6M-6 5H2"/></g>
+  </defs>
+  <rect width="1120" height="270" rx="24" fill="#f5f2e9"/>
+  <text x="32" y="29" font-size="11" font-weight="700" letter-spacing="2.5" fill="#7c7755">FLOWERSFOREVER · THE FARM DAY</text>
+  <text x="32" y="67" font-size="30" font-weight="700" fill="#214c38">Every stem has a next step.</text>
+  <text x="32" y="91" font-size="14" fill="#536759">From the bed plan to the last handoff, keep the work connected.</text>
+  <g transform="translate(1060 56)" opacity=".65">
+    <circle cy="-17" r="13" fill="#e6b5b6"/><circle cx="16" cy="-5" r="13" fill="#e6b5b6"/><circle cx="10" cy="14" r="13" fill="#e6b5b6"/><circle cx="-10" cy="14" r="13" fill="#e6b5b6"/><circle cx="-16" cy="-5" r="13" fill="#e6b5b6"/><circle r="9" fill="#d5a851"/>
+  </g>
+  <g fill="none" stroke="#9bab8c" stroke-width="1.5" marker-end="url(#arrow)">
+    <path d="M154 171H180"/><path d="M311 171H337"/><path d="M468 171H494"/><path d="M625 171H651"/><path d="M782 171H808"/><path d="M939 171H965"/>
+  </g>
+  <g transform="translate(27 117)"><rect class="card" width="126" height="124" rx="16"/><use href="#sprout" transform="translate(63 35)"/><text class="label" x="63" y="81">Plan</text><text class="note" x="63" y="104">Map the season</text></g>
+  <g transform="translate(184 117)"><rect class="card" width="126" height="124" rx="16"/><use href="#flower" transform="translate(63 39)"/><text class="label" x="63" y="81">Harvest</text><text class="note" x="63" y="104">Add stems to stock</text></g>
+  <g transform="translate(341 117)"><rect class="card" width="126" height="124" rx="16"/><use href="#stock" transform="translate(63 35)"/><text class="label" x="63" y="81">Stock</text><text class="note" x="63" y="104">See what is on hand</text></g>
+  <g transform="translate(498 117)"><rect class="card" width="126" height="124" rx="16"/><use href="#order" transform="translate(63 36)"/><text class="label" x="63" y="81">Order</text><text class="note" x="63" y="104">Confirm demand</text></g>
+  <g transform="translate(655 117)"><rect class="card" width="126" height="124" rx="16"/><use href="#box" transform="translate(63 35)"/><text class="label" x="63" y="81">Pack</text><text class="note" x="63" y="104">Review the pick list</text></g>
+  <g transform="translate(812 117)"><rect width="126" height="124" rx="16" fill="#edf3e7" stroke="#b6c9a5"/><use href="#check" transform="translate(63 35)"/><text class="label" x="63" y="81">Complete</text><text class="note" x="63" y="104">Deduct fulfilled stock</text></g>
+  <g transform="translate(969 117)"><rect class="card" width="126" height="124" rx="16"/><use href="#receipt" transform="translate(63 35)"/><text class="label" x="63" y="81">Close out</text><text class="note" x="63" y="104">Print the day's records</text></g>
+</svg>

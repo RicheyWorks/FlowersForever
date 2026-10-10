@@ -13,8 +13,8 @@ import java.util.Optional;
  * Parses multi-user accounts from configuration.
  *
  * <pre>
- * # Format: user:pass:ROLE,user2:pass2:ROLE
- * flowerfarm.auth.users=farm:kitsap:OWNER,hand:harvest:HAND,viewer:view:VIEWER
+     * # Format: user:pass:ROLE,user2:pass2:ROLE
+     * flowerfarm.auth.users=owner:a-long-password-from-env:OWNER
  * </pre>
  *
  * Falls back to single-user {@code flowerfarm.auth.username/password} as OWNER
@@ -28,7 +28,7 @@ public class FarmUserDirectory {
     public FarmUserDirectory(
             @Value("${flowerfarm.auth.users:}") String usersCsv,
             @Value("${flowerfarm.auth.username:farm}") String fallbackUser,
-            @Value("${flowerfarm.auth.password:kitsap}") String fallbackPass) {
+            @Value("${flowerfarm.auth.password:}") String fallbackPass) {
         parse(usersCsv);
         if (users.isEmpty()) {
             users.put(fallbackUser.trim().toLowerCase(),
@@ -41,16 +41,25 @@ public class FarmUserDirectory {
             return;
         }
         for (String part : usersCsv.split(",")) {
-            String[] bits = part.trim().split(":");
-            if (bits.length < 2) {
+            if (part.isBlank()) {
                 continue;
+            }
+            String[] bits = part.trim().split(":", -1);
+            if (bits.length < 2 || bits.length > 3) {
+                throw new IllegalArgumentException(
+                        "Invalid account entry. Expected username:password[:ROLE].");
             }
             String user = bits[0].trim();
             String pass = bits[1];
             FarmRole role = bits.length >= 3 ? FarmRole.fromString(bits[2]) : FarmRole.HAND;
-            if (!user.isEmpty()) {
-                users.put(user.toLowerCase(), new FarmUser(user, pass, role));
+            if (user.isEmpty()) {
+                throw new IllegalArgumentException("Account username cannot be blank.");
             }
+            String key = user.toLowerCase(java.util.Locale.ROOT);
+            if (users.containsKey(key)) {
+                throw new IllegalArgumentException("Duplicate account username: " + user);
+            }
+            users.put(key, new FarmUser(user, pass, role));
         }
     }
 
@@ -62,11 +71,23 @@ public class FarmUserDirectory {
         if (u == null) {
             return Optional.empty();
         }
-        String entered = password == null ? "" : new String(password);
-        if (u.password().equals(entered)) {
+        if (constantTimeMatches(u.password(), password)) {
             return Optional.of(u);
         }
         return Optional.empty();
+    }
+
+    private static boolean constantTimeMatches(String expected, char[] supplied) {
+        String safeExpected = expected == null ? "" : expected;
+        int suppliedLength = supplied == null ? 0 : supplied.length;
+        int difference = safeExpected.length() ^ suppliedLength;
+        int comparisons = Math.max(safeExpected.length(), suppliedLength);
+        for (int i = 0; i < comparisons; i++) {
+            char expectedChar = i < safeExpected.length() ? safeExpected.charAt(i) : 0;
+            char suppliedChar = supplied != null && i < suppliedLength ? supplied[i] : 0;
+            difference |= expectedChar ^ suppliedChar;
+        }
+        return difference == 0;
     }
 
     public Optional<FarmUser> find(String username) {

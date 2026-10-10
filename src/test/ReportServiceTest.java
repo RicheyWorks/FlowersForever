@@ -1,5 +1,6 @@
 package com.flowerfarm.service;
 
+import com.flowerfarm.model.FarmProfile;
 import com.flowerfarm.model.Customer;
 import com.flowerfarm.model.CustomerOrder;
 import com.flowerfarm.model.HarvestEntry;
@@ -29,7 +30,7 @@ class ReportServiceTest {
 
     @BeforeEach
     void setUp() {
-        reportService = new ReportService(harvestService, orderService);
+        reportService = new ReportService(harvestService, orderService, new FarmProfile());
     }
 
     @Test
@@ -74,5 +75,52 @@ class ReportServiceTest {
         assertThatIllegalArgumentException()
                 .isThrownBy(() -> reportService.generateReportPdf(
                         LocalDate.of(2026, 7, 10), LocalDate.of(2026, 7, 1)));
+    }
+
+    @Test
+    @DisplayName("preview separates committed and fulfilled revenue before export")
+    void previewSeparatesRevenueStates() {
+        LocalDate from = LocalDate.of(2026, 8, 1);
+        LocalDate to = LocalDate.of(2026, 8, 7);
+        when(harvestService.findBetween(from, to)).thenReturn(List.of(
+                new HarvestEntry(from, "Dahlia", 40, "stems", "Bed A", ""),
+                new HarvestEntry(to, "Nootka Rose", 24, "stems", "Bed B", "")));
+
+        Customer customer = new Customer("Stem & Vine", "", "", "", "FLORIST", "");
+        customer.setId(7L);
+        CustomerOrder confirmed = new CustomerOrder(customer, from, "CONFIRMED", "");
+        confirmed.addLine(new OrderLine("Dahlia", 10, "stems", 4.0));
+        CustomerOrder fulfilled = new CustomerOrder(customer, to, "FULFILLED", "");
+        fulfilled.addLine(new OrderLine("Nootka Rose", 8, "stems", 5.0));
+        CustomerOrder draft = new CustomerOrder(customer, to, "DRAFT", "");
+        draft.addLine(new OrderLine("Market Bouquet", 2, "each", 25.0));
+        when(orderService.findBetween(from, to))
+                .thenReturn(List.of(confirmed, fulfilled, draft));
+
+        ReportService.ReportPreview preview = reportService.preview(from, to);
+
+        assertThat(preview.harvestEntries()).isEqualTo(2);
+        assertThat(preview.orders()).isEqualTo(3);
+        assertThat(preview.confirmedOrders()).isEqualTo(1);
+        assertThat(preview.fulfilledOrders()).isEqualTo(1);
+        assertThat(preview.committedRevenue()).isEqualTo(80.0);
+        assertThat(preview.fulfilledRevenue()).isEqualTo(40.0);
+        assertThat(preview.products()).hasSize(2);
+        assertThat(preview.products()).filteredOn(
+                product -> product.productName().equals("Dahlia")).singleElement()
+                .satisfies(product -> {
+            assertThat(product.productName()).isEqualTo("Dahlia");
+            assertThat(product.quantity()).isEqualTo(10.0);
+            assertThat(product.orderCount()).isEqualTo(1);
+            assertThat(product.committedRevenue()).isEqualTo(40.0);
+            assertThat(product.averageUnitPrice()).isEqualTo(4.0);
+        });
+        assertThat(preview.customers()).singleElement().satisfies(customerRow -> {
+            assertThat(customerRow.customerName()).isEqualTo("Stem & Vine");
+            assertThat(customerRow.orderCount()).isEqualTo(2);
+            assertThat(customerRow.committedRevenue()).isEqualTo(80.0);
+            assertThat(customerRow.fulfilledRevenue()).isEqualTo(40.0);
+            assertThat(customerRow.averageOrderValue()).isEqualTo(40.0);
+        });
     }
 }

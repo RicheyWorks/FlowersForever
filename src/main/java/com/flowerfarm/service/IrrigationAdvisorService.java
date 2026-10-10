@@ -3,6 +3,7 @@ package com.flowerfarm.service;
 import com.flowerfarm.model.HarvestEntry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -48,6 +49,7 @@ public class IrrigationAdvisorService {
     private final HttpClient httpClient;
     private final LiveForecastFetcher forecastFetcher;
 
+    @Autowired
     public IrrigationAdvisorService(
             HarvestService harvestService,
             @Value("${flowerfarm.irrigation.live-weather:true}") boolean liveWeatherEnabled,

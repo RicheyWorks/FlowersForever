@@ -39,6 +39,12 @@ class LocalJsonMirrorTest {
             assertThat(back).hasSize(1);
             assertThat(back.get(0).get("name")).isEqualTo("Nootka Rose");
             assertThat(back.get(0).get("quantity")).isEqualTo(10);
+            try (var files = Files.list(tmp.getParent())) {
+                assertThat(files.filter(path -> path.getFileName().toString()
+                        .startsWith(tmp.getFileName().toString()))
+                        .filter(path -> path.getFileName().toString().endsWith(".tmp")))
+                        .isEmpty();
+            }
         } finally {
             Files.deleteIfExists(tmp);
         }
@@ -49,5 +55,24 @@ class LocalJsonMirrorTest {
     void blankPath() {
         assertThatIllegalArgumentException().isThrownBy(() -> new LocalJsonMirror("  ", "x"));
         assertThatIllegalArgumentException().isThrownBy(() -> new LocalJsonMirror(null, "x"));
+    }
+
+    @Test
+    @DisplayName("oversized mirrors are rejected before JSON parsing")
+    void oversizedMirrorRejected() throws Exception {
+        Path tmp = Files.createTempFile("oversized-mirror", ".json");
+        try {
+            try (var channel = java.nio.channels.FileChannel.open(tmp,
+                    java.nio.file.StandardOpenOption.WRITE)) {
+                channel.position(LocalJsonMirror.MAX_MIRROR_BYTES);
+                channel.write(java.nio.ByteBuffer.wrap(new byte[]{0}));
+            }
+            LocalJsonMirror mirror = new LocalJsonMirror(tmp.toString(), "test");
+            assertThat(org.assertj.core.api.Assertions.catchThrowable(mirror::readRows))
+                    .isInstanceOf(java.io.IOException.class)
+                    .hasMessageContaining("10 MiB");
+        } finally {
+            Files.deleteIfExists(tmp);
+        }
     }
 }

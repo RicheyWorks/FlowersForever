@@ -1,7 +1,7 @@
 package com.flowerfarm.service;
 
 import com.flowerfarm.model.Customer;
-import com.flowerfarm.repository.CustomerJpaRepository;
+import com.flowerfarm.repository.CustomerRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -19,7 +19,7 @@ import static org.mockito.Mockito.*;
 @DisplayName("CustomerService")
 class CustomerServiceTest {
 
-    @Mock CustomerJpaRepository repository;
+    @Mock CustomerRepository repository;
     CustomerService service;
 
     @BeforeEach
@@ -49,7 +49,7 @@ class CustomerServiceTest {
     @Test
     @DisplayName("delete() throws when missing")
     void deleteMissing() {
-        when(repository.findById(9L)).thenReturn(Optional.empty());
+        when(repository.findByIdForUpdate(9L)).thenReturn(Optional.empty());
         assertThatExceptionOfType(IndexOutOfBoundsException.class)
                 .isThrownBy(() -> service.delete(9L));
     }
@@ -57,7 +57,7 @@ class CustomerServiceTest {
     @Test
     @DisplayName("search() matches name/contact/email (blank → all)")
     void search() {
-        when(repository.findAllByOrderByNameAsc()).thenReturn(java.util.List.of(
+        when(repository.findAllByName()).thenReturn(java.util.List.of(
                 new Customer("Kitsap Blooms", "Sam", "sam@x.com", "360", "WHOLESALE", "florist"),
                 new Customer("Market Stall", "Lee", "", "", "MARKET", "")
         ));
@@ -73,11 +73,60 @@ class CustomerServiceTest {
     void update() {
         Customer existing = new Customer("Old", "", "", "", "OTHER", "");
         existing.setId(2L);
-        when(repository.findById(2L)).thenReturn(Optional.of(existing));
+        when(repository.findByIdForUpdate(2L)).thenReturn(Optional.of(existing));
         when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         Customer saved = service.update(2L, new Customer("New", "Pat", "p@x.com", "1", "FLORIST", "n"));
         assertThat(saved.getName()).isEqualTo("New");
         assertThat(saved.getCustomerType()).isEqualTo("FLORIST");
+    }
+
+    @Test
+    @DisplayName("upsertByName() updates an exact-name customer and inserts a new one")
+    void upsertByName() {
+        Customer existing = new Customer("Kitsap Blooms", "Old", "", "", "OTHER", "");
+        existing.setId(2L);
+        when(repository.findByNameIgnoreCaseForUpdate("KITSAP BLOOMS"))
+                .thenReturn(Optional.of(existing));
+        when(repository.findByNameIgnoreCaseForUpdate("New Market"))
+                .thenReturn(Optional.empty());
+        when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        Customer updated = service.upsertByName(new Customer(
+                "KITSAP BLOOMS", "Pat", "p@example.test", "360", "WHOLESALE", "weekly"));
+        Customer inserted = service.upsertByName(new Customer(
+                "New Market", "Lee", "", "", "MARKET", ""));
+
+        assertThat(updated.getId()).isEqualTo(2L);
+        assertThat(updated.getContactName()).isEqualTo("Pat");
+        assertThat(inserted.getId()).isNull();
+        verify(repository, times(2)).save(any());
+    }
+
+    @Test
+    @DisplayName("add and rename reject an existing customer name without saving")
+    void duplicateCustomerNamesAreRejected() {
+        Customer existing = new Customer(
+                "Kitsap Blooms", "Sam", "", "", "WHOLESALE", "");
+        existing.setId(8L);
+        when(repository.findByNameIgnoreCaseForUpdate(any()))
+                .thenReturn(Optional.of(existing));
+
+        assertThatThrownBy(() -> service.add(new Customer(
+                "kitsap blooms", "Pat", "", "", "WHOLESALE", "")))
+                .isInstanceOfSatisfying(CustomerService.DuplicateCustomerNameException.class,
+                        duplicate -> {
+                            assertThat(duplicate.existingId()).isEqualTo(8L);
+                            assertThat(duplicate.customerName()).isEqualTo("Kitsap Blooms");
+                        });
+
+        Customer renamed = new Customer("Other", "", "", "", "OTHER", "");
+        renamed.setId(9L);
+        when(repository.findByIdForUpdate(9L)).thenReturn(Optional.of(renamed));
+        assertThatThrownBy(() -> service.update(9L, new Customer(
+                "KITSAP BLOOMS", "", "", "", "OTHER", "")))
+                .isInstanceOf(CustomerService.DuplicateCustomerNameException.class);
+
+        verify(repository, never()).save(any());
     }
 }

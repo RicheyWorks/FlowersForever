@@ -46,11 +46,7 @@ public class FlowerFarmCLI implements ApplicationRunner {
     private final ConnectorRegistry connectorRegistry;
     private final IrrigationAdvisorService irrigationAdvisorService;
     private final MarketDayPackingService marketDayPackingService;
-    private final MorningBriefingService morningBriefingService;
-    private final DayCloseoutService dayCloseoutService;
-    private final OrderService orderService;
-    private final CustomerStatementService customerStatementService;
-    private final SyncHistoryService syncHistoryService;
+    private final CliReportCommands reportCommands;
 
     public FlowerFarmCLI(InventoryService inventoryService,
                          HarvestService harvestService,
@@ -69,48 +65,22 @@ public class FlowerFarmCLI implements ApplicationRunner {
         this.connectorRegistry = connectorRegistry;
         this.irrigationAdvisorService = irrigationAdvisorService;
         this.marketDayPackingService = marketDayPackingService;
-        this.morningBriefingService = morningBriefingService;
-        this.dayCloseoutService = dayCloseoutService;
-        this.orderService = orderService;
-        this.customerStatementService = customerStatementService;
-        this.syncHistoryService = syncHistoryService;
+        this.reportCommands = new CliReportCommands(inventoryService, harvestService,
+                morningBriefingService, dayCloseoutService, orderService,
+                customerStatementService, syncHistoryService);
     }
 
     @Override
     public void run(ApplicationArguments args) {
         Scanner scanner = new Scanner(System.in, java.nio.charset.StandardCharsets.UTF_8);
         printBanner();
+        CliCommandRouter router = createCommandRouter();
 
         boolean running = true;
         while (running) {
-            printMenu();
+            router.printMenu();
             String choice = scanner.nextLine().trim();
-
-            switch (choice) {
-                case "1" -> listInventory();
-                case "2" -> searchInventory(scanner);
-                case "3" -> addItem(scanner);
-                case "4" -> editItem(scanner);
-                case "5" -> deleteItem(scanner);
-                case "6" -> exportCsv();
-                case "7" -> runConnector(scanner);
-                case "8" -> runTrendAnalysis();
-                case "9" -> logHarvest(scanner);
-                case "10" -> listAndExportHarvest(scanner);
-                case "11" -> irrigationAdvice(scanner);
-                case "12" -> marketDayPacking(scanner);
-                case "13" -> bedProduction(scanner);
-                case "14" -> morningBriefing(scanner);
-                case "15" -> dayCloseout(scanner);
-                case "16" -> orderInvoice(scanner);
-                case "17" -> lowStockReorder(scanner);
-                case "18" -> customerStatement(scanner);
-                case "19" -> harvestLogPdf(scanner);
-                case "20" -> auditHistoryPdf(scanner);
-                case "21" -> priceListPdf(scanner);
-                case "22" -> { System.out.println("Goodbye!"); running = false; }
-                default  -> System.out.println("Unknown option. Try again.");
-            }
+            running = router.dispatch(choice, scanner);
         }
         scanner.close();
     }
@@ -126,34 +96,30 @@ public class FlowerFarmCLI implements ApplicationRunner {
                 """);
     }
 
-    private void printMenu() {
-        System.out.println("""
-                ─────────────────────────────────────────
-                 1) List inventory
-                 2) Search inventory
-                 3) Add item
-                 4) Edit item
-                 5) Delete item
-                 6) Export inventory CSV
-                 7) Run connector (import/export)
-                 8) Trend analysis (Weka ML)
-                 9) Log harvest (single or batch)
-                10) List / export harvest log
-                11) Kitsap irrigation advice
-                12) Market day packing list
-                13) Bed / field production
-                14) Morning briefing
-                15) Day closeout
-                16) Order invoice PDF
-                17) Low-stock reorder list
-                18) Customer statement PDF
-                19) Harvest log PDF
-                20) Audit history PDF
-                21) Price list PDF
-                22) Exit
-                ─────────────────────────────────────────
-                Choice: \
-                """);
+    private CliCommandRouter createCommandRouter() {
+        return new CliCommandRouter(System.out)
+                .register("1", "List inventory", scanner -> listInventory())
+                .register("2", "Search inventory", this::searchInventory)
+                .register("3", "Add item", this::addItem)
+                .register("4", "Edit item", this::editItem)
+                .register("5", "Delete item", this::deleteItem)
+                .register("6", "Export inventory CSV", scanner -> exportCsv())
+                .register("7", "Run connector (import/export)", this::runConnector)
+                .register("8", "Harvest production forecast", scanner -> runTrendAnalysis())
+                .register("9", "Log harvest (single or batch)", this::logHarvest)
+                .register("10", "List / export harvest log", this::listAndExportHarvest)
+                .register("11", "Kitsap irrigation advice", this::irrigationAdvice)
+                .register("12", "Market day packing list", this::marketDayPacking)
+                .register("13", "Bed / field production", this::bedProduction)
+                .register("14", "Morning briefing", reportCommands::morningBriefing)
+                .register("15", "Day closeout", reportCommands::dayCloseout)
+                .register("16", "Order invoice PDF", reportCommands::orderInvoice)
+                .register("17", "Low-stock reorder list", reportCommands::lowStockReorder)
+                .register("18", "Customer statement PDF", reportCommands::customerStatement)
+                .register("19", "Harvest log PDF", reportCommands::harvestLogPdf)
+                .register("20", "Audit history PDF", reportCommands::auditHistoryPdf)
+                .register("21", "Price list PDF", reportCommands::priceListPdf)
+                .exit("22", "Exit", scanner -> System.out.println("Goodbye!"));
     }
 
     // ── Actions ──────────────────────────────────────────────────────────────
@@ -293,7 +259,7 @@ public class FlowerFarmCLI implements ApplicationRunner {
     }
 
     private void runTrendAnalysis() {
-        System.out.println("Running Weka linear regression…");
+        System.out.println("Forecasting next-week production from real weekly harvest history…");
         TrendService.TrendResult result = trendService.analyzeQuantityTrend();
         if (result.isSuccess()) {
             System.out.println(result.summary());
@@ -379,201 +345,6 @@ public class FlowerFarmCLI implements ApplicationRunner {
             } catch (Exception e) {
                 System.out.println("✗ Export failed: " + e.getMessage());
             }
-        }
-    }
-
-    private void morningBriefing(Scanner sc) {
-        try {
-            System.out.print("Try live weather for irrigation? (y/n) [n]: ");
-            boolean live = "y".equalsIgnoreCase(sc.nextLine().trim());
-            System.out.println(live
-                    ? "Building briefing (live weather if available)…"
-                    : "Building offline morning briefing…");
-            var briefing = morningBriefingService.build(live);
-            System.out.println();
-            System.out.println(briefing.plainText());
-            System.out.print("Export PDF? (y/n): ");
-            if ("y".equalsIgnoreCase(sc.nextLine().trim())) {
-                String def = "morning-briefing-" + briefing.date() + ".pdf";
-                System.out.print("Filename [" + def + "]: ");
-                String file = orDefault(sc.nextLine(), def);
-                byte[] pdf = morningBriefingService.generatePdf(briefing);
-                java.nio.file.Files.write(java.nio.file.Path.of(file), pdf);
-                System.out.println("✓ Wrote " + file + " (" + pdf.length + " bytes)");
-            }
-        } catch (Exception e) {
-            System.out.println("✗ Morning briefing failed: " + e.getMessage());
-        }
-    }
-
-    private void dayCloseout(Scanner sc) {
-        try {
-            System.out.println("Building end-of-day closeout…");
-            var closeout = dayCloseoutService.build();
-            System.out.println();
-            System.out.println(closeout.plainText());
-            System.out.print("Export PDF? (y/n): ");
-            if ("y".equalsIgnoreCase(sc.nextLine().trim())) {
-                String def = "day-closeout-" + closeout.date() + ".pdf";
-                System.out.print("Filename [" + def + "]: ");
-                String file = orDefault(sc.nextLine(), def);
-                byte[] pdf = dayCloseoutService.generatePdf(closeout);
-                java.nio.file.Files.write(java.nio.file.Path.of(file), pdf);
-                System.out.println("✓ Wrote " + file + " (" + pdf.length + " bytes)");
-            }
-        } catch (Exception e) {
-            System.out.println("✗ Day closeout failed: " + e.getMessage());
-        }
-    }
-
-    private void orderInvoice(Scanner sc) {
-        try {
-            System.out.print("Order id: ");
-            String raw = sc.nextLine().trim();
-            long id = Long.parseLong(raw);
-            System.out.println();
-            System.out.println(orderService.formatInvoiceText(id));
-            System.out.print("Export PDF? (y/n): ");
-            if ("y".equalsIgnoreCase(sc.nextLine().trim())) {
-                String def = "invoice-order-" + id + ".pdf";
-                System.out.print("Filename [" + def + "]: ");
-                String file = orDefault(sc.nextLine(), def);
-                byte[] pdf = orderService.generateInvoicePdf(id);
-                java.nio.file.Files.write(java.nio.file.Path.of(file), pdf);
-                System.out.println("✓ Wrote " + file + " (" + pdf.length + " bytes)");
-            }
-        } catch (NumberFormatException e) {
-            System.out.println("✗ Enter a numeric order id.");
-        } catch (Exception e) {
-            System.out.println("✗ Order invoice failed: " + e.getMessage());
-        }
-    }
-
-    private void lowStockReorder(Scanner sc) {
-        try {
-            System.out.print("Threshold (qty ≤ N) [10]: ");
-            String raw = sc.nextLine().trim();
-            int threshold = raw.isEmpty() ? 10 : Integer.parseInt(raw);
-            var report = inventoryService.buildLowStockReport(threshold);
-            System.out.println();
-            System.out.println(report.plainText());
-            System.out.print("Export PDF? (y/n): ");
-            if ("y".equalsIgnoreCase(sc.nextLine().trim())) {
-                String def = "low-stock-reorder-" + report.date() + ".pdf";
-                System.out.print("Filename [" + def + "]: ");
-                String file = orDefault(sc.nextLine(), def);
-                byte[] pdf = inventoryService.generateLowStockPdf(report);
-                java.nio.file.Files.write(java.nio.file.Path.of(file), pdf);
-                System.out.println("✓ Wrote " + file + " (" + pdf.length + " bytes)");
-            }
-        } catch (NumberFormatException e) {
-            System.out.println("✗ Enter a whole number threshold.");
-        } catch (Exception e) {
-            System.out.println("✗ Low-stock reorder failed: " + e.getMessage());
-        }
-    }
-
-    private void customerStatement(Scanner sc) {
-        try {
-            System.out.print("Customer id: ");
-            long id = Long.parseLong(sc.nextLine().trim());
-            System.out.print("From YYYY-MM-DD [90 days ago]: ");
-            String fromRaw = sc.nextLine().trim();
-            System.out.print("To YYYY-MM-DD [today]: ");
-            String toRaw = sc.nextLine().trim();
-            LocalDate from = fromRaw.isEmpty() ? null : LocalDate.parse(fromRaw);
-            LocalDate to = toRaw.isEmpty() ? null : LocalDate.parse(toRaw);
-            var statement = customerStatementService.build(id, from, to);
-            System.out.println();
-            System.out.println(statement.plainText());
-            System.out.print("Export PDF? (y/n): ");
-            if ("y".equalsIgnoreCase(sc.nextLine().trim())) {
-                String def = "statement-customer-" + id + ".pdf";
-                System.out.print("Filename [" + def + "]: ");
-                String file = orDefault(sc.nextLine(), def);
-                byte[] pdf = customerStatementService.generatePdf(statement);
-                java.nio.file.Files.write(java.nio.file.Path.of(file), pdf);
-                System.out.println("✓ Wrote " + file + " (" + pdf.length + " bytes)");
-            }
-        } catch (NumberFormatException e) {
-            System.out.println("✗ Enter a numeric customer id.");
-        } catch (Exception e) {
-            System.out.println("✗ Customer statement failed: " + e.getMessage());
-        }
-    }
-
-    private void harvestLogPdf(Scanner sc) {
-        try {
-            System.out.print("From YYYY-MM-DD [7 days ago]: ");
-            String fromRaw = sc.nextLine().trim();
-            System.out.print("To YYYY-MM-DD [today]: ");
-            String toRaw = sc.nextLine().trim();
-            LocalDate from = fromRaw.isEmpty() ? null : LocalDate.parse(fromRaw);
-            LocalDate to = toRaw.isEmpty() ? null : LocalDate.parse(toRaw);
-            var report = harvestService.buildHarvestLogReport(from, to);
-            System.out.println();
-            System.out.println(report.plainText());
-            System.out.print("Export PDF? (y/n): ");
-            if ("y".equalsIgnoreCase(sc.nextLine().trim())) {
-                String def = "harvest-log-" + report.to() + ".pdf";
-                System.out.print("Filename [" + def + "]: ");
-                String file = orDefault(sc.nextLine(), def);
-                byte[] pdf = harvestService.generateHarvestLogPdf(report);
-                java.nio.file.Files.write(java.nio.file.Path.of(file), pdf);
-                System.out.println("✓ Wrote " + file + " (" + pdf.length + " bytes)");
-            }
-        } catch (Exception e) {
-            System.out.println("✗ Harvest log PDF failed: " + e.getMessage());
-        }
-    }
-
-    private void auditHistoryPdf(Scanner sc) {
-        try {
-            System.out.print("FAIL only? (y/n) [n]: ");
-            boolean failOnly = "y".equalsIgnoreCase(sc.nextLine().trim());
-            System.out.print("Limit [100]: ");
-            String limRaw = sc.nextLine().trim();
-            int limit = limRaw.isEmpty() ? 100 : Integer.parseInt(limRaw);
-            Boolean success = failOnly ? Boolean.FALSE : null;
-            var report = syncHistoryService.buildAuditReport(
-                    null, null, success, null, limit);
-            System.out.println();
-            System.out.println(report.plainText());
-            System.out.print("Export PDF? (y/n): ");
-            if ("y".equalsIgnoreCase(sc.nextLine().trim())) {
-                String def = "audit-history-" + report.generatedOn() + ".pdf";
-                System.out.print("Filename [" + def + "]: ");
-                String file = orDefault(sc.nextLine(), def);
-                byte[] pdf = syncHistoryService.generateAuditPdf(report);
-                java.nio.file.Files.write(java.nio.file.Path.of(file), pdf);
-                System.out.println("✓ Wrote " + file + " (" + pdf.length + " bytes)");
-            }
-        } catch (NumberFormatException e) {
-            System.out.println("✗ Enter a whole number limit.");
-        } catch (Exception e) {
-            System.out.println("✗ Audit history PDF failed: " + e.getMessage());
-        }
-    }
-
-    private void priceListPdf(Scanner sc) {
-        try {
-            System.out.print("In-stock only? (y/n) [y]: ");
-            String raw = sc.nextLine().trim();
-            boolean inStockOnly = raw.isEmpty() || "y".equalsIgnoreCase(raw);
-            var report = inventoryService.buildPriceListReport(inStockOnly);
-            System.out.println();
-            System.out.println(report.plainText());
-            System.out.print("Export PDF? (y/n): ");
-            if ("y".equalsIgnoreCase(sc.nextLine().trim())) {
-                String def = "price-list-" + report.date() + ".pdf";
-                System.out.print("Filename [" + def + "]: ");
-                String file = orDefault(sc.nextLine(), def);
-                byte[] pdf = inventoryService.generatePriceListPdf(report);
-                java.nio.file.Files.write(java.nio.file.Path.of(file), pdf);
-                System.out.println("✓ Wrote " + file + " (" + pdf.length + " bytes)");
-            }
-        } catch (Exception e) {
-            System.out.println("✗ Price list PDF failed: " + e.getMessage());
         }
     }
 
@@ -669,7 +440,7 @@ public class FlowerFarmCLI implements ApplicationRunner {
                     result.messages().forEach(m -> System.out.println("  • " + m));
                 }
             }
-        } catch (Exception e) {
+        } catch (java.io.IOException | RuntimeException e) {
             System.out.println("✗ Market day packing failed: " + e.getMessage());
         }
     }

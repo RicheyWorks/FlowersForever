@@ -1,5 +1,12 @@
 package com.flowerfarm.gui.tabs;
 
+import com.flowerfarm.gui.FarmDialogs;
+import com.flowerfarm.gui.FarmFileChooser;
+import com.flowerfarm.gui.FarmUi;
+import com.flowerfarm.gui.StartHereGuide;
+import com.flowerfarm.gui.RemindersPanel;
+import com.flowerfarm.gui.StartHerePanel;
+import com.flowerfarm.service.GrowerReminder;
 import com.flowerfarm.model.Item;
 import com.flowerfarm.service.HarvestService;
 import com.flowerfarm.service.InventoryService;
@@ -11,6 +18,8 @@ import com.flowerfarm.service.OrderService;
 import org.jfree.chart.ChartFactory;
 import org.jfree.chart.ChartPanel;
 import org.jfree.chart.JFreeChart;
+import org.jfree.chart.plot.CategoryPlot;
+import org.jfree.chart.plot.PiePlot;
 import org.jfree.data.category.DefaultCategoryDataset;
 import org.jfree.data.general.DefaultPieDataset;
 
@@ -18,6 +27,9 @@ import javax.swing.*;
 import java.awt.*;
 import java.io.File;
 import java.nio.file.Files;
+import java.nio.file.AtomicMoveNotSupportedException;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
@@ -44,27 +56,53 @@ public class DashboardTab implements FlowerFarmTab {
     private final MorningBriefingService morningBriefingService;
     private final DayCloseoutService dayCloseoutService;
     private final TabHost host;
+    private final FarmDialogs dialogs;
+    private final FarmFileChooser files;
 
     private JPanel panel;
     private JLabel totalItemsLabel;
     private JLabel totalValueLabel;
-    private JLabel totalCostLabel;
     private JLabel lowStockLabel;
     private JLabel weekHarvestLabel;
     private JLabel weekHarvestDeltaLabel;
     private JLabel weekRevenueLabel;
     private JLabel weekRevenuePipelineLabel;
     private JLabel lastUpdatedLabel;
+    private JButton refreshOverviewButton;
+    private boolean refreshingOverview;
+    private boolean refreshQueued;
     private JTextArea alertsArea;
     private JLabel lowStockSubtitle;
+    private JLabel priorityStatusLabel;
+    private JLabel priorityDetailLabel;
+    private JButton priorityActionButton;
+    private JComboBox<String> priorityQueue;
+    private StartHerePanel startHerePanel;
+    private RemindersPanel remindersPanel;
+    private java.util.function.Consumer<GrowerReminder> reminderOpener = reminder -> { };
+    private Runnable reminderDismisser = () -> { };
+    private Runnable remindersRefresh = () -> { };
+    private boolean startHereDismissed;
+    private JButton morningBriefingButton;
+    private JButton dayCloseoutButton;
+    private JLabel dailySheetStatusLabel;
+    /** Event dispatch thread only: set and cleared by button handlers and SwingWorker.done(). */
+    private boolean preparingDailySheet;
+    private List<DashboardPriority> rankedPriorities = List.of();
+    private boolean priorityQueueUpdating;
+    private DashboardPriority selectedDashboardPriority;
+    private volatile HarvestService.BedProductionReport lastGoodBedProduction;
+    private volatile IrrigationAdvisorService.IrrigationAdvice lastGoodIrrigation;
+    private volatile MarketDayPackingService.MarketDayPlan lastGoodPacking;
 
-    private final JPanel[] kpiCards = new JPanel[5];
+    private final JPanel[] kpiCards = new JPanel[4];
     private SparklinePanel weekHarvestSpark;
     private SparklinePanel weekRevenueSpark;
-    private boolean darkTheme;
 
     private final DefaultPieDataset pieDataset = new DefaultPieDataset();
     private final DefaultCategoryDataset barDataset = new DefaultCategoryDataset();
+    private JFreeChart inventoryValueChart;
+    private JFreeChart stockQuantityChart;
 
     public DashboardTab(InventoryService inventoryService,
                         HarvestService harvestService,
@@ -74,6 +112,21 @@ public class DashboardTab implements FlowerFarmTab {
                         MorningBriefingService morningBriefingService,
                         DayCloseoutService dayCloseoutService,
                         TabHost host) {
+        this(inventoryService, harvestService, orderService, irrigationAdvisorService,
+                marketDayPackingService, morningBriefingService, dayCloseoutService, host,
+                FarmDialogs.swing(), FarmFileChooser.swing());
+    }
+
+    public DashboardTab(InventoryService inventoryService,
+                        HarvestService harvestService,
+                        OrderService orderService,
+                        IrrigationAdvisorService irrigationAdvisorService,
+                        MarketDayPackingService marketDayPackingService,
+                        MorningBriefingService morningBriefingService,
+                        DayCloseoutService dayCloseoutService,
+                        TabHost host,
+                        FarmDialogs dialogs,
+                        FarmFileChooser files) {
         this.inventoryService = inventoryService;
         this.harvestService = harvestService;
         this.orderService = orderService;
@@ -82,13 +135,15 @@ public class DashboardTab implements FlowerFarmTab {
         this.morningBriefingService = morningBriefingService;
         this.dayCloseoutService = dayCloseoutService;
         this.host = host;
+        this.dialogs = java.util.Objects.requireNonNull(dialogs, "dialogs");
+        this.files = java.util.Objects.requireNonNull(files, "files");
     }
 
     @Override public String getTabTitle() { return "Dashboard"; }
 
     @Override
     public String getDescription() {
-        return "KPIs, week harvest/revenue, charts, alerts, and quick actions";
+        return "Weekly harvest and sales overview, alerts, and quick actions";
     }
 
     @Override
@@ -109,22 +164,135 @@ public class DashboardTab implements FlowerFarmTab {
         if (panel == null) {
             return;
         }
+        startOverviewRefresh();
+    }
 
-        List<Item> items = inventoryService.getAllItems();
+    void startOverviewRefresh() {
+        if (refreshingOverview) {
+            refreshQueued = true;
+            showOverviewState("Refresh queued · current snapshot finishing",
+                    "A newer dashboard refresh will start as soon as the current snapshot returns.",
+                    FarmUi.Tone.INFO);
+            return;
+        }
+        refreshingOverview = true;
+        refreshOverviewButton.setEnabled(false);
+        lockPriorityActionsForRefresh();
+        showOverviewState("Refreshing overview…",
+                "Loading inventory, harvest, order, packing, and watering data in the background.",
+                FarmUi.Tone.INFO);
+        if (host != null) {
+            host.setStatus("Refreshing the dashboard overview…");
+        }
+
+        new SwingWorker<DashboardSnapshot, Void>() {
+            @Override
+            protected DashboardSnapshot doInBackground() {
+                return loadDashboardSnapshot();
+            }
+
+            @Override
+            protected void done() {
+                try {
+                    DashboardSnapshot snapshot = get();
+                    if (!refreshQueued) {
+                        applyDashboardSnapshot(snapshot);
+                        if (host != null) {
+                            host.setStatus(snapshot.partialFailures().isEmpty()
+                                    ? "Dashboard overview refreshed."
+                                    : "Dashboard core metrics refreshed; "
+                                            + partialSourceSummary(snapshot.partialFailures())
+                                            + " unavailable. Retained context is marked when available.");
+                        }
+                    } else if (host != null) {
+                        host.setStatus("A newer dashboard refresh is queued; discarding the older snapshot.");
+                    }
+                } catch (InterruptedException exception) {
+                    Thread.currentThread().interrupt();
+                    if (!refreshQueued) {
+                        failOverviewRefresh(exception);
+                    }
+                } catch (java.util.concurrent.ExecutionException exception) {
+                    if (!refreshQueued) {
+                        failOverviewRefresh(exception.getCause() == null
+                                ? exception : exception.getCause());
+                    }
+                } catch (RuntimeException exception) {
+                    if (!refreshQueued) {
+                        failOverviewRefresh(exception);
+                    }
+                } finally {
+                    finishOverviewRefresh();
+                }
+            }
+        }.execute();
+    }
+
+    private DashboardSnapshot loadDashboardSnapshot() {
+        List<Item> items = List.copyOf(inventoryService.getAllItems());
         InventoryService.InventoryKpiSnapshot inv =
                 inventoryService.inventoryKpis(LOW_STOCK_THRESHOLD);
-
         double weekHarvest = harvestService.totalQuantityLast7Days();
         double priorHarvest = harvestService.totalQuantityPrior7Days();
         OrderService.WeekRevenueSummary rev = orderService.weekRevenueSummary();
         double priorRev = orderService.realizedRevenuePrior7Days();
+        double[] harvestDays = harvestService.dailyQuantitiesLast7Days();
+        double[] revenueDays = orderService.dailyRevenueLast7Days();
 
-        totalItemsLabel.setText(String.valueOf(inv.skuCount()));
-        totalValueLabel.setText(String.format("$%,.2f", inv.sellValue()));
-        if (totalCostLabel != null) {
-            totalCostLabel.setText(String.format("cost basis $%,.2f · %d units",
-                    inv.costBasis(), inv.totalUnits()));
+        List<DashboardSourceFailure> partialFailures = new ArrayList<>();
+        HarvestService.BedProductionReport beds = null;
+        if (weekHarvest > 0) {
+            try {
+                beds = harvestService.productionByBedLast7Days();
+            } catch (RuntimeException failure) {
+                beds = lastGoodBedProduction;
+                partialFailures.add(sourceFailure(
+                        "Bed production", failure, beds != null));
+            }
         }
+        IrrigationAdvisorService.IrrigationAdvice irrigation = null;
+        if (irrigationAdvisorService != null) {
+            try {
+                irrigation = irrigationAdvisorService.adviseClimatology();
+            } catch (RuntimeException failure) {
+                irrigation = lastGoodIrrigation;
+                partialFailures.add(sourceFailure(
+                        "Irrigation", failure, irrigation != null));
+            }
+        }
+        MarketDayPackingService.MarketDayPlan packing = null;
+        if (marketDayPackingService != null) {
+            try {
+                packing = marketDayPackingService.planForDay(LocalDate.now());
+            } catch (RuntimeException failure) {
+                packing = lastGoodPacking;
+                partialFailures.add(sourceFailure(
+                        "Market Day", failure, packing != null));
+            }
+        }
+        return new DashboardSnapshot(items, inv, weekHarvest, priorHarvest,
+                rev, priorRev, harvestDays, revenueDays, beds, irrigation, packing,
+                List.copyOf(partialFailures));
+    }
+
+    private static DashboardSourceFailure sourceFailure(
+            String source, RuntimeException failure, boolean retained) {
+        return new DashboardSourceFailure(source,
+                compactMessage(FarmUi.actionableError("Loading " + source + " context", failure)),
+                retained);
+    }
+
+    private void applyDashboardSnapshot(DashboardSnapshot snapshot) {
+        List<Item> items = snapshot.items();
+        InventoryService.InventoryKpiSnapshot inv = snapshot.inventory();
+        double weekHarvest = snapshot.weekHarvest();
+        double priorHarvest = snapshot.priorHarvest();
+        OrderService.WeekRevenueSummary rev = snapshot.revenue();
+        double priorRev = snapshot.priorRevenue();
+
+        totalItemsLabel.setText(String.format("%d products · %,d units · cost $%,.0f",
+                inv.skuCount(), inv.totalUnits(), inv.costBasis()));
+        totalValueLabel.setText(String.format("$%,.2f", inv.sellValue()));
         lowStockLabel.setText(String.valueOf(inv.lowStockCount()));
         weekHarvestLabel.setText(String.format("%,.0f", weekHarvest));
         if (weekHarvestDeltaLabel != null) {
@@ -140,35 +308,194 @@ public class DashboardTab implements FlowerFarmTab {
                     : ((rev.realized() - priorRev) / priorRev) * 100.0;
             String wow = formatWow("prior", revPct, rev.realized() - priorRev, true);
             weekRevenuePipelineLabel.setText(String.format(
-                    "<html><center>pipeline $%,.2f · booked $%,.2f<br/>%s</center></html>",
+                    "<html>confirmed $%,.2f · booked $%,.2f<br/>%s</html>",
                     rev.pipeline(), rev.booked(), wow));
         }
 
         long lowStockCount = inv.lowStockCount();
 
         if (weekHarvestSpark != null) {
-            double[] harvestDays = harvestService.dailyQuantitiesLast7Days();
+            double[] harvestDays = snapshot.harvestDays();
             weekHarvestSpark.setValues(harvestDays);
-            weekHarvestSpark.setToolTipText(formatSparkTip("Harvest qty", harvestDays, false));
+            weekHarvestSpark.setToolTipText(formatSparkTip("Harvest amount", harvestDays, false));
         }
         if (weekRevenueSpark != null) {
-            double[] revDays = orderService.dailyRevenueLast7Days(); // realized only
+            double[] revDays = snapshot.revenueDays(); // realized only
             weekRevenueSpark.setValues(revDays);
-            weekRevenueSpark.setToolTipText(formatSparkTip("Fulfilled $", revDays, true));
+            weekRevenueSpark.setToolTipText(formatSparkTip("Completed sales $", revDays, true));
         }
 
         applyLowStockCardStyle(lowStockCount > 0);
 
-        if (lastUpdatedLabel != null) {
-            lastUpdatedLabel.setText("KPIs updated "
-                    + LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss"))
-                    + "  ·  Week = last 7 days · Revenue = FULFILLED (pipeline shown under)");
-        }
+        updateOptionalContextCache(snapshot);
+        updateDashboardFreshness(snapshot.partialFailures());
 
-        rebuildAlerts(items, rev, weekHarvest);
+        rebuildAlerts(items, rev, weekHarvest,
+                snapshot.beds(), snapshot.irrigation(), snapshot.packing(),
+                snapshot.partialFailures());
         rebuildValueByCategory(items);
         rebuildQuantityByItem(items);
     }
+
+    private void updateOptionalContextCache(DashboardSnapshot snapshot) {
+        if (!sourceFailed(snapshot.partialFailures(), "Bed production")
+                && snapshot.beds() != null) {
+            lastGoodBedProduction = snapshot.beds();
+        }
+        if (!sourceFailed(snapshot.partialFailures(), "Irrigation")
+                && snapshot.irrigation() != null) {
+            lastGoodIrrigation = snapshot.irrigation();
+        }
+        if (!sourceFailed(snapshot.partialFailures(), "Market Day")
+                && snapshot.packing() != null) {
+            lastGoodPacking = snapshot.packing();
+        }
+    }
+
+    private void updateDashboardFreshness(List<DashboardSourceFailure> failures) {
+        if (lastUpdatedLabel == null) {
+            return;
+        }
+        String updated = "Updated "
+                + LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss"))
+                + " · 7-day view";
+        if (failures.isEmpty()) {
+            lastUpdatedLabel.setText(updated);
+            lastUpdatedLabel.setToolTipText(
+                    "Week metrics use the last 7 days; revenue includes completed orders only.");
+            lastUpdatedLabel.getAccessibleContext().setAccessibleDescription(
+                    "Dashboard snapshot updated successfully. Week metrics use the last 7 days; "
+                            + "revenue includes completed orders only.");
+            lastUpdatedLabel.setForeground(FarmUi.mutedColor());
+            return;
+        }
+        String sources = partialSourceSummary(failures);
+        String detail = failures.stream()
+                .map(failure -> failure.source() + ": " + failure.detail()
+                        + (failure.retained()
+                        ? " Last-good context retained." : " No prior context available."))
+                .collect(java.util.stream.Collectors.joining(" "));
+        lastUpdatedLabel.setText(updated + " · " + failures.size()
+                + " context" + (failures.size() == 1 ? "" : "s") + " unavailable");
+        lastUpdatedLabel.setToolTipText(
+                "Core inventory, harvest, and order metrics are current. " + detail);
+        lastUpdatedLabel.getAccessibleContext().setAccessibleDescription(
+                "Dashboard partially updated. Core inventory, harvest, and order metrics are current. "
+                        + sources + " unavailable. " + detail);
+        lastUpdatedLabel.setForeground(FarmUi.toneForegroundColor(FarmUi.Tone.WARNING));
+    }
+
+    private static String partialSourceSummary(List<DashboardSourceFailure> failures) {
+        return failures.stream().map(DashboardSourceFailure::source)
+                .collect(java.util.stream.Collectors.joining(", "));
+    }
+
+    private static boolean sourceFailed(
+            List<DashboardSourceFailure> failures, String source) {
+        return failures.stream().anyMatch(failure -> failure.source().equals(source));
+    }
+
+    private void failOverviewRefresh(Throwable failure) {
+        String detail = compactMessage(FarmUi.actionableError(
+                "Refreshing the dashboard overview", failure));
+        showOverviewState("Refresh failed · retry",
+                detail + " Existing dashboard values were kept; retry when the data source is ready.",
+                FarmUi.Tone.DANGER);
+        restorePriorityActionsAfterFailure();
+        if (host != null) {
+            host.setStatus("Dashboard refresh failed. Existing values were kept; review the status and retry.");
+        }
+    }
+
+    private void finishOverviewRefresh() {
+        refreshingOverview = false;
+        refreshOverviewButton.setEnabled(true);
+        if (refreshQueued) {
+            refreshQueued = false;
+            startOverviewRefresh();
+        }
+    }
+
+    private void showOverviewState(String message, String description, FarmUi.Tone tone) {
+        lastUpdatedLabel.setText(message);
+        lastUpdatedLabel.setToolTipText(description);
+        lastUpdatedLabel.getAccessibleContext().setAccessibleDescription(description);
+        lastUpdatedLabel.setForeground(FarmUi.toneForegroundColor(tone));
+    }
+
+    private void lockPriorityActionsForRefresh() {
+        if (priorityStatusLabel == null || priorityDetailLabel == null
+                || priorityQueue == null || priorityActionButton == null) {
+            return;
+        }
+        FarmUi.updateStatusBadge(priorityStatusLabel,
+                "Checking priorities…", FarmUi.Tone.INFO);
+        priorityDetailLabel.setText(
+                "Farm-wide snapshot is refreshing; priority actions are temporarily locked.");
+        priorityDetailLabel.getAccessibleContext().setAccessibleDescription(
+                "Farm-wide snapshot is refreshing. Priority actions will unlock when current data is ready.");
+        priorityQueue.setEnabled(false);
+        priorityActionButton.setEnabled(false);
+        priorityActionButton.setToolTipText(
+                "Wait for the current farm-wide snapshot before opening a priority.");
+    }
+
+    private void restorePriorityActionsAfterFailure() {
+        if (priorityStatusLabel == null || priorityDetailLabel == null
+                || priorityQueue == null || priorityActionButton == null) {
+            return;
+        }
+        if (rankedPriorities.isEmpty()) {
+            FarmUi.updateStatusBadge(priorityStatusLabel,
+                    "Priorities unavailable · retry", FarmUi.Tone.DANGER);
+            priorityDetailLabel.setText(
+                    "No current priority is available; refresh again before starting dashboard work.");
+            priorityDetailLabel.getAccessibleContext().setAccessibleDescription(
+                    "Priority loading failed and no earlier snapshot is available. Refresh again before starting dashboard work.");
+            priorityQueue.setEnabled(false);
+            priorityActionButton.setEnabled(false);
+            return;
+        }
+        int selected = priorityQueue.getSelectedIndex();
+        if (selected < 0 || selected >= rankedPriorities.size()) {
+            selected = 0;
+            priorityQueue.setSelectedIndex(selected);
+        }
+        priorityQueue.setEnabled(true);
+        selectDashboardPriority(selected);
+        FarmUi.updateStatusBadge(priorityStatusLabel,
+                "Priority " + (selected + 1) + " of " + rankedPriorities.size()
+                        + " · last good snapshot",
+                FarmUi.Tone.DANGER);
+        priorityDetailLabel.setText(priorityDetailLabel.getText()
+                + "  Snapshot refresh failed; verify conditions in the workspace.");
+        priorityDetailLabel.getAccessibleContext().setAccessibleDescription(
+                priorityDetailLabel.getAccessibleContext().getAccessibleDescription()
+                        + " The snapshot refresh failed, so verify current conditions in the workspace.");
+    }
+
+    private record DashboardSnapshot(
+            List<Item> items,
+            InventoryService.InventoryKpiSnapshot inventory,
+            double weekHarvest,
+            double priorHarvest,
+            OrderService.WeekRevenueSummary revenue,
+            double priorRevenue,
+            double[] harvestDays,
+            double[] revenueDays,
+            HarvestService.BedProductionReport beds,
+            IrrigationAdvisorService.IrrigationAdvice irrigation,
+            MarketDayPackingService.MarketDayPlan packing,
+            List<DashboardSourceFailure> partialFailures) {
+        private DashboardSnapshot {
+            items = List.copyOf(items);
+            harvestDays = harvestDays == null ? new double[0] : harvestDays.clone();
+            revenueDays = revenueDays == null ? new double[0] : revenueDays.clone();
+            partialFailures = List.copyOf(partialFailures);
+        }
+    }
+
+    private record DashboardSourceFailure(String source, String detail, boolean retained) { }
 
     private static String formatWow(String prefix, Double pct, double absDelta, boolean money) {
         String abs = money
@@ -181,29 +508,40 @@ public class DashboardTab implements FlowerFarmTab {
     }
 
     private void applyLowStockCardStyle(boolean warning) {
-        if (kpiCards[2] == null) {
+        if (kpiCards[3] == null) {
             return;
         }
-        Color border = warning
-                ? new Color(200, 80, 60)
-                : (darkTheme ? new Color(90, 93, 95) : new Color(200, 200, 200));
-        Color bg = warning
-                ? (darkTheme ? new Color(90, 50, 45) : new Color(255, 240, 235))
-                : (darkTheme ? new Color(60, 63, 65) : new Color(250, 250, 250));
-        kpiCards[2].setBackground(bg);
-        kpiCards[2].setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createLineBorder(border, warning ? 2 : 1),
-                BorderFactory.createEmptyBorder(12, 12, 12, 12)));
+        FarmUi.Tone tone = warning ? FarmUi.Tone.DANGER : FarmUi.Tone.SUCCESS;
+        kpiCards[3].setBackground(FarmUi.toneSurfaceColor(tone));
+        kpiCards[3].setBorder(dashboardCardBorder(tone));
         if (lowStockLabel != null) {
             lowStockLabel.setForeground(warning
-                    ? new Color(180, 40, 30)
-                    : (darkTheme ? new Color(120, 220, 120) : new Color(0, 100, 0)));
+                    ? FarmUi.toneForegroundColor(FarmUi.Tone.DANGER)
+                    : FarmUi.toneForegroundColor(FarmUi.Tone.SUCCESS));
         }
         if (lowStockSubtitle != null) {
             lowStockSubtitle.setText(warning
                     ? "items ≤ " + LOW_STOCK_THRESHOLD + " — restock!"
                     : "items ≤ " + LOW_STOCK_THRESHOLD);
         }
+    }
+
+    private static FarmUi.Tone kpiTone(int index) {
+        return switch (index) {
+            case 1 -> FarmUi.Tone.DANGER;
+            case 2 -> FarmUi.Tone.INFO;
+            case 3 -> FarmUi.Tone.WARNING;
+            default -> FarmUi.Tone.SUCCESS;
+        };
+    }
+
+    private static javax.swing.border.Border dashboardCardBorder(FarmUi.Tone tone) {
+        return BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(FarmUi.borderColor()),
+                BorderFactory.createCompoundBorder(
+                        BorderFactory.createMatteBorder(4, 0, 0, 0,
+                                FarmUi.toneForegroundColor(tone)),
+                        BorderFactory.createEmptyBorder(11, 15, 13, 15)));
     }
 
     private static String formatSparkTip(String prefix, double[] days, boolean money) {
@@ -226,87 +564,198 @@ public class DashboardTab implements FlowerFarmTab {
         return sb.toString();
     }
 
-    private void rebuildAlerts(List<Item> items, OrderService.WeekRevenueSummary rev, double weekHarvest) {
+    private void rebuildAlerts(List<Item> items, OrderService.WeekRevenueSummary rev,
+                               double weekHarvest,
+                               HarvestService.BedProductionReport beds,
+                               IrrigationAdvisorService.IrrigationAdvice irrigation,
+                               MarketDayPackingService.MarketDayPlan packing,
+                               List<DashboardSourceFailure> partialFailures) {
         StringBuilder alerts = new StringBuilder();
-        items.stream()
+        List<DashboardPriority> priorities = new ArrayList<>();
+        boolean emptyFarm = items.isEmpty() && weekHarvest <= 0;
+        updateStartHereVisibility(emptyFarm);
+        if (emptyFarm) {
+            alerts.append("• New cut-flower farm: start with today’s cut, a spreadsheet import, "
+                    + "or your first product (Help > Start here…)\n");
+            priorities.add(new DashboardPriority(1,
+                    "Start here — set up your cut-flower farm",
+                    "Start here",
+                    "Opened the Start here setup choices."));
+        }
+        if (!partialFailures.isEmpty()) {
+            alerts.append("⚠ Partial update: ")
+                    .append(partialSourceSummary(partialFailures))
+                    .append(" unavailable. Retained context is marked when available; "
+                            + "core metrics are current.\n");
+        }
+        List<Item> lowItems = items.stream()
                 .filter(i -> i.getQuantity() <= LOW_STOCK_THRESHOLD)
                 .sorted((a, b) -> Integer.compare(a.getQuantity(), b.getQuantity()))
-                .forEach(i -> alerts.append("• LOW  ").append(i.getName())
-                        .append(" — only ").append(i.getQuantity()).append(" left\n"));
+                .toList();
+        for (Item item : lowItems) {
+            alerts.append("• Low stock: ").append(item.getName())
+                    .append(" — only ").append(item.getQuantity()).append(" left\n");
+        }
+        if (!lowItems.isEmpty()) {
+            Item lowest = lowItems.get(0);
+            priorities.add(new DashboardPriority(30,
+                    "Restock " + lowest.getName() + " · " + lowest.getQuantity() + " left",
+                    "Inventory",
+                    "Opened inventory for the lowest-stock products.",
+                    lowItems.stream().map(Item::getName).distinct().toList(), null));
+        }
 
         if (rev != null) {
             if (rev.confirmedOrderCount() > 0) {
-                alerts.append("• PIPE ").append(rev.confirmedOrderCount())
-                        .append(" confirmed order(s) awaiting fulfill — $")
-                        .append(String.format("%,.2f", rev.pipeline())).append(" pipeline\n");
+                alerts.append("• Packing review: ").append(rev.confirmedOrderCount())
+                        .append(" confirmed order(s) — $")
+                        .append(String.format("%,.2f", rev.pipeline())).append(" total\n");
+                priorities.add(new DashboardPriority(20,
+                        rev.confirmedOrderCount() + " confirmed order(s) to review for packing",
+                        "Market Day",
+                        "Opened Market Day for confirmed orders."));
             }
             if (rev.draftOrderCount() > 0) {
-                alerts.append("• DRAFT ").append(rev.draftOrderCount())
+                alerts.append("• Needs confirmation: ").append(rev.draftOrderCount())
                         .append(" draft order(s) ($")
-                        .append(String.format("%,.2f", rev.draft())).append(") not in revenue KPI\n");
+                        .append(String.format("%,.2f", rev.draft())).append(")\n");
+                priorities.add(new DashboardPriority(50,
+                        "Confirm " + rev.draftOrderCount() + " draft order(s)",
+                        "Customers & Orders",
+                        "Opened draft orders for confirmation.", List.of(), "DRAFT"));
             }
             if (rev.realized() <= 0 && rev.pipeline() <= 0) {
-                alerts.append("• Week revenue quiet — no fulfilled/confirmed orders in 7 days\n");
+                alerts.append("• No completed or confirmed sales in the last 7 days\n");
             }
         }
         if (weekHarvest <= 0) {
             alerts.append("• No harvest logged in the last 7 days — open Harvest Log\n");
-        } else {
-            try {
-                HarvestService.BedProductionReport beds =
-                        harvestService.productionByBedLast7Days();
-                if (!beds.beds().isEmpty()) {
-                    HarvestService.BedProduction top = beds.beds().get(0);
-                    alerts.append("• BEDS top this week: ").append(top.bed())
-                            .append(" (").append(String.format("%.0f", top.totalQuantity()))
-                            .append(" qty) across ").append(beds.bedCount())
-                            .append(" bed(s) — Harvest Log → Bed production\n");
-                }
-            } catch (Exception ignored) {
-                // bed rollup is best-effort
+            priorities.add(new DashboardPriority(40,
+                    "No harvest logged in the last 7 days",
+                    "Harvest Log",
+                    "Opened Harvest Log to record the latest cut."));
+        } else if (beds != null && !beds.beds().isEmpty()) {
+            HarvestService.BedProduction top = beds.beds().get(0);
+            alerts.append("• Top bed this week: ").append(top.bed())
+                    .append(" (").append(String.format("%.0f", top.totalQuantity()))
+                    .append(" harvested) across ").append(beds.bedCount())
+                    .append(" bed(s)")
+                    .append(sourceFailed(partialFailures, "Bed production")
+                            ? " · previous snapshot · verify\n" : "\n");
+        }
+
+        if (irrigation != null
+                && (irrigation.priority() == IrrigationAdvisorService.Priority.HIGH
+                || irrigation.priority() == IrrigationAdvisorService.Priority.MEDIUM)) {
+            alerts.append("• Watering priority: ")
+                    .append(irrigation.priority().name().toLowerCase())
+                    .append(" — ").append(irrigation.headline())
+                    .append(sourceFailed(partialFailures, "Irrigation")
+                            ? " · previous snapshot · verify\n" : "\n");
+            if (!sourceFailed(partialFailures, "Irrigation")) {
+                priorities.add(new DashboardPriority(
+                        irrigation.priority() == IrrigationAdvisorService.Priority.HIGH ? 10 : 45,
+                        "Watering " + irrigation.priority().name().toLowerCase()
+                                + " · " + irrigation.headline(),
+                        "Irrigation & Care",
+                        "Opened irrigation guidance for today."));
             }
         }
 
-        if (irrigationAdvisorService != null) {
-            try {
-                // Climatology only on dashboard refresh (fast, offline-safe)
-                IrrigationAdvisorService.IrrigationAdvice tip =
-                        irrigationAdvisorService.adviseClimatology();
-                if (tip.priority() == IrrigationAdvisorService.Priority.HIGH
-                        || tip.priority() == IrrigationAdvisorService.Priority.MEDIUM) {
-                    alerts.append("• WATER ").append(tip.priority().name())
-                            .append(" — ").append(tip.headline())
-                            .append(" (Irrigation & Care)\n");
+        if (packing != null && packing.orderCount() > 0) {
+            alerts.append("• Packing review today: ").append(packing.orderCount())
+                    .append(" confirmed order(s) — $")
+                    .append(String.format("%,.2f", packing.pipelineValue()))
+                    .append(" total")
+                    .append(sourceFailed(partialFailures, "Market Day")
+                            ? " · previous snapshot · verify\n" : "\n");
+            if (packing.shortfallSkuCount() > 0) {
+                alerts.append("• Packing shortfall: ").append(packing.shortfallSkuCount())
+                        .append(" product(s) under stock for today's load-out")
+                        .append(sourceFailed(partialFailures, "Market Day")
+                                ? " · previous snapshot · verify\n" : "\n");
+                if (!sourceFailed(partialFailures, "Market Day")) {
+                    priorities.add(new DashboardPriority(0,
+                            "Resolve " + packing.shortfallSkuCount()
+                                    + " packing shortfall(s)",
+                            "Market Day",
+                            "Opened Market Day to review packing shortfalls."));
                 }
-            } catch (Exception ignored) {
-                // advisory is best-effort on the dashboard
-            }
-        }
-
-        if (marketDayPackingService != null) {
-            try {
-                MarketDayPackingService.MarketDayPlan plan =
-                        marketDayPackingService.planForDay(LocalDate.now());
-                if (plan.orderCount() > 0) {
-                    alerts.append("• PACK ").append(plan.orderCount())
-                            .append(" CONFIRMED order(s) for today — $")
-                            .append(String.format("%,.2f", plan.pipelineValue()))
-                            .append(" pipeline (Market Day)\n");
-                    if (plan.shortfallSkuCount() > 0) {
-                        alerts.append("• PACK SHORT ").append(plan.shortfallSkuCount())
-                                .append(" product(s) under stock for today's load-out\n");
-                    }
-                }
-            } catch (Exception ignored) {
-                // packing plan is best-effort on the dashboard
+            } else if (!sourceFailed(partialFailures, "Market Day")) {
+                priorities.add(new DashboardPriority(15,
+                        "Review " + packing.orderCount() + " order(s) for packing today",
+                        "Market Day",
+                        "Opened today’s market packing list."));
             }
         }
 
         if (alerts.length() == 0) {
-            alerts.append("All clear — stock healthy, harvest moving, orders on track. Great job, Kitsap!");
+            alerts.append("All clear — stock healthy, harvest moving, orders on track. Great job!");
         }
         alertsArea.setText(alerts.toString());
         alertsArea.setCaretPosition(0);
+        updateDashboardPriority(priorities);
+        remindersRefresh.run();
+    }
+
+    private void updateDashboardPriority(List<DashboardPriority> priorities) {
+        if (priorityStatusLabel == null || priorityActionButton == null
+                || priorityQueue == null) {
+            return;
+        }
+        Map<String, DashboardPriority> bestByWorkspace = new LinkedHashMap<>();
+        priorities.stream()
+                .sorted(java.util.Comparator.comparingInt(DashboardPriority::rank))
+                .forEach(priority -> bestByWorkspace.putIfAbsent(
+                        priority.targetTab(), priority));
+        rankedPriorities = List.copyOf(bestByWorkspace.values());
+
+        priorityQueueUpdating = true;
+        priorityQueue.removeAllItems();
+        for (DashboardPriority priority : rankedPriorities) {
+            priorityQueue.addItem(priority.summary());
+        }
+        priorityQueueUpdating = false;
+
+        if (rankedPriorities.isEmpty()) {
+            selectedDashboardPriority = null;
+            FarmUi.updateStatusBadge(
+                    priorityStatusLabel, "All caught up", FarmUi.Tone.SUCCESS);
+            priorityQueue.setEnabled(false);
+            priorityActionButton.setEnabled(false);
+            priorityActionButton.setToolTipText("No urgent farm task is waiting.");
+            priorityDetailLabel.setText(
+                    "No operational task is waiting in the current farm snapshot.");
+            priorityDetailLabel.getAccessibleContext().setAccessibleDescription(
+                    "No operational task is waiting in the current farm snapshot.");
+            return;
+        }
+        priorityQueue.setEnabled(true);
+        priorityQueue.setSelectedIndex(0);
+        selectDashboardPriority(0);
+    }
+
+    private void selectDashboardPriority(int index) {
+        if (index < 0 || index >= rankedPriorities.size()) {
+            return;
+        }
+        DashboardPriority priority = rankedPriorities.get(index);
+        String urgency = priority.rank() <= 10 ? "Urgent"
+                : priority.rank() <= 30 ? "Next up" : "Follow-up";
+        selectedDashboardPriority = priority;
+        FarmUi.updateStatusBadge(priorityStatusLabel,
+                "Priority " + (index + 1) + " of " + rankedPriorities.size()
+                        + " · " + urgency,
+                priority.rank() <= 10 ? FarmUi.Tone.DANGER
+                        : priority.rank() <= 30 ? FarmUi.Tone.WARNING : FarmUi.Tone.INFO);
+        priorityDetailLabel.setText(
+                "Do next: " + priority.summary() + "  →  " + priority.targetTab());
+        priorityDetailLabel.getAccessibleContext().setAccessibleDescription(
+                "Selected " + urgency.toLowerCase() + " priority. " + priority.summary()
+                        + ". Opens " + priority.targetTab() + ".");
+        priorityActionButton.setEnabled(true);
+        priorityActionButton.setToolTipText(
+                "Open " + priority.targetTab() + " to address: " + priority.summary());
     }
 
     private void rebuildValueByCategory(List<Item> items) {
@@ -318,6 +767,12 @@ public class DashboardTab implements FlowerFarmTab {
         pieDataset.clear();
         for (Map.Entry<String, Double> entry : byCategory.entrySet()) {
             pieDataset.setValue(entry.getKey(), entry.getValue());
+        }
+        if (inventoryValueChart != null
+                && inventoryValueChart.getPlot() instanceof PiePlot plot) {
+            for (String category : byCategory.keySet()) {
+                plot.setSectionPaint(category, categoryColor(category));
+            }
         }
     }
 
@@ -342,51 +797,43 @@ public class DashboardTab implements FlowerFarmTab {
     }
 
     private void buildUI() {
-        panel = new JPanel(new BorderLayout(12, 12));
-        panel.setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
+        panel = FarmUi.page();
 
-        JPanel north = new JPanel(new BorderLayout());
-        JLabel header = new JLabel("Flower Farm Dashboard — Port Orchard / Kitsap County, WA");
-        header.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 20));
-        north.add(header, BorderLayout.WEST);
-        JPanel northEast = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
-        lastUpdatedLabel = new JLabel("KPIs not refreshed yet");
-        lastUpdatedLabel.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 11));
-        lastUpdatedLabel.setForeground(new Color(90, 100, 90));
-        JButton refreshKpis = new JButton("Refresh KPIs");
-        refreshKpis.setToolTipText("Reload inventory, harvest, and order metrics.");
-        refreshKpis.addActionListener(e -> {
-            refreshData();
-            if (host != null) {
-                host.setStatus("Dashboard KPIs refreshed.");
-            }
-        });
-        northEast.add(lastUpdatedLabel);
-        northEast.add(refreshKpis);
-        north.add(northEast, BorderLayout.EAST);
-        panel.add(north, BorderLayout.NORTH);
+        lastUpdatedLabel = FarmUi.mutedLabel("Overview not refreshed yet");
+        lastUpdatedLabel.setName("dashboard.overviewStatus");
+        lastUpdatedLabel.getAccessibleContext().setAccessibleName("Dashboard refresh status");
+        lastUpdatedLabel.setFont(lastUpdatedLabel.getFont().deriveFont(11f));
+        refreshOverviewButton = FarmUi.primaryButton("Refresh overview");
+        refreshOverviewButton.setName("dashboard.refreshOverview");
+        refreshOverviewButton.setToolTipText(
+                "Reload inventory, harvest, order, packing, and watering metrics.");
+        refreshOverviewButton.addActionListener(e -> startOverviewRefresh());
+        panel.add(FarmUi.pageHeader(
+                "Today on the farm",
+                "Harvest, sales, stock, packing, and watering priorities in one place.",
+                FarmUi.toolbar(refreshOverviewButton)), BorderLayout.NORTH);
 
-        JPanel center = new JPanel(new BorderLayout(0, 12));
+        JPanel center = new DashboardBody();
+        center.setOpaque(false);
 
-        JPanel kpiPanel = new JPanel(new GridLayout(1, 5, 10, 10));
-        kpiCards[0] = createKPICard("Total SKUs", totalItemsLabel = new JLabel("—"), "items in inventory",
-                null, null, "Open Inventory", "Inventory");
-        totalCostLabel = new JLabel("cost basis —");
-        kpiCards[1] = createKPICard("Inventory Value", totalValueLabel = new JLabel("—"), "at sell prices",
-                totalCostLabel, null, "Open Inventory", "Inventory");
-        lowStockSubtitle = new JLabel("items ≤ " + LOW_STOCK_THRESHOLD);
-        kpiCards[2] = createKPICard("Low Stock", lowStockLabel = new JLabel("—"), null,
-                lowStockSubtitle, null, "Review stock", "Inventory");
+        JPanel kpiPanel = new JPanel(new GridLayout(1, 4, 12, 0));
+        kpiPanel.setOpaque(false);
         weekHarvestSpark = new SparklinePanel();
         weekHarvestSpark.setLineColor(new Color(34, 100, 54));
-        weekHarvestDeltaLabel = new JLabel("vs prior wk —");
-        kpiCards[3] = createKPICard("Week Harvest", weekHarvestLabel = new JLabel("—"), "qty last 7 days",
+        weekHarvestDeltaLabel = FarmUi.mutedLabel("vs prior wk —");
+        kpiCards[0] = createKPICard("Week harvest", weekHarvestLabel = new JLabel("—"), "amount in last 7 days",
                 weekHarvestDeltaLabel, weekHarvestSpark, "Log harvest", "Harvest Log");
         weekRevenueSpark = new SparklinePanel();
-        weekRevenueSpark.setLineColor(new Color(30, 90, 160));
-        weekRevenuePipelineLabel = new JLabel("pipeline —");
-        kpiCards[4] = createKPICard("Week Revenue", weekRevenueLabel = new JLabel("—"), "realized (fulfilled)",
-                weekRevenuePipelineLabel, weekRevenueSpark, "Create order", "CRM");
+        weekRevenueSpark.setLineColor(FarmUi.accentColor());
+        weekRevenuePipelineLabel = FarmUi.mutedLabel("confirmed —");
+        kpiCards[1] = createKPICard("Week revenue", weekRevenueLabel = new JLabel("—"), "from completed orders",
+                weekRevenuePipelineLabel, weekRevenueSpark, "Create order", "Customers & Orders");
+        totalItemsLabel = FarmUi.mutedLabel("products and units —");
+        kpiCards[2] = createKPICard("Inventory value", totalValueLabel = new JLabel("—"), "at sell prices",
+                totalItemsLabel, null, "Open Inventory", "Inventory");
+        lowStockSubtitle = FarmUi.mutedLabel("items ≤ " + LOW_STOCK_THRESHOLD);
+        kpiCards[3] = createKPICard("Low stock", lowStockLabel = new JLabel("—"), null,
+                lowStockSubtitle, null, "Review stock", "Inventory");
         for (JPanel card : kpiCards) {
             kpiPanel.add(card);
         }
@@ -395,67 +842,264 @@ public class DashboardTab implements FlowerFarmTab {
         JPanel chartsPanel = new JPanel(new GridLayout(1, 2, 12, 0));
         chartsPanel.add(buildPieChartPanel());
         chartsPanel.add(buildBarChartPanel());
-        center.add(chartsPanel, BorderLayout.CENTER);
 
-        panel.add(center, BorderLayout.CENTER);
+        alertsArea = FarmUi.displayArea(7, 28);
+        alertsArea.setFont(UIManager.getFont("Label.font").deriveFont(14f));
+        alertsArea.setMargin(new Insets(10, 10, 10, 10));
+        alertsArea.getAccessibleContext().setAccessibleName("Farm operations alerts");
+        JPanel alertsPanel = FarmUi.section(
+                "Operations alerts",
+                "Stock, orders, harvest, packing, and watering.",
+                new JScrollPane(alertsArea));
 
-        JPanel south = new JPanel(new BorderLayout(8, 8));
-
-        JPanel alertsPanel = new JPanel(new BorderLayout());
-        alertsPanel.setBorder(BorderFactory.createTitledBorder(
-                "Ops alerts (stock · pipeline · harvest · pack · water)"));
-        alertsArea = new JTextArea(5, 40);
-        alertsArea.setEditable(false);
-        alertsArea.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
-        alertsPanel.add(new JScrollPane(alertsArea), BorderLayout.CENTER);
-        south.add(alertsPanel, BorderLayout.CENTER);
-
-        JPanel actions = new JPanel(new GridLayout(0, 2, 8, 6));
-        actions.setBorder(BorderFactory.createTitledBorder("Quick actions"));
-        actions.add(actionButton("Log Harvest", "Harvest Log", "Open harvest log to record today's cut."));
-        actions.add(actionButton("Create Order", "CRM", "Open CRM to create a wholesale / market order."));
+        JPanel actions = new JPanel(new GridLayout(2, 3, 8, 6));
+        actions.setName("dashboard.quickActions");
+        actions.setOpaque(false);
+        morningBriefingButton = FarmUi.primaryButton("Morning briefing");
+        morningBriefingButton.setName("dashboard.morningBriefing");
+        FarmUi.initialFocus(morningBriefingButton);
+        morningBriefingButton.setToolTipText(
+                "Review packing, beds, watering, and low stock for the start of the day.");
+        morningBriefingButton.addActionListener(e -> startMorningBriefing());
+        actions.add(morningBriefingButton);
+        actions.add(actionButton("Log harvest", "Harvest Log",
+                "Open harvest log to record today's cut."));
         actions.add(actionButton("Market packing", "Market Day",
                 "Build today's packing list / pick sheet for the van."));
-        JButton briefing = new JButton("Morning briefing");
-        briefing.setToolTipText("Pack + beds + water + low stock — start-of-day sheet (PDF).");
-        briefing.addActionListener(e -> showMorningBriefing());
-        actions.add(briefing);
-        JButton closeout = new JButton("Day closeout");
-        closeout.setToolTipText("Fulfilled sales + harvest + leftover pipeline — end-of-day sheet (PDF).");
-        closeout.addActionListener(e -> showDayCloseout());
-        actions.add(closeout);
-        actions.add(actionButton("Fulfill pipeline", "CRM", "Open CRM to fulfill confirmed orders."));
-        actions.add(actionButton("Low-stock reorder", "Inventory",
-                "Open Inventory → Low-stock reorder for cooler restock sheet."));
-        actions.add(actionButton("Price list", "Inventory",
-                "Open Inventory → Price list for market / wholesale sheet."));
-        actions.add(actionButton("Weekly PDF Report", "Reports", "Generate harvest + sales PDF report."));
-        actions.add(actionButton("Rose Visualizer", "Rose Visualizer", "Grow generative L-System roses."));
-        JButton trends = new JButton("Run Trend Analysis");
-        trends.addActionListener(e -> {
-            if (host != null) {
-                host.setStatus("Running trend analysis…");
-                host.runTrendAnalysis();
-            }
-        });
-        actions.add(trends);
-        JButton inventory = new JButton("Open Inventory");
+        actions.add(actionButton("Create order", "Customers & Orders",
+                "Opened Customers & Orders. Choose a customer and add the order details."));
+        dayCloseoutButton = FarmUi.secondaryButton("Day closeout");
+        dayCloseoutButton.setName("dashboard.dayCloseout");
+        dayCloseoutButton.setToolTipText(
+                "Review completed sales, harvest, and orders still waiting at day end.");
+        dayCloseoutButton.addActionListener(e -> startDayCloseout());
+        actions.add(dayCloseoutButton);
+        JButton inventory = FarmUi.secondaryButton("Open inventory");
         inventory.addActionListener(e -> go("Inventory", "Opened inventory."));
         actions.add(inventory);
-        JButton syncHist = new JButton("Sync / Audit");
-        syncHist.addActionListener(e -> go("Sync History", "Opened audit trail."));
-        actions.add(syncHist);
-        south.add(actions, BorderLayout.EAST);
 
-        panel.add(south, BorderLayout.SOUTH);
+        JComboBox<String> moreTools = new JComboBox<>(new String[]{
+                "Low-stock reorder", "Price list", "Weekly farm report",
+                "Harvest forecast", "Activity history", "Rose visualizer"
+        });
+        moreTools.setName("dashboard.moreTools");
+        moreTools.getAccessibleContext().setAccessibleName("More farm tools");
+        JButton openTool = FarmUi.secondaryButton("Open tool");
+        openTool.addActionListener(e -> openDashboardTool((String) moreTools.getSelectedItem()));
+        JPanel moreToolsRow = new JPanel(new BorderLayout(FarmUi.CONTROL_GAP, 6));
+        moreToolsRow.setOpaque(false);
+        JLabel toolsLabel = FarmUi.mutedLabel("More farm tools");
+        toolsLabel.setLabelFor(moreTools);
+        moreToolsRow.add(toolsLabel, BorderLayout.NORTH);
+        moreToolsRow.add(moreTools, BorderLayout.CENTER);
+        moreToolsRow.add(openTool, BorderLayout.EAST);
+        dailySheetStatusLabel = FarmUi.wrappingStatusBadge(
+                "Daily sheets ready", FarmUi.Tone.NEUTRAL);
+        dailySheetStatusLabel.setName("dashboard.dailySheetStatus");
+        dailySheetStatusLabel.getAccessibleContext().setAccessibleName(
+                "Morning briefing and day closeout status");
+        JPanel actionFooter = new JPanel(new BorderLayout(0, FarmUi.CONTROL_GAP));
+        actionFooter.setOpaque(false);
+        actionFooter.add(dailySheetStatusLabel, BorderLayout.SOUTH);
+        actionFooter.add(moreToolsRow, BorderLayout.CENTER);
+        JPanel actionWorkspace = new JPanel(new BorderLayout(0, FarmUi.CONTROL_GAP));
+        actionWorkspace.setOpaque(false);
+        startHerePanel = new StartHerePanel(this::onStartHereChoice);
+        startHerePanel.setVisible(false);
+        remindersPanel = new RemindersPanel(
+                reminder -> reminderOpener.accept(reminder),
+                () -> reminderDismisser.run());
+        remindersPanel.setVisible(false);
+        priorityStatusLabel = FarmUi.wrappingStatusBadge(
+                "Refresh to identify the top priority", FarmUi.Tone.NEUTRAL);
+        priorityStatusLabel.setName("dashboard.priorityStatus");
+        priorityStatusLabel.getAccessibleContext().setAccessibleName("Top farm priority");
+        priorityDetailLabel = FarmUi.formHint(
+                "Refresh the overview to build today’s ranked work queue.");
+        priorityDetailLabel.setName("dashboard.priorityDetail");
+        priorityDetailLabel.getAccessibleContext().setAccessibleName(
+                "Selected farm priority details");
+        priorityDetailLabel.setVisible(false);
+        priorityQueue = new JComboBox<>();
+        priorityQueue.setPrototypeDisplayValue("Review today's packing and stock priorities");
+        priorityQueue.setName("dashboard.priorityQueue");
+        priorityQueue.setEnabled(false);
+        priorityQueue.getAccessibleContext().setAccessibleName("Ranked farm priorities");
+        priorityQueue.setToolTipText(priorityDetailLabel.getText());
+        priorityQueue.getAccessibleContext().setAccessibleDescription(
+                priorityDetailLabel.getText());
+        priorityDetailLabel.addPropertyChangeListener("text", event -> {
+            String detail = String.valueOf(event.getNewValue());
+            priorityQueue.setToolTipText(detail);
+            priorityQueue.getAccessibleContext().setAccessibleDescription(detail);
+        });
+        priorityQueue.addActionListener(event -> {
+            if (!priorityQueueUpdating) {
+                selectDashboardPriority(priorityQueue.getSelectedIndex());
+            }
+        });
+        priorityActionButton = FarmUi.primaryButton("Open priority");
+        priorityActionButton.setEnabled(false);
+        priorityActionButton.addActionListener(event -> {
+            startDashboardPriority(selectedDashboardPriority);
+        });
+        JPanel priorityRow = new JPanel(new BorderLayout(FarmUi.CONTROL_GAP, FarmUi.CONTROL_GAP));
+        priorityRow.setOpaque(false);
+        priorityRow.add(priorityStatusLabel, BorderLayout.NORTH);
+        priorityRow.add(priorityQueue, BorderLayout.CENTER);
+        priorityRow.add(priorityActionButton, BorderLayout.EAST);
+        JPanel priorityChooser = new JPanel(new BorderLayout(0, FarmUi.CONTROL_GAP));
+        priorityChooser.setOpaque(false);
+        priorityChooser.add(priorityRow, BorderLayout.NORTH);
+        priorityChooser.add(priorityDetailLabel, BorderLayout.SOUTH);
+        JPanel northStack = new JPanel(new BorderLayout(0, FarmUi.CONTROL_GAP));
+        northStack.setOpaque(false);
+        northStack.setName("dashboard.todayNorth");
+        JPanel bannerStack = new JPanel(new BorderLayout(0, FarmUi.CONTROL_GAP));
+        bannerStack.setOpaque(false);
+        bannerStack.setName("dashboard.reminderBanners");
+        bannerStack.add(startHerePanel, BorderLayout.NORTH);
+        bannerStack.add(remindersPanel, BorderLayout.CENTER);
+        northStack.add(bannerStack, BorderLayout.NORTH);
+        northStack.add(priorityChooser, BorderLayout.CENTER);
+        actionWorkspace.add(northStack, BorderLayout.NORTH);
+        JPanel boundedActions = new JPanel(new BorderLayout());
+        boundedActions.setOpaque(false);
+        boundedActions.add(actions, BorderLayout.NORTH);
+        actionWorkspace.add(boundedActions, BorderLayout.CENTER);
+        actionWorkspace.add(actionFooter, BorderLayout.SOUTH);
+        JPanel workPanel = FarmUi.section(
+                "Today’s work",
+                null,
+                actionWorkspace);
+        JPanel south = new DashboardSections(workPanel, alertsPanel);
+
+        JTabbedPane workspace = new JTabbedPane();
+        workspace.setName("dashboard.workspace");
+        workspace.getAccessibleContext().setAccessibleName("Dashboard workspaces");
+        workspace.addTab("Today’s work", south);
+        workspace.addTab("Inventory charts", chartsPanel);
+        center.add(workspace, BorderLayout.CENTER);
+        JScrollPane scroll = new JScrollPane(center,
+                JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED, JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+        scroll.setName("dashboard.scroll");
+        scroll.setBorder(BorderFactory.createEmptyBorder());
+        scroll.getVerticalScrollBar().setUnitIncrement(24);
+        panel.add(scroll, BorderLayout.CENTER);
+        panel.add(lastUpdatedLabel, BorderLayout.SOUTH);
+        FarmUi.revealFocusedControls(center);
 
         applyTheme(false);
     }
 
+    private static final class DashboardBody extends JPanel implements Scrollable {
+        private static final long serialVersionUID = 1L;
+
+        private DashboardBody() {
+            super(new BorderLayout(0, FarmUi.SECTION_GAP));
+        }
+
+        @Override public Dimension getPreferredScrollableViewportSize() { return getPreferredSize(); }
+        @Override public int getScrollableUnitIncrement(Rectangle visible, int orientation, int direction) {
+            return 24;
+        }
+        @Override public int getScrollableBlockIncrement(Rectangle visible, int orientation, int direction) {
+            return Math.max(24, visible.height - 24);
+        }
+        @Override public boolean getScrollableTracksViewportWidth() { return true; }
+        @Override public boolean getScrollableTracksViewportHeight() { return false; }
+    }
+
+    /** Keep actions at their natural height and stack the work cards on smaller screens. */
+    private static final class DashboardSections extends JPanel {
+        private static final long serialVersionUID = 1L;
+        private final JPanel work;
+        private final JPanel alerts;
+        private Boolean stacked;
+
+        private DashboardSections(JPanel work, JPanel alerts) {
+            super(new GridBagLayout());
+            this.work = work;
+            this.alerts = alerts;
+            setOpaque(false);
+            add(work);
+            add(alerts);
+        }
+
+        private void updateColumns() {
+            int width = getParent() == null ? getWidth() : getParent().getWidth();
+            boolean next = width > 0 && width < 1100;
+            if (stacked != null && stacked == next) return;
+            stacked = next;
+            GridBagLayout layout = (GridBagLayout) getLayout();
+            GridBagConstraints constraints = new GridBagConstraints();
+            constraints.fill = GridBagConstraints.BOTH;
+            constraints.anchor = GridBagConstraints.NORTHWEST;
+            constraints.weightx = 0.6;
+            layout.setConstraints(work, constraints);
+            constraints.gridx = next ? 0 : 1;
+            constraints.gridy = next ? 1 : 0;
+            constraints.weightx = next ? 0.6 : 0.4;
+            constraints.insets = next ? new Insets(FarmUi.CONTROL_GAP, 0, 0, 0)
+                    : new Insets(0, FarmUi.CONTROL_GAP, 0, 0);
+            layout.setConstraints(alerts, constraints);
+            revalidate();
+        }
+
+        @Override public Dimension getPreferredSize() {
+            updateColumns();
+            return super.getPreferredSize();
+        }
+
+        @Override public void doLayout() {
+            updateColumns();
+            super.doLayout();
+        }
+    }
+
     private JButton actionButton(String label, String tabTitle, String statusMsg) {
-        JButton btn = new JButton(label);
-        btn.addActionListener(e -> go(tabTitle, statusMsg));
+        JButton btn = FarmUi.secondaryButton(label);
+        btn.getAccessibleContext().setAccessibleName(
+                label + " from Today’s work actions");
+        btn.setToolTipText(statusMsg);
+        btn.addActionListener(e -> openDashboardDestination(tabTitle, statusMsg));
         return btn;
+    }
+
+    private void openDashboardDestination(String tabTitle, String statusMsg) {
+        if (host == null) {
+            return;
+        }
+        if ("Harvest Log".equals(tabTitle)) {
+            host.showHarvestEntry("Dashboard", "Dashboard");
+        } else if ("Market Day".equals(tabTitle)) {
+            host.showMarketDay("Dashboard", "Dashboard");
+        } else {
+            go(tabTitle, statusMsg);
+        }
+    }
+
+    private void openDashboardTool(String selection) {
+        if (selection == null) {
+            return;
+        }
+        switch (selection) {
+            case "Low-stock reorder" -> go("Inventory",
+                    "Open Inventory → Low-stock reorder for the restock sheet.");
+            case "Price list" -> go("Inventory",
+                    "Open Inventory → Price list for market or wholesale.");
+            case "Weekly farm report" -> go("Reports", "Opened weekly farm reports.");
+            case "Harvest forecast" -> {
+                if (host != null) {
+                    host.runTrendAnalysis();
+                }
+            }
+            case "Activity history" -> go("Activity History", "Opened activity history.");
+            case "Rose visualizer" -> go("Rose Visualizer", "Opened rose visualizer.");
+            default -> {
+                // The combo box is fixed; no fallback action is needed.
+            }
+        }
     }
 
     private void go(String tabTitle, String statusMsg) {
@@ -465,142 +1109,861 @@ public class DashboardTab implements FlowerFarmTab {
         }
     }
 
-    private void showMorningBriefing() {
-        if (morningBriefingService == null) {
-            return;
+    public void bindReminders(java.util.function.Consumer<GrowerReminder> onOpen,
+                               Runnable onDismiss, Runnable refresh) {
+        if (onOpen != null) {
+            reminderOpener = onOpen;
         }
-        try {
-            if (host != null) {
-                host.setStatus("⏳ Building morning briefing…");
-            }
-            MorningBriefingService.MorningBriefing briefing =
-                    morningBriefingService.buildOffline();
-            JTextArea area = new JTextArea(briefing.plainText(), 24, 68);
-            area.setEditable(false);
-            area.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
-            area.setCaretPosition(0);
-            JScrollPane scroll = new JScrollPane(area);
-            scroll.setPreferredSize(new Dimension(680, 460));
-
-            Object[] options = {"Export PDF…", "Close"};
-            int choice = JOptionPane.showOptionDialog(panel, scroll,
-                    "Morning briefing — " + briefing.date(),
-                    JOptionPane.DEFAULT_OPTION, JOptionPane.PLAIN_MESSAGE,
-                    null, options, options[1]);
-            if (choice == 0) {
-                JFileChooser chooser = new JFileChooser();
-                chooser.setSelectedFile(new File("morning-briefing-" + briefing.date() + ".pdf"));
-                if (chooser.showSaveDialog(panel) == JFileChooser.APPROVE_OPTION) {
-                    byte[] pdf = morningBriefingService.generatePdf(briefing);
-                    Files.write(chooser.getSelectedFile().toPath(), pdf);
-                    if (host != null) {
-                        host.setStatus("Morning briefing PDF → "
-                                + chooser.getSelectedFile().getName());
-                    }
-                }
-            } else if (host != null) {
-                host.setStatus("Briefing: " + briefing.actionItems().size() + " action(s).");
-            }
-        } catch (Exception ex) {
-            JOptionPane.showMessageDialog(panel, ex.getMessage(),
-                    "Morning briefing failed", JOptionPane.ERROR_MESSAGE);
-            if (host != null) {
-                host.setStatus("Briefing failed: " + ex.getMessage());
-            }
+        if (onDismiss != null) {
+            reminderDismisser = onDismiss;
+        }
+        if (refresh != null) {
+            remindersRefresh = refresh;
         }
     }
 
-    private void showDayCloseout() {
+    public RemindersPanel remindersPanel() {
+        if (panel == null) {
+            buildUI();
+        }
+        return remindersPanel;
+    }
+
+    private void updateStartHereVisibility(boolean emptyFarm) {
+        if (startHerePanel == null) {
+            return;
+        }
+        startHerePanel.setVisible(emptyFarm && !startHereDismissed);
+    }
+
+    private void onStartHereChoice(StartHereGuide.Choice choice) {
+        if (choice == StartHereGuide.Choice.DISMISS) {
+            startHereDismissed = true;
+            if (startHerePanel != null) {
+                startHerePanel.setVisible(false);
+            }
+        }
+        if (host == null) {
+            return;
+        }
+        switch (choice) {
+            case LOG_HARVEST -> host.showHarvestEntry("Dashboard", "Dashboard");
+            case IMPORT_SPREADSHEET -> host.importFromSpreadsheet();
+            case ADD_PRODUCT -> host.showAddInventoryItem("");
+            case DISMISS -> { /* status below */ }
+        }
+        host.setStatus(StartHereGuide.statusFor(choice));
+    }
+
+    private void startDashboardPriority(DashboardPriority priority) {
+        if (priority == null || host == null) {
+            return;
+        }
+        if ("Start here".equals(priority.targetTab())) {
+            host.openStartHere();
+            return;
+        }
+        if (!priority.inventoryProducts().isEmpty()) {
+            host.showInventoryProducts(
+                    priority.inventoryProducts(), "Dashboard", "Dashboard");
+            return;
+        }
+        if (priority.orderStatus() != null && !priority.orderStatus().isBlank()) {
+            host.showOrdersByStatus(priority.orderStatus(), "Dashboard", "Dashboard");
+            return;
+        }
+        if ("Market Day".equals(priority.targetTab())) {
+            host.showMarketDay("Dashboard", "Dashboard");
+            return;
+        }
+        if ("Irrigation & Care".equals(priority.targetTab())) {
+            host.showIrrigation("Dashboard", "Dashboard");
+            return;
+        }
+        if ("Harvest Log".equals(priority.targetTab())) {
+            host.showHarvestEntry("Dashboard", "Dashboard");
+            return;
+        }
+        go(priority.targetTab(), priority.navigationMessage());
+    }
+
+    private record DashboardPriority(int rank, String summary, String targetTab,
+                                     String navigationMessage,
+                                     List<String> inventoryProducts,
+                                     String orderStatus) {
+        private DashboardPriority(int rank, String summary, String targetTab,
+                                  String navigationMessage) {
+            this(rank, summary, targetTab, navigationMessage, List.of(), null);
+        }
+
+        private DashboardPriority {
+            inventoryProducts = inventoryProducts == null
+                    ? List.of() : List.copyOf(inventoryProducts);
+        }
+    }
+
+    void startMorningBriefing() {
+        if (morningBriefingService == null) {
+            return;
+        }
+        if (preparingDailySheet) {
+            return;
+        }
+        beginDailySheet("Preparing morning briefing…",
+                "Loading packing, watering, harvest, and stock priorities in the background.");
+        new SwingWorker<MorningBriefingService.MorningBriefing, Void>() {
+            @Override
+            protected MorningBriefingService.MorningBriefing doInBackground() {
+                return morningBriefingService.buildOffline();
+            }
+
+            @Override
+            protected void done() {
+                try {
+                    completeMorningBriefing(get());
+                } catch (InterruptedException exception) {
+                    Thread.currentThread().interrupt();
+                    failDailySheet("Morning briefing", exception);
+                } catch (java.util.concurrent.ExecutionException exception) {
+                    failDailySheet("Morning briefing",
+                            exception.getCause() == null ? exception : exception.getCause());
+                } catch (RuntimeException exception) {
+                    failDailySheet("Morning briefing", exception);
+                }
+            }
+        }.execute();
+    }
+
+    private void completeMorningBriefing(MorningBriefingService.MorningBriefing briefing) {
+        finishDailySheetControls();
+        List<MorningAction> actions = morningActions(briefing);
+        String summary = actions.isEmpty() ? "Morning briefing ready · farm ready"
+                : "Morning briefing ready · " + actions.size() + " priorit"
+                        + (actions.size() == 1 ? "y" : "ies");
+        updateDailySheetStatus(summary,
+                "Morning briefing prepared for " + briefing.date() + ". "
+                        + (actions.isEmpty() ? "No startup task is waiting."
+                        : "The first priority is " + actions.get(0).summary() + "."),
+                actions.isEmpty() ? FarmUi.Tone.SUCCESS : FarmUi.Tone.WARNING);
+        if (panel.isShowing()) {
+            presentMorningBriefing(briefing);
+        } else if (host != null) {
+            host.setStatus("Briefing: " + actions.size() + " operational priority(s).");
+        }
+    }
+
+    private void presentMorningBriefing(MorningBriefingService.MorningBriefing briefing) {
+        try {
+            List<MorningAction> morningActions = morningActions(briefing);
+            JLabel readiness = FarmUi.statusBadge(
+                    morningActions.isEmpty() ? "Farm ready"
+                            : morningActions.size() + " morning priorit"
+                            + (morningActions.size() == 1 ? "y" : "ies"),
+                    morningActions.isEmpty() ? FarmUi.Tone.SUCCESS : FarmUi.Tone.WARNING);
+            MorningActionChooser actionChooser = morningActions.isEmpty()
+                    ? null : buildMorningActionChooser(morningActions);
+            JComponent briefingView = buildDailySheetPreview(panel, "dashboard.morning",
+                    briefing.plainText(), readiness, morningActions.isEmpty()
+                            ? "No operational startup task is waiting."
+                            : "Choose today’s next job, then refresh after completing it.",
+                    actionChooser == null ? null : actionChooser.component());
+
+            Object[] options = morningActions.isEmpty()
+                    ? new Object[]{"Export PDF…", "Close"}
+                    : new Object[]{"Start selected task",
+                        "Export PDF…", "Close"};
+            int choice = dialogs.showOption(panel, briefingView,
+                    "Morning briefing — " + briefing.date(),
+                    JOptionPane.DEFAULT_OPTION, JOptionPane.PLAIN_MESSAGE,
+                    null, options, options[options.length - 1]);
+            if (!morningActions.isEmpty() && choice == 0) {
+                MorningAction next = actionChooser.selectedAction();
+                startMorningAction(next);
+                return;
+            }
+            int exportChoice = morningActions.isEmpty() ? 0 : 1;
+            if (choice == exportChoice) {
+                chooseMorningBriefingExport(briefing);
+            } else if (host != null) {
+                host.setStatus("Briefing: " + morningActions.size() + " operational priority(s).");
+            }
+        } catch (Exception ex) {
+            failDailySheet("Morning briefing", ex);
+        }
+    }
+
+    static JScrollPane buildDailySheetPreview(Component owner, String name, String report,
+                                               JLabel readiness, String guidance, JComponent chooser) {
+        JTextArea area = FarmUi.displayArea(16, 60);
+        area.setName(name + ".report");
+        area.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 13));
+        area.setBorder(BorderFactory.createEmptyBorder(12, 14, 12, 14));
+        area.setText(report);
+        area.setCaretPosition(0);
+        area.getAccessibleContext().setAccessibleName("Complete daily farm report");
+        area.getAccessibleContext().setAccessibleDescription(
+                "Read-only briefing or closeout text. Select and copy any part of the complete report.");
+        JScrollPane reportScroll = new JScrollPane(area,
+                JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED, JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+        reportScroll.setName(name + ".reportScroll");
+        reportScroll.setPreferredSize(new Dimension(640, 300));
+        reportScroll.setMinimumSize(new Dimension(260, 180));
+        reportScroll.getVerticalScrollBar().setUnitIncrement(24);
+
+        JPanel heading = new JPanel(new BorderLayout(0, FarmUi.CONTROL_GAP));
+        heading.setOpaque(false);
+        heading.add(FarmUi.toolbar(readiness), BorderLayout.NORTH);
+        JLabel hint = FarmUi.wrappingHint(guidance);
+        hint.setName(name + ".guidance");
+        heading.add(hint, BorderLayout.CENTER);
+        if (chooser != null) {
+            heading.add(chooser, BorderLayout.SOUTH);
+        }
+        JPanel preview = new JPanel(new BorderLayout(0, FarmUi.SECTION_GAP));
+        preview.setName(name + ".preview");
+        preview.setOpaque(false);
+        preview.setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
+        preview.add(heading, BorderLayout.NORTH);
+        preview.add(reportScroll, BorderLayout.CENTER);
+        int contentHeight = Math.min(540, preview.getPreferredSize().height);
+        JScrollPane dialog = FarmUi.dialogScroll(owner, preview, new Dimension(680, contentHeight));
+        dialog.setName(name + ".dialogScroll");
+        dialog.getAccessibleContext().setAccessibleName("Daily report and selected task preview");
+        return dialog;
+    }
+
+    static List<MorningAction> morningActions(
+            MorningBriefingService.MorningBriefing briefing) {
+        List<MorningAction> actions = new ArrayList<>();
+        MarketDayPackingService.MarketDayPlan marketDay = briefing.marketDay();
+        if (marketDay != null && marketDay.orderCount() > 0) {
+            if (marketDay.shortfallSkuCount() > 0) {
+                actions.add(new MorningAction(0, "Market Day",
+                        "Resolve " + marketDay.shortfallSkuCount() + " packing shortfall(s)",
+                        "Opened Market Day to resolve today’s packing shortfalls.", List.of()));
+            } else {
+                actions.add(new MorningAction(15, "Market Day",
+                        "Review " + marketDay.orderCount() + " order(s) for packing",
+                        "Opened Market Day to review today’s customer load-out.", List.of()));
+            }
+        }
+        IrrigationAdvisorService.IrrigationAdvice irrigation = briefing.irrigation();
+        if (irrigation != null && (irrigation.priority() == IrrigationAdvisorService.Priority.HIGH
+                || irrigation.priority() == IrrigationAdvisorService.Priority.MEDIUM)) {
+            int rank = irrigation.priority() == IrrigationAdvisorService.Priority.HIGH ? 10 : 45;
+            actions.add(new MorningAction(rank, "Irrigation & Care",
+                    "Watering " + irrigation.priority().name().toLowerCase()
+                            + " · " + irrigation.headline(),
+                    "Opened Irrigation & Care for today’s watering plan.", List.of()));
+        }
+        if (!briefing.lowStock().isEmpty()) {
+            List<String> lowStockProducts = briefing.lowStock().stream()
+                    .map(MorningBriefingService.LowStockLine::name)
+                    .filter(name -> name != null && !name.isBlank())
+                    .distinct()
+                    .toList();
+            actions.add(new MorningAction(30, "Inventory",
+                    "Count or restock " + briefing.lowStock().size() + " low-stock item(s)",
+                    "Opened Inventory with the morning low-stock queue.", lowStockProducts));
+        }
+        if (briefing.weekHarvestQty() <= 0) {
+            actions.add(new MorningAction(40, "Harvest Log",
+                    "No harvest logged in the last 7 days",
+                    "Opened Harvest Log to record the morning cut or review the harvest plan.",
+                    List.of()));
+        }
+        return actions.stream()
+                .sorted(java.util.Comparator.comparingInt(MorningAction::rank))
+                .toList();
+    }
+
+    record MorningAction(int rank, String targetTab, String summary,
+                         String navigationMessage, List<String> inventoryProducts) {
+        MorningAction {
+            inventoryProducts = inventoryProducts == null
+                    ? List.of() : List.copyOf(inventoryProducts);
+        }
+
+        @Override
+        public String toString() {
+            return summary + " → " + targetTab;
+        }
+    }
+
+    void startMorningAction(MorningAction action) {
+        if (action == null || host == null) {
+            return;
+        }
+        if (!action.inventoryProducts().isEmpty()) {
+            host.showInventoryProducts(
+                    action.inventoryProducts(), "Dashboard", "Dashboard");
+            host.setStatus(action.navigationMessage() + " "
+                    + String.join(", ", action.inventoryProducts()) + ".");
+            return;
+        }
+        if ("Market Day".equals(action.targetTab())) {
+            host.showMarketDay("Dashboard", "Dashboard");
+            return;
+        }
+        if ("Irrigation & Care".equals(action.targetTab())) {
+            host.showIrrigation("Dashboard", "Dashboard");
+            return;
+        }
+        if ("Harvest Log".equals(action.targetTab())) {
+            host.showHarvestEntry("Dashboard", "Dashboard");
+            return;
+        }
+        go(action.targetTab(), action.navigationMessage());
+    }
+
+    static MorningActionChooser buildMorningActionChooser(List<MorningAction> actions) {
+        List<MorningAction> snapshot = List.copyOf(actions);
+        JComboBox<MorningAction> queue = new JComboBox<>(
+                snapshot.toArray(MorningAction[]::new));
+        queue.setName("dashboard.morningTaskQueue");
+        queue.getAccessibleContext().setAccessibleName("Ranked morning task queue");
+        configureDailyTaskQueue(queue);
+        JLabel detail = FarmUi.wrappingHint(" ");
+        detail.setName("dashboard.morningTaskDetail");
+        detail.getAccessibleContext().setAccessibleName(
+                "Selected morning task destination and urgency");
+        Runnable update = () -> {
+            MorningAction selected = (MorningAction) queue.getSelectedItem();
+            queue.setToolTipText(selected == null ? null : selected.toString());
+            if (selected == null) {
+                detail.setText("No morning task selected.");
+                detail.getAccessibleContext().setAccessibleDescription(
+                        "No morning task is selected.");
+                return;
+            }
+            String urgency = selected.rank() <= 10 ? "Urgent"
+                    : selected.rank() <= 30 ? "Next up" : "Follow-up";
+            String guidance = urgency + " · "
+                    + dailySheetActionPreview(selected.targetTab(), selected.navigationMessage());
+            detail.setText(guidance);
+            detail.getAccessibleContext().setAccessibleDescription(
+                    "Selected " + urgency.toLowerCase() + " morning task: "
+                            + selected.summary() + ". " + guidance);
+        };
+        queue.addActionListener(event -> update.run());
+        update.run();
+        JPanel component = new JPanel(new BorderLayout(FarmUi.CONTROL_GAP, FarmUi.CONTROL_GAP));
+        component.setOpaque(false);
+        JLabel label = new JLabel("Start:");
+        label.setLabelFor(queue);
+        label.setDisplayedMnemonic('S');
+        component.add(label, BorderLayout.WEST);
+        component.add(queue, BorderLayout.CENTER);
+        component.add(detail, BorderLayout.SOUTH);
+        return new MorningActionChooser(component, queue);
+    }
+
+    private static void configureDailyTaskQueue(JComboBox<?> queue) {
+        FarmUi.entryControl(queue, "", "Choose a task; its destination and urgency are shown below.");
+        queue.setPreferredSize(new Dimension(420, 36));
+        queue.setMinimumSize(new Dimension(80, 36));
+        queue.setMaximumRowCount(8);
+        DefaultListCellRenderer renderer = new DefaultListCellRenderer();
+        renderer.putClientProperty("html.disable", Boolean.TRUE);
+        queue.setRenderer(renderer);
+    }
+
+    private static String dailySheetActionPreview(String targetTab, String navigationMessage) {
+        if (navigationMessage == null || navigationMessage.isBlank()) {
+            return "Opens " + targetTab + ".";
+        }
+        if (navigationMessage.startsWith("Opened ")) {
+            return "Opens " + navigationMessage.substring("Opened ".length());
+        }
+        return "Opens " + targetTab + " · " + navigationMessage;
+    }
+
+    record MorningActionChooser(JPanel component, JComboBox<MorningAction> queue) {
+        MorningAction selectedAction() {
+            return (MorningAction) queue.getSelectedItem();
+        }
+    }
+
+    void startDayCloseout() {
         if (dayCloseoutService == null) {
             return;
         }
-        try {
-            if (host != null) {
-                host.setStatus("⏳ Building day closeout…");
+        if (preparingDailySheet) {
+            return;
+        }
+        beginDailySheet("Preparing day closeout…",
+                "Loading completed sales, harvests, open orders, and stock in the background.");
+        new SwingWorker<DayCloseoutService.DayCloseout, Void>() {
+            @Override
+            protected DayCloseoutService.DayCloseout doInBackground() {
+                return dayCloseoutService.build();
             }
-            DayCloseoutService.DayCloseout closeout = dayCloseoutService.build();
-            JTextArea area = new JTextArea(closeout.plainText(), 24, 68);
-            area.setEditable(false);
-            area.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
-            area.setCaretPosition(0);
-            JScrollPane scroll = new JScrollPane(area);
-            scroll.setPreferredSize(new Dimension(680, 460));
 
-            Object[] options = {"Export PDF…", "Close"};
-            int choice = JOptionPane.showOptionDialog(panel, scroll,
+            @Override
+            protected void done() {
+                try {
+                    completeDayCloseout(get());
+                } catch (InterruptedException exception) {
+                    Thread.currentThread().interrupt();
+                    failDailySheet("Day closeout", exception);
+                } catch (java.util.concurrent.ExecutionException exception) {
+                    failDailySheet("Day closeout",
+                            exception.getCause() == null ? exception : exception.getCause());
+                } catch (RuntimeException exception) {
+                    failDailySheet("Day closeout", exception);
+                }
+            }
+        }.execute();
+    }
+
+    private void completeDayCloseout(DayCloseoutService.DayCloseout closeout) {
+        finishDailySheetControls();
+        List<CloseoutAction> actions = closeoutActions(closeout);
+        String summary = actions.isEmpty() ? "Day closeout ready · no blockers"
+                : "Day closeout ready · " + actions.size() + " follow-ups";
+        updateDailySheetStatus(summary,
+                "Day closeout prepared for " + closeout.date() + ". "
+                        + (actions.isEmpty() ? "No operational blocker remains."
+                        : "Resolve first: " + actions.get(0).summary() + "."),
+                actions.isEmpty() ? FarmUi.Tone.SUCCESS : FarmUi.Tone.WARNING);
+        if (panel.isShowing()) {
+            presentDayCloseout(closeout);
+        } else if (host != null) {
+            host.setStatus("Closeout: " + closeout.fulfilledCount() + " fulfilled · "
+                    + actions.size() + " follow-up area(s).");
+        }
+    }
+
+    private void presentDayCloseout(DayCloseoutService.DayCloseout closeout) {
+        try {
+            List<CloseoutAction> followUps = closeoutActions(closeout);
+            JLabel readiness = FarmUi.statusBadge(
+                    followUps.isEmpty() ? "Ready to close"
+                            : followUps.size() + " follow-up area"
+                            + (followUps.size() == 1 ? "" : "s"),
+                    followUps.isEmpty() ? FarmUi.Tone.SUCCESS : FarmUi.Tone.WARNING);
+            CloseoutActionChooser actionChooser = followUps.isEmpty()
+                    ? null : buildCloseoutActionChooser(followUps);
+            JComponent closeoutView = buildDailySheetPreview(panel, "dashboard.closeout",
+                    closeout.plainText(), readiness, followUps.isEmpty()
+                            ? "No operational blockers remain for today."
+                            : "Choose a follow-up, resolve it, then rebuild closeout.",
+                    actionChooser == null ? null : actionChooser.component());
+
+            Object[] options = followUps.isEmpty()
+                    ? new Object[]{"Export PDF…", "Close"}
+                    : new Object[]{"Open selected follow-up",
+                        "Export PDF…", "Close"};
+            int choice = dialogs.showOption(panel, closeoutView,
                     "Day closeout — " + closeout.date(),
                     JOptionPane.DEFAULT_OPTION, JOptionPane.PLAIN_MESSAGE,
-                    null, options, options[1]);
-            if (choice == 0) {
-                JFileChooser chooser = new JFileChooser();
-                chooser.setSelectedFile(new File("day-closeout-" + closeout.date() + ".pdf"));
-                if (chooser.showSaveDialog(panel) == JFileChooser.APPROVE_OPTION) {
-                    byte[] pdf = dayCloseoutService.generatePdf(closeout);
-                    Files.write(chooser.getSelectedFile().toPath(), pdf);
-                    if (host != null) {
-                        host.setStatus("Day closeout PDF → "
-                                + chooser.getSelectedFile().getName());
-                    }
-                }
+                    null, options, options[options.length - 1]);
+            if (!followUps.isEmpty() && choice == 0) {
+                CloseoutAction next = actionChooser.selectedAction();
+                startCloseoutAction(next);
+                return;
+            }
+            int exportChoice = followUps.isEmpty() ? 0 : 1;
+            if (choice == exportChoice) {
+                chooseDayCloseoutExport(closeout);
             } else if (host != null) {
                 host.setStatus("Closeout: " + closeout.fulfilledCount() + " fulfilled · "
-                        + closeout.nextSteps().size() + " next step(s).");
+                        + followUps.size() + " follow-up area(s).");
             }
         } catch (Exception ex) {
-            JOptionPane.showMessageDialog(panel, ex.getMessage(),
-                    "Day closeout failed", JOptionPane.ERROR_MESSAGE);
-            if (host != null) {
-                host.setStatus("Closeout failed: " + ex.getMessage());
+            failDailySheet("Day closeout", ex);
+        }
+    }
+
+    void chooseMorningBriefingExport(MorningBriefingService.MorningBriefing briefing) {
+        File suggested = new File("morning-briefing-" + briefing.date() + ".pdf");
+        var selected = files.chooseSave(panel, "Save morning briefing PDF", suggested);
+        if (selected.isEmpty()) {
+            cancelDailySheetSave("Morning briefing", false);
+            return;
+        }
+        File destination = selected.get();
+        if (!approveDailySheetReplacement(destination, "morning briefing")) {
+            cancelDailySheetSave("Morning briefing", true);
+            return;
+        }
+        startMorningBriefingExport(briefing, destination.toPath());
+    }
+
+    void chooseDayCloseoutExport(DayCloseoutService.DayCloseout closeout) {
+        File suggested = new File("day-closeout-" + closeout.date() + ".pdf");
+        var selected = files.chooseSave(panel, "Save day closeout PDF", suggested);
+        if (selected.isEmpty()) {
+            cancelDailySheetSave("Day closeout", false);
+            return;
+        }
+        File destination = selected.get();
+        if (!approveDailySheetReplacement(destination, "day closeout")) {
+            cancelDailySheetSave("Day closeout", true);
+            return;
+        }
+        startDayCloseoutExport(closeout, destination.toPath());
+    }
+
+    private boolean approveDailySheetReplacement(File file, String sheet) {
+        if (!file.exists()) {
+            return true;
+        }
+        return dialogs.showConfirm(panel,
+                "A file named " + file.getName() + " already exists. Replace it?",
+                "Replace existing " + sheet + "?",
+                JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE)
+                == JOptionPane.YES_OPTION;
+    }
+
+    private void cancelDailySheetSave(String sheet, boolean existingFile) {
+        String message = existingFile
+                ? sheet + " not saved · existing file kept"
+                : sheet + " ready · save cancelled";
+        String description = existingFile
+                ? "The selected file was not replaced; the prepared daily sheet remains available."
+                : "No file was written; prepare the daily sheet again when ready to save.";
+        updateDailySheetStatus(message, description, FarmUi.Tone.NEUTRAL);
+        if (host != null) {
+            host.setStatus(existingFile
+                    ? sheet + " was not saved. The existing file was kept."
+                    : sheet + " save cancelled. No file was changed.");
+        }
+    }
+
+    private void beginDailySheet(String label, String description) {
+        preparingDailySheet = true;
+        morningBriefingButton.setEnabled(false);
+        dayCloseoutButton.setEnabled(false);
+        updateDailySheetStatus(label, description, FarmUi.Tone.INFO);
+        if (host != null) {
+            host.setStatus(label);
+        }
+    }
+
+    void startMorningBriefingExport(MorningBriefingService.MorningBriefing briefing,
+                                    Path destination) {
+        if (briefing == null || destination == null || preparingDailySheet) {
+            return;
+        }
+        beginDailySheet("Saving morning briefing…",
+                "Generating the PDF and safely writing the selected file in the background.");
+        new SwingWorker<Path, Void>() {
+            @Override
+            protected Path doInBackground() throws Exception {
+                return writeDailySheetPdf(
+                        destination, morningBriefingService.generatePdf(briefing));
             }
+
+            @Override
+            protected void done() {
+                finishDailySheetExport("Morning briefing", this);
+            }
+        }.execute();
+    }
+
+    void startDayCloseoutExport(DayCloseoutService.DayCloseout closeout,
+                                Path destination) {
+        if (closeout == null || destination == null || preparingDailySheet) {
+            return;
+        }
+        beginDailySheet("Saving day closeout…",
+                "Generating the PDF and safely writing the selected file in the background.");
+        new SwingWorker<Path, Void>() {
+            @Override
+            protected Path doInBackground() throws Exception {
+                return writeDailySheetPdf(destination, dayCloseoutService.generatePdf(closeout));
+            }
+
+            @Override
+            protected void done() {
+                finishDailySheetExport("Day closeout", this);
+            }
+        }.execute();
+    }
+
+    private void finishDailySheetExport(String sheet, SwingWorker<Path, Void> worker) {
+        try {
+            Path destination = java.util.Objects.requireNonNull(
+                    worker.get(), "Daily-sheet export returned no destination.");
+            finishDailySheetControls();
+            Path destinationFileName = destination.getFileName();
+            String fileName = destinationFileName == null
+                    ? destination.toString() : destinationFileName.toString();
+            updateDailySheetStatus(sheet + " saved · " + fileName,
+                    sheet + " PDF saved successfully to " + destination.toAbsolutePath() + ".",
+                    FarmUi.Tone.SUCCESS);
+            if (host != null) {
+                host.setStatus(sheet + " saved as “" + fileName + "”.");
+            }
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            failDailySheetExport(sheet, exception);
+        } catch (java.util.concurrent.ExecutionException exception) {
+            failDailySheetExport(sheet,
+                    exception.getCause() == null ? exception : exception.getCause());
+        } catch (RuntimeException exception) {
+            failDailySheetExport(sheet, exception);
+        }
+    }
+
+    private void failDailySheetExport(String sheet, Throwable failure) {
+        finishDailySheetControls();
+        String detail = compactMessage(FarmUi.actionableError(
+                "Saving the " + sheet.toLowerCase(java.util.Locale.ROOT), failure));
+        String recovery = detail
+                + " Review the selected destination and retry the export.";
+        updateDailySheetStatus(sheet + " export failed · retry available",
+                recovery, FarmUi.Tone.DANGER);
+        if (host != null) {
+            host.setStatus(sheet + " was not saved. Review the status and retry the export.");
+        }
+        if (panel.isShowing()) {
+            dialogs.showMessage(panel, recovery,
+                    sheet + " export failed", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private static Path writeDailySheetPdf(Path destination, byte[] pdf) throws Exception {
+        if (pdf == null || pdf.length == 0) {
+            throw new IllegalStateException("The generated PDF was empty.");
+        }
+        Path target = destination.toAbsolutePath().normalize();
+        Path parent = target.getParent();
+        if (parent == null || !Files.isDirectory(parent)) {
+            throw new IllegalArgumentException("Choose an existing destination folder.");
+        }
+        Path targetFileName = target.getFileName();
+        String leaf = targetFileName == null ? "daily-sheet" : targetFileName.toString();
+        Path temporary = Files.createTempFile(parent, "." + leaf + "-", ".tmp");
+        try {
+            Files.write(temporary, pdf);
+            try {
+                return Files.move(temporary, target,
+                        StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+            } catch (AtomicMoveNotSupportedException exception) {
+                return Files.move(temporary, target, StandardCopyOption.REPLACE_EXISTING);
+            }
+        } finally {
+            Files.deleteIfExists(temporary);
+        }
+    }
+
+    private void finishDailySheetControls() {
+        preparingDailySheet = false;
+        morningBriefingButton.setEnabled(true);
+        dayCloseoutButton.setEnabled(true);
+    }
+
+    private void failDailySheet(String sheet, Throwable failure) {
+        finishDailySheetControls();
+        String detail = FarmUi.actionableError("Preparing the "
+                + sheet.toLowerCase(java.util.Locale.ROOT), failure);
+        String recovery = compactMessage(detail)
+                + " No daily sheet was opened; correct the data issue and retry.";
+        updateDailySheetStatus(sheet + " failed · retry available",
+                recovery, FarmUi.Tone.DANGER);
+        if (host != null) {
+            host.setStatus("The " + sheet.toLowerCase(java.util.Locale.ROOT)
+                    + " could not be prepared. Review the status and retry.");
+        }
+        if (panel.isShowing()) {
+            dialogs.showMessage(panel, recovery,
+                    sheet + " failed", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private void updateDailySheetStatus(String message, String description, FarmUi.Tone tone) {
+        FarmUi.updateStatusBadge(dailySheetStatusLabel, message, tone);
+        dailySheetStatusLabel.setToolTipText(description);
+        dailySheetStatusLabel.getAccessibleContext().setAccessibleDescription(description);
+    }
+
+    private static String compactMessage(String message) {
+        String clean = message == null ? "The operation did not return a result."
+                : message.replaceAll("\\s+", " ").trim();
+        return clean.length() <= 220 ? clean : clean.substring(0, 217) + "…";
+    }
+
+    static List<CloseoutAction> closeoutActions(DayCloseoutService.DayCloseout closeout) {
+        List<CloseoutAction> actions = new ArrayList<>();
+        if (closeout.remainingConfirmedCount() > 0) {
+            actions.add(new CloseoutAction(
+                    "Market Day",
+                    "Finish " + closeout.remainingConfirmedCount() + " confirmed order(s)",
+                    "Opened Market Day to finish the confirmed orders still waiting at closeout.",
+                    List.of()));
+        }
+        if (closeout.todayHarvestEntries() == 0) {
+            actions.add(new CloseoutAction(
+                    "Harvest Log",
+                    "Review the missing harvest log",
+                    "Opened Harvest Log to record today’s cut or confirm a rest day.", List.of()));
+        }
+        if (!closeout.lowStock().isEmpty()) {
+            List<String> lowStockProducts = closeout.lowStock().stream()
+                    .map(DayCloseoutService.LowStockLine::name)
+                    .filter(name -> name != null && !name.isBlank())
+                    .distinct()
+                    .toList();
+            actions.add(new CloseoutAction(
+                    "Inventory",
+                    "Count or restock " + closeout.lowStock().size() + " low-stock item(s)",
+                    "Opened Inventory with the closeout low-stock queue.", lowStockProducts));
+        }
+        if (closeout.cancelledCount() > 0) {
+            actions.add(new CloseoutAction(
+                    "Customers & Orders",
+                    "Follow up " + closeout.cancelledCount() + " cancelled order(s)",
+                    "Opened Customers & Orders to review cancelled-order follow-up notes.",
+                    List.of(), "CANCELLED"));
+        }
+        return List.copyOf(actions);
+    }
+
+    static CloseoutActionChooser buildCloseoutActionChooser(List<CloseoutAction> actions) {
+        List<CloseoutAction> snapshot = List.copyOf(actions);
+        JComboBox<CloseoutAction> queue = new JComboBox<>(
+                snapshot.toArray(CloseoutAction[]::new));
+        queue.setName("dashboard.closeoutFollowUps");
+        queue.getAccessibleContext().setAccessibleName("Day closeout follow-up queue");
+        configureDailyTaskQueue(queue);
+        JLabel detail = FarmUi.wrappingHint(" ");
+        detail.setName("dashboard.closeoutFollowUpDetail");
+        detail.getAccessibleContext().setAccessibleName(
+                "Selected closeout follow-up destination");
+        Runnable update = () -> {
+            CloseoutAction selected = (CloseoutAction) queue.getSelectedItem();
+            queue.setToolTipText(selected == null ? null : selected.toString());
+            if (selected == null) {
+                detail.setText("No follow-up selected.");
+                detail.getAccessibleContext().setAccessibleDescription(
+                        "No closeout follow-up is selected.");
+                return;
+            }
+            String guidance = dailySheetActionPreview(
+                    selected.targetTab(), selected.navigationMessage());
+            detail.setText(guidance);
+            detail.getAccessibleContext().setAccessibleDescription(
+                    "Selected follow-up: " + selected.summary() + ". " + guidance);
+        };
+        queue.addActionListener(event -> update.run());
+        update.run();
+        JPanel component = new JPanel(new BorderLayout(FarmUi.CONTROL_GAP, FarmUi.CONTROL_GAP));
+        component.setOpaque(false);
+        JLabel label = new JLabel("Resolve:");
+        label.setLabelFor(queue);
+        label.setDisplayedMnemonic('R');
+        component.add(label, BorderLayout.WEST);
+        component.add(queue, BorderLayout.CENTER);
+        component.add(detail, BorderLayout.SOUTH);
+        return new CloseoutActionChooser(component, queue);
+    }
+
+    record CloseoutAction(String targetTab, String summary, String navigationMessage,
+                          List<String> inventoryProducts, String orderStatus) {
+        CloseoutAction(String targetTab, String summary, String navigationMessage,
+                       List<String> inventoryProducts) {
+            this(targetTab, summary, navigationMessage, inventoryProducts, null);
+        }
+
+        CloseoutAction {
+            inventoryProducts = inventoryProducts == null
+                    ? List.of() : List.copyOf(inventoryProducts);
+        }
+
+        @Override
+        public String toString() {
+            return summary + " → " + targetTab;
+        }
+    }
+
+    void startCloseoutAction(CloseoutAction action) {
+        if (action == null || host == null) {
+            return;
+        }
+        if (!action.inventoryProducts().isEmpty()) {
+            host.showInventoryProducts(
+                    action.inventoryProducts(), "Dashboard", "Dashboard");
+            host.setStatus(action.navigationMessage() + " "
+                    + String.join(", ", action.inventoryProducts()) + ".");
+            return;
+        }
+        if (action.orderStatus() != null && !action.orderStatus().isBlank()) {
+            host.showOrdersByStatus(action.orderStatus(), "Dashboard", "Dashboard");
+            return;
+        }
+        if ("Market Day".equals(action.targetTab())) {
+            host.showMarketDay("Dashboard", "Dashboard");
+            return;
+        }
+        if ("Harvest Log".equals(action.targetTab())) {
+            host.showHarvestEntry("Dashboard", "Dashboard");
+            return;
+        }
+        go(action.targetTab(), action.navigationMessage());
+    }
+
+    record CloseoutActionChooser(JPanel component, JComboBox<CloseoutAction> queue) {
+        CloseoutAction selectedAction() {
+            return (CloseoutAction) queue.getSelectedItem();
         }
     }
 
     private ChartPanel buildPieChartPanel() {
-        JFreeChart chart = ChartFactory.createPieChart(
+        inventoryValueChart = ChartFactory.createPieChart(
                 "Inventory Value by Category", pieDataset, true, true, false);
-        chart.setBackgroundPaint(Color.WHITE);
-        chart.getPlot().setBackgroundPaint(Color.WHITE);
-        chart.getPlot().setOutlineVisible(false);
-        ChartPanel chartPanel = new ChartPanel(chart);
+        inventoryValueChart.getPlot().setOutlineVisible(false);
+        ChartPanel chartPanel = new ChartPanel(inventoryValueChart);
         chartPanel.setPreferredSize(new Dimension(420, 300));
         return chartPanel;
     }
 
     private ChartPanel buildBarChartPanel() {
-        JFreeChart chart = ChartFactory.createBarChart(
+        stockQuantityChart = ChartFactory.createBarChart(
                 "Quantity by Item (top " + MAX_BARS + ")", "Item", "Quantity", barDataset);
-        chart.setBackgroundPaint(Color.WHITE);
-        chart.getPlot().setBackgroundPaint(new Color(250, 250, 250));
-        chart.getPlot().setOutlineVisible(false);
-        ChartPanel chartPanel = new ChartPanel(chart);
+        stockQuantityChart.getPlot().setOutlineVisible(false);
+        ((CategoryPlot) stockQuantityChart.getPlot()).getRenderer()
+                .setSeriesPaint(0, FarmUi.accentColor());
+        ChartPanel chartPanel = new ChartPanel(stockQuantityChart);
         chartPanel.setPreferredSize(new Dimension(420, 300));
         return chartPanel;
     }
 
     public void applyTheme(boolean dark) {
-        this.darkTheme = dark;
         if (panel == null) {
             return;
         }
-        Color cardBg = dark ? new Color(60, 63, 65) : new Color(250, 250, 250);
-        Color valueFg = dark ? new Color(120, 220, 120) : new Color(0, 100, 0);
-        Color mutedFg = dark ? new Color(160, 170, 160) : new Color(90, 100, 90);
-        Color border = dark ? new Color(90, 93, 95) : new Color(200, 200, 200);
+        Color mutedFg = FarmUi.mutedColor();
+
+        if (lastUpdatedLabel != null) lastUpdatedLabel.setForeground(mutedFg);
+        if (lowStockSubtitle != null) lowStockSubtitle.setForeground(mutedFg);
+        if (weekHarvestSpark != null) {
+            weekHarvestSpark.setLineColor(
+                    FarmUi.toneForegroundColor(FarmUi.Tone.SUCCESS));
+        }
+        if (weekRevenueSpark != null) {
+            weekRevenueSpark.setLineColor(FarmUi.accentColor());
+        }
+
+        styleChart(inventoryValueChart);
+        styleChart(stockQuantityChart);
 
         for (int i = 0; i < kpiCards.length; i++) {
             JPanel card = kpiCards[i];
-            if (card != null && i != 2) { // low-stock styled separately
-                card.setBackground(cardBg);
-                card.setBorder(BorderFactory.createCompoundBorder(
-                        BorderFactory.createLineBorder(border, 1),
-                        BorderFactory.createEmptyBorder(12, 12, 12, 12)));
+            if (card != null && i != 3) { // low-stock styled separately
+                FarmUi.Tone tone = kpiTone(i);
+                card.setBackground(FarmUi.toneSurfaceColor(tone));
+                card.setBorder(dashboardCardBorder(tone));
             }
         }
-        if (totalItemsLabel != null) totalItemsLabel.setForeground(valueFg);
-        if (totalValueLabel != null) totalValueLabel.setForeground(valueFg);
-        if (totalCostLabel != null) totalCostLabel.setForeground(mutedFg);
-        if (weekHarvestLabel != null) weekHarvestLabel.setForeground(valueFg);
-        if (weekRevenueLabel != null) weekRevenueLabel.setForeground(valueFg);
+        if (totalItemsLabel != null) totalItemsLabel.setForeground(mutedFg);
+        if (totalValueLabel != null) totalValueLabel.setForeground(
+                FarmUi.toneForegroundColor(FarmUi.Tone.INFO));
+        if (weekHarvestLabel != null) weekHarvestLabel.setForeground(
+                FarmUi.toneForegroundColor(FarmUi.Tone.SUCCESS));
+        if (weekRevenueLabel != null) weekRevenueLabel.setForeground(
+                FarmUi.toneForegroundColor(FarmUi.Tone.SUCCESS));
         if (weekRevenuePipelineLabel != null) weekRevenuePipelineLabel.setForeground(mutedFg);
         if (weekHarvestDeltaLabel != null) weekHarvestDeltaLabel.setForeground(mutedFg);
 
@@ -618,6 +1981,48 @@ public class DashboardTab implements FlowerFarmTab {
         panel.repaint();
     }
 
+    private static void styleChart(JFreeChart chart) {
+        if (chart == null) {
+            return;
+        }
+        Color surface = FarmUi.surfaceColor();
+        Color foreground = UIManager.getColor("Label.foreground");
+        if (foreground == null) {
+            foreground = Color.DARK_GRAY;
+        }
+        chart.setBackgroundPaint(surface);
+        chart.getPlot().setBackgroundPaint(surface);
+        chart.getTitle().setPaint(foreground);
+        if (chart.getLegend() != null) {
+            chart.getLegend().setBackgroundPaint(surface);
+            chart.getLegend().setItemPaint(foreground);
+        }
+        if (chart.getPlot() instanceof CategoryPlot plot) {
+            plot.setRangeGridlinePaint(FarmUi.borderColor());
+            plot.getRenderer().setSeriesPaint(0, FarmUi.accentColor());
+            plot.getDomainAxis().setLabelPaint(foreground);
+            plot.getDomainAxis().setTickLabelPaint(foreground);
+            plot.getRangeAxis().setLabelPaint(foreground);
+            plot.getRangeAxis().setTickLabelPaint(foreground);
+        } else if (chart.getPlot() instanceof PiePlot plot) {
+            plot.setLabelPaint(foreground);
+            plot.setLabelBackgroundPaint(surface);
+            plot.setLabelOutlinePaint(FarmUi.borderColor());
+        }
+    }
+
+    private static Color categoryColor(String category) {
+        return switch (category == null ? "" : category) {
+            case "Flowers/Plants" -> new Color(190, 78, 101);
+            case "Fertilizers" -> new Color(92, 145, 79);
+            case "Pest Control" -> new Color(211, 153, 52);
+            case "Tools/Equipment" -> new Color(73, 121, 153);
+            case "Rentals" -> new Color(131, 101, 162);
+            case "Gas/Fuel" -> new Color(193, 111, 54);
+            default -> new Color(115, 132, 121);
+        };
+    }
+
     /**
      * @param secondary optional second line under the value (e.g. cost basis / pipeline)
      * @param subtitle  optional fixed subtitle; if null, {@code secondary} is used alone
@@ -626,52 +2031,61 @@ public class DashboardTab implements FlowerFarmTab {
                                  JLabel secondary, SparklinePanel spark,
                                  String actionLabel, String tabTitle) {
         JPanel card = new JPanel();
+        card.setName("dashboard.metricCard");
         card.setLayout(new BoxLayout(card, BoxLayout.Y_AXIS));
         card.setOpaque(true);
-        card.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createLineBorder(new Color(200, 200, 200), 1),
-                BorderFactory.createEmptyBorder(12, 12, 12, 12)));
+        FarmUi.Tone cardTone = switch (title) {
+            case "Week revenue" -> FarmUi.Tone.SUCCESS;
+            case "Inventory value" -> FarmUi.Tone.INFO;
+            case "Low stock" -> FarmUi.Tone.WARNING;
+            default -> FarmUi.Tone.SUCCESS;
+        };
+        card.setBackground(FarmUi.toneSurfaceColor(cardTone));
+        card.setBorder(dashboardCardBorder(cardTone));
 
-        JLabel titleLabel = new JLabel(title);
-        titleLabel.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 12));
-        titleLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+        JLabel titleLabel = FarmUi.eyebrowLabel(title, cardTone);
+        titleLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
 
-        valueLabel.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 22));
-        valueLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+        valueLabel.setFont(valueLabel.getFont().deriveFont(Font.BOLD, 27f));
+        valueLabel.setForeground(FarmUi.toneForegroundColor(cardTone));
+        valueLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
 
         card.add(titleLabel);
         card.add(Box.createVerticalStrut(6));
         card.add(valueLabel);
 
         if (subtitle != null && !subtitle.isBlank()) {
-            JLabel subLabel = new JLabel(subtitle);
-            subLabel.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 10));
-            subLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+            JLabel subLabel = FarmUi.mutedLabel(subtitle);
+            subLabel.setFont(subLabel.getFont().deriveFont(11f));
+            subLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
             card.add(Box.createVerticalStrut(4));
             card.add(subLabel);
         }
 
         if (secondary != null) {
-            secondary.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 10));
-            secondary.setAlignmentX(Component.CENTER_ALIGNMENT);
-            secondary.setForeground(new Color(90, 100, 90));
+            secondary.setFont(secondary.getFont().deriveFont(11f));
+            secondary.setAlignmentX(Component.LEFT_ALIGNMENT);
+            secondary.setForeground(FarmUi.mutedColor());
             card.add(Box.createVerticalStrut(2));
             card.add(secondary);
         }
 
         if (spark != null) {
-            spark.setAlignmentX(Component.CENTER_ALIGNMENT);
-            spark.setMaximumSize(new Dimension(100, 30));
+            spark.setAlignmentX(Component.LEFT_ALIGNMENT);
+            spark.setMaximumSize(new Dimension(145, 32));
             card.add(Box.createVerticalStrut(6));
             card.add(spark);
         }
 
         if (actionLabel != null && tabTitle != null) {
-            JButton action = new JButton(actionLabel);
-            action.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 10));
-            action.setAlignmentX(Component.CENTER_ALIGNMENT);
-            action.setFocusable(false);
-            action.addActionListener(e -> go(tabTitle, actionLabel + "…"));
+            JButton action = FarmUi.secondaryButton(actionLabel);
+            action.getAccessibleContext().setAccessibleName(
+                    actionLabel + " from " + title + " metric");
+            action.setFont(action.getFont().deriveFont(11f));
+            action.setAlignmentX(Component.LEFT_ALIGNMENT);
+            action.setToolTipText(actionLabel + " in " + tabTitle + ".");
+            action.addActionListener(e -> openDashboardDestination(
+                    tabTitle, actionLabel + "…"));
             card.add(Box.createVerticalStrut(6));
             card.add(action);
         }

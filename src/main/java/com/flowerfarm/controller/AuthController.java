@@ -1,16 +1,18 @@
 package com.flowerfarm.controller;
 
 import com.flowerfarm.auth.FarmRole;
-import com.flowerfarm.auth.FarmUser;
 import com.flowerfarm.auth.FarmUserDirectory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.CacheControl;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.web.csrf.CsrfToken;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -31,6 +33,18 @@ public class AuthController {
             FarmUserDirectory directory) {
         this.enabled = enabled;
         this.directory = directory;
+    }
+
+    /**
+     * A fresh masked token for an HTTP write. Clients retain the HttpOnly token
+     * cookie and send this response token in the named header; neither belongs
+     * in a persisted offline operation or a URL.
+     */
+    @GetMapping("/csrf")
+    public ResponseEntity<Map<String, String>> csrf(CsrfToken token) {
+        return ResponseEntity.ok()
+                .cacheControl(CacheControl.noStore())
+                .body(Map.of("headerName", token.getHeaderName(), "token", token.getToken()));
     }
 
     /**
@@ -60,7 +74,8 @@ public class AuthController {
                 .map(a -> a.startsWith("ROLE_") ? a.substring(5) : a)
                 .collect(Collectors.toList());
         FarmRole role = roles.stream()
-                .map(FarmRole::fromString)
+                .flatMap(raw -> Arrays.stream(FarmRole.values())
+                        .filter(candidate -> candidate.name().equalsIgnoreCase(raw)))
                 .findFirst()
                 .orElse(FarmRole.VIEWER);
         body.put("authenticated", true);

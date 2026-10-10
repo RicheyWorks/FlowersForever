@@ -3,14 +3,15 @@ package com.flowerfarm.integration;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.flowerfarm.controller.InventoryController;
 import com.flowerfarm.model.Item;
+import com.flowerfarm.service.ServerCsvExportService;
 import com.flowerfarm.service.InventoryService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -25,7 +26,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 /**
  * Slice test for InventoryController — starts only the web layer,
- * all service dependencies are mocked via @MockBean.
+ * all service dependencies are mocked via @MockitoBean.
  */
 @WebMvcTest(InventoryController.class)
 @AutoConfigureMockMvc(addFilters = false)
@@ -35,7 +36,8 @@ class InventoryControllerIT {
     @Autowired MockMvc mockMvc;
     @Autowired ObjectMapper objectMapper;
 
-    @MockBean InventoryService inventoryService;
+    @MockitoBean InventoryService inventoryService;
+    @MockitoBean ServerCsvExportService serverCsvExportService;
 
     private static final Item SAMPLE_ROSE =
             new Item("Nootka Rose", "Flowers/Plants", 3.50, "Per Stem", 2.00, 50, "PNW native");
@@ -311,24 +313,40 @@ class InventoryControllerIT {
         @Test
         @DisplayName("returns 200 with confirmation message")
         void returns200WithConfirmation() throws Exception {
-            doNothing().when(inventoryService).exportToCsv("exported_inventory.csv");
+            doNothing().when(serverCsvExportService).exportCsv(eq("exported_inventory.csv"), any());
 
             mockMvc.perform(post("/api/inventory/export"))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.message", containsString("exported_inventory.csv")));
 
-            verify(inventoryService).exportToCsv("exported_inventory.csv");
+            verify(serverCsvExportService).exportCsv(eq("exported_inventory.csv"), any());
+            verify(inventoryService, never()).exportToCsv(anyString());
+        }
+
+        @Test
+        @DisplayName("returns 400 for a path traversal filename")
+        void returns400ForTraversal() throws Exception {
+            doThrow(new IllegalArgumentException("Export filename must be a single CSV basename."))
+                    .when(serverCsvExportService).exportCsv(eq("../escape.csv"), any());
+
+            mockMvc.perform(post("/api/inventory/export")
+                            .param("filename", "../escape.csv"))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.error", containsString("single CSV basename")));
+
+            verify(inventoryService, never()).exportToCsv(anyString());
         }
 
         @Test
         @DisplayName("returns 500 when export write fails")
         void returns500OnWriteFailure() throws Exception {
             doThrow(new IllegalStateException("Export to 'exported_inventory.csv' failed: disk full"))
-                    .when(inventoryService).exportToCsv("exported_inventory.csv");
+                    .when(serverCsvExportService).exportCsv(eq("exported_inventory.csv"), any());
 
             mockMvc.perform(post("/api/inventory/export"))
                     .andExpect(status().isInternalServerError())
-                    .andExpect(jsonPath("$.error", containsString("failed")));
+                    .andExpect(jsonPath("$.code").value("INTERNAL_ERROR"))
+                    .andExpect(jsonPath("$.error", not(containsString("disk full"))));
         }
     }
 

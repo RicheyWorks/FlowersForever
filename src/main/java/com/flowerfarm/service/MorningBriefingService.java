@@ -1,5 +1,6 @@
 package com.flowerfarm.service;
 
+import com.flowerfarm.model.FarmProfile;
 import com.flowerfarm.model.Item;
 import com.flowerfarm.service.HarvestService.BedProduction;
 import com.flowerfarm.service.HarvestService.BedProductionReport;
@@ -29,7 +30,6 @@ import java.awt.Color;
 import java.io.ByteArrayOutputStream;
 import java.time.LocalDate;
 import java.time.LocalTime;
-import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -39,14 +39,13 @@ import java.util.Locale;
 import java.util.Map;
 
 /**
- * Start-of-day Kitsap farm briefing — packing, beds, water, and low stock in one place.
+ * Start-of-day farm briefing — packing, beds, water, and low stock in one place.
  * Offline-safe by default (climatology irrigation; no required live weather).
  */
 @Service
 public class MorningBriefingService {
 
     private static final Logger log = LoggerFactory.getLogger(MorningBriefingService.class);
-    private static final ZoneId PNW = ZoneId.of("America/Los_Angeles");
     private static final int DEFAULT_LOW_STOCK = 10;
     private static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("HH:mm");
 
@@ -55,17 +54,20 @@ public class MorningBriefingService {
     private final OrderService orderService;
     private final MarketDayPackingService marketDayPackingService;
     private final IrrigationAdvisorService irrigationAdvisorService;
+    private final FarmProfile farmProfile;
 
     public MorningBriefingService(InventoryService inventoryService,
                                   HarvestService harvestService,
                                   OrderService orderService,
                                   MarketDayPackingService marketDayPackingService,
-                                  IrrigationAdvisorService irrigationAdvisorService) {
+                                  IrrigationAdvisorService irrigationAdvisorService,
+                                  FarmProfile farmProfile) {
         this.inventoryService = inventoryService;
         this.harvestService = harvestService;
         this.orderService = orderService;
         this.marketDayPackingService = marketDayPackingService;
         this.irrigationAdvisorService = irrigationAdvisorService;
+        this.farmProfile = farmProfile;
     }
 
     public record LowStockLine(String name, int quantity, String unit) {}
@@ -115,14 +117,12 @@ public class MorningBriefingService {
      */
     @Transactional(readOnly = true)
     public MorningBriefing build(boolean preferLiveWeather) {
-        LocalDate today = LocalDate.now(PNW);
-        String when = LocalTime.now(PNW).format(TIME);
+        LocalDate today = LocalDate.now(farmProfile.zoneId());
+        String when = LocalTime.now(farmProfile.zoneId()).format(TIME);
 
         MarketDayPlan pack = marketDayPackingService.planForDay(today);
         BedProductionReport beds = harvestService.productionByBedLast7Days();
         IrrigationAdvice water = irrigationAdvisorService.advise(preferLiveWeather);
-        InventoryService.InventoryKpiSnapshot inv =
-                inventoryService.inventoryKpis(DEFAULT_LOW_STOCK);
         OrderService.WeekRevenueSummary rev = orderService.weekRevenueSummary();
         double weekHarvest = harvestService.totalQuantityLast7Days();
 
@@ -143,7 +143,7 @@ public class MorningBriefingService {
         return new MorningBriefing(
                 today,
                 when,
-                "Port Orchard / Kitsap County, WA",
+                farmProfile.locationLabel(),
                 weekHarvest,
                 rev.realized(),
                 rev.pipeline(),
@@ -185,7 +185,7 @@ public class MorningBriefingService {
             PdfPTable bannerTable = new PdfPTable(1);
             bannerTable.setWidthPercentage(100);
             PdfPCell bannerCell = new PdfPCell(new Phrase(
-                    "FlowersForever  ·  Port Orchard / Kitsap  ·  Morning Briefing",
+                    farmProfile.documentBanner("Morning Briefing"),
                     banner));
             bannerCell.setBackgroundColor(brandGreen);
             bannerCell.setPadding(10);
@@ -197,7 +197,7 @@ public class MorningBriefingService {
             doc.add(new Paragraph("Morning Farm Briefing", titleFont));
             doc.add(new Paragraph(
                     briefing.date() + "  ·  " + briefing.generatedAt()
-                            + " America/Los_Angeles  ·  " + briefing.location(),
+                            + " " + farmProfile.zoneId() + "  ·  " + briefing.location(),
                     small));
             doc.add(Chunk.NEWLINE);
 
@@ -236,7 +236,7 @@ public class MorningBriefingService {
                             ? "No CONFIRMED orders for today."
                             : pack.orderCount() + " order(s) · pipeline $"
                             + String.format(Locale.US, "%,.2f", pack.pipelineValue())
-                            + " · shortfalls " + pack.shortfallSkuCount(),
+                            + " · packing issues " + pack.shortfallSkuCount(),
                     body));
             if (pack.shortfallSkuCount() > 0) {
                 doc.add(Chunk.NEWLINE);
@@ -245,15 +245,19 @@ public class MorningBriefingService {
                 headerCell(t, "Product");
                 headerCell(t, "Need");
                 headerCell(t, "Stock");
-                headerCell(t, "Short");
+                headerCell(t, "Issue");
                 for (ProductNeed p : pack.pickList()) {
-                    if (!p.shortfall()) {
+                    if (!p.blockingIssue()) {
                         continue;
                     }
                     t.addCell(cell(p.productName(), body));
                     t.addCell(cell(String.format(Locale.US, "%.1f", p.neededQty()), body));
                     t.addCell(cell(String.valueOf(p.stockOnHand()), body));
-                    t.addCell(cell(String.format(Locale.US, "%.1f", p.shortfallQty()), body));
+                    t.addCell(cell(p.quantityInvalid()
+                            ? "Invalid quantity"
+                            : p.unitMismatch()
+                                    ? "Unit " + p.unit() + " / " + p.inventoryUnit()
+                                    : String.format(Locale.US, "%.1f", p.shortfallQty()), body));
                 }
                 doc.add(t);
             }
@@ -319,8 +323,7 @@ public class MorningBriefingService {
             }
 
             doc.add(Chunk.NEWLINE);
-            doc.add(new Paragraph(
-                    "FlowersForever · practical tools for PNW flower growers", small));
+            doc.add(new Paragraph(farmProfile.softwareFooter(), small));
 
             doc.close();
             log.info("Generated morning briefing PDF for {} ({} actions)",
@@ -343,8 +346,11 @@ public class MorningBriefingService {
                     + String.format(Locale.US, "%,.2f", pack.pipelineValue()) + " pipeline).");
         }
         if (pack.shortfallSkuCount() > 0) {
+            boolean nonStockIssue = pack.pickList().stream().anyMatch(need ->
+                    need.unitMismatch() || need.quantityInvalid());
             actions.add("Resolve " + pack.shortfallSkuCount()
-                    + " packing shortfall SKU(s) before load-out.");
+                    + (nonStockIssue ? " packing issue SKU(s)" : " packing shortfall SKU(s)")
+                    + " before load-out.");
         }
         if (water.priority() == Priority.HIGH || water.priority() == Priority.MEDIUM) {
             actions.add("Water (" + water.priority().name() + "): " + water.headline());
@@ -363,19 +369,20 @@ public class MorningBriefingService {
         return actions;
     }
 
-    private static String formatPlainText(LocalDate date, String time,
-                                          MarketDayPlan pack,
-                                          BedProductionReport beds,
-                                          IrrigationAdvice water,
-                                          List<LowStockLine> low,
-                                          double weekHarvest,
-                                          OrderService.WeekRevenueSummary rev,
-                                          List<String> actions) {
+    private String formatPlainText(LocalDate date, String time,
+                                   MarketDayPlan pack,
+                                   BedProductionReport beds,
+                                   IrrigationAdvice water,
+                                   List<LowStockLine> low,
+                                   double weekHarvest,
+                                   OrderService.WeekRevenueSummary rev,
+                                   List<String> actions) {
         StringBuilder sb = new StringBuilder();
-        sb.append("MORNING BRIEFING — Port Orchard / Kitsap County\n");
+        sb.append(farmProfile.documentBanner("Morning Briefing").toUpperCase(Locale.ROOT))
+                .append('\n');
         sb.append("═══════════════════════════════════════════════\n");
         sb.append("Date: ").append(date).append("  ·  ").append(time)
-                .append(" America/Los_Angeles\n");
+                .append(' ').append(farmProfile.zoneId()).append('\n');
         sb.append(String.format(Locale.US,
                 "Week harvest: %,.0f   Realized $%,.2f   Pipeline $%,.2f%n",
                 weekHarvest, rev.realized(), rev.pipeline()));
@@ -396,13 +403,23 @@ public class MorningBriefingService {
         sb.append("MARKET DAY\n");
         sb.append("──────────\n");
         sb.append(String.format(Locale.US,
-                "  Orders: %d  ·  Pipeline $%,.2f  ·  Shortfalls: %d%n",
+                "  Orders: %d  ·  Pipeline $%,.2f  ·  Packing issues: %d%n",
                 pack.orderCount(), pack.pipelineValue(), pack.shortfallSkuCount()));
         for (ProductNeed p : pack.pickList()) {
-            if (p.shortfall()) {
-                sb.append(String.format(Locale.US,
-                        "  SHORT %-24s need %.1f stock %d%n",
-                        p.productName(), p.neededQty(), p.stockOnHand()));
+            if (p.blockingIssue()) {
+                if (p.quantityInvalid()) {
+                    sb.append(String.format(Locale.US,
+                            "  QTY   %-24s must round to at least 1 inventory unit%n",
+                            p.productName()));
+                } else if (p.unitMismatch()) {
+                    sb.append(String.format(Locale.US,
+                            "  UNIT  %-24s order %s inventory %s%n",
+                            p.productName(), p.unit(), p.inventoryUnit()));
+                } else {
+                    sb.append(String.format(Locale.US,
+                            "  SHORT %-24s need %.1f stock %d%n",
+                            p.productName(), p.neededQty(), p.stockOnHand()));
+                }
             }
         }
         sb.append('\n');

@@ -1,11 +1,11 @@
 package com.flowerfarm.controller;
 
 import com.flowerfarm.model.Item;
+import com.flowerfarm.service.ServerCsvExportService;
 import com.flowerfarm.controller.dto.FarmApiDtos.ItemRequest;
 import com.flowerfarm.controller.dto.FarmApiDtos.ItemResponse;
 import com.flowerfarm.service.InventoryService;
 import com.flowerfarm.service.InventoryService.LowStockReport;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -35,9 +35,12 @@ import java.util.Map;
 public class InventoryController {
 
     private final InventoryService inventoryService;
+    private final ServerCsvExportService serverCsvExportService;
 
-    public InventoryController(InventoryService inventoryService) {
+    public InventoryController(InventoryService inventoryService,
+                               ServerCsvExportService serverCsvExportService) {
         this.inventoryService = inventoryService;
+        this.serverCsvExportService = serverCsvExportService;
     }
 
     /** Returns all inventory items as a JSON array (ordered by id). */
@@ -75,10 +78,7 @@ public class InventoryController {
         LowStockReport report = inventoryService.buildLowStockReport(threshold);
         byte[] pdf = inventoryService.generateLowStockPdf(report);
         String filename = "low-stock-reorder-" + report.date() + ".pdf";
-        return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
-                .contentType(MediaType.APPLICATION_PDF)
-                .body(pdf);
+        return DownloadResponse.pdf(pdf, filename);
     }
 
     /**
@@ -103,10 +103,7 @@ public class InventoryController {
         var report = inventoryService.buildPriceListReport(inStockOnly);
         byte[] pdf = inventoryService.generatePriceListPdf(report);
         String filename = "price-list-" + report.date() + ".pdf";
-        return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
-                .contentType(MediaType.APPLICATION_PDF)
-                .body(pdf);
+        return DownloadResponse.pdf(pdf, filename);
     }
 
     /** Returns items matching the search query (name or category). */
@@ -164,38 +161,28 @@ public class InventoryController {
     /** Deletes the item at {@code index}. Returns 204 No Content. */
     @DeleteMapping("/{index}")
     public ResponseEntity<?> deleteItem(@PathVariable int index) {
-        try {
-            inventoryService.deleteItem(index);
-            return ResponseEntity.noContent().build();
-        } catch (IndexOutOfBoundsException e) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", e.getMessage()));
-        }
+        inventoryService.deleteItem(index);
+        return ResponseEntity.noContent().build();
     }
 
     /** Deletes the item with the given database id. Preferred over index-based delete. */
     @DeleteMapping("/by-id/{id}")
     public ResponseEntity<?> deleteById(@PathVariable Long id) {
-        try {
-            inventoryService.deleteById(id);
-            return ResponseEntity.noContent().build();
-        } catch (IndexOutOfBoundsException e) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", e.getMessage()));
-        }
+        inventoryService.deleteById(id);
+        return ResponseEntity.noContent().build();
     }
 
     /**
-     * Triggers a server-side CSV export to {@code exported_inventory.csv}.
+     * Triggers a server-side CSV export beneath the configured export directory.
      * Returns 200 OK with a confirmation message, or 500 if the write fails.
      */
     @PostMapping("/export")
-    public ResponseEntity<Map<String, String>> exportCsv() {
-        try {
-            inventoryService.exportToCsv("exported_inventory.csv");
-            return ResponseEntity.ok(Map.of("message", "Exported to exported_inventory.csv"));
-        } catch (IllegalStateException e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of("error", e.getMessage()));
-        }
+    public ResponseEntity<Map<String, String>> exportCsv(
+            @RequestParam(value = "filename", defaultValue = "exported_inventory.csv")
+            String filename) {
+        List<Item> rows = inventoryService.getAllItems();
+        serverCsvExportService.exportCsv(filename, writer -> inventoryService.writeCsv(writer, rows));
+        return ResponseEntity.ok(Map.of("message", "Exported inventory to " + filename));
     }
 
     /**

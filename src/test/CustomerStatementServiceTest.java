@@ -1,5 +1,6 @@
 package com.flowerfarm.service;
 
+import com.flowerfarm.model.FarmProfile;
 import com.flowerfarm.model.Customer;
 import com.flowerfarm.model.CustomerOrder;
 import com.flowerfarm.model.OrderLine;
@@ -32,7 +33,8 @@ class CustomerStatementServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new CustomerStatementService(customerService, orderService);
+        service = new CustomerStatementService(customerService, orderService,
+                new FarmProfile());
     }
 
     @Test

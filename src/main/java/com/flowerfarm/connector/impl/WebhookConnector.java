@@ -1,10 +1,12 @@
 package com.flowerfarm.connector.impl;
 
+import com.flowerfarm.connector.ConnectorHttpClient;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.flowerfarm.connector.*;
 import com.flowerfarm.model.Item;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.stereotype.Component;
@@ -49,11 +51,12 @@ public class WebhookConnector implements ExternalConnector<Map<String, Object>>,
     private final ConnectorConfig config;
     private final RestTemplate restTemplate;
 
+    @Autowired
     public WebhookConnector(
             @Value("${connector.webhook.url:}") String url,
             @Value("${connector.webhook.secret:}") String secret,
             @Value("${connector.webhook.local-file:}") String localFile) {
-        this(url, secret, localFile, new RestTemplate());
+        this(url, secret, localFile, ConnectorHttpClient.create());
     }
 
     /** Package-private for tests. */
@@ -67,7 +70,7 @@ public class WebhookConnector implements ExternalConnector<Map<String, Object>>,
 
     /** Backward-compatible test constructor (remote-only). */
     WebhookConnector(String url, String secret) {
-        this(url, secret, "", new RestTemplate());
+        this(url, secret, "", ConnectorHttpClient.create());
     }
 
     @Override public String getName() { return "webhook"; }

@@ -56,8 +56,8 @@ class ConnectorRegistryTest {
                 inventoryService,
                 syncHistoryService
         );
-        // History recording is best-effort; keep stubs quiet unless asserted
-        lenient().doNothing().when(syncHistoryService).recordResult(anyString(), anyString(), any());
+        lenient().when(inventoryService.upsertByName(any(Item.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
     }
 
     // ── Discovery ────────────────────────────────────────────────────────────
@@ -74,6 +74,19 @@ class ConnectorRegistryTest {
     @DisplayName("find() returns empty Optional for unknown connector")
     void findReturnsEmptyForUnknown() {
         assertThat(registry.find("does-not-exist")).isEmpty();
+        assertThat(registry.find(null)).isEmpty();
+        assertThat(registry.find("  ")).isEmpty();
+    }
+
+    @Test
+    @DisplayName("constructor rejects duplicate connector names")
+    void rejectsDuplicateConnectorNames() {
+        ExternalConnector<?> duplicate = mock(ExternalConnector.class);
+        when(duplicate.getName()).thenReturn("mockimporter");
+
+        assertThatIllegalStateException().isThrownBy(() -> new ConnectorRegistry(
+                List.of(importConnector, duplicate), inventoryService, syncHistoryService))
+                .withMessageContaining("Duplicate connector");
     }
 
     @Test
@@ -127,7 +140,9 @@ class ConnectorRegistryTest {
 
             assertThat(result.isSuccess()).isTrue();
             assertThat(result.getPayload()).hasSize(2);
-            verify(inventoryService, times(2)).addItem(any(Item.class));
+            verify(inventoryService, times(2)).upsertByName(any(Item.class));
+            verify(syncHistoryService).record(eq("mockimporter"), eq("IMPORT"), eq(true),
+                    eq("Imported 2"), isNull(), eq(2));
         }
 
         @Test
@@ -171,14 +186,16 @@ class ConnectorRegistryTest {
             );
             when(importConnector.importItems())
                     .thenReturn(ConnectorResult.ok(incoming, "Imported 2"));
-            when(inventoryService.addItem(any()))
+            when(inventoryService.upsertByName(any()))
                     .thenThrow(new IllegalArgumentException("DB error"))
                     .thenAnswer(inv -> inv.getArgument(0));
 
             ConnectorResult<List<Item>> result = registry.runImport("mockimporter");
 
             assertThat(result.isSuccess()).isTrue();
-            verify(inventoryService, times(2)).addItem(any());
+            assertThat(result.getPayload()).hasSize(1);
+            assertThat(result.getMessage()).contains("skipped 1");
+            verify(inventoryService, times(2)).upsertByName(any());
         }
     }
 
@@ -246,6 +263,8 @@ class ConnectorRegistryTest {
             assertThat(result.isSuccess()).isTrue();
             assertThat(result.getPayload().created()).isEqualTo(2);
             assertThat(result.getPayload().updated()).isEqualTo(1);
+            verify(syncHistoryService).record(eq("mockbidi"), eq("SYNC"), eq(true),
+                    eq("Sync done"), isNull(), eq(6));
         }
 
         @Test

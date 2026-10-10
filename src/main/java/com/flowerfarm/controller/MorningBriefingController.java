@@ -2,7 +2,6 @@ package com.flowerfarm.controller;
 
 import com.flowerfarm.service.MorningBriefingService;
 import com.flowerfarm.service.MorningBriefingService.MorningBriefing;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -49,9 +48,6 @@ public class MorningBriefingController {
         MorningBriefing briefing = morningBriefingService.build(live);
         byte[] pdf = morningBriefingService.generatePdf(briefing);
         String filename = "morning-briefing-" + briefing.date() + ".pdf";
-        return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
-                .contentType(MediaType.APPLICATION_PDF)
-                .body(pdf);
+        return DownloadResponse.pdf(pdf, filename);
     }
 }

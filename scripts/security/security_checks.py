@@ -1,8 +1,9 @@
-"""Fail closed on incomplete SAST, advisory data, or offline dependency inventory."""
+"""Fail closed on incomplete SAST, advisory data, or resolved dependency inventory."""
 import argparse
 import base64
 from collections import Counter
 from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
 import hashlib
 import json
 import math
@@ -10,7 +11,7 @@ from pathlib import Path
 import re
 import sys
 from urllib.parse import unquote
-from urllib.request import urlopen
+from urllib.request import Request, urlopen
 import xml.etree.ElementTree as ET
 import zipfile
 
@@ -290,6 +291,116 @@ def inventory_complete(sbom_path, report_path, fail_on_findings=False):
             "vulnerability_ids": sorted(vulnerabilities)}
 
 
+def live_api_json(url, payload=None):
+    """Only the fixed OSV API receives public Maven coordinates; never source or credentials."""
+    require(url == "https://api.osv.dev/v1/querybatch" or re.fullmatch(
+        r"https://api\.osv\.dev/v1/vulns/[A-Za-z0-9][A-Za-z0-9._-]{0,200}", url),
+        "Unexpected OSV endpoint")
+    data = None if payload is None else json.dumps(payload).encode("utf-8")
+    request = Request(url, data=data, headers={"Content-Type": "application/json",
+                                              "Cache-Control": "no-cache"})
+    with urlopen(request, timeout=60) as response:
+        require(response.status == 200 and response.geturl() == url, "Unexpected OSV HTTP response")
+        server_date = parsedate_to_datetime(response.headers["Date"])
+        require(server_date.tzinfo is not None and abs(
+            (datetime.now(timezone.utc) - server_date).total_seconds()) <= 300,
+            "Stale or future-dated OSV API response")
+        raw = response.read(16 * 1024 * 1024 + 1)
+        require(len(raw) <= 16 * 1024 * 1024, "Oversized OSV API response")
+        return strict_json(raw), {"url": url, "server_date": server_date.isoformat(),
+                                  "sha256": hashlib.sha256(raw).hexdigest()}
+
+
+def live_osv(sbom_path, report_path, fail_on_findings=False, fetch=None):
+    """Query every resolved identity, exhaust pagination, and retain validated full advisories.
+
+    The daily Maven ZIP can lag publication. A live query uses OSV's current index without
+    accepting an older ZIP or weakening the offline database freshness check.
+    """
+    fetch = fetch or live_api_json
+    raw_sbom = sbom_path.read_bytes()
+    bom = strict_json(raw_sbom)
+    require(isinstance(bom, dict) and bom.get("bomFormat") == "CycloneDX", "Expected CycloneDX SBOM")
+    components = bom.get("components")
+    require(isinstance(components, list) and components, "No resolved SBOM components")
+    queries, identities = [], set()
+    for component in components:
+        require(isinstance(component, dict) and not component.get("components"),
+                "Invalid or nested SBOM component")
+        match = re.fullmatch(r"pkg:maven/([^/?#]+)/([^/?#@]+)@([^?#]+)(?:\?[^#]+)?",
+                             component.get("purl", ""))
+        require(match is not None, "Unmapped/non-Maven component PURL")
+        group, artifact, version = map(unquote, match.groups())
+        require((group, artifact, version) == (component.get("group"), component.get("name"),
+                                             component.get("version")), "SBOM identity/PURL mismatch")
+        identity = (group, artifact, version)
+        require(identity not in identities, "Duplicate Maven SBOM identity")
+        identities.add(identity)
+        queries.append({"package": {"ecosystem": "Maven", "name": group + ":" + artifact},
+                        "version": version})
+    receipts, findings = [], [dict(query=q, vulnerability_ids=[]) for q in queries]
+    modified = {}
+    for start in range(0, len(queries), 100):
+        pending = [(index, dict(queries[index])) for index in range(start, min(start + 100, len(queries)))]
+        tokens = set()
+        for _ in range(100):
+            response, receipt = fetch("https://api.osv.dev/v1/querybatch",
+                                      {"queries": [query for _, query in pending]})
+            receipts.append(receipt)
+            known_fields(response, {"results"})
+            results = response.get("results")
+            require(isinstance(results, list) and len(results) == len(pending),
+                    "OSV result cardinality differs from resolved query inventory")
+            next_pending = []
+            for (index, query), result in zip(pending, results):
+                known_fields(result, {"vulns", "next_page_token"})
+                vulnerabilities = result.get("vulns", [])
+                require(isinstance(vulnerabilities, list), "Invalid OSV vulnerability list")
+                for vulnerability in vulnerabilities:
+                    known_fields(vulnerability, {"id", "modified"})
+                    identifier, timestamp = vulnerability.get("id"), vulnerability.get("modified")
+                    require(isinstance(identifier, str) and re.fullmatch(
+                        r"[A-Za-z0-9][A-Za-z0-9._-]{0,200}", identifier), "Invalid OSV advisory ID")
+                    require(isinstance(timestamp, str), "Missing OSV advisory timestamp")
+                    require(identifier not in findings[index]["vulnerability_ids"],
+                            "Duplicate OSV advisory across query pages")
+                    require(identifier not in modified or modified[identifier] == timestamp,
+                            "OSV advisory changed during scan; retry with consistent evidence")
+                    modified[identifier] = timestamp
+                    findings[index]["vulnerability_ids"].append(identifier)
+                token = result.get("next_page_token", "")
+                require(isinstance(token, str), "Invalid OSV page token")
+                if token:
+                    require((index, token) not in tokens, "Repeated OSV page token")
+                    tokens.add((index, token))
+                    next_pending.append((index, dict(queries[index], page_token=token)))
+            if not next_pending:
+                break
+            pending = next_pending
+        else:
+            raise ValueError("OSV pagination limit exceeded; incomplete scan")
+    advisories = []
+    for identifier in sorted(modified):
+        advisory, receipt = fetch("https://api.osv.dev/v1/vulns/" + identifier, None)
+        receipts.append(receipt)
+        require(advisory_valid(advisory) > 0 and advisory["id"] == identifier
+                and advisory["modified"] == modified[identifier], "OSV advisory identity/version mismatch")
+        affected_names = {entry["package"]["name"] for entry in advisory["affected"]
+                          if entry["package"]["ecosystem"] == "Maven"}
+        require(all(f["query"]["package"]["name"] in affected_names for f in findings
+                    if identifier in f["vulnerability_ids"]), "OSV advisory package mismatch")
+        advisories.append(advisory)
+    report = {"completed": True, "sbom_sha256": hashlib.sha256(raw_sbom).hexdigest(),
+              "scanned_packages": len(queries), "queries": findings,
+              "advisories": advisories, "api_receipts": receipts,
+              "vulnerability_ids": sorted(modified)}
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    report_path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+    require(not fail_on_findings or not modified,
+            "Known vulnerabilities in resolved SBOM: " + ", ".join(sorted(modified)))
+    return {key: report[key] for key in ("completed", "sbom_sha256", "scanned_packages", "vulnerability_ids")}
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
@@ -301,12 +412,17 @@ def main():
     inventory = sub.add_parser("inventory")
     inventory.add_argument("sbom", type=Path)
     inventory.add_argument("report", type=Path)
+    live = sub.add_parser("live-osv")
+    live.add_argument("sbom", type=Path)
+    live.add_argument("report", type=Path)
     args = parser.parse_args()
     try:
         if args.command == "spotbugs":
             result = spotbugs_complete(args.report)
         elif args.command == "prepare-db":
             result = prepare_database(args.cache, args.receipt)
+        elif args.command == "live-osv":
+            result = live_osv(args.sbom, args.report, fail_on_findings=True)
         else:
             result = inventory_complete(args.sbom, args.report, fail_on_findings=True)
         print(json.dumps(result, indent=2))

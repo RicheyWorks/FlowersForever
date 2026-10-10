@@ -1,10 +1,14 @@
 package com.flowerfarm.connector.impl;
 
+import com.flowerfarm.connector.ConnectorHttpClient;
 import com.flowerfarm.connector.*;
 import com.flowerfarm.model.Item;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
+import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
 
 import java.net.URLEncoder;
@@ -18,6 +22,7 @@ import java.util.*;
  *   <li><b>Remote REST</b> — Airtable Web API with personal access token.</li>
  * </ul>
  */
+@Component
 public class AirtableConnector implements ExternalConnector<Map<String, Object>>, DualModeCapable {
 
     private static final Logger log = LoggerFactory.getLogger(AirtableConnector.class);
@@ -28,11 +33,16 @@ public class AirtableConnector implements ExternalConnector<Map<String, Object>>
     private final RestTemplate restTemplate;
 
     public AirtableConnector(String apiToken, String baseId, String tableName) {
-        this(apiToken, baseId, tableName, "", new RestTemplate());
+        this(apiToken, baseId, tableName, "", ConnectorHttpClient.create());
     }
 
-    public AirtableConnector(String apiToken, String baseId, String tableName, String localFile) {
-        this(apiToken, baseId, tableName, localFile, new RestTemplate());
+    @Autowired
+    public AirtableConnector(
+            @Value("${connector.airtable.api-key:}") String apiToken,
+            @Value("${connector.airtable.base-id:}") String baseId,
+            @Value("${connector.airtable.table-name:Table 1}") String tableName,
+            @Value("${connector.airtable.local-file:}") String localFile) {
+        this(apiToken, baseId, tableName, localFile, ConnectorHttpClient.create());
     }
 
     AirtableConnector(String apiToken, String baseId, String tableName, String localFile,
@@ -117,9 +127,32 @@ public class AirtableConnector implements ExternalConnector<Map<String, Object>>
         }
     }
 
-    @SuppressWarnings("unchecked")
     private ConnectorResult<List<Item>> importFromRemote() {
+        ConnectorResult<List<Map<String, Object>>> fetched = fetchRemoteRecords();
+        if (!fetched.isSuccess()) {
+            return ConnectorResult.fail(
+                    "Airtable import failed.",
+                    fetched.getErrorDetail(),
+                    getName());
+        }
+
         List<Item> items = new ArrayList<>();
+        for (Map<String, Object> record : fetched.getPayload()) {
+            Map<String, Object> fields = recordFields(record);
+            Item item = mapToItem(fields);
+            if (item != null) {
+                items.add(item);
+            }
+        }
+
+        String msg = "Airtable REST import successful. Imported " + items.size() + " items.";
+        log.info("[airtable] {}", msg);
+        return ConnectorResult.ok(items, msg, getName());
+    }
+
+    @SuppressWarnings("unchecked")
+    private ConnectorResult<List<Map<String, Object>>> fetchRemoteRecords() {
+        List<Map<String, Object>> allRecords = new ArrayList<>();
 
         try {
             String offset = null;
@@ -147,22 +180,11 @@ public class AirtableConnector implements ExternalConnector<Map<String, Object>>
                     );
                 }
 
-                List<Map<String, Object>> records =
-                        (List<Map<String, Object>>) body.getOrDefault("records", List.of());
-
-                for (Map<String, Object> record : records) {
-                    Object fieldsObj = record.get("fields");
-
-                    if (fieldsObj instanceof Map<?, ?> fieldsMap) {
-                        Map<String, Object> fields = new LinkedHashMap<>();
-
-                        for (Map.Entry<?, ?> entry : fieldsMap.entrySet()) {
-                            fields.put(String.valueOf(entry.getKey()), entry.getValue());
-                        }
-
-                        Item item = mapToItem(fields);
-                        if (item != null) {
-                            items.add(item);
+                Object recordsObject = body.get("records");
+                if (recordsObject instanceof List<?> records) {
+                    for (Object rawRecord : records) {
+                        if (rawRecord instanceof Map<?, ?> record) {
+                            allRecords.add(stringKeyMap(record));
                         }
                     }
                 }
@@ -172,12 +194,12 @@ public class AirtableConnector implements ExternalConnector<Map<String, Object>>
 
             } while (offset != null && !offset.isBlank());
 
-            String msg = "Airtable REST import successful. Imported " + items.size() + " items.";
-            log.info("[airtable] {}", msg);
-            return ConnectorResult.ok(items, msg, getName());
+            return ConnectorResult.ok(allRecords,
+                    "Fetched " + allRecords.size() + " Airtable record(s).",
+                    getName());
 
         } catch (Exception e) {
-            return ConnectorResult.fail("Airtable import failed.", e, getName());
+            return ConnectorResult.fail("Airtable fetch failed.", e, getName());
         }
     }
 
@@ -255,8 +277,7 @@ public class AirtableConnector implements ExternalConnector<Map<String, Object>>
                 Item r = byName.get(local.getName().toLowerCase(Locale.ROOT));
                 if (r == null) {
                     created++;
-                } else if (r.getQuantity() != local.getQuantity()
-                        || Double.compare(r.getPrice(), local.getPrice()) != 0) {
+                } else if (!sameItem(r, local)) {
                     updated++;
                 } else {
                     skipped++;
@@ -272,31 +293,66 @@ public class AirtableConnector implements ExternalConnector<Map<String, Object>>
             return ConnectorResult.ok(summary, msg, getName());
         }
 
-        ConnectorResult<Integer> exportResult = exportItems(localItems);
+        return syncRemote(localItems);
+    }
 
-        if (!exportResult.isSuccess()) {
+    private ConnectorResult<SyncSummary> syncRemote(List<Item> localItems) {
+        ConnectorResult<List<Map<String, Object>>> fetched = fetchRemoteRecords();
+        if (!fetched.isSuccess()) {
             return ConnectorResult.fail(
-                    "Airtable sync failed.",
-                    exportResult.getErrorDetail(),
-                    getName()
-            );
+                    "Airtable sync aborted because existing records could not be read.",
+                    fetched.getErrorDetail(),
+                    getName());
         }
 
-        int exported = exportResult.getPayload() == null ? 0 : exportResult.getPayload();
+        Map<String, Map<String, Object>> remoteByName = new LinkedHashMap<>();
+        for (Map<String, Object> record : fetched.getPayload()) {
+            Item remoteItem = mapToItem(recordFields(record));
+            if (remoteItem != null) {
+                remoteByName.putIfAbsent(remoteItem.getName().toLowerCase(Locale.ROOT), record);
+            }
+        }
 
-        SyncSummary summary = new SyncSummary(
-                exported,
-                0,
-                0,
-                0,
-                0
-        );
+        List<Map<String, Object>> creates = new ArrayList<>();
+        List<Map<String, Object>> updates = new ArrayList<>();
+        int skipped = 0;
 
-        return ConnectorResult.ok(
-                summary,
-                "Airtable sync complete. Exported " + exported + " items. (REST)",
-                getName()
-        );
+        for (Item local : localItems) {
+            Map<String, Object> remoteRecord = remoteByName.get(local.getName().toLowerCase(Locale.ROOT));
+            if (remoteRecord == null) {
+                creates.add(Map.of("fields", mapFromItem(local)));
+                continue;
+            }
+
+            Item remoteItem = mapToItem(recordFields(remoteRecord));
+            if (sameItem(local, remoteItem)) {
+                skipped++;
+                continue;
+            }
+
+            Object id = remoteRecord.get("id");
+            if (id == null || id.toString().isBlank()) {
+                return ConnectorResult.fail(
+                        "Airtable sync aborted because a changed remote record has no id.",
+                        "Record name: " + local.getName(),
+                        getName());
+            }
+            Map<String, Object> update = new LinkedHashMap<>();
+            update.put("id", id.toString());
+            update.put("fields", mapFromItem(local));
+            updates.add(update);
+        }
+
+        try {
+            int created = sendBatches(creates, HttpMethod.POST);
+            int updated = sendBatches(updates, HttpMethod.PATCH);
+            SyncSummary summary = new SyncSummary(created, updated, 0, skipped, 0);
+            String msg = "Airtable sync complete. " + summary + " (REST)";
+            log.info("[airtable] {}", msg);
+            return ConnectorResult.ok(summary, msg, getName());
+        } catch (Exception e) {
+            return ConnectorResult.fail("Airtable sync failed.", e, getName());
+        }
     }
 
     private static String nullToEmpty(String s) {
@@ -313,21 +369,35 @@ public class AirtableConnector implements ExternalConnector<Map<String, Object>>
         return fieldMapper.toExternalMap(item);
     }
 
-    @SuppressWarnings("unchecked")
     private int sendCreateBatch(List<Map<String, Object>> records) {
+        return sendBatch(records, HttpMethod.POST);
+    }
+
+    private int sendBatches(List<Map<String, Object>> records, HttpMethod method) {
+        int sent = 0;
+        for (int start = 0; start < records.size(); start += 10) {
+            int end = Math.min(start + 10, records.size());
+            sent += sendBatch(new ArrayList<>(records.subList(start, end)), method);
+        }
+        return sent;
+    }
+
+    @SuppressWarnings("unchecked")
+    private int sendBatch(List<Map<String, Object>> records, HttpMethod method) {
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("records", records);
 
         ResponseEntity<Map> response = restTemplate.exchange(
                 recordsUrl(),
-                HttpMethod.POST,
+                method,
                 new HttpEntity<>(payload, headers()),
                 Map.class
         );
 
         Map<?, ?> respBody = response.getBody();
         if (!response.getStatusCode().is2xxSuccessful() || respBody == null) {
-            return 0;
+            throw new IllegalStateException(
+                    "Airtable " + method + " failed with HTTP " + response.getStatusCode());
         }
 
         Object created = respBody.get("records");
@@ -336,7 +406,29 @@ public class AirtableConnector implements ExternalConnector<Map<String, Object>>
             return list.size();
         }
 
-        return 0;
+        throw new IllegalStateException("Airtable " + method + " response did not contain records.");
+    }
+
+    private Map<String, Object> recordFields(Map<String, Object> record) {
+        Object fields = record.get("fields");
+        return fields instanceof Map<?, ?> map ? stringKeyMap(map) : Map.of();
+    }
+
+    private Map<String, Object> stringKeyMap(Map<?, ?> raw) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        raw.forEach((key, value) -> result.put(String.valueOf(key), value));
+        return result;
+    }
+
+    private boolean sameItem(Item left, Item right) {
+        return right != null
+                && left.getName().equalsIgnoreCase(right.getName())
+                && Objects.equals(left.getCategory(), right.getCategory())
+                && Double.compare(left.getPrice(), right.getPrice()) == 0
+                && Objects.equals(left.getUnit(), right.getUnit())
+                && Double.compare(left.getCost(), right.getCost()) == 0
+                && left.getQuantity() == right.getQuantity()
+                && Objects.equals(left.getNotes(), right.getNotes());
     }
 
     private HttpHeaders headers() {

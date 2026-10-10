@@ -8,34 +8,58 @@
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
-        <version>3.5.16</version>
+        <version>4.1.1</version>
         <relativePath/>
     </parent>
 
     <groupId>com.flowerfarm</groupId>
     <artifactId>flowerfarm-manager</artifactId>
-    <version>1.0.19</version>
+    <version>1.3.0-SNAPSHOT</version>
     <packaging>jar</packaging>
     <name>Flower Farm Manager</name>
     <description>Spring Boot inventory manager for PNW flower farms (Port Orchard, Kitsap County).</description>
 
+    <licenses>
+        <license>
+            <name>MIT License</name>
+            <url>LICENSE</url>
+            <distribution>repo</distribution>
+            <comments>Copyright (c) 2026 RicheyWorks; see LICENSE for permissions and terms.</comments>
+        </license>
+    </licenses>
+
     <properties>
         <java.version>17</java.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <!-- Same-line patches for advisories in the resolved application SBOM. -->
-        <commons-lang3.version>3.18.0</commons-lang3.version>
-        <jackson-bom.version>2.21.7</jackson-bom.version>
-        <log4j2.version>2.25.5</log4j2.version>
-        <tomcat.version>10.1.60</tomcat.version>
+        <flowerfarm.build.directory>target</flowerfarm.build.directory>
+        <!-- Spring Boot 4.1.1 manages H2 2.4.240, whose CHECK constraints keep the session that
+             created them and fail with "Check constraint invalid ... database has been closed" once
+             that connection closes (h2database#4291, fixed upstream but not yet released). Stay on
+             2.3.232, which FlowersForever already ships and Flyway 12 is verified with. -->
+        <h2.version>2.3.232</h2.version>
+        <!-- Security patch versions beyond the Boot 4.1.1 BOM; both Jackson generations are used. -->
+        <jackson-2-bom.version>2.21.7</jackson-2-bom.version>
+        <jackson-bom.version>3.1.7</jackson-bom.version>
+        <tomcat.version>11.0.25</tomcat.version>
     </properties>
 
     <dependencies>
         <!-- Spring Boot Web (REST API + embedded Tomcat) -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-web</artifactId>
+            <artifactId>spring-boot-starter-webmvc</artifactId>
         </dependency>
 
+        <!-- Spring Boot 4 defaults to Jackson 3. FlowersForever's JSON code is still Jackson 2, so the
+             deprecated Jackson 2 bridge keeps the same ObjectMapper and MVC converter until it is ported. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-jackson2</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.fasterxml.jackson.datatype</groupId>
+            <artifactId>jackson-datatype-jsr310</artifactId>
+        </dependency>
         <!-- Optional HTTP Basic auth for shared barn PCs (profile: auth) -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -58,6 +82,11 @@
             <artifactId>h2</artifactId>
             <scope>runtime</scope>
         </dependency>
+        <!-- Spring Boot 4 auto-configures Flyway only through its own starter. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-flyway</artifactId>
+        </dependency>
 
         <!-- Optional SQLite dialect (activate with spring.profiles.active=sqlite) -->
         <dependency>
@@ -77,11 +106,11 @@
             <version>1.3.39</version>
         </dependency>
 
-        <!-- Weka for ML trend analysis -->
+        <!-- Standards-based QR payloads for printable harvest-lot traceability labels -->
         <dependency>
-            <groupId>nz.ac.waikato.cms.weka</groupId>
-            <artifactId>weka-stable</artifactId>
-            <version>3.8.6</version>
+            <groupId>com.google.zxing</groupId>
+            <artifactId>core</artifactId>
+            <version>3.5.3</version>
         </dependency>
 
         <!-- Excel / XLSX support -->
@@ -111,14 +140,31 @@
             <artifactId>spring-boot-starter-test</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- Spring Boot 4 test slices: MockMvc, security test support and TestRestTemplate. -->
         <dependency>
-            <groupId>org.springframework.security</groupId>
-            <artifactId>spring-security-test</artifactId>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-webmvc-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-security-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-resttestclient</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-restclient</artifactId>
             <scope>test</scope>
         </dependency>
     </dependencies>
 
     <build>
+        <directory>${flowerfarm.build.directory}</directory>
         <!-- Tests live flat in src/test (package-declared), not the Maven-default src/test/java -->
         <testSourceDirectory>src/test</testSourceDirectory>
 
@@ -145,11 +191,33 @@
                 </configuration>
             </plugin>
 
-            <!-- JaCoCo — coverage report on every verify (report-only, no threshold yet; see ADR-001) -->
+            <!-- Exercise the repackaged JAR after package, including its Boot loader. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-failsafe-plugin</artifactId>
+                <configuration>
+                    <includes>
+                        <include>**/McpPackagedProcessSmokeIT.java</include>
+                    </includes>
+                    <systemPropertyVariables>
+                        <flowerfarm.mcp.executable-jar>${project.build.directory}/${project.build.finalName}.jar</flowerfarm.mcp.executable-jar>
+                    </systemPropertyVariables>
+                </configuration>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>integration-test</goal>
+                            <goal>verify</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!-- JaCoCo — report plus meaningful line/branch regression floors (ADR-001) -->
             <plugin>
                 <groupId>org.jacoco</groupId>
                 <artifactId>jacoco-maven-plugin</artifactId>
-                <version>0.8.13</version>
+                <version>0.8.15</version>
                 <executions>
                     <execution>
                         <id>prepare-agent</id>
@@ -160,6 +228,30 @@
                         <phase>verify</phase>
                         <goals><goal>report</goal></goals>
                     </execution>
+                    <execution>
+                        <id>coverage-gate</id>
+                        <phase>verify</phase>
+                        <goals><goal>check</goal></goals>
+                        <configuration>
+                            <rules>
+                                <rule>
+                                    <element>BUNDLE</element>
+                                    <limits>
+                                        <limit>
+                                            <counter>LINE</counter>
+                                            <value>COVEREDRATIO</value>
+                                            <minimum>0.75</minimum>
+                                        </limit>
+                                        <limit>
+                                            <counter>BRANCH</counter>
+                                            <value>COVEREDRATIO</value>
+                                            <minimum>0.55</minimum>
+                                        </limit>
+                                    </limits>
+                                </rule>
+                            </rules>
+                        </configuration>
+                    </execution>
                 </executions>
             </plugin>
 
@@ -167,11 +259,73 @@
             <plugin>
                 <groupId>org.cyclonedx</groupId>
                 <artifactId>cyclonedx-maven-plugin</artifactId>
-                <version>2.9.1</version>
+                <version>2.9.3</version>
+                <configuration>
+                    <schemaVersion>1.6</schemaVersion>
+                    <outputDirectory>${project.build.directory}</outputDirectory>
+                    <outputName>bom</outputName>
+                    <outputFormat>all</outputFormat>
+                    <includeBomSerialNumber>true</includeBomSerialNumber>
+                    <skipAttach>true</skipAttach>
+                </configuration>
                 <executions>
                     <execution>
+                        <id>release-sbom</id>
                         <phase>package</phase>
                         <goals><goal>makeAggregateBom</goal></goals>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!-- Generate bundled third-party notices and block strong-copyleft dependencies. -->
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>license-maven-plugin</artifactId>
+                <version>2.7.1</version>
+                <executions>
+                    <execution>
+                        <id>third-party-license-policy</id>
+                        <phase>generate-resources</phase>
+                        <goals><goal>add-third-party</goal></goals>
+                        <configuration>
+                            <excludedScopes>test,provided</excludedScopes>
+                            <failOnBlacklist>true</failOnBlacklist>
+                            <excludedLicenses>
+                                <excludedLicense>GNU General Public License 3</excludedLicense>
+                                <excludedLicense>GNU General Public License v3.0</excludedLicense>
+                                <excludedLicense>GNU Affero General Public License</excludedLicense>
+                                <excludedLicense>GNU Affero General Public License v3.0</excludedLicense>
+                            </excludedLicenses>
+                            <force>true</force>
+                            <generateBundle>true</generateBundle>
+                            <bundleThirdPartyPath>META-INF/FlowersForever-THIRD-PARTY.txt</bundleThirdPartyPath>
+                            <outputDirectory>${project.build.directory}/generated-resources/licenses</outputDirectory>
+                            <thirdPartyFilename>THIRD-PARTY.txt</thirdPartyFilename>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!-- Defense in depth for the GPL analytics dependency removed in 1.1.0. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-enforcer-plugin</artifactId>
+                <version>3.6.2</version>
+                <executions>
+                    <execution>
+                        <id>ban-incompatible-distribution-dependencies</id>
+                        <goals><goal>enforce</goal></goals>
+                        <configuration>
+                            <rules>
+                                <bannedDependencies>
+                                    <excludes>
+                                        <exclude>nz.ac.waikato.cms.weka:*</exclude>
+                                    </excludes>
+                                    <searchTransitive>true</searchTransitive>
+                                    <message>Weka is GPLv3 and is excluded from the FlowersForever distribution; keep third-party license review explicit.</message>
+                                </bannedDependencies>
+                            </rules>
+                        </configuration>
                     </execution>
                 </executions>
             </plugin>
@@ -187,7 +341,7 @@
                     <plugin>
                         <groupId>com.github.spotbugs</groupId>
                         <artifactId>spotbugs-maven-plugin</artifactId>
-                        <version>4.8.6.6</version>
+                        <version>4.10.4.0</version>
                         <configuration>
                             <effort>Max</effort>
                             <threshold>Low</threshold>
@@ -212,7 +366,7 @@
                 </plugins>
             </build>
         </profile>
-        <!-- Static analysis, report-first (non-blocking). CI runs: mvn verify -Pquality (ADR-001) -->
+        <!-- Static analysis: zero-baseline SpotBugs and project-style Checkstyle gates. -->
         <profile>
             <id>quality</id>
             <build>
@@ -220,9 +374,9 @@
                     <plugin>
                         <groupId>com.github.spotbugs</groupId>
                         <artifactId>spotbugs-maven-plugin</artifactId>
-                        <version>4.8.6.6</version>
+                        <version>4.10.4.0</version>
                         <configuration>
-                            <failOnError>false</failOnError>
+                            <failOnError>true</failOnError>
                             <effort>Max</effort>
                             <excludeFilterFile>config/spotbugs-exclude.xml</excludeFilterFile>
                             <xmlOutput>true</xmlOutput>
@@ -237,13 +391,13 @@
                                     <threshold>Medium</threshold>
                                 </configuration>
                             </execution>
-                            <!-- Ratchet: fail on any High-priority finding (baseline fixed at 0, ADR-001) -->
+                            <!-- Ratchet: fail on any Medium+ finding (baseline fixed at 0, ADR-001) -->
                             <execution>
                                 <id>spotbugs-gate</id>
                                 <phase>verify</phase>
                                 <goals><goal>check</goal></goals>
                                 <configuration>
-                                    <threshold>High</threshold>
+                                    <threshold>Medium</threshold>
                                 </configuration>
                             </execution>
                         </executions>
@@ -253,17 +407,41 @@
                         <artifactId>maven-checkstyle-plugin</artifactId>
                         <version>3.6.0</version>
                         <configuration>
-                            <configLocation>google_checks.xml</configLocation>
-                            <failsOnError>false</failsOnError>
-                            <failOnViolation>false</failOnViolation>
+                            <configLocation>config/checkstyle.xml</configLocation>
+                            <failsOnError>true</failsOnError>
+                            <failOnViolation>true</failOnViolation>
                             <outputFileFormat>xml</outputFileFormat>
                         </configuration>
                         <executions>
                             <execution>
                                 <phase>verify</phase>
-                                <goals><goal>checkstyle</goal></goals>
+                                <goals><goal>check</goal></goals>
                             </execution>
                         </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+        <!--
+          Native pointer/keyboard smoke. This profile intentionally replaces
+          the normal Surefire includes so an operator opts into screen control
+          without also running hundreds of headless tests behind the window.
+        -->
+        <profile>
+            <id>installed-desktop-smoke</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-surefire-plugin</artifactId>
+                        <configuration>
+                            <includes combine.self="override">
+                                <include>**/InstalledDesktopSmoke.java</include>
+                            </includes>
+                            <systemPropertyVariables>
+                                <flowerfarm.installed-desktop-smoke>true</flowerfarm.installed-desktop-smoke>
+                            </systemPropertyVariables>
+                        </configuration>
                     </plugin>
                 </plugins>
             </build>

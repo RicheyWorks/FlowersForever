@@ -1,7 +1,9 @@
 package com.flowerfarm.repository;
 
 import com.flowerfarm.model.Item;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -13,6 +15,14 @@ import java.util.List;
 public interface ItemJpaRepository extends JpaRepository<Item, Long> {
 
     List<Item> findAllByOrderByIdAsc();
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT i FROM Item i WHERE i.id = :id")
+    java.util.Optional<Item> findByIdForUpdate(@Param("id") Long id);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT i FROM Item i WHERE LOWER(i.name) = LOWER(:name) ORDER BY i.id ASC")
+    List<Item> findAllByNameIgnoreCaseForUpdate(@Param("name") String name);
 
     @Query("""
             SELECT i FROM Item i

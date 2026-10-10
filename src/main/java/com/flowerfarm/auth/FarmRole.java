@@ -47,7 +47,9 @@ public enum FarmRole {
         try {
             return FarmRole.valueOf(raw.trim().toUpperCase());
         } catch (IllegalArgumentException e) {
-            return HAND;
+            throw new IllegalArgumentException(
+                    "Unknown farm role '" + raw.trim()
+                            + "'. Expected OWNER, HAND, or VIEWER.", e);
         }
     }
 }

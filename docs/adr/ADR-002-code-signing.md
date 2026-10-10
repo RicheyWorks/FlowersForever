@@ -1,12 +1,12 @@
 # ADR-002: Code signing for native installers
 
-**Status:** Accepted (deferred adoption)
+**Status:** Implemented (external enrollment and credentials pending)
 **Date:** 2026-07-17
 **Deciders:** Richmond (RicheyWorks)
 
 ## Context
 
-ADR-001 ships unsigned jpackage installers (MSI, DMG). Windows SmartScreen shows "Unknown publisher" warnings and macOS Gatekeeper blocks unnotarized apps by default (users must right-click → Open). Acceptable for a portfolio project and hand-installed barn PCs; a barrier if distribution ever widens. ADR-001 action item 8 asked for this evaluation.
+ADR-001 ships unsigned jpackage installers (MSI, DMG). Windows SmartScreen shows "Unknown publisher" warnings and macOS Gatekeeper blocks unnotarized apps by default. During local 1.2 candidate validation on 2026-08-27, Norton also blocked the generated Windows launcher as `IDP.Generic`. The application completed its controlled release-smoke startup, migration, marker, and shutdown before the alert, but that evidence does not justify bypassing an antivirus block. Signing is now a release requirement for external pilots.
 
 ## Options Considered
 
@@ -27,9 +27,9 @@ ADR-001 ships unsigned jpackage installers (MSI, DMG). Windows SmartScreen shows
 
 ## Decision
 
-**Defer purchasing; adopt when there's a distribution trigger.** Signing both platforms costs ~$220/yr (~$120 Azure + $99 Apple) plus setup time — not justified while users are the maintainer's own machines and portfolio reviewers. The trigger to revisit: any external user who is not comfortable clicking through OS warnings, or public promotion of the installers.
+**Adopt signing before external pilot distribution.** The distribution trigger has been reached. Enrollment and identity validation are external account steps that remain pending, so unsigned candidate artifacts may be used only for controlled maintainer validation and must not be presented as an approved pilot release.
 
-When triggered, the chosen stack is **Azure Artifact Signing (Windows) + Apple Developer Program (macOS)**, wired into `installers.yml` as post-jpackage steps (Azure's signing action for the MSI; `--mac-sign`, `notarytool submit --wait`, `stapler staple` for the DMG). Secrets live in GitHub repo secrets; no certificates on disk.
+The chosen stack is **Azure Artifact Signing (Windows) + Apple Developer Program (macOS)**, wired into the gated `release.yml` packaging jobs (Azure's signing action for the MSI; `--mac-sign`, `notarytool submit --wait`, `stapler staple` for the DMG). Secrets live in GitHub repository secrets; no certificates are committed or stored in the release artifacts.
 
 ## Consequences
 
@@ -40,4 +40,8 @@ When triggered, the chosen stack is **Azure Artifact Signing (Windows) + Apple D
 ## Action Items
 
 1. [x] Evaluation recorded (this ADR)
-2. [ ] On trigger: Azure tenant + Artifact Signing account, Apple Developer enrollment, extend `installers.yml`
+2. [x] Add non-publishing Windows/macOS candidate packaging and executable smoke tests
+3. [ ] Complete Azure tenant + Artifact Signing account enrollment and Apple Developer enrollment
+4. [x] Add credential-gated signing, notarization, signature verification, and publication dependencies to `release.yml`
+5. [ ] Populate and protect the GitHub `release-signing` environment
+6. [ ] Submit the exact blocked Windows candidate to Norton for false-positive review after provenance confirmation

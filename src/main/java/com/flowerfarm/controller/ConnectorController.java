@@ -9,7 +9,6 @@ import com.flowerfarm.controller.dto.FarmApiDtos.HistoryResponse;
 import com.flowerfarm.controller.dto.FarmApiDtos.ItemResponse;
 import com.flowerfarm.service.SyncHistoryService;
 import com.flowerfarm.service.ServerCsvExportService;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -144,10 +143,7 @@ public class ConnectorController {
                 connector, operation, success, query, limit);
         byte[] pdf = syncHistoryService.generateAuditPdf(report);
         String filename = "audit-history-" + report.generatedOn() + ".pdf";
-        return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
-                .contentType(MediaType.APPLICATION_PDF)
-                .body(pdf);
+        return DownloadResponse.pdf(pdf, filename);
     }
 
     /** Clears the entire sync history audit log. */

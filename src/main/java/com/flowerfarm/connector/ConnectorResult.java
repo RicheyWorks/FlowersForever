@@ -1,5 +1,7 @@
 package com.flowerfarm.connector;
 
+import com.flowerfarm.security.SecretRedactor;
+
 import java.time.Instant;
 
 /**
@@ -27,8 +29,8 @@ public class ConnectorResult<T> {
                             String connectorName) {
         this.success       = success;
         this.payload       = payload;
-        this.message       = message;
-        this.errorDetail   = errorDetail;
+        this.message       = success ? message : SecretRedactor.redact(message, 512);
+        this.errorDetail   = success ? errorDetail : SecretRedactor.redact(errorDetail, 2000);
         this.connectorName = connectorName;
         this.timestamp     = Instant.now();
     }
@@ -75,8 +77,8 @@ public class ConnectorResult<T> {
         if (cause == null) {
             return "unknown error";
         }
-        return cause.getClass().getSimpleName()
-                + (cause.getMessage() != null ? ": " + cause.getMessage() : "");
+        return SecretRedactor.redact(cause.getClass().getSimpleName()
+                + (cause.getMessage() != null ? ": " + cause.getMessage() : ""), 2000);
     }
 
     // ── Accessors ─────────────────────────────────────────────────────────────

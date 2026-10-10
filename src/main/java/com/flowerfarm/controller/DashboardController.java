@@ -4,6 +4,8 @@ import com.flowerfarm.service.HarvestService;
 import com.flowerfarm.service.InventoryService;
 import com.flowerfarm.service.MarketDayPackingService;
 import com.flowerfarm.service.OrderService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -20,6 +22,7 @@ import java.util.Map;
 @RequestMapping("/api/dashboard")
 public class DashboardController {
 
+    private static final Logger log = LoggerFactory.getLogger(DashboardController.class);
     private static final int DEFAULT_LOW_STOCK = 10;
 
     private final InventoryService inventoryService;
@@ -93,12 +96,13 @@ public class DashboardController {
             marketDay.put("scope", pack.scope());
             body.put("marketDay", marketDay);
         } catch (Exception ex) {
+            log.warn("Market-day dashboard summary is unavailable", ex);
             body.put("marketDay", Map.of(
                     "date", LocalDate.now().toString(),
                     "orderCount", 0,
                     "pipelineValue", 0,
                     "shortfallSkuCount", 0,
-                    "error", ex.getMessage() != null ? ex.getMessage() : "unavailable"
+                    "error", "Market-day summary is temporarily unavailable."
             ));
         }
 

@@ -1,5 +1,6 @@
 package com.flowerfarm.service;
 
+import com.flowerfarm.model.FarmProfile;
 import com.flowerfarm.model.Customer;
 import com.flowerfarm.model.CustomerOrder;
 import com.flowerfarm.model.Item;
@@ -45,7 +46,7 @@ class MorningBriefingServiceTest {
     void setUp() {
         service = new MorningBriefingService(
                 inventoryService, harvestService, orderService,
-                marketDayPackingService, irrigationAdvisorService);
+                marketDayPackingService, irrigationAdvisorService, new FarmProfile());
     }
 
     @Test
@@ -77,8 +78,6 @@ class MorningBriefingServiceTest {
                 List.of("Deep soak"), List.of(), null, null, null, null, null, "notes");
         when(irrigationAdvisorService.advise(false)).thenReturn(water);
 
-        when(inventoryService.inventoryKpis(10)).thenReturn(
-                new InventoryService.InventoryKpiSnapshot(4, 100, 50, 1, 60, 10));
         when(inventoryService.getAllItems()).thenReturn(List.of(
                 new Item("Low SKU", "Other", 1, "each", 0.5, 3, ""),
                 new Item("OK SKU", "Other", 1, "each", 0.5, 50, "")

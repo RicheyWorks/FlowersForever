@@ -1,5 +1,6 @@
 package com.flowerfarm.service;
 
+import com.flowerfarm.model.FarmProfile;
 import com.flowerfarm.model.Customer;
 import com.flowerfarm.model.CustomerOrder;
 import com.flowerfarm.model.HarvestEntry;
@@ -39,7 +40,10 @@ class DayCloseoutServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new DayCloseoutService(inventoryService, harvestService, orderService);
+        FarmProfile farmProfile = new FarmProfile();
+        farmProfile.setTimeZone(PNW.getId());
+        service = new DayCloseoutService(
+                inventoryService, harvestService, orderService, farmProfile);
     }
 
     @Test
@@ -79,6 +83,7 @@ class DayCloseoutServiceTest {
         ));
 
         DayCloseout closeout = service.build();
+        assertThat(closeout.date()).isEqualTo(today);
         assertThat(closeout.plainText()).contains("DAY CLOSEOUT");
         assertThat(closeout.fulfilledCount()).isEqualTo(1);
         assertThat(closeout.fulfilledRevenue()).isEqualTo(50.0);

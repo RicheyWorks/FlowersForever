@@ -1,5 +1,10 @@
 package com.flowerfarm.gui.tabs;
 
+import com.flowerfarm.model.FieldScienceExportSummary;
+import com.flowerfarm.model.PnwPlantProfile;
+
+import java.util.List;
+
 /**
  * Coordination contract implemented by the main GUI orchestrator and handed to
  * the tabs that need to trigger cross-cutting actions — a global data refresh,
@@ -22,7 +27,176 @@ public interface TabHost {
     /** Show a short message in the application status bar. */
     void setStatus(String message);
 
-    /** Switch to the Trend Analysis tab and start a forecast on a background thread. */
+    /**
+     * Open Inventory with only the named products visible for a focused handoff.
+     * Hosts without direct access to the inventory workflow still provide a
+     * useful navigation and status fallback.
+     */
+    default void showInventoryProducts(List<String> productNames) {
+        List<String> products = productNames == null ? List.of() : productNames.stream()
+                .filter(name -> name != null && !name.isBlank())
+                .distinct()
+                .toList();
+        selectTab("Inventory");
+        setStatus(products.isEmpty()
+                ? "Opened Inventory to review stock."
+                : "Opened Inventory for market shortfalls: " + String.join(", ", products) + ".");
+    }
+
+    /**
+     * Open a focused Inventory queue with a route back to the workflow that
+     * requested the stock review. Basic hosts may ignore the return context.
+     */
+    default void showInventoryProducts(List<String> productNames,
+                                       String returnTab, String returnLabel) {
+        showInventoryProducts(productNames);
+    }
+
+    /** Open Add Item with a missing product name prepared when safe. */
+    default void showAddInventoryItem(String productName) {
+        String safeName = productName == null ? "" : productName.trim();
+        selectTab("Add Item");
+        setStatus(safeName.isEmpty()
+                ? "Opened Add Item."
+                : "Opened Add Item for missing product “" + safeName + "”.");
+    }
+
+    /**
+     * Open Customers & Orders with a status-focused order queue. Hosts without
+     * direct access to CRM still provide a useful navigation fallback.
+     */
+    default void showOrdersByStatus(String status) {
+        String safeStatus = status == null || status.isBlank() ? "ALL" : status.trim();
+        selectTab("Customers & Orders");
+        setStatus("Opened Customers & Orders for " + safeStatus + " orders.");
+    }
+
+    /** Open a status-focused order queue with a route back to its source. */
+    default void showOrdersByStatus(String status, String returnTab, String returnLabel) {
+        showOrdersByStatus(status);
+    }
+
+    /**
+     * Open Customers & Orders with one exact order selected for review. Hosts
+     * without direct access to CRM still provide a useful navigation fallback.
+     */
+    default void showOrder(long orderId) {
+        selectTab("Customers & Orders");
+        setStatus("Opened Customers & Orders for order #" + orderId + ".");
+    }
+
+    /**
+     * Open one exact order with a route back to the workflow that requested the
+     * review. Basic hosts may ignore the return context.
+     */
+    default void showOrder(long orderId, String returnTab, String returnLabel) {
+        showOrder(orderId);
+    }
+
+    /**
+     * Open a new CRM order draft and prepare a non-stock event-services brief.
+     * Physical flowers and other goods remain separate inventory-tracked lines.
+     */
+    default boolean showEventOrderDraft(String occasion, String services, String brief) {
+        String safeOccasion = occasion == null || occasion.isBlank()
+                ? "event" : occasion.trim();
+        selectTab("Customers & Orders");
+        setStatus("Opened Customers & Orders for a " + safeOccasion + " service brief.");
+        return false;
+    }
+
+    /**
+     * Open Season Planner with a sourced plant profile prepared as an editable
+     * farm-specific planting draft. The bundled reference remains immutable.
+     */
+    default boolean showSeasonPlanDraft(PnwPlantProfile plant) {
+        if (plant == null) {
+            return false;
+        }
+        selectTab("Season Planner");
+        setStatus("Opened Season Planner for “" + plant.commonName()
+                + "”; confirm farm dates, bed space, and expected stems before saving.");
+        return false;
+    }
+
+    /** Open an editable farm finding with the selected field instrument attributed. */
+    default void showFieldScienceFinding(String instrumentTitle, String sourceUrl) {
+        selectTab("Knowledge Log");
+        setStatus("Opened Knowledge Log for a finding from " + instrumentTitle
+                + ". Add your observation before saving.");
+    }
+
+    /** Prepare a finding linked to one exact, already saved field science export. */
+    default void showFieldScienceFindingFromExport(FieldScienceExportSummary export) {
+        setStatus("A linked field science finding cannot be opened in this workspace.");
+    }
+
+    /** Open one saved field science export by archive ID, including for viewers. */
+    default void showFieldScienceExport(long exportId) {
+        setStatus("This workspace cannot open a linked field science export.");
+    }
+
+    /**
+     * Open one exact order and focus the saved product line that needs review.
+     * Older hosts retain a safe exact-order fallback.
+     */
+    default void showOrderLine(long orderId, Long lineId, String productName,
+                               String returnTab, String returnLabel) {
+        showOrder(orderId, returnTab, returnLabel);
+    }
+
+    /** Open an exact saved product and prepare its correction fields when permitted. */
+    default void showOrderLineCorrection(long orderId, Long lineId, String productName,
+                                         String returnTab, String returnLabel) {
+        showOrderLine(orderId, lineId, productName, returnTab, returnLabel);
+    }
+
+    /** Open Harvest Log with one exact saved harvest selected for review. */
+    default void showHarvest(long harvestId) {
+        selectTab("Harvest Log");
+        setStatus("Opened Harvest Log for harvest #" + harvestId + ".");
+    }
+
+    /** Open one exact harvest with a route back to the requesting workflow. */
+    default void showHarvest(long harvestId, String returnTab, String returnLabel) {
+        showHarvest(harvestId);
+    }
+
+    /** Open the retained Market Day plan with a route back to its source. */
+    default void showMarketDay(String returnTab, String returnLabel) {
+        selectTab("Market Day");
+        setStatus("Opened Market Day packing work.");
+    }
+
+    /** Open the retained irrigation plan with a route back to its source. */
+    default void showIrrigation(String returnTab, String returnLabel) {
+        selectTab("Irrigation & Care");
+        setStatus("Opened Irrigation & Care.");
+    }
+
+    /** Open the retained single-harvest entry workspace with a return route. */
+    default void showHarvestEntry(String returnTab, String returnLabel) {
+        selectTab("Harvest Log");
+        setStatus("Opened Harvest Log for entry.");
+    }
+
+    /**
+     * Open the cut-flower “Start here” choices (first cut, spreadsheet import,
+     * or add a product). Desktop hosts show the dialog; others leave a status tip.
+     */
+    default void openStartHere() {
+        setStatus("Use Help > Start here… to set up your cut-flower farm.");
+    }
+
+    /**
+     * Import products from a CSV or Excel spreadsheet. Desktop hosts offer the
+     * file type choice; others leave a status tip.
+     */
+    default void importFromSpreadsheet() {
+        setStatus("Use File > Import CSV… or Import Excel… to bring products from a spreadsheet.");
+    }
+
+    /** Switch to Trend Analysis and forecast from weekly harvest history in the background. */
     void runTrendAnalysis();
 
     /**
@@ -36,5 +210,10 @@ public interface TabHost {
     /** Whether the user may clear the audit log (OWNER only when auth on). */
     default boolean canClearHistory() {
         return true;
+    }
+
+    /** User-facing identity for permission feedback; never used for REST authorization. */
+    default String sessionDisplayName() {
+        return "local desktop session";
     }
 }

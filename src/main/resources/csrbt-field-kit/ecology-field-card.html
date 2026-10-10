@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ecology Field Card — CSRBT</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<!-- Webfonts load without blocking first paint: a stylesheet request that
+     hangs (one bar of signal) otherwise holds the page blank indefinitely,
+     which breaks the offline constraint in ADR-031. See tools/audit_offline.py. -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&family=JetBrains+Mono:wght@400;500&display=swap" media="print" data-webfont>
+<noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&family=JetBrains+Mono:wght@400;500&display=swap"></noscript>
+<script>(function(){var l=document.querySelector('link[data-webfont]');if(!l)return;
+  var on=function(){l.media="all";};
+  if(l.sheet){on();}else{l.addEventListener("load",on);l.addEventListener("error",function(){});}
+})();</script>
+<style>
+  :root {
+    color-scheme: light;
+    --page:#F5F1E6; --surface:#FFFDF7; --ink:#23281F; --ink-2:#4B5344; --muted:#6B6B5E;
+    --border:#E3DCC9; --rule:#C7C0AC; --s1:#2C784C; --s2:#A94F26; --s3:#2B6C8F;
+    --soft:#E9F0E7; --soft-2:#F3EEE0; --shadow:0 1px 2px rgba(35,40,31,.05),0 12px 32px rgba(35,40,31,.06);
+    --head:"Fraunces",Georgia,serif; --body:"Newsreader",Georgia,"Times New Roman",serif;
+    --mono:"JetBrains Mono",ui-monospace,Menlo,monospace;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--page); color:var(--ink); font:16px/1.5 var(--body);
+    -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility; }
+  .wrap { max-width:900px; margin:0 auto; padding:0 26px; }
+  a { color:var(--s1); text-underline-offset:2px; }
+
+  .kit-nav { display:flex; flex-wrap:wrap; gap:8px; padding:14px 0 0; }
+  .kit-nav a { font-family:var(--mono); font-size:12.5px; letter-spacing:.02em; text-decoration:none;
+    color:var(--ink-2); background:var(--surface); border:1px solid var(--border); border-radius:999px;
+    padding:9px 15px; box-shadow:var(--shadow); display:inline-flex; align-items:center; min-height:40px; }
+  .kit-nav a:hover { border-color:var(--s1); color:var(--s1); }
+
+  .masthead { padding:26px 0 6px; }
+  .masthead::before { content:""; display:block; width:52px; height:3px; background:var(--s1); border-radius:2px; margin:0 0 16px; }
+  .eyebrow { font-family:var(--mono); font-size:12px; letter-spacing:.18em; text-transform:uppercase; color:var(--s1); margin:0 0 12px; }
+  h1 { font-family:var(--head); font-weight:700; font-size:clamp(30px,5vw,44px); line-height:1.05; letter-spacing:-0.02em; margin:0 0 10px; }
+  .dek { font-size:17px; color:var(--ink-2); margin:0; max-width:66ch; }
+
+  .mapping { background:var(--soft); border-left:3px solid var(--s1); border-radius:0 10px 10px 0;
+    padding:11px 16px; margin:18px 0 4px; font-size:15.5px; }
+  .mapping b { font-family:var(--head); }
+
+  .grid { columns:2; column-gap:22px; margin-top:14px; }
+  @media (max-width:680px){ .grid { columns:1; } }
+  .block { break-inside:avoid; margin:0 0 16px; }
+  .block h2 { font-family:var(--head); font-weight:600; font-size:16px; margin:0 0 2px; letter-spacing:-0.01em; }
+  .block .tool { font-family:var(--mono); font-size:11px; color:var(--s3); letter-spacing:.02em; }
+  table { border-collapse:collapse; width:100%; font-size:13.5px; margin-top:6px; }
+  td, th { border:1px solid var(--rule); padding:5px 8px; text-align:left; vertical-align:top; line-height:1.4; }
+  th { background:var(--soft); font-family:var(--head); font-weight:600; font-size:12.5px; }
+  .m { font-family:var(--mono); font-size:12px; color:var(--ink); white-space:nowrap; }
+  .who { font-family:var(--mono); font-size:11px; color:var(--muted); font-weight:400; margin-right:4px; }
+  .band { color:var(--ink-2); }
+  .band em { font-style:normal; color:var(--s1); font-weight:600; }
+
+  footer { margin:22px 0 50px; padding-top:16px; border-top:1px solid var(--border); color:var(--muted); font-size:13px; }
+  footer a { font-weight:500; }
+
+  @media print {
+    :root { --page:#fff; --surface:#fff; --soft:#f2f6f1; --soft-2:#f6f4ee; --shadow:none; }
+    body { font-size:9.5pt; background:#fff; } .wrap { max-width:none; padding:0; }
+    .kit-nav { display:none; } a { color:inherit; text-decoration:none; }
+    .grid { columns:2; column-gap:16px; } .block { break-inside:avoid; }
+    h1 { font-size:22pt; } .masthead { padding:0 0 4px; }
+  }
+
+  /* WCAG 1.4.11 non-text contrast: the visible edge of a control you are meant
+     to write in is the only thing telling you where to write, so it carries the
+     3:1 floor. Decorative card borders are not controls and stay quiet. */
+  input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]),
+  select, textarea { border-color: #8E8160; }
+</style>
+</head>
+<body>
+
+<nav class="kit-nav">
+  <a href="ecology.html">Overview</a>
+  <a href="ecology-lab.html">Interactive Lab</a>
+  <a href="ecology-lab-manual.html">Lab Manual</a>
+  <a href="ecology-teachers-guide.html">Teacher's Guide</a>
+  <a href="ecology-field-guide.html">Field Guide</a>
+  <a href="ecology-field-card.html" aria-current="page">Field Card</a>
+  <a href="ecology-glossary.html">Glossary</a>
+  <a href="plant-characters.html">Plant Characters</a>
+  <a href="fungal-characters.html">Fungal Characters</a>
+  <a href="cp-characters.html">CP Characters</a>
+  <a href="eco-protocol-reference.html">.eco Reference</a>
+  <a href="ecology.html#suites">Suites</a>
+  <a href="ecology.html#field-tools">Field Tools</a>
+</nav>
+
+<div class="wrap">
+  <div class="masthead">
+    <p class="eyebrow">CSRBT · quick reference</p>
+    <h1>Ecology Field Card</h1>
+    <p class="dek">Every metric the kit computes — what it tells you, its interpretation band, and the
+       tool that produces it — across the Workbench, the forest and vegetation plots, the fungal survey,
+       behavioural sampling, selection on marked individuals, and the cell and microbiology bench.
+       One card to keep on the bench. Print it double-sided.</p>
+    <div class="mapping"><b>The mapping:</b> keys are <b>species</b>, how often a key is touched is that
+      species' <b>abundance</b>, inserts and removes are <b>births and deaths</b>, and time is counted in
+      <b>operations</b> — so every number reproduces exactly. Your own entered field data reads the same way.</div>
+  </div>
+
+  <div class="grid">
+
+    <div class="block">
+      <h2>Diversity &amp; evenness</h2>
+      <span class="tool">tool: Field data — species counts</span>
+      <table>
+        <tr><th>Metric</th><th>Reads</th></tr>
+        <tr><td class="m">Richness&nbsp;S</td><td class="band">count of species/categories — more is richer</td></tr>
+        <tr><td class="m">Shannon&nbsp;H′</td><td class="band">diversity (richness weighted by evenness) — higher is more diverse</td></tr>
+        <tr><td class="m">Pielou&nbsp;J′</td><td class="band"><em>~1</em> even · <em>~0.5</em> uneven · <em>~0</em> one type dominates</td></tr>
+        <tr><td class="m">Hill&nbsp;N₁</td><td class="band">effective species — "100 present, behaves like 11"</td></tr>
+        <tr><td class="m">Simpson</td><td class="band">dominance — higher = one type carries more</td></tr>
+        <tr><td class="m">Chao1</td><td class="band"><b>lower bound</b> on richness from the rare species — "at least this many", never a total</td></tr>
+      </table>
+    </div>
+
+    <div class="block">
+      <h2>Spatial pattern</h2>
+      <span class="tool">tool: Quadrat grid — dispersion</span>
+      <table>
+        <tr><th>Metric</th><th>Reads</th></tr>
+        <tr><td class="m">Var / mean</td><td class="band"><em>≈1</em> random · <em>&lt;1</em> regular (even) · <em>&gt;1</em> clumped (patchy)</td></tr>
+        <tr><td class="m">Morisita</td><td class="band">same reading, robust to sample size</td></tr>
+      </table>
+    </div>
+
+    <div class="block">
+      <h2>Demography</h2>
+      <span class="tool">from lifespans / population series</span>
+      <table>
+        <tr><th>Metric</th><th>Reads</th></tr>
+        <tr><td class="m">Survivorship</td><td class="band"><em>I</em> live long, die together · <em>II</em> constant risk · <em>III</em> die young, survivors persist</td></tr>
+        <tr><td class="m">Logistic&nbsp;r</td><td class="band">intrinsic growth rate (per op)</td></tr>
+        <tr><td class="m">Logistic&nbsp;K</td><td class="band">carrying capacity — the ceiling reached</td></tr>
+      </table>
+    </div>
+
+    <div class="block">
+      <h2>Forest plots</h2>
+      <span class="tool">tool: Stand Sheet — stem tally &amp; plot geometry</span>
+      <table>
+        <tr><th>Metric</th><th>Reads</th></tr>
+        <tr><td class="m">Basal area BA</td><td class="band">0.00007854&nbsp;&times;&nbsp;DBH²<sub>cm</sub> per stem; summed per hectare it is the standard stocking measure</td></tr>
+        <tr><td class="m">QMD</td><td class="band">&radic;(&Sigma;DBH²/n) &mdash; the tree of average <em>basal area</em>, always &ge; mean DBH</td></tr>
+        <tr><td class="m">Reineke SDI</td><td class="band"><span class="who">Reineke 1933</span> N(QMD/25)<sup>1.605</sup> &mdash; metric form; the 25&nbsp;cm reference is a convention, not a conversion of Reineke's 10&nbsp;in. Zone thresholds are rules of thumb and vary by species: &asymp;35% of max is the lower limit of full site occupancy, &asymp;60% the lower limit of self-thinning (Long &amp; Daniel 1990) &mdash; published onsets of imminent competition mortality run 0.45 for white spruce to 0.55 for lodgepole pine. Derived for even-aged single-species stands</td></tr>
+        <tr><td class="m">Importance value</td><td class="band">(rel. density + rel. dominance)/2 &mdash; ranks species by presence <em>and</em> size together</td></tr>
+        <tr><td class="m">Height</td><td class="band">D(tan&nbsp;&theta;<sub>top</sub> &minus; tan&nbsp;&theta;<sub>base</sub>) &mdash; both angles, or the number is wrong on a slope</td></tr>
+        <tr><td class="m">CWD volume</td><td class="band">van Wagner &pi;²&Sigma;d²/(8L) &mdash; line-intercept, needs the full transect length</td></tr>
+        <tr><td class="m">Folded aspect</td><td class="band">|180&minus;|aspect&minus;225|| &mdash; turns a compass circle into a hot–cool gradient</td></tr>
+      </table>
+    </div>
+
+    <div class="block">
+      <h2>Vegetation plots</h2>
+      <span class="tool">tool: Relev&eacute; — cover by stratum</span>
+      <table>
+        <tr><th>Metric</th><th>Reads</th></tr>
+        <tr><td class="m">Cover class</td><td class="band"><b>ordinal</b> — convert to a class midpoint before averaging, and never average the class numbers</td></tr>
+        <tr><td class="m">Shannon on cover</td><td class="band">same formula, but p<sub>i</sub> is cover share, not count share — say which you used</td></tr>
+        <tr><td class="m">Mean C</td><td class="band">average coefficient of conservatism — <em>&lt;3.5</em> disturbed · <em>&gt;4.5</em> remnant-quality</td></tr>
+        <tr><td class="m">FQI</td><td class="band">meanC&nbsp;&times;&nbsp;&radic;N — rewards quality <em>and</em> richness; comparable only within one region's C-list</td></tr>
+        <tr><td class="m">Adjusted FQI</td><td class="band">100(meanC/10)(&radic;N<sub>nat</sub>/&radic;N<sub>tot</sub>) — 0–100, penalises non-native load</td></tr>
+        <tr><td class="m">Prevalence index</td><td class="band">&Sigma;(cover&times;weight)/&Sigma;cover — <em>&le;3.0</em> passes the hydrophyte criterion. <b>One of three</b>, not a delineation</td></tr>
+        <tr><td class="m">LPI cover</td><td class="band">hits/points, SE&nbsp;=&nbsp;&radic;(p(1&minus;p)/n) — plan the transect before walking it or n is meaningless</td></tr>
+      </table>
+    </div>
+
+    <div class="block">
+      <h2>Macrofungi</h2>
+      <span class="tool">tool: Collection Sheet — collections &amp; guild</span>
+      <table>
+        <tr><th>Metric</th><th>Reads</th></tr>
+        <tr><td class="m">S<sub>obs</sub></td><td class="band">taxa recorded — a severe undercount: a fungus that did not fruit today cannot be counted</td></tr>
+        <tr><td class="m">Chao1</td><td class="band">S<sub>obs</sub>&nbsp;+&nbsp;F₁(F₁&minus;1)/(2(F₂+1)) — a <b>lower bound</b>; a big gap means keep walking</td></tr>
+        <tr><td class="m">F₁ / F₂</td><td class="band">singletons and doubletons. <em>F₂&nbsp;=&nbsp;0</em> means Chao1 is running on the thinnest data it can</td></tr>
+        <tr><td class="m">Shannon on bodies</td><td class="band">describes the <em>display</em>, not the community — one genet can put up 200 caps</td></tr>
+        <tr><td class="m">Productivity</td><td class="band">collections or g&nbsp;fresh per m² <em>and</em> per hour — the two fail differently, record both</td></tr>
+        <tr><td class="m">Guild spectrum</td><td class="band">genus-level prior. Worthless when most taxa sit in <em>mixed</em> genera</td></tr>
+        <tr><td class="m">Single-host flag</td><td class="band">a prompt, not a finding — meaningless in a stand dominated by that host</td></tr>
+      </table>
+    </div>
+
+    <div class="block">
+      <h2>Behaviour</h2>
+      <span class="tool">tool: Ethogram — sampling &amp; time budgets</span>
+      <table>
+        <tr><th>Metric</th><th>Reads</th></tr>
+        <tr><td class="m">Time budget</td><td class="band">time in state ÷ <b>observed</b> time — out-of-sight excluded, or every % is wrong</td></tr>
+        <tr><td class="m">Point sample %</td><td class="band">points in state ÷ points; unbiased for <em>time</em>, useless for frequency. SE = &radic;(p(1&minus;p)/n)</td></tr>
+        <tr><td class="m">One-zero %</td><td class="band">intervals <em>containing</em> the behaviour. <b>Biased for duration and frequency both</b> — never a budget or a rate</td></tr>
+        <tr><td class="m">Event rate</td><td class="band">count ÷ observed minutes. Point sampling cannot produce one</td></tr>
+        <tr><td class="m">Mean bout</td><td class="band">continuous recording only; entirely a function of how the state's <em>end</em> was defined</td></tr>
+        <tr><td class="m">Cohen's&nbsp;&kappa;</td><td class="band">(p<sub>o</sub>&minus;p<sub>e</sub>)/(1&minus;p<sub>e</sub>). Bands are convention, not result. Depressed when one category dominates</td></tr>
+        <tr><td class="m">Transitions</td><td class="band">first-order Markov; diagonal structurally empty. Rows under 5 transitions are noise — a rule of thumb</td></tr>
+      </table>
+    </div>
+
+    <div class="block">
+      <h2>Selection &amp; inheritance</h2>
+      <span class="tool">tool: Selection Log — marked individuals</span>
+      <table>
+        <tr><th>Metric</th><th>Reads</th></tr>
+        <tr><td class="m">Repeatability&nbsp;R</td><td class="band">ICC. <em>&lt;0.7</em> the trait as measured is mostly your hand. Attenuates β by ≈R — fix the method, not the n</td></tr>
+        <tr><td class="m">Differential&nbsp;S</td><td class="band">weighted mean &minus; mean, in trait units. Includes selection on every correlated trait you didn't measure</td></tr>
+        <tr><td class="m">Intensity&nbsp;i</td><td class="band">S/&sigma; — comparable across traits and years</td></tr>
+        <tr><td class="m">Gradient&nbsp;β</td><td class="band">slope of relative fitness on standardised trait. <b>Univariate β = i exactly</b>; only a multiple regression separates direct from indirect</td></tr>
+        <tr><td class="m">h²</td><td class="band">mid-parent slope (single parent × 2). Upper bound — shared environment inflates it. Population- and environment-specific</td></tr>
+        <tr><td class="m">R&nbsp;=&nbsp;h²S</td><td class="band">predicted response. Routinely fails in the wild — a hypothesis the next generation tests</td></tr>
+      </table>
+    </div>
+
+    <div class="block">
+      <h2>Cell bench</h2>
+      <span class="tool">tool: Cell Bench — counting &amp; assays</span>
+      <table>
+        <tr><th>Metric</th><th>Reads</th></tr>
+        <tr><td class="m">Counting CV</td><td class="band">1/&radic;N. 100 cells = ±10%, 400 = ±5%. The floor on every count</td></tr>
+        <tr><td class="m">cells/mL</td><td class="band">(cells ÷ squares) × chamber factor × dilution. the conventional <em>20&ndash;50</em> per square: fewer imprecise, more <b>undercount</b></td></tr>
+        <tr><td class="m">Viability</td><td class="band">trypan blue is membrane integrity, not viability. Below the conventional <em>80%</em>, suspect handling first</td></tr>
+        <tr><td class="m">Doubling time</td><td class="band">Δt ÷ log₂(N_f/N_i). Exponential phase only; past the conventional &gt;80% confluence it reads long</td></tr>
+        <tr><td class="m">Standard curve</td><td class="band">high r² ≠ valid. Above the top standard is <b>extrapolation, not measurement</b> — dilute</td></tr>
+        <tr><td class="m">A260/A280</td><td class="band">≈1.8 DNA, ≈2.0 RNA — conventions, buffer-sensitive, silent about integrity</td></tr>
+        <tr><td class="m">Mitotic index</td><td class="band">dividing ÷ total. Phase durations assume asynchrony, known cycle, equal visibility — the last is false</td></tr>
+      </table>
+    </div>
+
+    <div class="block">
+      <h2>Micro bench</h2>
+      <span class="tool">tool: Micro Bench — plates &amp; growth</span>
+      <table>
+        <tr><th>Metric</th><th>Reads</th></tr>
+        <tr><td class="m">CFU/mL</td><td class="band">colonies ÷ (volume × dilution). A clump or chain is one CFU — <b>never</b> cells/mL</td></tr>
+        <tr><td class="m">30&ndash;300 rule</td><td class="band"><em>&lt;30</em> TFTC, imprecise · <em>&gt;300</em> TNTC, a <b>bias</b> more plates can't fix. A <b>convention</b> (APHA 9215 pour plate); BAM says 25&ndash;250. Show what you excluded</td></tr>
+        <tr><td class="m">Adjacent plates</td><td class="band">two countable dilutions should agree within ≈2×. Wider means the series, not the sample</td></tr>
+        <tr><td class="m">µ (h⁻¹)</td><td class="band">slope of ln(OD) over exponential phase; t_d = ln2/µ. You choose the window, not the software</td></tr>
+        <tr><td class="m">OD₆₀₀</td><td class="band">turbidity, not cells. Saturates optically above ≈0.4&ndash;0.6. No OD→CFU without your own calibration</td></tr>
+        <tr><td class="m">Zone (mm)</td><td class="band">a measurement. S/I/R needs a breakpoint table, revised <b>annually</b> — enter yours and record its edition</td></tr>
+        <tr><td class="m">Negative control</td><td class="band">grows? the run is <b>void</b>, not adjusted</td></tr>
+      </table>
+    </div>
+
+    <div class="block">
+      <h2>Between two sites — β diversity</h2>
+      <span class="tool">tool: Compare two sites</span>
+      <table>
+        <tr><th>Metric</th><th>Reads</th></tr>
+        <tr><td class="m">Jaccard</td><td class="band">fraction of species shared (presence) — <em>higher</em> = more shared</td></tr>
+        <tr><td class="m">Sørensen</td><td class="band">shared, weighting common presence — <em>higher</em> = more shared</td></tr>
+        <tr><td class="m">Bray–Curtis</td><td class="band">abundance-weighted difference — <em>higher</em> = more different</td></tr>
+      </table>
+    </div>
+
+    <div class="block">
+      <h2>Islands (MacArthur &amp; Wilson)</h2>
+      <span class="tool">tool: Terrarium island · .eco island</span>
+      <table>
+        <tr><th>Metric</th><th>Reads</th></tr>
+        <tr><td class="m">Ŝ (equilibrium)</td><td class="band">species number where immigration rate = extinction rate</td></tr>
+        <tr><td class="m">Turnover</td><td class="band">(immigrations + extinctions) / 2 at equilibrium</td></tr>
+        <tr><td class="m">Area effect</td><td class="band">bigger island → lower extinction → <em>higher Ŝ</em></td></tr>
+        <tr><td class="m">Distance effect</td><td class="band">closer island → higher immigration → <em>higher Ŝ</em></td></tr>
+      </table>
+    </div>
+
+    <div class="block">
+      <h2>Food webs</h2>
+      <span class="tool">tool: Food Web Builder</span>
+      <table>
+        <tr><th>Metric</th><th>Reads</th></tr>
+        <tr><td class="m">Trophic level</td><td class="band">producers = 1; a consumer = 1 + its highest-level food</td></tr>
+        <tr><td class="m">Chain length</td><td class="band">longest producer→predator path; published webs mostly 3–5. The ~10%-per-level transfer behind that is a convention, not a constant</td></tr>
+        <tr><td class="m">Connectance L/S²</td><td class="band">&lt;0.05 sparse (or under-sampled) · 0.05–0.3 typical of real webs · &gt;0.3 dense</td></tr>
+        <tr><td class="m">Secondary extinctions</td><td class="band">species left with no food path after a knockout — the web's robustness</td></tr>
+        <tr><td class="m">Keystone signal</td><td class="band">one removal taking ≥2 others down with it</td></tr>
+      </table>
+    </div>
+
+    <div class="block">
+      <h2>Genetics</h2>
+      <span class="tool">tool: Punnett builder · χ² · Hardy–Weinberg</span>
+      <table>
+        <tr><th>Cross / test</th><th>Expected</th></tr>
+        <tr><td class="m">Monohybrid F2</td><td class="band">3 : 1</td></tr>
+        <tr><td class="m">Dihybrid F2</td><td class="band">9 : 3 : 3 : 1</td></tr>
+        <tr><td class="m">Incomplete dom.</td><td class="band">1 : 2 : 1 (three phenotypes)</td></tr>
+        <tr><td class="m">Test cross</td><td class="band">reveals a hidden heterozygote</td></tr>
+        <tr><td class="m">Hardy–Weinberg</td><td class="band">p² : 2pq : q² — χ² tests equilibrium</td></tr>
+        <tr><td class="m">χ² goodness-of-fit</td><td class="band">tests observed counts vs the expected ratio</td></tr>
+      </table>
+    </div>
+
+    <div class="block">
+      <h2>Population size</h2>
+      <span class="tool">tool: Mark–recapture</span>
+      <table>
+        <tr><th>Method</th><th>Estimate</th></tr>
+        <tr><td class="m">Lincoln–Petersen</td><td class="band">N̂ ≈ (M × C) / R &nbsp;— marked, caught, recaptured</td></tr>
+      </table>
+    </div>
+
+    <div class="block">
+      <h2>Reading numbers in words</h2>
+      <span class="tool">FieldReport — fixed, tested thresholds</span>
+      <table>
+        <tr><th>The report says…</th><th>means</th></tr>
+        <tr><td class="band">"uneven"</td><td class="band">a few hot species carry most of it</td></tr>
+        <tr><td class="band">"clumped"</td><td class="band">individuals bunched in patches</td></tr>
+        <tr><td class="band">"type III"</td><td class="band">heavy early mortality, survivors persist</td></tr>
+      </table>
+    </div>
+
+  </div>
+
+  <footer>
+    Every number here is seeded and oracle-tested, so it reproduces and you can cite it. Full detail in the
+    <a href="ecology-field-guide.html">Field Guide</a>; run the instruments in the
+    <a href="ecology-lab.html">Interactive Lab</a>; ready-to-run exercises in the
+    <a href="ecology-lab-manual.html">Lab Manual</a>. MIT-licensed · © 2026 Richmond.
+  </footer>
+</div>
+</body>
+</html>

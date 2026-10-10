@@ -1,29 +1,17 @@
 package com.flowerfarm.service;
 
+import com.flowerfarm.model.FarmProfile;
 import com.flowerfarm.model.HarvestEntry;
 import com.flowerfarm.model.Item;
-import com.flowerfarm.repository.HarvestJpaRepository;
-import com.lowagie.text.Chunk;
-import com.lowagie.text.Document;
-import com.lowagie.text.DocumentException;
-import com.lowagie.text.Element;
-import com.lowagie.text.Font;
-import com.lowagie.text.FontFactory;
-import com.lowagie.text.PageSize;
-import com.lowagie.text.Paragraph;
-import com.lowagie.text.Phrase;
-import com.lowagie.text.Rectangle;
-import com.lowagie.text.pdf.PdfPCell;
-import com.lowagie.text.pdf.PdfPTable;
-import com.lowagie.text.pdf.PdfWriter;
+import com.flowerfarm.repository.HarvestRepository;
+import com.flowerfarm.util.InventoryUnits;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.awt.Color;
-import java.io.ByteArrayOutputStream;
 import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -31,6 +19,9 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
+import java.util.HashSet;
+import java.util.UUID;
 
 /**
  * Harvest logging for PNW flower production — stems, bunches, beds, market prep.
@@ -40,27 +31,70 @@ import java.util.Optional;
 public class HarvestService {
 
     private static final Logger log = LoggerFactory.getLogger(HarvestService.class);
+    public static final int MAX_BATCH_SIZE = 500;
+    private static final long MAX_QUERY_DAYS = 3_660;
 
-    private final HarvestJpaRepository repository;
+    private final HarvestRepository repository;
     private final InventoryService inventoryService;
     private final SyncHistoryService syncHistoryService;
+    private final HarvestReportGenerator reportGenerator;
+    private final HarvestCsvExporter csvExporter;
+    private final FarmProfile farmProfile;
 
-    public HarvestService(HarvestJpaRepository repository,
+    public HarvestService(HarvestRepository repository,
                           InventoryService inventoryService,
-                          SyncHistoryService syncHistoryService) {
+                          SyncHistoryService syncHistoryService,
+                          HarvestReportGenerator reportGenerator,
+                          HarvestCsvExporter csvExporter,
+                          FarmProfile farmProfile) {
         this.repository = repository;
         this.inventoryService = inventoryService;
         this.syncHistoryService = syncHistoryService;
+        this.reportGenerator = reportGenerator;
+        this.csvExporter = csvExporter;
+        this.farmProfile = farmProfile;
     }
 
     @Transactional(readOnly = true)
     public List<HarvestEntry> getAll() {
-        return new ArrayList<>(repository.findAllByOrderByHarvestDateDescIdDesc());
+        return new ArrayList<>(repository.findAllNewestFirst());
     }
 
     @Transactional(readOnly = true)
     public Optional<HarvestEntry> findById(Long id) {
         return repository.findById(id);
+    }
+
+    /** Exact, case-insensitive lot lookup used by labels, scanners, and AI clients. */
+    @Transactional(readOnly = true)
+    public Optional<HarvestEntry> findByLotCode(String lotCode) {
+        String normalized = normalizeLotCode(lotCode);
+        if (normalized.isEmpty()) {
+            throw new IllegalArgumentException("Lot code is required.");
+        }
+        return repository.findByLotCodeIgnoreCase(normalized);
+    }
+
+    /**
+     * Identify harvest crop names that will cause automatic zero-price Inventory
+     * SKU creation. Intended for background UI previews immediately before save.
+     */
+    @Transactional(readOnly = true)
+    public List<String> missingInventoryProducts(List<HarvestEntry> entries) {
+        if (entries == null || entries.isEmpty()) {
+            return List.of();
+        }
+        Map<String, String> uniqueNames = new LinkedHashMap<>();
+        for (HarvestEntry entry : entries) {
+            if (entry != null && entry.getCropName() != null
+                    && !entry.getCropName().isBlank()) {
+                String name = entry.getCropName().trim();
+                uniqueNames.putIfAbsent(name.toLowerCase(Locale.ROOT), name);
+            }
+        }
+        return uniqueNames.values().stream()
+                .filter(name -> inventoryService.findByNameIgnoreCase(name).isEmpty())
+                .toList();
     }
 
     @Transactional(readOnly = true)
@@ -71,7 +105,10 @@ public class HarvestService {
         if (to.isBefore(from)) {
             throw new IllegalArgumentException("to date must be on or after from date.");
         }
-        return new ArrayList<>(repository.findByHarvestDateBetweenOrderByHarvestDateDescIdDesc(from, to));
+        if (ChronoUnit.DAYS.between(from, to) > MAX_QUERY_DAYS) {
+            throw new IllegalArgumentException("Date range cannot exceed 10 years.");
+        }
+        return new ArrayList<>(repository.findBetween(from, to));
     }
 
     @Transactional(readOnly = true)
@@ -80,7 +117,7 @@ public class HarvestService {
             return List.of();
         }
         return new ArrayList<>(
-                repository.findByCropNameContainingIgnoreCaseOrderByHarvestDateDesc(crop.trim()));
+                repository.searchByCrop(crop.trim()));
     }
 
     /**
@@ -89,24 +126,10 @@ public class HarvestService {
      */
     @Transactional
     public List<HarvestEntry> addBatch(List<HarvestEntry> entries) {
-        if (entries == null || entries.isEmpty()) {
-            throw new IllegalArgumentException("Batch must contain at least one harvest row.");
-        }
+        validateBatch(entries);
         List<HarvestEntry> saved = new ArrayList<>();
         for (HarvestEntry e : entries) {
-            if (e == null) {
-                continue;
-            }
-            if (e.getCropName() == null || e.getCropName().isBlank()) {
-                continue;
-            }
-            if (e.getQuantity() <= 0) {
-                continue;
-            }
             saved.add(add(e));
-        }
-        if (saved.isEmpty()) {
-            throw new IllegalArgumentException("No valid harvest rows in batch (need crop + qty > 0).");
         }
         syncHistoryService.record(
                 "harvest",
@@ -122,6 +145,49 @@ public class HarvestService {
     }
 
     /**
+     * Imports historical harvest evidence without changing today's inventory balance.
+     * This keeps migration semantics separate from a newly logged operational harvest.
+     */
+    @Transactional
+    public List<HarvestEntry> importHistoricalBatch(List<HarvestEntry> entries) {
+        validateBatch(entries);
+        validateLotCodes(entries, null);
+        List<HarvestEntry> saved = new ArrayList<>();
+        for (HarvestEntry entry : entries) {
+            entry.setId(null);
+            assignLotCode(entry);
+            saved.add(repository.save(entry));
+        }
+        syncHistoryService.record(
+                "harvest",
+                "HARVEST_HISTORY_IMPORT",
+                true,
+                "Historical harvest imported: " + saved.size() + " row(s)",
+                "Inventory was not adjusted",
+                saved.size());
+        return List.copyOf(saved);
+    }
+
+    /** Validates a proposed harvest batch without saving records or adjusting inventory. */
+    public void validateBatch(List<HarvestEntry> entries) {
+        if (entries == null || entries.isEmpty()) {
+            throw new IllegalArgumentException("Batch must contain at least one harvest row.");
+        }
+        if (entries.size() > MAX_BATCH_SIZE) {
+            throw new IllegalArgumentException(
+                    "Batch cannot contain more than " + MAX_BATCH_SIZE + " harvest rows.");
+        }
+        for (HarvestEntry entry : entries) {
+            if (entry == null) {
+                throw new IllegalArgumentException("Batch harvest rows must not be null.");
+            }
+            validateHarvestDate(entry.getHarvestDate());
+            inventoryQuantityFor(entry.getQuantity());
+            validateLossQuantity(entry.getLossQuantity());
+        }
+    }
+
+    /**
      * Saves the harvest entry and increments inventory for the crop name.
      * Creates a new inventory SKU when none exists. Records {@code HARVEST_LOG} audit.
      */
@@ -130,10 +196,14 @@ public class HarvestService {
         if (entry == null) {
             throw new IllegalArgumentException("Harvest entry must not be null.");
         }
+        validateHarvestDate(entry.getHarvestDate());
+        validateLossQuantity(entry.getLossQuantity());
         entry.setId(null);
+        validateLotCodes(List.of(entry), null);
+        assignLotCode(entry);
         HarvestEntry saved = repository.save(entry);
 
-        int amount = (int) Math.round(saved.getQuantity());
+        int amount = inventoryQuantityFor(saved.getQuantity());
         Item stock = inventoryService.incrementQuantityByName(
                 saved.getCropName(),
                 amount,
@@ -149,8 +219,10 @@ public class HarvestService {
                 "HARVEST_LOG",
                 true,
                 msg,
-                "harvestId=" + saved.getId() + ", inventoryId=" + stock.getId()
-                        + ", bed=" + saved.getBedOrField(),
+                "harvestId=" + saved.getId() + ", lot=" + saved.getLotCode()
+                        + ", grade=" + saved.getGrade() + ", loss=" + saved.getLossQuantity()
+                        + ", storage=" + saved.getStorageLocation()
+                        + ", inventoryId=" + stock.getId() + ", bed=" + saved.getBedOrField(),
                 amount
         );
         log.info("[harvest] {}", msg);
@@ -160,6 +232,7 @@ public class HarvestService {
     /**
      * Updates a harvest entry and corrects inventory for crop/qty changes.
      * Same crop → adjust by delta; crop rename → reverse old, apply new.
+     * A same-crop change to a different unit requires an explicit conversion.
      * Records {@code HARVEST_EDIT} in the audit trail.
      */
     @Transactional
@@ -167,22 +240,32 @@ public class HarvestService {
         if (incoming == null) {
             throw new IllegalArgumentException("Harvest entry must not be null.");
         }
-        HarvestEntry existing = repository.findById(id)
+        validateHarvestDate(incoming.getHarvestDate());
+        validateLossQuantity(incoming.getLossQuantity());
+        HarvestEntry existing = repository.findByIdForUpdate(id)
                 .orElseThrow(() -> new IndexOutOfBoundsException("No harvest entry with id=" + id));
 
         String oldCrop = existing.getCropName();
-        int oldQty = (int) Math.round(existing.getQuantity());
+        int oldQty = inventoryQuantityFor(existing.getQuantity());
         String newCrop = incoming.getCropName() == null ? "" : incoming.getCropName().trim();
-        int newQty = (int) Math.round(incoming.getQuantity());
+        int newQty = inventoryQuantityFor(incoming.getQuantity());
         String newUnit = incoming.getUnit();
 
         if (newCrop.isBlank()) {
             throw new IllegalArgumentException("Crop name is required.");
         }
-        if (incoming.getQuantity() < 0) {
-            throw new IllegalArgumentException("Quantity cannot be negative.");
+        if (oldCrop.equalsIgnoreCase(newCrop)
+                && !InventoryUnits.equivalent(existing.getUnit(), newUnit)) {
+            throw new IllegalArgumentException(
+                    "Cannot change the unit for an existing harvest of '" + oldCrop
+                            + "' from " + existing.getUnit() + " to " + newUnit
+                            + ". An explicit inventory conversion is required.");
         }
-
+        if (incoming.getLotCode() == null || incoming.getLotCode().isBlank()) {
+            assignLotCode(existing);
+            incoming.setLotCode(existing.getLotCode());
+        }
+        validateLotCodes(List.of(incoming), id);
         // Apply inventory correction before persisting harvest fields
         applyInventoryEdit(oldCrop, oldQty, newCrop, newQty, newUnit, existing.getHarvestDate());
 
@@ -192,20 +275,99 @@ public class HarvestService {
         existing.setUnit(incoming.getUnit());
         existing.setBedOrField(incoming.getBedOrField());
         existing.setNotes(incoming.getNotes());
+        existing.setLotCode(incoming.getLotCode());
+        existing.setGrade(incoming.getGrade());
+        existing.setLossQuantity(incoming.getLossQuantity());
+        existing.setStorageLocation(incoming.getStorageLocation());
         HarvestEntry saved = repository.save(existing);
 
         String msg = "Harvest edited id=" + id + ": " + oldCrop + "×" + oldQty
-                + " → " + saved.getCropName() + "×" + (int) Math.round(saved.getQuantity());
+                + " → " + saved.getCropName() + "×" + newQty;
         syncHistoryService.record(
                 "harvest",
                 "HARVEST_EDIT",
                 true,
                 msg,
-                "notes=" + saved.getNotes() + ", bed=" + saved.getBedOrField(),
+                "lot=" + saved.getLotCode() + ", grade=" + saved.getGrade()
+                        + ", loss=" + saved.getLossQuantity()
+                        + ", storage=" + saved.getStorageLocation()
+                        + ", notes=" + saved.getNotes() + ", bed=" + saved.getBedOrField(),
                 Math.abs(newQty - oldQty)
         );
         log.info("[harvest] {}", msg);
         return saved;
+    }
+
+    /**
+     * Converts a recorded harvest quantity to the whole units held by inventory.
+     * Keeping this rule public lets every input surface preview the same adjustment
+     * that the transaction will apply.
+     */
+    public static int inventoryQuantityFor(double quantity) {
+        if (!Double.isFinite(quantity) || quantity <= 0 || quantity > Integer.MAX_VALUE) {
+            throw new IllegalArgumentException(
+                    "Quantity must be a finite number greater than zero and no more than "
+                            + Integer.MAX_VALUE + ".");
+        }
+        int rounded = (int) Math.round(quantity);
+        if (rounded <= 0) {
+            throw new IllegalArgumentException(
+                    "Quantity must round to at least one inventory unit; enter 0.5 or more.");
+        }
+        return rounded;
+    }
+
+    private static void validateLossQuantity(double lossQuantity) {
+        if (!Double.isFinite(lossQuantity) || lossQuantity < 0
+                || lossQuantity > Integer.MAX_VALUE) {
+            throw new IllegalArgumentException(
+                    "Loss quantity must be a finite number from 0 through "
+                            + Integer.MAX_VALUE + ".");
+        }
+    }
+
+    private void validateLotCodes(List<HarvestEntry> entries, Long allowedId) {
+        Set<String> batchCodes = new HashSet<>();
+        for (HarvestEntry entry : entries) {
+            String code = normalizeLotCode(entry.getLotCode());
+            if (code.isEmpty()) {
+                continue;
+            }
+            if (!batchCodes.add(code)) {
+                throw new IllegalArgumentException("Duplicate harvest lot code in batch: " + code + ".");
+            }
+            repository.findByLotCodeIgnoreCase(code).ifPresent(existing -> {
+                if (allowedId == null || !allowedId.equals(existing.getId())) {
+                    throw new IllegalArgumentException(
+                            "Harvest lot code already exists: " + code + ".");
+                }
+            });
+        }
+    }
+
+    private static void assignLotCode(HarvestEntry entry) {
+        if (entry.getLotCode() != null && !entry.getLotCode().isBlank()) {
+            return;
+        }
+        String date = entry.getHarvestDate().toString().replace("-", "");
+        String nonce = UUID.randomUUID().toString().replace("-", "")
+                .substring(0, 12).toUpperCase(Locale.ROOT);
+        entry.setLotCode("FFH-" + date + "-" + nonce);
+    }
+
+    private static String normalizeLotCode(String lotCode) {
+        return lotCode == null ? "" : lotCode.trim().toUpperCase(Locale.ROOT);
+    }
+
+    private void validateHarvestDate(LocalDate date) {
+        if (date == null) {
+            throw new IllegalArgumentException("Harvest date is required.");
+        }
+        LocalDate today = LocalDate.now(farmProfile.zoneId());
+        if (date.isAfter(today)) {
+            throw new IllegalArgumentException(
+                    "Harvest date cannot be after today (" + today + ").");
+        }
     }
 
     private void applyInventoryEdit(String oldCrop, int oldQty, String newCrop, int newQty,
@@ -237,10 +399,10 @@ public class HarvestService {
      */
     @Transactional
     public void delete(Long id) {
-        HarvestEntry existing = repository.findById(id)
+        HarvestEntry existing = repository.findByIdForUpdate(id)
                 .orElseThrow(() -> new IndexOutOfBoundsException("No harvest entry with id=" + id));
 
-        int amount = (int) Math.round(existing.getQuantity());
+        int amount = inventoryQuantityFor(existing.getQuantity());
         var stock = inventoryService.decrementQuantityByName(existing.getCropName(), amount);
 
         repository.deleteById(id);
@@ -267,7 +429,7 @@ public class HarvestService {
     @Transactional(readOnly = true)
     public Map<String, Double> totalsByCrop() {
         Map<String, Double> totals = new LinkedHashMap<>();
-        for (HarvestEntry e : repository.findAllByOrderByHarvestDateDescIdDesc()) {
+        for (HarvestEntry e : repository.findAllNewestFirst()) {
             totals.merge(e.getCropName(), e.getQuantity(), Double::sum);
         }
         return totals;
@@ -276,7 +438,7 @@ public class HarvestService {
     /** Sum of harvest quantities for the trailing 7 days (inclusive of today). */
     @Transactional(readOnly = true)
     public double totalQuantityLast7Days() {
-        LocalDate to = LocalDate.now();
+        LocalDate to = LocalDate.now(farmProfile.zoneId());
         LocalDate from = to.minusDays(6);
         return findBetween(from, to).stream().mapToDouble(HarvestEntry::getQuantity).sum();
     }
@@ -284,7 +446,7 @@ public class HarvestService {
     /** Prior 7-day window (days -13 … -7) for week-over-week comparison. */
     @Transactional(readOnly = true)
     public double totalQuantityPrior7Days() {
-        LocalDate to = LocalDate.now().minusDays(7);
+        LocalDate to = LocalDate.now(farmProfile.zoneId()).minusDays(7);
         LocalDate from = to.minusDays(6);
         return findBetween(from, to).stream().mapToDouble(HarvestEntry::getQuantity).sum();
     }
@@ -309,7 +471,7 @@ public class HarvestService {
      */
     @Transactional(readOnly = true)
     public double[] dailyQuantitiesLast7Days() {
-        LocalDate today = LocalDate.now();
+        LocalDate today = LocalDate.now(farmProfile.zoneId());
         LocalDate from = today.minusDays(6);
         Map<LocalDate, Double> byDay = new LinkedHashMap<>();
         for (int i = 0; i < 7; i++) {
@@ -490,157 +652,19 @@ public class HarvestService {
     /** Trailing 7 days bed production (inclusive of today). */
     @Transactional(readOnly = true)
     public BedProductionReport productionByBedLast7Days() {
-        LocalDate to = LocalDate.now();
+        LocalDate to = LocalDate.now(farmProfile.zoneId());
         return productionByBed(to.minusDays(6), to);
     }
 
     public String exportBedProductionCsv(BedProductionReport report) {
-        StringBuilder sb = new StringBuilder();
-        sb.append("bed,totalQuantity,entryCount,firstDate,lastDate,crop,cropQuantity\n");
-        for (BedProduction b : report.beds()) {
-            if (b.byCrop().isEmpty()) {
-                sb.append(csv(b.bed())).append(',')
-                        .append(b.totalQuantity()).append(',')
-                        .append(b.entryCount()).append(',')
-                        .append(b.firstDate()).append(',')
-                        .append(b.lastDate()).append(",,\n");
-                continue;
-            }
-            for (Map.Entry<String, Double> crop : b.byCrop().entrySet()) {
-                sb.append(csv(b.bed())).append(',')
-                        .append(b.totalQuantity()).append(',')
-                        .append(b.entryCount()).append(',')
-                        .append(b.firstDate()).append(',')
-                        .append(b.lastDate()).append(',')
-                        .append(csv(crop.getKey())).append(',')
-                        .append(crop.getValue()).append('\n');
-            }
-        }
-        return sb.toString();
+        return reportGenerator.exportBedProductionCsv(report);
     }
 
     /**
      * Printable bed / field production PDF (ranked beds + crop mix).
      */
     public byte[] generateBedProductionPdf(BedProductionReport report) {
-        if (report == null) {
-            throw new IllegalArgumentException("report is required.");
-        }
-        try {
-            ByteArrayOutputStream baos = new ByteArrayOutputStream();
-            Document doc = new Document(PageSize.LETTER, 40, 40, 48, 40);
-            PdfWriter.getInstance(doc, baos);
-            doc.open();
-
-            Color brandGreen = new Color(34, 100, 54);
-            Color brandSoft = new Color(232, 245, 233);
-            Font titleFont = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 18, brandGreen);
-            Font h2 = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 12, brandGreen);
-            Font body = FontFactory.getFont(FontFactory.HELVETICA, 10);
-            Font small = FontFactory.getFont(FontFactory.HELVETICA, 9, Color.DARK_GRAY);
-            Font banner = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 11, Color.WHITE);
-
-            PdfPTable bannerTable = new PdfPTable(1);
-            bannerTable.setWidthPercentage(100);
-            PdfPCell bannerCell = new PdfPCell(new Phrase(
-                    "FlowersForever  ·  Port Orchard / Kitsap County  ·  Bed Production",
-                    banner));
-            bannerCell.setBackgroundColor(brandGreen);
-            bannerCell.setPadding(10);
-            bannerCell.setBorder(Rectangle.NO_BORDER);
-            bannerTable.addCell(bannerCell);
-            doc.add(bannerTable);
-            doc.add(Chunk.NEWLINE);
-
-            doc.add(new Paragraph("Bed / Field Production Report", titleFont));
-            doc.add(new Paragraph(
-                    "Period: " + report.from() + "  →  " + report.to()
-                            + "     ·     Generated: " + LocalDate.now(),
-                    small));
-            doc.add(Chunk.NEWLINE);
-
-            PdfPTable summary = new PdfPTable(new float[]{1, 1, 1});
-            summary.setWidthPercentage(100);
-            summary.addCell(summaryCell("Beds", String.valueOf(report.bedCount()), brandSoft));
-            summary.addCell(summaryCell("Harvest logs", String.valueOf(report.entryCount()), brandSoft));
-            summary.addCell(summaryCell("Total qty",
-                    String.format(Locale.US, "%,.1f", report.grandTotal()), brandSoft));
-            doc.add(summary);
-            doc.add(Chunk.NEWLINE);
-
-            doc.add(new Paragraph("1. Beds ranked by quantity", h2));
-            doc.add(Chunk.NEWLINE);
-            if (report.beds().isEmpty()) {
-                doc.add(new Paragraph(
-                        "No harvest rows in range — log cuts with a Bed / field value.", body));
-            } else {
-                PdfPTable bedTable = new PdfPTable(new float[]{0.7f, 2.5f, 1.3f, 1.0f, 2.5f, 2.2f});
-                bedTable.setWidthPercentage(100);
-                headerCell(bedTable, "#");
-                headerCell(bedTable, "Bed / Field");
-                headerCell(bedTable, "Qty");
-                headerCell(bedTable, "Logs");
-                headerCell(bedTable, "Top crop");
-                headerCell(bedTable, "Dates");
-                int rank = 1;
-                for (BedProduction b : report.beds()) {
-                    String topCrop = "—";
-                    if (!b.byCrop().isEmpty()) {
-                        Map.Entry<String, Double> first = b.byCrop().entrySet().iterator().next();
-                        topCrop = first.getKey() + " ("
-                                + String.format(Locale.US, "%.0f", first.getValue()) + ")";
-                    }
-                    String dates = (b.firstDate().isEmpty() ? "?" : b.firstDate())
-                            + " → "
-                            + (b.lastDate().isEmpty() ? "?" : b.lastDate());
-                    bedTable.addCell(cell(String.valueOf(rank++), body));
-                    bedTable.addCell(cell(b.bed(), body));
-                    bedTable.addCell(cell(String.format(Locale.US, "%.1f", b.totalQuantity()), body));
-                    bedTable.addCell(cell(String.valueOf(b.entryCount()), body));
-                    bedTable.addCell(cell(topCrop, body));
-                    bedTable.addCell(cell(dates, body));
-                }
-                doc.add(bedTable);
-            }
-
-            if (!report.beds().isEmpty()) {
-                doc.add(Chunk.NEWLINE);
-                doc.add(new Paragraph("2. Crop mix by bed", h2));
-                doc.add(Chunk.NEWLINE);
-                for (BedProduction b : report.beds()) {
-                    doc.add(new Paragraph(
-                            b.bed() + "  ·  qty " + String.format(Locale.US, "%,.1f", b.totalQuantity()),
-                            FontFactory.getFont(FontFactory.HELVETICA_BOLD, 10, brandGreen)));
-                    if (b.byCrop().isEmpty()) {
-                        doc.add(new Paragraph("  (no crop detail)", small));
-                    } else {
-                        PdfPTable crops = new PdfPTable(new float[]{3, 1.5f});
-                        crops.setWidthPercentage(60);
-                        headerCell(crops, "Crop");
-                        headerCell(crops, "Qty");
-                        for (Map.Entry<String, Double> c : b.byCrop().entrySet()) {
-                            crops.addCell(cell(c.getKey(), body));
-                            crops.addCell(cell(String.format(Locale.US, "%.1f", c.getValue()), body));
-                        }
-                        doc.add(crops);
-                    }
-                    doc.add(Chunk.NEWLINE);
-                }
-            }
-
-            doc.add(new Paragraph(
-                    "Tip: consistent bed names (Bed A, Tunnel 1) make this report sharper.",
-                    small));
-            doc.add(new Paragraph(
-                    "FlowersForever · practical tools for PNW flower growers", small));
-
-            doc.close();
-            log.info("Generated bed production PDF {} → {} ({} beds, qty {})",
-                    report.from(), report.to(), report.bedCount(), report.grandTotal());
-            return baos.toByteArray();
-        } catch (DocumentException e) {
-            throw new IllegalStateException("Failed to build bed production PDF: " + e.getMessage(), e);
-        }
+        return reportGenerator.generateBedProductionPdf(report);
     }
 
     /**
@@ -658,10 +682,14 @@ public class HarvestService {
     ) {
         public Map<String, Object> toMap() {
             Map<String, Object> m = new LinkedHashMap<>();
+            double totalLoss = entries.stream()
+                    .mapToDouble(HarvestEntry::getLossQuantity).sum();
             m.put("from", from);
             m.put("to", to);
             m.put("entryCount", entryCount);
             m.put("totalQuantity", totalQuantity);
+            m.put("totalLossQuantity", round1(totalLoss));
+            m.put("totalGrossQuantity", round1(totalQuantity + totalLoss));
             m.put("byCrop", byCrop);
             m.put("entries", entries.stream().map(e -> {
                 Map<String, Object> row = new LinkedHashMap<>();
@@ -672,6 +700,11 @@ public class HarvestService {
                 row.put("unit", e.getUnit());
                 row.put("bedOrField", e.getBedOrField() == null ? "" : e.getBedOrField());
                 row.put("notes", e.getNotes() == null ? "" : e.getNotes());
+                row.put("lotCode", e.getLotCode());
+                row.put("grade", e.getGrade());
+                row.put("lossQuantity", e.getLossQuantity());
+                row.put("grossQuantity", e.getGrossQuantity());
+                row.put("storageLocation", e.getStorageLocation());
                 return row;
             }).toList());
             m.put("plainText", plainText);
@@ -681,14 +714,14 @@ public class HarvestService {
 
     @Transactional(readOnly = true)
     public HarvestLogReport buildHarvestLogReport(LocalDate from, LocalDate to) {
-        LocalDate end = to != null ? to : LocalDate.now();
+        LocalDate end = to != null ? to : LocalDate.now(farmProfile.zoneId());
         LocalDate start = from != null ? from : end.minusDays(6);
         if (end.isBefore(start)) {
             throw new IllegalArgumentException("to must be on or after from.");
         }
         List<HarvestEntry> entries = findBetween(start, end).stream()
                 .sorted(Comparator.comparing(HarvestEntry::getHarvestDate)
-                        .thenComparing(e -> e.getId() == null ? 0L : e.getId()))
+                        .thenComparingLong(e -> e.getId() == null ? 0L : e.getId()))
                 .toList();
         Map<String, Double> byCrop = new LinkedHashMap<>();
         double total = 0;
@@ -721,124 +754,35 @@ public class HarvestService {
     /** Trailing 7 days harvest log (clipboard default). */
     @Transactional(readOnly = true)
     public HarvestLogReport buildHarvestLogReportLast7Days() {
-        LocalDate to = LocalDate.now();
+        LocalDate to = LocalDate.now(farmProfile.zoneId());
         return buildHarvestLogReport(to.minusDays(6), to);
     }
 
     public byte[] generateHarvestLogPdf(HarvestLogReport report) {
-        if (report == null) {
-            throw new IllegalArgumentException("report is required.");
-        }
-        try {
-            ByteArrayOutputStream baos = new ByteArrayOutputStream();
-            Document doc = new Document(PageSize.LETTER, 40, 40, 48, 40);
-            PdfWriter.getInstance(doc, baos);
-            doc.open();
-
-            Color brandGreen = new Color(34, 100, 54);
-            Color brandSoft = new Color(232, 245, 233);
-            Font titleFont = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 18, brandGreen);
-            Font h2 = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 12, brandGreen);
-            Font body = FontFactory.getFont(FontFactory.HELVETICA, 10);
-            Font small = FontFactory.getFont(FontFactory.HELVETICA, 9, Color.DARK_GRAY);
-            Font banner = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 11, Color.WHITE);
-
-            PdfPTable bannerTable = new PdfPTable(1);
-            bannerTable.setWidthPercentage(100);
-            PdfPCell bannerCell = new PdfPCell(new Phrase(
-                    "FlowersForever  ·  Port Orchard / Kitsap  ·  Harvest Log",
-                    banner));
-            bannerCell.setBackgroundColor(brandGreen);
-            bannerCell.setPadding(10);
-            bannerCell.setBorder(Rectangle.NO_BORDER);
-            bannerTable.addCell(bannerCell);
-            doc.add(bannerTable);
-            doc.add(Chunk.NEWLINE);
-
-            doc.add(new Paragraph("Harvest Log", titleFont));
-            doc.add(new Paragraph(
-                    "Period: " + report.from() + "  →  " + report.to()
-                            + "     ·     Generated: " + LocalDate.now(),
-                    small));
-            doc.add(Chunk.NEWLINE);
-
-            PdfPTable summary = new PdfPTable(new float[]{1, 1, 1});
-            summary.setWidthPercentage(100);
-            summary.addCell(summaryCell("Entries", String.valueOf(report.entryCount()), brandSoft));
-            summary.addCell(summaryCell("Total qty",
-                    String.format(Locale.US, "%,.1f", report.totalQuantity()), brandSoft));
-            summary.addCell(summaryCell("Crops",
-                    String.valueOf(report.byCrop().size()), brandSoft));
-            doc.add(summary);
-            doc.add(Chunk.NEWLINE);
-
-            doc.add(new Paragraph("1. By crop", h2));
-            doc.add(Chunk.NEWLINE);
-            if (report.byCrop().isEmpty()) {
-                doc.add(new Paragraph("No harvests in this period.", body));
-            } else {
-                PdfPTable crops = new PdfPTable(new float[]{3, 1.5f});
-                crops.setWidthPercentage(55);
-                headerCell(crops, "Crop");
-                headerCell(crops, "Qty");
-                for (Map.Entry<String, Double> c : report.byCrop().entrySet()) {
-                    crops.addCell(cell(c.getKey(), body));
-                    crops.addCell(cell(String.format(Locale.US, "%,.1f", c.getValue()), body));
-                }
-                doc.add(crops);
-            }
-            doc.add(Chunk.NEWLINE);
-
-            doc.add(new Paragraph("2. Detail log (chronological)", h2));
-            doc.add(Chunk.NEWLINE);
-            if (report.entries().isEmpty()) {
-                doc.add(new Paragraph("No rows — log cuts after morning harvest.", body));
-            } else {
-                PdfPTable t = new PdfPTable(new float[]{1.3f, 2.2f, 1.0f, 1.0f, 1.4f, 2.0f});
-                t.setWidthPercentage(100);
-                headerCell(t, "Date");
-                headerCell(t, "Crop");
-                headerCell(t, "Qty");
-                headerCell(t, "Unit");
-                headerCell(t, "Bed");
-                headerCell(t, "Notes");
-                for (HarvestEntry e : report.entries()) {
-                    t.addCell(cell(e.getHarvestDate() == null ? "" : e.getHarvestDate().toString(), body));
-                    t.addCell(cell(e.getCropName(), body));
-                    t.addCell(cell(String.format(Locale.US, "%,.1f", e.getQuantity()), body));
-                    t.addCell(cell(e.getUnit() == null ? "" : e.getUnit(), body));
-                    t.addCell(cell(e.getBedOrField() == null || e.getBedOrField().isBlank()
-                            ? "—" : e.getBedOrField(), body));
-                    t.addCell(cell(e.getNotes() == null ? "" : e.getNotes(), body));
-                }
-                doc.add(t);
-            }
-            doc.add(Chunk.NEWLINE);
-            doc.add(new Paragraph(
-                    "Tip: bed production PDF ranks fields; this sheet is the raw cut list for the cooler.",
-                    small));
-            doc.add(new Paragraph(
-                    "FlowersForever · practical tools for PNW flower growers", small));
-
-            doc.close();
-            log.info("Generated harvest log PDF {} → {} ({} entries, qty {})",
-                    report.from(), report.to(), report.entryCount(), report.totalQuantity());
-            return baos.toByteArray();
-        } catch (DocumentException e) {
-            throw new IllegalStateException("Failed to build harvest log PDF: " + e.getMessage(), e);
-        }
+        return reportGenerator.generateHarvestLogPdf(report);
     }
 
-    private static String formatHarvestLogText(String from, String to,
-                                               List<HarvestEntry> entries,
-                                               double total,
-                                               Map<String, Double> byCrop) {
+    @Transactional(readOnly = true)
+    public byte[] generateLotLabelPdf(Long harvestId) {
+        HarvestEntry entry = repository.findById(harvestId)
+                .orElseThrow(() -> new IndexOutOfBoundsException(
+                        "No harvest entry with id=" + harvestId));
+        return reportGenerator.generateHarvestLotLabelPdf(entry);
+    }
+
+    private String formatHarvestLogText(String from, String to,
+                                        List<HarvestEntry> entries,
+                                        double total,
+                                        Map<String, Double> byCrop) {
         StringBuilder sb = new StringBuilder();
-        sb.append("HARVEST LOG — Port Orchard / Kitsap County\n");
+        sb.append(farmProfile.documentBanner("Harvest Log").toUpperCase(Locale.ROOT))
+                .append('\n');
         sb.append("═════════════════════════════════════════\n");
         sb.append("Period: ").append(from).append(" → ").append(to).append('\n');
-        sb.append(String.format(Locale.US, "Entries: %d  ·  Total qty: %,.1f  ·  Crops: %d%n",
-                entries.size(), total, byCrop.size()));
+        double totalLoss = entries.stream().mapToDouble(HarvestEntry::getLossQuantity).sum();
+        sb.append(String.format(Locale.US,
+                "Entries: %d  ·  Marketable: %,.1f  ·  Loss: %,.1f  ·  Crops: %d%n",
+                entries.size(), total, totalLoss, byCrop.size()));
         sb.append('\n');
         sb.append("BY CROP\n");
         sb.append("───────\n");
@@ -856,57 +800,41 @@ public class HarvestService {
         if (entries.isEmpty()) {
             sb.append("  (no harvests in period)\n");
         } else {
-            sb.append(String.format(Locale.US, "%-12s %-18s %8s %-8s %-12s%n",
-                    "Date", "Crop", "Qty", "Unit", "Bed"));
-            sb.append("-".repeat(62)).append('\n');
+            sb.append(String.format(Locale.US, "%-12s %-16s %8s %-8s %-10s %-12s %-10s%n",
+                    "Date", "Crop", "Qty", "Unit", "Grade", "Lot", "Loss"));
+            sb.append("-".repeat(86)).append('\n');
             for (HarvestEntry e : entries) {
-                sb.append(String.format(Locale.US, "%-12s %-18s %8.1f %-8s %-12s%n",
+                sb.append(String.format(Locale.US,
+                        "%-12s %-16s %8.1f %-8s %-10s %-12s %10.1f%n",
                         e.getHarvestDate() == null ? "" : e.getHarvestDate().toString(),
-                        truncate(e.getCropName(), 18),
+                        truncate(e.getCropName(), 16),
                         e.getQuantity(),
                         truncate(e.getUnit() == null ? "" : e.getUnit(), 8),
-                        truncate(e.getBedOrField() == null || e.getBedOrField().isBlank()
-                                ? "—" : e.getBedOrField(), 12)));
+                        e.getGrade(),
+                        truncate(e.getLotCode(), 12),
+                        e.getLossQuantity()));
+                sb.append("    Source: ").append(
+                        e.getBedOrField() == null || e.getBedOrField().isBlank()
+                                ? "—" : e.getBedOrField())
+                        .append(" · Storage: ").append(
+                                e.getStorageLocation() == null || e.getStorageLocation().isBlank()
+                                        ? "—" : e.getStorageLocation())
+                        .append('\n');
             }
-            sb.append("-".repeat(62)).append('\n');
-            sb.append(String.format(Locale.US, "TOTAL QTY  %,.1f%n", total));
+            sb.append("-".repeat(86)).append('\n');
+            sb.append(String.format(Locale.US,
+                    "TOTAL MARKETABLE  %,.1f · TOTAL LOSS %,.1f%n", total, totalLoss));
         }
         sb.append("\nTip: export bed production PDF for ranked fields; this is the cut list.\n");
         return sb.toString();
     }
 
-    private static void headerCell(PdfPTable table, String text) {
-        PdfPCell cell = new PdfPCell(new Phrase(text,
-                FontFactory.getFont(FontFactory.HELVETICA_BOLD, 9, Color.WHITE)));
-        cell.setBackgroundColor(new Color(34, 100, 54));
-        cell.setPadding(5);
-        table.addCell(cell);
-    }
-
-    private static PdfPCell cell(String text, Font font) {
-        PdfPCell cell = new PdfPCell(new Phrase(text == null ? "" : text, font));
-        cell.setPadding(4);
-        cell.setBorderColor(new Color(200, 210, 200));
-        return cell;
-    }
-
-    private static PdfPCell summaryCell(String label, String value, Color bg) {
-        Paragraph p = new Paragraph();
-        p.add(new Chunk(label + "\n", FontFactory.getFont(FontFactory.HELVETICA, 9, Color.DARK_GRAY)));
-        p.add(new Chunk(value, FontFactory.getFont(FontFactory.HELVETICA_BOLD, 14)));
-        PdfPCell cell = new PdfPCell(p);
-        cell.setBackgroundColor(bg);
-        cell.setPadding(8);
-        cell.setBorderColor(new Color(180, 200, 180));
-        cell.setHorizontalAlignment(Element.ALIGN_CENTER);
-        return cell;
-    }
-
-    private static String formatBedProductionText(String from, String to,
-                                                  List<BedProduction> beds,
-                                                  double grand, int entryCount) {
+    private String formatBedProductionText(String from, String to,
+                                           List<BedProduction> beds,
+                                           double grand, int entryCount) {
         StringBuilder sb = new StringBuilder();
-        sb.append("BED / FIELD PRODUCTION — Port Orchard / Kitsap County\n");
+        sb.append(farmProfile.documentBanner("Bed / Field Production")
+                .toUpperCase(Locale.ROOT)).append('\n');
         sb.append("════════════════════════════════════════════════════\n");
         sb.append("Period     : ").append(from).append(" → ").append(to).append('\n');
         sb.append("Beds       : ").append(beds.size())
@@ -943,16 +871,6 @@ public class HarvestService {
         return s.length() <= max ? s : s.substring(0, max - 1) + "…";
     }
 
-    private static String csv(String s) {
-        if (s == null) {
-            return "";
-        }
-        if (s.contains(",") || s.contains("\"") || s.contains("\n")) {
-            return "\"" + s.replace("\"", "\"\"") + "\"";
-        }
-        return s;
-    }
-
     private static double round1(double v) {
         return Math.round(v * 10.0) / 10.0;
     }
@@ -968,45 +886,11 @@ public class HarvestService {
     /** Export a filtered subset (e.g. current UI filter). */
     @Transactional(readOnly = true)
     public void exportToCsv(String filename, List<HarvestEntry> entries) {
-        if (filename == null || filename.isBlank()) {
-            throw new IllegalArgumentException("Export filename must not be null or empty.");
-        }
-        if (entries == null) {
-            entries = List.of();
-        }
-        try (java.io.BufferedWriter bw = new java.io.BufferedWriter(new java.io.FileWriter(filename.trim(), java.nio.charset.StandardCharsets.UTF_8))) {
-            writeCsv(bw, entries);
-            log.info("Harvest log exported to '{}' ({} row(s)).", LogValue.escape(filename), entries.size());
-        } catch (java.io.IOException ex) {
-            throw new IllegalStateException("Harvest export failed: " + ex.getMessage(), ex);
-        }
+        csvExporter.export(filename, entries);
     }
 
-    /** Serialize rows to an already opened writer; the caller owns the destination and writer lifetime. */
-    public void writeCsv(java.io.BufferedWriter writer, List<HarvestEntry> entries) throws java.io.IOException {
-        List<HarvestEntry> rows = entries == null ? List.of() : entries;
-        writer.write("Id,Date,Crop,Quantity,Unit,BedOrField,Notes");
-        writer.newLine();
-        for (HarvestEntry e : rows) {
-            writer.write(String.format("%s,%s,%s,%.2f,%s,%s,\"%s\"",
-                    e.getId() == null ? "" : e.getId(),
-                    e.getHarvestDate(),
-                    csvEscape(e.getCropName()),
-                    e.getQuantity(),
-                    csvEscape(e.getUnit()),
-                    csvEscape(e.getBedOrField()),
-                    e.getNotes() == null ? "" : e.getNotes().replace("\"", "\"\"")));
-            writer.newLine();
-        }
-    }
-
-    private static String csvEscape(String s) {
-        if (s == null) {
-            return "";
-        }
-        if (s.contains(",") || s.contains("\"")) {
-            return "\"" + s.replace("\"", "\"\"") + "\"";
-        }
-        return s;
+    /** Serialize rows to a caller-owned writer using the same desktop CSV contract. */
+    public void writeCsv(java.io.Writer writer, List<HarvestEntry> entries) throws java.io.IOException {
+        csvExporter.writeCsv(writer, entries);
     }
 }

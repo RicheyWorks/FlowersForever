@@ -7,13 +7,14 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * REST controller for ML trend analysis and static rose variety info.
+ * REST controller for harvest-production trend analysis and static rose variety info.
  *
  * <pre>
- * GET /api/trends        → run Weka linear regression, return result
+ * GET /api/trends        → run transparent linear regression, return result
  * GET /api/roses         → structured list of PNW rose variety suggestions
  * </pre>
  */
@@ -28,17 +29,36 @@ public class TrendController {
     }
 
     /**
-     * Runs the linear-regression trend analysis and returns either a result
-     * object or an error message wrapped in JSON.
+     * Runs the weekly harvest regression and returns either a production signal,
+     * an actionable insufficient-history response, or an internal error.
      */
     @GetMapping("/trends")
     public ResponseEntity<?> getTrends() {
         TrendService.TrendResult result = trendService.analyzeQuantityTrend();
         if (result.isSuccess()) {
-            return ResponseEntity.ok(Map.of(
-                    "predictedQuantity", result.predictedQuantity(),
-                    "summary", result.summary()
-            ));
+            Map<String, Object> response = new LinkedHashMap<>();
+            response.put("predictedQuantity", result.predictedQuantity());
+            response.put("summary", result.summary());
+            response.put("cropName", result.cropName());
+            response.put("unit", result.unit());
+            response.put("observedWeeks", result.observedWeeks());
+            if (Double.isFinite(result.latestQuantity())) {
+                response.put("latestQuantity", result.latestQuantity());
+            }
+            if (result.latestWeekStart() != null) {
+                response.put("latestWeekStart", result.latestWeekStart());
+            }
+            if (result.forecastWeekStart() != null) {
+                response.put("forecastWeekStart", result.forecastWeekStart());
+            }
+            return ResponseEntity.ok(response);
+        }
+        if (result.needsHistory()) {
+            return ResponseEntity.unprocessableEntity().body(Map.of(
+                    "error", result.error(),
+                    "cropName", result.cropName(),
+                    "unit", result.unit(),
+                    "observedWeeks", result.observedWeeks()));
         }
         return ResponseEntity.internalServerError()
                 .body(Map.of("error", result.error()));

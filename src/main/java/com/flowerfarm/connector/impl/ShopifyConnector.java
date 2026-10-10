@@ -1,18 +1,22 @@
 package com.flowerfarm.connector.impl;
 
+import com.flowerfarm.connector.ConnectorHttpClient;
 import com.flowerfarm.connector.*;
 import com.flowerfarm.model.Item;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 
+import java.io.IOException;
+import java.net.HttpURLConnection;
+import java.net.URI;
 import java.util.*;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 /**
  * Shopify Admin connector — dual mode:
@@ -37,19 +41,22 @@ import java.util.regex.Pattern;
 public class ShopifyConnector implements ExternalConnector<Map<String, Object>>, DualModeCapable {
 
     private static final Logger log = LoggerFactory.getLogger(ShopifyConnector.class);
-    private static final Pattern LINK_NEXT =
-            Pattern.compile("<([^>]+)>;\\s*rel=\"next\"", Pattern.CASE_INSENSITIVE);
     private static final int PAGE_LIMIT = 50;
+    private static final int MAX_PAGES = 1000;
+    private static final int MAX_LINK_HEADER_LENGTH = 16384;
+    private static final int MAX_PAGE_URL_LENGTH = 8192;
+    private static final int MAX_HTML_LENGTH = 1_000_000;
 
     private final ConnectorConfig config;
     private final RestTemplate restTemplate;
 
+    @Autowired
     public ShopifyConnector(
             @Value("${connector.shopify.shop-name:}") String shopName,
             @Value("${connector.shopify.api-token:}") String apiToken,
             @Value("${connector.shopify.api-version:2024-01}") String apiVersion,
             @Value("${connector.shopify.local-file:}") String localFile) {
-        this(shopName, apiToken, apiVersion, localFile, new RestTemplate());
+        this(shopName, apiToken, apiVersion, localFile, new RestTemplate(new ShopifyRequestFactory()));
     }
 
     /** Package-private constructor for unit tests with a mockable {@link RestTemplate}. */
@@ -121,14 +128,19 @@ public class ShopifyConnector implements ExternalConnector<Map<String, Object>>,
     @SuppressWarnings("unchecked")
     private ConnectorResult<List<Item>> importFromRemote() {
         List<Item> items = new ArrayList<>();
-        String url = productsUrl() + "?limit=" + PAGE_LIMIT;
         int pages = 0;
 
         try {
+            String endpoint = productsUrl();
+            String url = endpoint + "?limit=" + PAGE_LIMIT;
+            Set<String> visited = new HashSet<>();
             while (url != null && !url.isBlank()) {
+                if (pages >= MAX_PAGES || !visited.add(url)) {
+                    throw new IllegalArgumentException("Shopify pagination repeated a page or exceeded its limit");
+                }
                 pages++;
                 ResponseEntity<Map> response = restTemplate.exchange(
-                        url, HttpMethod.GET, new HttpEntity<>(authHeaders()), Map.class);
+                        URI.create(url), HttpMethod.GET, new HttpEntity<>(authHeaders()), Map.class);
 
                 Map<?, ?> body = response.getBody();
                 if (!response.getStatusCode().is2xxSuccessful() || body == null) {
@@ -150,7 +162,7 @@ public class ShopifyConnector implements ExternalConnector<Map<String, Object>>,
                     }
                 }
 
-                url = extractNextLink(response.getHeaders().getFirst(HttpHeaders.LINK));
+                url = nextPageUrl(endpoint, response.getHeaders());
             }
 
             String msg = "Shopify REST import complete — " + items.size()
@@ -435,12 +447,17 @@ public class ShopifyConnector implements ExternalConnector<Map<String, Object>>,
     @SuppressWarnings("unchecked")
     private ConnectorResult<List<Map<String, Object>>> fetchAllProductsRaw() {
         List<Map<String, Object>> products = new ArrayList<>();
-        String url = productsUrl() + "?limit=" + PAGE_LIMIT;
 
         try {
+            String endpoint = productsUrl();
+            String url = endpoint + "?limit=" + PAGE_LIMIT;
+            Set<String> visited = new HashSet<>();
             while (url != null && !url.isBlank()) {
+                if (visited.size() >= MAX_PAGES || !visited.add(url)) {
+                    throw new IllegalArgumentException("Shopify pagination repeated a page or exceeded its limit");
+                }
                 ResponseEntity<Map> response = restTemplate.exchange(
-                        url, HttpMethod.GET, new HttpEntity<>(authHeaders()), Map.class);
+                        URI.create(url), HttpMethod.GET, new HttpEntity<>(authHeaders()), Map.class);
                 Map<?, ?> body = response.getBody();
                 if (!response.getStatusCode().is2xxSuccessful() || body == null) {
                     return ConnectorResult.fail(
@@ -456,7 +473,7 @@ public class ShopifyConnector implements ExternalConnector<Map<String, Object>>,
                         }
                     }
                 }
-                url = extractNextLink(response.getHeaders().getFirst(HttpHeaders.LINK));
+                url = nextPageUrl(endpoint, response.getHeaders());
             }
             return ConnectorResult.ok(products, "Fetched " + products.size() + " products.", getName());
         } catch (Exception e) {
@@ -465,15 +482,95 @@ public class ShopifyConnector implements ExternalConnector<Map<String, Object>>,
     }
 
     private String productsUrl() {
-        String shop = config.get("shop-name", "").trim()
-                .replace("https://", "")
-                .replace("http://", "")
-                .replaceAll("/+$", "");
-        // Bare store name → {name}.myshopify.com; already-qualified hosts kept as-is
-        String host = shop.endsWith(".myshopify.com") || shop.contains(".")
-                ? shop
-                : shop + ".myshopify.com";
-        return "https://" + host + "/admin/api/" + config.get("api-version") + "/products.json";
+        String shop = config.get("shop-name", "");
+        if (shop.isBlank() || shop.length() > 255) {
+            throw new IllegalArgumentException("A valid Shopify store name is required");
+        }
+        String supplied = shop.contains("://") ? shop
+                : "https://" + (shop.contains(".") ? shop : shop + ".myshopify.com");
+        URI configured = URI.create(supplied);
+        String host = configured.getHost();
+        String path = configured.getRawPath();
+        if (!"https".equalsIgnoreCase(configured.getScheme()) || host == null
+                || configured.getRawUserInfo() != null || configured.getRawQuery() != null
+                || configured.getRawFragment() != null || !allowedHttpsPort(configured.getPort())
+                || path == null || !(path.isEmpty() || path.equals("/"))) {
+            throw new IllegalArgumentException("Shopify requires the store's HTTPS myshopify.com address");
+        }
+        host = host.toLowerCase(Locale.ROOT);
+        String suffix = ".myshopify.com";
+        if (!host.endsWith(suffix) || !storeLabel(host.substring(0, host.length() - suffix.length()))) {
+            throw new IllegalArgumentException("Shopify requires the store's HTTPS myshopify.com address");
+        }
+        String version = config.get("api-version");
+        if (version.length() != 7 || version.charAt(4) != '-') {
+            throw new IllegalArgumentException("Shopify API version must be YYYY-MM");
+        }
+        for (int at = 0; at < version.length(); at++) {
+            if (at != 4 && !asciiDigit(version.charAt(at))) {
+                throw new IllegalArgumentException("Shopify API version must be YYYY-MM");
+            }
+        }
+        int month = Integer.parseInt(version.substring(5));
+        if (month < 1 || month > 12) {
+            throw new IllegalArgumentException("Shopify API version must be YYYY-MM");
+        }
+        return "https://" + host + "/admin/api/" + version + "/products.json";
+    }
+
+    private static boolean storeLabel(String label) {
+        if (label.isEmpty() || label.length() > 63 || label.charAt(0) == '-'
+                || label.charAt(label.length() - 1) == '-') {
+            return false;
+        }
+        for (int at = 0; at < label.length(); at++) {
+            char value = label.charAt(at);
+            if (!(value >= 'a' && value <= 'z') && !asciiDigit(value) && value != '-') {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static boolean allowedHttpsPort(int port) {
+        return port == -1 || port == 443;
+    }
+
+    private static boolean asciiDigit(char value) {
+        return value >= '0' && value <= '9';
+    }
+
+    private static String nextPageUrl(String endpoint, HttpHeaders headers) {
+        List<String> values = headers.get(HttpHeaders.LINK);
+        if (values == null || values.isEmpty()) {
+            return null;
+        }
+        int length = values.size() - 1;
+        for (String value : values) {
+            if (value == null || value.length() > MAX_LINK_HEADER_LENGTH
+                    || length > MAX_LINK_HEADER_LENGTH - value.length()) {
+                throw new IllegalArgumentException("Shopify pagination header is too long or invalid");
+            }
+            length += value.length();
+        }
+        String next = extractNextLink(String.join(",", values));
+        if (next == null) {
+            return null;
+        }
+        URI base = URI.create(endpoint);
+        URI candidate = URI.create(next);
+        String host = base.getHost();
+        String path = base.getRawPath();
+        if (!"https".equalsIgnoreCase(candidate.getScheme()) || candidate.getHost() == null
+                || host == null || !host.equalsIgnoreCase(candidate.getHost())
+                || !allowedHttpsPort(candidate.getPort()) || candidate.getRawUserInfo() != null
+                || candidate.getRawFragment() != null || path == null || !path.equals(candidate.getRawPath())) {
+            throw new IllegalArgumentException("Shopify pagination left the configured store's product endpoint");
+        }
+        // Preserve the opaque page_info query exactly. Authority and path always
+        // come from the admitted configured store, never the provider's Link URL.
+        String query = candidate.getRawQuery();
+        return query == null ? endpoint : endpoint + "?" + query;
     }
 
     private HttpHeaders authHeaders() {
@@ -488,8 +585,105 @@ public class ShopifyConnector implements ExternalConnector<Map<String, Object>>,
         if (linkHeader == null || linkHeader.isBlank()) {
             return null;
         }
-        Matcher m = LINK_NEXT.matcher(linkHeader);
-        return m.find() ? m.group(1) : null;
+        if (linkHeader.length() > MAX_LINK_HEADER_LENGTH) {
+            throw new IllegalArgumentException("Shopify pagination header is too long");
+        }
+        String next = null;
+        int at = 0;
+        while (at < linkHeader.length()) {
+            at = skipLinkWhitespace(linkHeader, at);
+            if (at == linkHeader.length() || linkHeader.charAt(at++) != '<') {
+                throw new IllegalArgumentException("Shopify pagination header is malformed");
+            }
+            int end = linkHeader.indexOf('>', at);
+            if (end < 0 || end == at || end - at > MAX_PAGE_URL_LENGTH) {
+                throw new IllegalArgumentException("Shopify pagination URL is malformed or too long");
+            }
+            String url = linkHeader.substring(at, end);
+            at = end + 1;
+            String relation = null;
+            while (true) {
+                at = skipLinkWhitespace(linkHeader, at);
+                if (at == linkHeader.length() || linkHeader.charAt(at) == ',') {
+                    break;
+                }
+                if (linkHeader.charAt(at++) != ';') {
+                    throw new IllegalArgumentException("Shopify pagination header is malformed");
+                }
+                at = skipLinkWhitespace(linkHeader, at);
+                int nameStart = at;
+                while (at < linkHeader.length() && linkParameterCharacter(linkHeader.charAt(at))) at++;
+                String name = linkHeader.substring(nameStart, at);
+                at = skipLinkWhitespace(linkHeader, at);
+                if (name.isEmpty() || at == linkHeader.length() || linkHeader.charAt(at++) != '=') {
+                    throw new IllegalArgumentException("Shopify pagination parameter is malformed");
+                }
+                at = skipLinkWhitespace(linkHeader, at);
+                StringBuilder value = new StringBuilder();
+                if (at < linkHeader.length() && linkHeader.charAt(at) == '"') {
+                    at++;
+                    boolean closed = false;
+                    while (at < linkHeader.length()) {
+                        char current = linkHeader.charAt(at++);
+                        if (current == '"') { closed = true; break; }
+                        if (current == '\\') {
+                            if (at == linkHeader.length()) break;
+                            current = linkHeader.charAt(at++);
+                        }
+                        if (current < 32 || current == 127) {
+                            throw new IllegalArgumentException("Shopify pagination parameter is malformed");
+                        }
+                        value.append(current);
+                    }
+                    if (!closed) throw new IllegalArgumentException("Shopify pagination parameter is malformed");
+                } else {
+                    while (at < linkHeader.length() && linkParameterCharacter(linkHeader.charAt(at))) {
+                        value.append(linkHeader.charAt(at++));
+                    }
+                    if (value.isEmpty()) throw new IllegalArgumentException("Shopify pagination parameter is malformed");
+                }
+                if (name.equalsIgnoreCase("rel")) {
+                    if (relation != null) throw new IllegalArgumentException("Shopify pagination relation is ambiguous");
+                    relation = value.toString();
+                }
+            }
+            if (relation == null) throw new IllegalArgumentException("Shopify pagination relation is missing");
+            if (relation.equalsIgnoreCase("next")) {
+                if (next != null) throw new IllegalArgumentException("Shopify pagination has multiple next pages");
+                next = url;
+            }
+            if (at < linkHeader.length()) {
+                at++;
+                if (skipLinkWhitespace(linkHeader, at) == linkHeader.length()) {
+                    throw new IllegalArgumentException("Shopify pagination header is malformed");
+                }
+            }
+        }
+        return next;
+    }
+
+    private static int skipLinkWhitespace(String header, int at) {
+        while (at < header.length() && (header.charAt(at) == ' ' || header.charAt(at) == '\t')) at++;
+        return at;
+    }
+
+    private static boolean linkParameterCharacter(char value) {
+        return (value >= 'a' && value <= 'z') || (value >= 'A' && value <= 'Z')
+                || asciiDigit(value) || value == '-' || value == '_' || value == '*';
+    }
+
+    /** Provider redirects are never allowed to carry the Admin API token elsewhere. */
+    static final class ShopifyRequestFactory extends SimpleClientHttpRequestFactory {
+        ShopifyRequestFactory() {
+            setConnectTimeout(ConnectorHttpClient.CONNECT_TIMEOUT_MILLIS);
+            setReadTimeout(ConnectorHttpClient.READ_TIMEOUT_MILLIS);
+        }
+
+        @Override
+        protected void prepareConnection(HttpURLConnection connection, String method) throws IOException {
+            super.prepareConnection(connection, method);
+            connection.setInstanceFollowRedirects(false);
+        }
     }
 
     @SuppressWarnings("unchecked")
@@ -525,8 +719,44 @@ public class ShopifyConnector implements ExternalConnector<Map<String, Object>>,
         }
     }
 
-    private static String stripHtml(String html) {
-        if (html == null || html.isBlank()) return "";
-        return html.replaceAll("(?is)<[^>]+>", " ").replaceAll("\\s+", " ").trim();
+    static String stripHtml(String html) {
+        if (html == null) return "";
+        if (html.length() > MAX_HTML_LENGTH) {
+            throw new IllegalArgumentException("Shopify product description exceeds the supported size");
+        }
+        if (html.isBlank()) return "";
+        StringBuilder stripped = new StringBuilder(html.length());
+        int at = 0;
+        while (at < html.length()) {
+            char current = html.charAt(at);
+            if (current == '<') {
+                int end = html.indexOf('>', at + 1);
+                if (end < 0) {
+                    stripped.append(html, at, html.length());
+                    break;
+                }
+                if (end > at + 1) {
+                    stripped.append(' ');
+                    at = end + 1;
+                    continue;
+                }
+            }
+            stripped.append(current);
+            at++;
+        }
+        StringBuilder result = new StringBuilder(stripped.length());
+        boolean whitespace = false;
+        for (int index = 0; index < stripped.length(); index++) {
+            char current = stripped.charAt(index);
+            if (current == ' ' || current == '\t' || current == '\n' || current == '\r'
+                    || current == '\f' || current == 11) {
+                if (!whitespace) result.append(' ');
+                whitespace = true;
+            } else {
+                result.append(current);
+                whitespace = false;
+            }
+        }
+        return result.toString().trim();
     }
 }

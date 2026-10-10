@@ -2,9 +2,9 @@ name: Security scans
 
 on:
   push:
-    branches: [main]
+    branches: [main, codex/recover-unpushed-work]
   pull_request:
-    branches: [main]
+    branches: [main, codex/recover-unpushed-work]
   schedule:
     - cron: "17 6 * * 1"
 
@@ -17,7 +17,7 @@ concurrency:
 
 jobs:
   security:
-    name: FindSecBugs and offline OSV
+    name: FindSecBugs and live OSV
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -47,33 +47,16 @@ jobs:
       - name: Gate Medium and High security findings
         shell: bash
         run: |
-          mvn -B -ntp -U -Psecurity-oss com.github.spotbugs:spotbugs-maven-plugin:4.8.6.6:spotbugs | tee target/security/findsecbugs.log
+          mvn -B -ntp -U -Psecurity-oss com.github.spotbugs:spotbugs-maven-plugin:4.10.4.0:spotbugs | tee target/security/findsecbugs.log
           python3 scripts/security/classify_sast.py target/spotbugsXml.xml config/security-reviewed-findings.json --plugin "$HOME/.m2/repository/com/h3xstream/findsecbugs/findsecbugs-plugin/1.14.0/findsecbugs-plugin-1.14.0.jar" | tee target/security/sast-gate.json
 
-      - name: Validate a fresh public Maven advisory database
-        id: database
+      - name: Gate every resolved Maven identity with the live OSV API
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
-        env:
-          OSV_SCANNER_LOCAL_DB_CACHE_DIRECTORY: ${{ runner.temp }}/osv-data
-        run: python3 scripts/security/security_checks.py prepare-db "$OSV_SCANNER_LOCAL_DB_CACHE_DIRECTORY" target/security/database-receipt.json
-
-      - name: Gate resolved dependencies with offline OSV
-        if: ${{ !cancelled() && steps.build.outcome == 'success' && steps.database.outcome == 'success' }}
-        env:
-          OSV_SCANNER_LOCAL_DB_CACHE_DIRECTORY: ${{ runner.temp }}/osv-data
         shell: bash
         run: |
-          curl --fail --location --retry 2 --connect-timeout 15 --max-time 120 --output "$RUNNER_TEMP/osv-scanner" https://github.com/google/osv-scanner/releases/download/v2.6.0/osv-scanner_linux_amd64
-          echo 'ca69b3d3cd08f889a49dc0a383122f71cc528b83803671df5fd874d97485b108' "$RUNNER_TEMP/osv-scanner" | sha256sum --check
-          chmod +x "$RUNNER_TEMP/osv-scanner"
-          set +e
-          "$RUNNER_TEMP/osv-scanner" scan source --offline --no-ignore --no-resolve --config=config/osv-scanner-empty.toml --all-packages --all-vulns --format=json --output-file=target/security/osv.json -L target/classes/META-INF/sbom/application.cdx.json 2>&1 | tee target/security/osv.log
-          scanner_status=${PIPESTATUS[0]}
-          set -e
-          python3 scripts/security/security_checks.py inventory target/classes/META-INF/sbom/application.cdx.json target/security/osv.json | tee target/security/inventory-receipt.json
-          exit "$scanner_status"
+          python3 scripts/security/security_checks.py live-osv target/classes/META-INF/sbom/application.cdx.json target/security/osv-live.json | tee target/security/inventory-receipt.json
 
-      - name: Retain private security reports
+      - name: Retain repository security reports
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:

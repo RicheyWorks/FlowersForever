@@ -1,7 +1,6 @@
 package com.flowerfarm.gui;
 
-import com.flowerfarm.auth.FarmRole;
-import com.flowerfarm.auth.FarmSession;
+import com.flowerfarm.auth.DesktopSession;
 import com.flowerfarm.auth.FarmUser;
 import com.flowerfarm.auth.FarmUserDirectory;
 import org.springframework.beans.factory.annotation.Value;
@@ -21,14 +20,20 @@ import java.util.Optional;
 public class GuiLoginGate {
 
     private final boolean enabled;
+    private final boolean showDemoCredentials;
     private final FarmUserDirectory directory;
+    private final DesktopSession session;
 
     public GuiLoginGate(
             @Value("${flowerfarm.auth.enabled:false}") boolean enabled,
-            FarmUserDirectory directory) {
+            @Value("${flowerfarm.auth.allow-demo-credentials:false}") boolean showDemoCredentials,
+            FarmUserDirectory directory,
+            DesktopSession session) {
         this.enabled = enabled;
+        this.showDemoCredentials = showDemoCredentials;
         this.directory = directory;
-        FarmSession.setAuthEnabled(enabled);
+        this.session = session;
+        session.setAuthEnabled(enabled);
     }
 
     public boolean isEnabled() {
@@ -39,9 +44,9 @@ public class GuiLoginGate {
      * @return true if auth is disabled or credentials accepted; false if cancelled / failed out.
      */
     public boolean promptUntilAuthenticatedOrCancel() {
-        FarmSession.setAuthEnabled(enabled);
+        session.setAuthEnabled(enabled);
         if (!enabled) {
-            FarmSession.clear();
+            session.clear();
             return true;
         }
 
@@ -54,7 +59,7 @@ public class GuiLoginGate {
                     null, panel, "FlowersForever · barn login (" + attempt + "/3)",
                     JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
             if (result != JOptionPane.OK_OPTION) {
-                FarmSession.clear();
+                session.clear();
                 return false;
             }
             String u = userField.getText() == null ? "" : userField.getText().trim();
@@ -63,7 +68,7 @@ public class GuiLoginGate {
             Arrays.fill(p, '\0');
             passField.setText("");
             if (user.isPresent()) {
-                FarmSession.set(user.get());
+                session.set(user.get());
                 return true;
             }
             JOptionPane.showMessageDialog(null,
@@ -71,7 +76,7 @@ public class GuiLoginGate {
                     "Login failed", JOptionPane.ERROR_MESSAGE);
             userField.requestFocusInWindow();
         }
-        FarmSession.clear();
+        session.clear();
         return false;
     }
 
@@ -82,15 +87,15 @@ public class GuiLoginGate {
         if (!enabled) {
             return true;
         }
-        FarmSession.clear();
+        session.clear();
         return promptUntilAuthenticatedOrCancel();
     }
 
-    private JPanel buildLoginPanel() {
+    JPanel buildLoginPanel() {
         JPanel root = new JPanel(new BorderLayout(8, 8));
         root.setBorder(new EmptyBorder(8, 8, 4, 8));
 
-        JLabel title = new JLabel("<html><b>Kitsap barn login</b><br/>"
+        JLabel title = new JLabel("<html><b>FlowersForever sign in</b><br/>"
                 + "<span style='font-size:10px;color:gray'>Roles: Owner · Hand · Viewer</span></html>");
         root.add(title, BorderLayout.NORTH);
 
@@ -102,21 +107,32 @@ public class GuiLoginGate {
 
         JTextField userField = new JTextField(18);
         JPasswordField passField = new JPasswordField(18);
+        userField.getAccessibleContext().setAccessibleName("Farm username");
+        passField.getAccessibleContext().setAccessibleName("Farm password");
+        JLabel userLabel = new JLabel("Username");
+        userLabel.setDisplayedMnemonic('U');
+        userLabel.setLabelFor(userField);
+        JLabel passwordLabel = new JLabel("Password");
+        passwordLabel.setDisplayedMnemonic('P');
+        passwordLabel.setLabelFor(passField);
         c.gridx = 0; c.gridy = 0; c.weightx = 0;
-        form.add(new JLabel("Username"), c);
+        form.add(userLabel, c);
         c.gridx = 1; c.weightx = 1;
         form.add(userField, c);
         c.gridx = 0; c.gridy = 1; c.weightx = 0;
-        form.add(new JLabel("Password"), c);
+        form.add(passwordLabel, c);
         c.gridx = 1; c.weightx = 1;
         form.add(passField, c);
         root.add(form, BorderLayout.CENTER);
 
-        JTextArea roles = new JTextArea(
-                "OWNER — full access (clear audit)\n"
-                        + "HAND  — inventory, harvest, CRM, connectors\n"
-                        + "VIEWER — read-only (no writes)\n\n"
-                        + "Defaults: farm/kitsap · hand/harvest · viewer/view");
+        String roleGuide =
+                "OWNER — full access, including clearing activity history\n"
+                        + "HAND  — inventory, harvests, orders, imports, and exports\n"
+                        + "VIEWER — view, filter, print, and export only";
+        if (showDemoCredentials) {
+            roleGuide += "\n\nDemo accounts are enabled for this run.";
+        }
+        JTextArea roles = new JTextArea(roleGuide);
         roles.setEditable(false);
         roles.setOpaque(false);
         roles.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 11));
@@ -131,7 +147,7 @@ public class GuiLoginGate {
     /** Demo helper: list usernames for status tip (no passwords). */
     public String accountHint() {
         if (!enabled) {
-            return "auth off";
+            return "Local mode";
         }
         StringBuilder sb = new StringBuilder();
         for (FarmUser u : directory.listUsers()) {

@@ -1,5 +1,6 @@
 package com.flowerfarm.service;
 
+import com.flowerfarm.model.FarmProfile;
 import com.flowerfarm.model.Customer;
 import com.flowerfarm.model.CustomerOrder;
 import com.lowagie.text.Chunk;
@@ -42,10 +43,13 @@ public class CustomerStatementService {
 
     private final CustomerService customerService;
     private final OrderService orderService;
+    private final FarmProfile farmProfile;
 
-    public CustomerStatementService(CustomerService customerService, OrderService orderService) {
+    public CustomerStatementService(CustomerService customerService, OrderService orderService,
+                                    FarmProfile farmProfile) {
         this.customerService = customerService;
         this.orderService = orderService;
+        this.farmProfile = farmProfile;
     }
 
     public record StatementLine(
@@ -134,7 +138,7 @@ public class CustomerStatementService {
                         && !o.getOrderDate().isBefore(start)
                         && !o.getOrderDate().isAfter(end))
                 .sorted(Comparator.comparing(CustomerOrder::getOrderDate)
-                        .thenComparing(o -> o.getId() == null ? 0L : o.getId()))
+                        .thenComparingLong(o -> o.getId() == null ? 0L : o.getId()))
                 .toList();
 
         List<StatementLine> lines = new ArrayList<>();
@@ -206,7 +210,7 @@ public class CustomerStatementService {
             PdfPTable bannerTable = new PdfPTable(1);
             bannerTable.setWidthPercentage(100);
             PdfPCell bannerCell = new PdfPCell(new Phrase(
-                    "FlowersForever  ·  Port Orchard / Kitsap  ·  Customer Statement",
+                    farmProfile.documentBanner("Customer Statement"),
                     banner));
             bannerCell.setBackgroundColor(brandGreen);
             bannerCell.setPadding(10);
@@ -231,7 +235,7 @@ public class CustomerStatementService {
                     + (statement.phone().isBlank() ? "" : "\n" + statement.phone());
             parties.addCell(infoBlock("Account", billTo, brandSoft, body));
             parties.addCell(infoBlock("From",
-                    "FlowersForever Farm\nPort Orchard / Kitsap County, WA\nPNW West of the Cascades",
+                    farmProfile.contactBlock(),
                     brandSoft, body));
             doc.add(parties);
             doc.add(Chunk.NEWLINE);
@@ -303,11 +307,11 @@ public class CustomerStatementService {
                     body));
             doc.add(Chunk.NEWLINE);
             doc.add(new Paragraph(
-                    "Thank you for supporting local PNW cut flowers. "
-                            + "Single-order invoices: CRM → Invoice PDF.",
+                    farmProfile.thankYouLine()
+                            + " Single-order invoices: CRM → Invoice PDF.",
                     small));
             doc.add(new Paragraph(
-                    "FlowersForever · practical tools for PNW flower growers", small));
+                    farmProfile.softwareFooter(), small));
 
             doc.close();
             log.info("Generated customer statement PDF for id={} ({} orders, ${})",
@@ -319,12 +323,13 @@ public class CustomerStatementService {
         }
     }
 
-    private static String formatText(Customer customer, LocalDate from, LocalDate to,
-                                     List<StatementLine> lines,
-                                     double fulfilled, double pipeline,
-                                     double draft, double cancelled, double grand) {
+    private String formatText(Customer customer, LocalDate from, LocalDate to,
+                              List<StatementLine> lines,
+                              double fulfilled, double pipeline,
+                              double draft, double cancelled, double grand) {
         StringBuilder sb = new StringBuilder();
-        sb.append("CUSTOMER STATEMENT — Port Orchard / Kitsap County\n");
+        sb.append(farmProfile.documentBanner("Customer Statement").toUpperCase(Locale.ROOT))
+                .append('\n');
         sb.append("═══════════════════════════════════════════════\n");
         sb.append("Customer: ").append(customer.getName());
         if (customer.getCustomerType() != null && !customer.getCustomerType().isBlank()) {

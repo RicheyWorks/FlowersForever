@@ -1,6 +1,7 @@
 package com.flowerfarm.model;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import jakarta.persistence.*;
 
 /**
@@ -9,6 +10,8 @@ import jakarta.persistence.*;
 @Entity
 @Table(name = "order_lines")
 public class OrderLine {
+
+    private static final double MAX_UNIT_PRICE = 1_000_000_000.0;
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -31,6 +34,11 @@ public class OrderLine {
     @Column(nullable = false)
     private double unitPrice;
 
+    /** Optional saved floral recipe this line is made from (stem demand board). */
+    @Column(name = "recipe_id")
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    private Long recipeId;
+
     protected OrderLine() {
     }
 
@@ -48,7 +56,18 @@ public class OrderLine {
     public String getUnit() { return unit; }
     public double getUnitPrice() { return unitPrice; }
 
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public Long getRecipeId() { return recipeId; }
+
     public void setId(Long id) { this.id = id; }
+
+    /** Links this line to a saved floral recipe, or clears the link with {@code null}. */
+    public void setRecipeId(Long recipeId) {
+        if (recipeId != null && recipeId <= 0) {
+            throw new IllegalArgumentException("Recipe id must be positive.");
+        }
+        this.recipeId = recipeId;
+    }
 
     public void setOrder(CustomerOrder order) {
         this.order = order;
@@ -58,25 +77,36 @@ public class OrderLine {
         if (productName == null || productName.isBlank()) {
             throw new IllegalArgumentException("Product name is required.");
         }
-        this.productName = productName.trim();
+        this.productName = requireMaxLength(productName.trim(), 255, "Product name");
     }
 
     public void setQuantity(double quantity) {
-        if (quantity < 0) {
-            throw new IllegalArgumentException("Quantity cannot be negative.");
+        if (!Double.isFinite(quantity) || quantity <= 0 || quantity > Integer.MAX_VALUE) {
+            throw new IllegalArgumentException(
+                    "Quantity must be a finite number greater than 0 and no more than "
+                            + Integer.MAX_VALUE + ".");
         }
         this.quantity = quantity;
     }
 
     public void setUnit(String unit) {
-        this.unit = (unit == null || unit.isBlank()) ? "bunch" : unit.trim();
+        String normalized = (unit == null || unit.isBlank()) ? "bunch" : unit.trim();
+        this.unit = requireMaxLength(normalized, 64, "Unit");
     }
 
     public void setUnitPrice(double unitPrice) {
-        if (unitPrice < 0) {
-            throw new IllegalArgumentException("Unit price cannot be negative.");
+        if (!Double.isFinite(unitPrice) || unitPrice < 0 || unitPrice > MAX_UNIT_PRICE) {
+            throw new IllegalArgumentException("Unit price must be a finite number between 0 and "
+                    + (long) MAX_UNIT_PRICE + ".");
         }
         this.unitPrice = unitPrice;
+    }
+
+    private static String requireMaxLength(String value, int max, String field) {
+        if (value.length() > max) {
+            throw new IllegalArgumentException(field + " cannot exceed " + max + " characters.");
+        }
+        return value;
     }
 
     public double lineTotal() {
