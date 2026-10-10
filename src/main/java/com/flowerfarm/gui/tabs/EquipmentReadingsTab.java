@@ -153,6 +153,8 @@ public final class EquipmentReadingsTab implements FlowerFarmTab {
         table.setDefaultRenderer(Object.class, plain);
         JScrollPane history = FarmUi.tableScroll(table);
         history.setColumnHeaderView(table.getTableHeader());
+        history.setPreferredSize(new Dimension(800, table.getTableHeader().getPreferredSize().height
+                + table.getRowHeight() * 4 + history.getHorizontalScrollBar().getPreferredSize().height + 2));
         root.add(FarmUi.section("Saved equipment readings", "Each value keeps its reported unit and condition. Age does not prove equipment is working.",
                 history), BorderLayout.CENTER);
         JPanel bottom = new JPanel(new BorderLayout(4, 4));
@@ -205,7 +207,7 @@ public final class EquipmentReadingsTab implements FlowerFarmTab {
 
         @Override public Dimension getPreferredSize() {
             Dimension preferred = super.getPreferredSize();
-            return new Dimension(preferred.width, 780);
+            return new Dimension(preferred.width, Math.max(780, preferred.height));
         }
         @Override public Dimension getPreferredScrollableViewportSize() { return getPreferredSize(); }
         @Override public int getScrollableUnitIncrement(Rectangle visible, int orientation, int direction) { return 24; }
