@@ -99,4 +99,21 @@ flags use volatile visibility across asynchronous callbacks. These changes add n
 new file, process, SQL-construction, network, or authorization transport boundary;
 the complete scan and source fingerprints were renewed after this caller review.
 
+The desktop spreadsheet increment adds an approved local read boundary:
+`FarmFileChooser.chooseEquipmentSpreadsheet` returns only the farmer's selected
+file, and `EquipmentReadingsTab` calls `EquipmentSpreadsheet.read` off the event
+thread. The reader accepts only regular non-link CSV files, opens with
+`NOFOLLOW_LINKS`, reads at most 1 MiB plus one byte, decodes strict UTF-8, and bounds
+columns, cells and rows before review. No HTTP caller supplies this path. Review
+tables render imported text literally, with Swing HTML disabled. Exact decimals
+are validated and normalized before preview, including extreme zero exponents.
+Names and event references are data; neither becomes SQL, a path, or a command.
+Source, metric and event keys enter the existing fixed prepared-statement intake
+in one transaction. Role checks are repeated after selection and review and before
+the background intake; pending imports and kept previews participate in shell
+exit and farm-change guards. The four modified production callers and the new
+reader were reviewed together. All 554 production Java files and the unchanged
+POM are bound. The complete scan retains the same 38 reviewed Medium contexts,
+with no High or additional Medium finding, no analysis error and no missing class.
+
 Any new, changed, duplicate or absent reviewed finding fails. Any production Java edit/addition/removal or POM change requires a fresh source/build/caller review and an intentional manifest update; do not regenerate the manifest automatically to make a failed check pass. There are no native category/class/method exclusions in the security profile. The separate general quality profile retains its existing exclusions and Medium-or-higher zero-violation gate.

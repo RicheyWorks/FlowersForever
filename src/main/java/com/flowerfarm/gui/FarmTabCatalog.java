@@ -1139,7 +1139,7 @@ public final class FarmTabCatalog {
                 beforeInventory++;
             }
             withReadings.add(beforeInventory, new com.flowerfarm.gui.tabs.EquipmentReadingsTab(
-                    farmReadingService, host, dialogs));
+                    farmReadingService, host, dialogs, files));
             tabs = List.copyOf(withReadings);
         }
         List<CropAreaPlanTab> cropAreas = new java.util.ArrayList<>(2);

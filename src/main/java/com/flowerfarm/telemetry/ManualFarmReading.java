@@ -42,7 +42,8 @@ public final class ManualFarmReading {
     }
 
     public static String equipmentName(FarmReading reading) {
-        if (SOURCE.equals(reading.sourceId()) && reading.deviceId().startsWith(PREFIX)) {
+        if ((SOURCE.equals(reading.sourceId()) || EquipmentSpreadsheet.SOURCE.equals(reading.sourceId()))
+                && reading.deviceId().startsWith(PREFIX)) {
             try {
                 byte[] bytes = Base64.getUrlDecoder().decode(reading.deviceId().substring(PREFIX.length()));
                 String name = new String(bytes, StandardCharsets.UTF_8);

@@ -208,9 +208,11 @@ Select **Browse all farm tools** to find all 41 tools and guides, including Soil
 
 Open **Equipment readings** to record measurements from your soil, water, air, and growing spaces. Give the equipment a familiar name, choose the measurement, enter its value and unit, and review it before saving. The history also shows readings brought in by an equipment helper, with when and where they were taken. Missing readings stay missing, and retrying a save does not count the same reading twice.
 
-For files saved by a sensor or recorder, your equipment helper can use the optional import tool (file types called “CSV” and “JSON”). Direct file selection in this screen, automatic readings, Bluetooth pairing, charts, and pump operation still need further work. [Read the farmer's guide to equipment readings](docs/FARM_READINGS.md).
+Choose **Bring in equipment spreadsheet…** to select a spreadsheet (CSV), check all its readings, and review them before saving. **Spreadsheet layout** explains the headings using farm language. Up to 500 readings save together; an unchanged retry adds no duplicates, and your manual draft stays intact. Other logger layouts and readings files (JSON) can use the optional helper. Automatic readings, Bluetooth pairing, charts, and pump operation still need further work. [Read the farmer's guide to equipment readings](docs/FARM_READINGS.md).
 
 [![Equipment readings: familiar equipment names, reviewed manual entry, and saved measurement history using sample records.](docs/images/app-equipment-readings.png)](docs/images/app-equipment-readings.png)
+
+[![Review an equipment spreadsheet before saving: equipment names, growing areas, exact values, units, conditions, and measured times using sample records.](docs/images/app-equipment-spreadsheet-review.png)](docs/images/app-equipment-spreadsheet-review.png)
 
 ## Take a five-minute tour
 

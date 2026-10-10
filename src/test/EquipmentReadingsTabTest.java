@@ -1,11 +1,14 @@
 package com.flowerfarm.gui.tabs;
 
 import com.flowerfarm.gui.FarmDialogs;
+import com.flowerfarm.gui.FarmFileChooser;
+import com.flowerfarm.telemetry.EquipmentSpreadsheet;
 import com.flowerfarm.telemetry.FarmReadingService;
 import com.flowerfarm.telemetry.ManualFarmReading;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
@@ -25,10 +28,13 @@ import javax.swing.SwingUtilities;
 import java.awt.Component;
 import java.awt.Container;
 import java.math.BigDecimal;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Instant;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
@@ -55,6 +61,8 @@ class EquipmentReadingsTabTest {
     private FarmDialogs dialogs;
     private EquipmentReadingsTab tab;
     private JComponent root;
+    private FarmFileChooser files;
+    @TempDir Path directory;
 
     @BeforeEach void setup() throws Exception {
         DriverManagerDataSource data = new DriverManagerDataSource(
@@ -71,7 +79,9 @@ class EquipmentReadingsTabTest {
         dialogs = mock(FarmDialogs.class);
         when(dialogs.showConfirm(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
                 anyString(), anyInt(), anyInt())).thenReturn(JOptionPane.YES_OPTION);
-        tab = edt(() -> new EquipmentReadingsTab(service, host, dialogs));
+        files = mock(FarmFileChooser.class);
+        when(files.chooseEquipmentSpreadsheet(org.mockito.ArgumentMatchers.any(), anyString())).thenReturn(Optional.empty());
+        tab = edt(() -> new EquipmentReadingsTab(service, host, dialogs, files));
         root = tab.getUIComponent();
         edt(() -> {
             text("equipment").setText("North greenhouse probe");
@@ -292,6 +302,175 @@ class EquipmentReadingsTabTest {
             assertThat(((JLabel) renderer).getText()).startsWith("<html>");
             return null;
         });
+    }
+
+    @Test void spreadsheetReviewSavesExactRowsInBackgroundWithoutChangingManualDraft() throws Exception {
+        spreadsheet("21.125000000001", "Measured");
+        AtomicBoolean background = new AtomicBoolean();
+        doAnswer(call -> {
+            background.set(!SwingUtilities.isEventDispatchThread());
+            return transaction.execute(status -> new FarmReadingService(jdbc).ingest(call.getArgument(0), call.getArgument(1)));
+        }).when(service).ingest(anyString(), anyCollection());
+        click("import");
+        await(() -> service.count() == 1 && table().getRowCount() == 1 && component("import", JButton.class).isEnabled());
+        var row = service.history(EquipmentSpreadsheet.SOURCE, 0, 10).readings().get(0);
+        assertThat(row.value()).isEqualByComparingTo("21.125000000001");
+        assertThat(ManualFarmReading.equipmentName(row)).isEqualTo("Sheet probe");
+        assertThat(background).isTrue();
+        assertThat(edt(() -> text("value").getText())).isEqualTo("21.125000001");
+        assertThat(edt(() -> table().getValueAt(0, 7))).isEqualTo("Equipment spreadsheet");
+        assertThat(edt(tab::applicationExitWarning)).contains("unfinished reading");
+        click("import");
+        await(() -> feedback().contains("0 new readings; 1 already saved") && component("import", JButton.class).isEnabled());
+        assertThat(service.count()).isEqualTo(1);
+    }
+
+    @Test void cancelSelectionWritesNothingAndKeepsManualDraft() throws Exception {
+        click("import");
+        assertThat(service.count()).isZero();
+        assertThat(edt(() -> text("value").getText())).isEqualTo("21.125000001");
+        assertThat(edt(() -> component("save", JButton.class).isEnabled())).isTrue();
+    }
+
+    @Test void accessChangeDuringFileSelectionPreventsReadingOrSavingFile() throws Exception {
+        Path file = spreadsheet("1", "Measured");
+        when(files.chooseEquipmentSpreadsheet(org.mockito.ArgumentMatchers.any(), anyString())).thenAnswer(call -> {
+            when(host.canMutateData()).thenReturn(false);
+            tab.applyRolePermissions(false);
+            return Optional.of(file.toFile());
+        });
+        click("import");
+        assertThat(service.count()).isZero();
+        assertThat(edt(this::feedback)).contains("access changed", "No spreadsheet");
+        assertThat(edt(tab::applicationExitWarning)).contains("unfinished reading");
+    }
+
+    @Test void unreadableSelectedFileLeavesNoPreviewAndPreservesManualDraft() throws Exception {
+        Path file = spreadsheet("1", "Measured");
+        Files.delete(file);
+        click("import");
+        await(() -> feedback().contains("Choose a spreadsheet") && component("import", JButton.class).isEnabled());
+        assertThat(service.count()).isZero();
+        assertThat(edt(() -> component("save", JButton.class).isEnabled())).isTrue();
+        assertThat(edt(() -> text("value").getText())).isEqualTo("21.125000001");
+    }
+
+    @Test void declinedPreviewIsKeptAndExplicitLeaveRestoresManualDraft() throws Exception {
+        spreadsheet("0", "Measured");
+        when(dialogs.showConfirm(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(), anyString(), anyInt(), anyInt()))
+                .thenReturn(JOptionPane.NO_OPTION);
+        click("import");
+        await(() -> feedback().contains("preview kept"));
+        assertThat(service.count()).isZero();
+        assertThat(edt(tab::applicationExitWarning)).contains("spreadsheet preview");
+        click("leaveImport");
+        assertThat(edt(tab::applicationExitWarning)).contains("spreadsheet preview");
+        when(dialogs.showConfirm(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(), anyString(), anyInt(), anyInt()))
+                .thenReturn(JOptionPane.YES_OPTION);
+        click("leaveImport");
+        assertThat(edt(() -> component("save", JButton.class).isEnabled())).isTrue();
+        assertThat(edt(() -> text("value").getText())).isEqualTo("21.125000001");
+    }
+
+    @Test void invalidLaterRowAndMissingWithZeroPreventAllWritesBeforeReview() throws Exception {
+        Path file = spreadsheet("1", "Measured");
+        Files.writeString(file, Files.readString(file) + "Other probe,House,Soil moisture,not a number,%,Measured,2026-10-01T12:00:01Z\n");
+        click("import");
+        await(() -> feedback().contains("Reading 2:") && component("import", JButton.class).isEnabled());
+        assertThat(service.count()).isZero();
+        spreadsheet("0", "No reading");
+        click("import");
+        await(() -> feedback().contains("missing is not zero") && component("import", JButton.class).isEnabled());
+        assertThat(service.count()).isZero();
+    }
+
+    @Test void roleRevocationDuringSpreadsheetReviewKeepsPreviewWithoutSaving() throws Exception {
+        spreadsheet("1", "Measured");
+        when(dialogs.showConfirm(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(), anyString(), anyInt(), anyInt()))
+                .thenAnswer(call -> { when(host.canMutateData()).thenReturn(false); tab.applyRolePermissions(false); return JOptionPane.YES_OPTION; });
+        click("import");
+        await(() -> feedback().contains("access changed"));
+        assertThat(service.count()).isZero();
+        assertThat(edt(tab::applicationExitWarning)).contains("spreadsheet preview");
+        assertThat(edt(() -> component("import", JButton.class).isEnabled())).isFalse();
+    }
+
+    @Test void uncertainSpreadsheetCommitRetriesKeptRowsEvenIfFileChanges() throws Exception {
+        Path file = spreadsheet("1", "Measured");
+        AtomicBoolean first = new AtomicBoolean(true);
+        doAnswer(call -> {
+            var result = transaction.execute(status -> new FarmReadingService(jdbc).ingest(call.getArgument(0), call.getArgument(1)));
+            if (first.getAndSet(false)) throw new IllegalStateException("Lost confirmation");
+            return result;
+        }).when(service).ingest(anyString(), anyCollection());
+        click("import");
+        await(() -> feedback().contains("Could not confirm the spreadsheet save") && component("import", JButton.class).isEnabled());
+        assertThat(edt(tab::applicationExitWarning)).contains("could not be confirmed");
+        Files.writeString(file, "broken sheet");
+        click("import");
+        await(() -> feedback().contains("0 new readings; 1 already saved") && component("import", JButton.class).isEnabled());
+        assertThat(service.count()).isEqualTo(1);
+        assertThat(edt(() -> text("value").getText())).isEqualTo("21.125000001");
+    }
+
+    @Test void existingConflictRollsBackEarlierNewRowInSpreadsheetBatch() throws Exception {
+        Path file = spreadsheet("1", "Measured");
+        var existing = EquipmentSpreadsheet.read(file, service);
+        transaction.executeWithoutResult(status -> service.ingest(EquipmentSpreadsheet.SOURCE, existing));
+        String conflicting = Files.readString(file).replace(",1,", ",9,");
+        Files.writeString(file, String.join(",", EquipmentSpreadsheet.HEADINGS) + "\n"
+                + "New probe,House,Soil moisture,30,%,Measured,2026-10-01T12:00:01Z\n"
+                + conflicting.substring(conflicting.indexOf('\n') + 1));
+        click("import");
+        await(() -> feedback().contains("Could not confirm the spreadsheet save") && component("import", JButton.class).isEnabled());
+        assertThat(service.count()).isEqualTo(1);
+        assertThat(service.history(EquipmentSpreadsheet.SOURCE, 0, 10).readings().get(0).value()).isEqualByComparingTo("1");
+    }
+
+    @Test void slowSpreadsheetSaveBlocksRepeatClicksAndReportsPendingExit() throws Exception {
+        spreadsheet("1", "Measured");
+        CountDownLatch entered = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        doAnswer(call -> {
+            entered.countDown();
+            assertThat(release.await(5, TimeUnit.SECONDS)).isTrue();
+            return transaction.execute(status -> new FarmReadingService(jdbc).ingest(call.getArgument(0), call.getArgument(1)));
+        }).when(service).ingest(anyString(), anyCollection());
+        try {
+            click("import");
+            assertThat(entered.await(5, TimeUnit.SECONDS)).isTrue();
+            assertThat(edt(tab::hasPendingSave)).isTrue();
+            assertThat(edt(tab::applicationExitWarning)).contains("spreadsheet being read or saved");
+            assertThat(edt(() -> component("import", JButton.class).isEnabled())).isFalse();
+            assertThat(edt(() -> component("save", JButton.class).isEnabled())).isFalse();
+            click("import");
+        } finally { release.countDown(); }
+        await(() -> service.count() == 1 && component("import", JButton.class).isEnabled());
+    }
+
+    @Test void previewRendererKeepsSpreadsheetMarkupLiteralAndMissingValueAbsent() throws Exception {
+        Path file = spreadsheet("", "No reading");
+        Files.writeString(file, Files.readString(file).replace("House", "<html><img src='https://example.invalid/pixel'>"));
+        when(dialogs.showConfirm(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(), anyString(), anyInt(), anyInt()))
+                .thenAnswer(call -> {
+                    JTable preview = (JTable) find((Component) call.getArgument(1), "equipmentReadings.importPreview");
+                    assertThat(preview.getRowCount()).isEqualTo(1);
+                    assertThat(preview.getValueAt(0, 3)).isEqualTo("No value");
+                    JComponent rendered = (JComponent) preview.prepareRenderer(preview.getCellRenderer(0, 1), 0, 1);
+                    assertThat(rendered.getClientProperty("html.disable")).isEqualTo(Boolean.TRUE);
+                    return JOptionPane.YES_OPTION;
+                });
+        click("import");
+        await(() -> service.count() == 1 && component("import", JButton.class).isEnabled());
+        assertThat(service.history(EquipmentSpreadsheet.SOURCE, 0, 10).readings().get(0).value()).isNull();
+    }
+
+    private Path spreadsheet(String value, String quality) throws Exception {
+        Path file = directory.resolve("equipment.csv");
+        Files.writeString(file, String.join(",", EquipmentSpreadsheet.HEADINGS) + "\n"
+                + "Sheet probe,House,Soil moisture," + value + ",%," + quality + ",2026-10-01T12:00:00Z\n");
+        when(files.chooseEquipmentSpreadsheet(org.mockito.ArgumentMatchers.any(), anyString())).thenReturn(Optional.of(file.toFile()));
+        return file;
     }
 
     private void adapter(String device, String key) {

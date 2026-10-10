@@ -91,9 +91,11 @@ Explore actual app tabs and entry forms with sample records. Select any image to
 
 ## Equipment readings
 
-Record soil, water, and greenhouse measurements with familiar equipment names and explicit units. Review an observation before saving, then browse the history. This picture uses isolated sample records, including a missing value and a reading that needs checking. Equipment file imports currently use the helper; automatic pairing and pump controls remain future work.
+Record soil, water, and greenhouse measurements with familiar equipment names and explicit units. Review an observation before saving, or choose an equipment spreadsheet and review its checked rows before saving them together. This picture uses isolated sample records, including a missing value and a reading that needs checking. Automatic pairing and pump controls remain future work.
 
 [![Equipment readings with manual entry and saved sample observations.](images/app-equipment-readings.png)](images/app-equipment-readings.png)
+
+[![Equipment spreadsheet review with three checked sample observations, including a missing value.](images/app-equipment-spreadsheet-review.png)](images/app-equipment-spreadsheet-review.png)
 
 ## Plant and flower references
 

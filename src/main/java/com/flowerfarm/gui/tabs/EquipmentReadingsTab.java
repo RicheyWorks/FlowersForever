@@ -1,7 +1,9 @@
 package com.flowerfarm.gui.tabs;
 
 import com.flowerfarm.gui.FarmDialogs;
+import com.flowerfarm.gui.FarmFileChooser;
 import com.flowerfarm.gui.FarmUi;
+import com.flowerfarm.telemetry.EquipmentSpreadsheet;
 import com.flowerfarm.telemetry.FarmReading;
 import com.flowerfarm.telemetry.FarmReadingService;
 import com.flowerfarm.telemetry.ManualFarmReading;
@@ -25,6 +27,7 @@ import java.awt.BorderLayout;
 import java.awt.GridBagLayout;
 import java.awt.GridBagConstraints;
 import java.awt.Insets;
+import java.awt.Dimension;
 import java.text.ParseException;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
@@ -47,6 +50,7 @@ public final class EquipmentReadingsTab implements FlowerFarmTab {
     private final FarmReadingService service;
     private final TabHost host;
     private final FarmDialogs dialogs;
+    private final FarmFileChooser files;
     private final JPanel root = FarmUi.page();
     private final JTextField equipment = field("equipment");
     private final JTextField area = field("area");
@@ -60,6 +64,9 @@ public final class EquipmentReadingsTab implements FlowerFarmTab {
     private final JButton next = button("Start a new reading", "new");
     private final JButton latest = button("Latest readings", "latest");
     private final JButton older = button("Older readings", "older");
+    private final JButton bring = button("Bring in equipment spreadsheet…", "import");
+    private final JButton leave = button("Leave spreadsheet preview", "leaveImport");
+    private final JButton layout = button("Spreadsheet layout", "layout");
     private final JLabel feedback = FarmUi.wrappingStatusBadge(
             "Enter a reading from your equipment, or review readings brought in by a farm connection.", FarmUi.Tone.INFO);
     private final DefaultTableModel rows = new DefaultTableModel(new String[] {
@@ -71,15 +78,23 @@ public final class EquipmentReadingsTab implements FlowerFarmTab {
     private volatile boolean loading;
     private volatile boolean latestRequested;
     private boolean unconfirmedSave;
+    private volatile boolean importing;
+    private boolean unconfirmedImport;
+    private List<Map<String, Object>> importDraft;
     private List<Object> cleanDraft;
     private long nextCursor;
     private boolean hasMore;
     private String readingKey = UUID.randomUUID().toString();
 
     public EquipmentReadingsTab(FarmReadingService service, TabHost host, FarmDialogs dialogs) {
+        this(service, host, dialogs, FarmFileChooser.swing());
+    }
+
+    public EquipmentReadingsTab(FarmReadingService service, TabHost host, FarmDialogs dialogs, FarmFileChooser files) {
         this.service = Objects.requireNonNull(service, "service");
         this.host = Objects.requireNonNull(host, "host");
         this.dialogs = Objects.requireNonNull(dialogs, "dialogs");
+        this.files = Objects.requireNonNull(files, "files");
         canWrite = host.canMutateData();
         root.setName("equipmentReadings.root");
         JPanel top = new JPanel(new BorderLayout(8, 8));
@@ -104,7 +119,11 @@ public final class EquipmentReadingsTab implements FlowerFarmTab {
         JPanel entry = new JPanel(new BorderLayout(0, 8));
         entry.setOpaque(false);
         entry.add(form, BorderLayout.CENTER);
-        entry.add(FarmUi.toolbar(save, next), BorderLayout.SOUTH);
+        JPanel actions = new JPanel(new java.awt.GridLayout(2, 1, 0, 4));
+        actions.setOpaque(false);
+        actions.add(FarmUi.toolbar(save, next));
+        actions.add(FarmUi.toolbar(bring, leave, layout));
+        entry.add(actions, BorderLayout.SOUTH);
         top.add(FarmUi.section("Record a measurement",
                 "Use the equipment's unit. Leave the value blank for No reading.", entry), BorderLayout.CENTER);
         root.add(top, BorderLayout.NORTH);
@@ -128,12 +147,15 @@ public final class EquipmentReadingsTab implements FlowerFarmTab {
         bottom.add(controls, BorderLayout.NORTH);
         feedback.setName("equipmentReadings.feedback");
         bottom.add(feedback, BorderLayout.CENTER);
-        bottom.add(FarmUi.mutedLabel("Equipment files use the import helper. Automatic pairing and controls are future features."), BorderLayout.SOUTH);
+        bottom.add(FarmUi.mutedLabel("Bring in up to 500 readings from a spreadsheet (CSV). Automatic pairing and controls are future features."), BorderLayout.SOUTH);
         root.add(bottom, BorderLayout.SOUTH);
         save.addActionListener(event -> saveReading());
         next.addActionListener(event -> newReading());
         latest.addActionListener(event -> load(0));
         older.addActionListener(event -> load(nextCursor));
+        bring.addActionListener(event -> bringSpreadsheet());
+        leave.addActionListener(event -> leaveSpreadsheet());
+        layout.addActionListener(event -> showSpreadsheetLayout());
         cleanDraft = draftState();
         updateControls();
     }
@@ -184,12 +206,15 @@ public final class EquipmentReadingsTab implements FlowerFarmTab {
     }
 
     private void updateControls() {
-        boolean edit = canWrite && !saving;
+        boolean edit = canWrite && !saving && !importing && importDraft == null;
         for (JComponent control : List.of(equipment, area, value, unit, measurement, condition, observed, save, next)) {
             control.setEnabled(edit);
         }
         latest.setEnabled(!loading);
         older.setEnabled(!loading && hasMore);
+        bring.setEnabled(canWrite && !saving && !importing && !unconfirmedSave);
+        bring.setText(importDraft == null ? "Bring in equipment spreadsheet…" : "Review and retry spreadsheet…");
+        leave.setEnabled(importDraft != null && !importing);
     }
 
     private void message(String text) {
@@ -198,7 +223,7 @@ public final class EquipmentReadingsTab implements FlowerFarmTab {
     }
 
     private void newReading() {
-        if (saving || !canWrite || !host.canMutateData()) return;
+        if (saving || importing || importDraft != null || !canWrite || !host.canMutateData()) return;
         if (hasUnfinishedDraft() && dialogs.showConfirm(root,
                 "Leave this draft and start a separate reading? If a save failed, check Latest readings first.",
                 "Start a new reading", JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE)
@@ -213,10 +238,13 @@ public final class EquipmentReadingsTab implements FlowerFarmTab {
         message("Ready for a new reading. Equipment, area, measurement, and unit are kept.");
     }
 
-    public boolean hasPendingSave() { return saving; }
+    public boolean hasPendingSave() { return saving || importing; }
 
     public String applicationExitWarning() {
         if (saving) return "Equipment readings has a save still running. Wait for its result before leaving.";
+        if (importing) return "Equipment readings has a spreadsheet being read or saved. Wait for its result before leaving.";
+        if (unconfirmedImport) return "Equipment readings has a spreadsheet save that could not be confirmed. Check Latest readings, then review and retry the kept preview.";
+        if (importDraft != null) return "Equipment readings has a spreadsheet preview. Save it or explicitly leave the preview before changing farm types.";
         if (unconfirmedSave) return "Equipment readings has a save that could not be confirmed. Check Latest readings before retrying or leaving.";
         return hasUnfinishedDraft() ? "Equipment readings has an unfinished reading. Save it or explicitly start a new reading before changing farm types." : null;
     }
@@ -233,7 +261,7 @@ public final class EquipmentReadingsTab implements FlowerFarmTab {
     }
 
     private void saveReading() {
-        if (saving || !canWrite || !host.canMutateData()) {
+        if (saving || importing || importDraft != null || !canWrite || !host.canMutateData()) {
             message("This session can review readings but cannot save them.");
             return;
         }
@@ -313,6 +341,147 @@ public final class EquipmentReadingsTab implements FlowerFarmTab {
                         "Use a growing area name on one line, up to 180 characters.");
     }
 
+    private void showSpreadsheetLayout() {
+        JTextArea guide = new JTextArea("Save your equipment sheet as CSV UTF-8, up to 1 MB and 500 readings.\n"
+                + "Use these headings (any order):\n" + String.join(", ", EquipmentSpreadsheet.HEADINGS)
+                + "\n\nMeasurements: " + String.join(", ", LABELS)
+                + "\nConditions: Measured, Needs checking, No reading, Equipment error.\n"
+                + "Leave Value blank for No reading; keep zero when equipment measured zero.\n"
+                + "Keep the unit in its own column. Use a decimal point for numbers.\n"
+                + "Measured at example: 2026-10-01T08:30:00-07:00 (include the time-zone offset).\n"
+                + "Use a different, consistent equipment name for each device on this farm.\n"
+                + "Optional Reading reference: an equipment event number, reused only for the same event.\n"
+                + "Without a reference, equipment + measurement + measured time identifies a reading.\n"
+                + "Reopening the same sheet adds no duplicates. Changing an existing reading conflicts;\n"
+                + "do not change names or times just to retry. All rows save together after your review.", 17, 62);
+        guide.setEditable(false);
+        guide.setLineWrap(true);
+        guide.setWrapStyleWord(true);
+        dialogs.showMessage(root, new JScrollPane(guide), "Equipment spreadsheet layout", JOptionPane.INFORMATION_MESSAGE);
+    }
+
+    private void bringSpreadsheet() {
+        if (saving || importing || unconfirmedSave || !canWrite || !host.canMutateData()) return;
+        if (importDraft != null) { reviewSpreadsheet(); return; }
+        var selected = files.chooseEquipmentSpreadsheet(root, "Bring in equipment spreadsheet (CSV)");
+        if (selected.isEmpty()) return;
+        if (!canWrite || !host.canMutateData()) { message("Your access changed. No spreadsheet was brought in."); return; }
+        importing = true;
+        updateControls();
+        message("Checking your spreadsheet before review. No readings have been saved yet…");
+        new SwingWorker<List<Map<String, Object>>, Void>() {
+            @Override protected List<Map<String, Object>> doInBackground() throws java.io.IOException {
+                return EquipmentSpreadsheet.read(selected.get().toPath(), service);
+            }
+            @Override protected void done() {
+                importing = false;
+                try {
+                    importDraft = get();
+                    reviewSpreadsheet();
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                    message("Spreadsheet check interrupted. No readings were saved; your manual draft is kept.");
+                } catch (ExecutionException failed) {
+                    String reason = failed.getCause() instanceof IllegalArgumentException
+                            ? readableError(failed.getCause().getMessage()) : "Could not read this spreadsheet. Choose a readable local CSV file.";
+                    message(reason + " No readings were saved; your manual draft is kept.");
+                }
+                updateControls();
+            }
+        }.execute();
+    }
+
+    private void leaveSpreadsheet() {
+        if (importing || importDraft == null) return;
+        JTextArea warning = new JTextArea(unconfirmedImport
+                ? "The last save could not be confirmed. Leaving this preview does not undo saved readings. Check Latest readings first. Leave the preview?"
+                : "Leave this spreadsheet preview without saving it? Your manual reading stays intact.", 4, 48);
+        warning.setEditable(false);
+        warning.setLineWrap(true);
+        warning.setWrapStyleWord(true);
+        if (dialogs.showConfirm(root, warning, "Leave spreadsheet preview", JOptionPane.YES_NO_OPTION,
+                JOptionPane.QUESTION_MESSAGE) != JOptionPane.YES_OPTION) return;
+        importDraft = null;
+        unconfirmedImport = false;
+        updateControls();
+        message("Spreadsheet preview left. Your manual reading is kept.");
+    }
+
+    private void reviewSpreadsheet() {
+        updateControls();
+        if (importDraft == null || !canWrite || !host.canMutateData()) {
+            message("Your access changed. The spreadsheet preview is kept; nothing new was saved.");
+            return;
+        }
+        DefaultTableModel previewRows = new DefaultTableModel(EquipmentSpreadsheet.HEADINGS.toArray(), 0) {
+            @Override public boolean isCellEditable(int row, int column) { return false; }
+        };
+        for (Map<String, Object> row : importDraft) {
+            var reading = new FarmReading(0, EquipmentSpreadsheet.SOURCE, (String) row.get("readingKey"),
+                    (String) row.get("deviceId"), (String) row.get("metric"), (String) row.get("unit"),
+                    (java.math.BigDecimal) row.get("value"), (String) row.get("quality"),
+                    java.time.Instant.parse((String) row.get("observedAt")), java.time.Instant.EPOCH,
+                    (String) row.get("location"), null);
+            int metric = METRICS.indexOf(reading.metric());
+            int quality = CONDITIONS.indexOf(reading.quality());
+            previewRows.addRow(new Object[] {ManualFarmReading.equipmentName(reading), reading.location(),
+                    LABELS.get(metric), reading.value() == null ? "No value" : reading.value().toPlainString(),
+                    reading.unit(), condition.getItemAt(quality), TIME.format(reading.observedAt())});
+        }
+        JTable preview = new JTable(previewRows);
+        preview.setName("equipmentReadings.importPreview");
+        FarmUi.configureTable(preview, "Equipment spreadsheet readings to review before saving");
+        preview.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
+        DefaultTableCellRenderer plain = new DefaultTableCellRenderer();
+        plain.putClientProperty("html.disable", Boolean.TRUE);
+        preview.setDefaultRenderer(Object.class, plain);
+        int[] widths = {180, 150, 150, 130, 75, 140, 210};
+        for (int i = 0; i < widths.length; i++) preview.getColumnModel().getColumn(i).setPreferredWidth(widths[i]);
+        JScrollPane scroll = FarmUi.tableScroll(preview);
+        scroll.setColumnHeaderView(preview.getTableHeader());
+        scroll.setPreferredSize(new Dimension(800, 280));
+        JPanel review = new JPanel(new BorderLayout(0, 8));
+        review.add(new JLabel(importDraft.size() + " readings checked. Scroll across to review units and times. Save all together?"), BorderLayout.NORTH);
+        review.add(scroll, BorderLayout.CENTER);
+        review.add(new JLabel("Repeated events add no duplicates. A conflict saves none of this batch. Your manual draft stays intact."), BorderLayout.SOUTH);
+        if (dialogs.showConfirm(root, review, "Review equipment spreadsheet", JOptionPane.YES_NO_OPTION,
+                JOptionPane.QUESTION_MESSAGE) != JOptionPane.YES_OPTION) {
+            message("Spreadsheet preview kept. Review it again or use Leave spreadsheet preview.");
+            updateControls();
+            return;
+        }
+        if (!canWrite || !host.canMutateData()) { message("Your access changed. The spreadsheet preview is kept."); updateControls(); return; }
+        final List<Map<String, Object>> batch = importDraft;
+        importing = true;
+        updateControls();
+        message("Saving the reviewed spreadsheet readings together…");
+        new SwingWorker<FarmReadingService.IntakeResult, Void>() {
+            @Override protected FarmReadingService.IntakeResult doInBackground() {
+                if (!canWrite || !host.canMutateData()) throw new IllegalStateException("Access changed before saving.");
+                return service.ingest(EquipmentSpreadsheet.SOURCE, batch);
+            }
+            @Override protected void done() {
+                importing = false;
+                try {
+                    var result = get();
+                    importDraft = null;
+                    unconfirmedImport = false;
+                    message("Spreadsheet saved: " + result.inserted() + " new readings; " + result.replayed()
+                            + " already saved. Your manual draft is kept.");
+                    load(0);
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                    unconfirmedImport = true;
+                    message("Spreadsheet save interrupted. Check Latest readings, then review and retry the kept preview.");
+                } catch (ExecutionException failed) {
+                    unconfirmedImport = true;
+                    message("Could not confirm the spreadsheet save. A conflicting event saves none of this batch. Check Latest readings, then review and retry the kept preview.");
+                }
+                updateControls();
+            }
+        }.execute();
+    }
+
     private void load(long beforeId) {
         if (loading) {
             if (beforeId == 0) latestRequested = true;
@@ -337,7 +506,8 @@ public final class EquipmentReadingsTab implements FlowerFarmTab {
                                 reading.value() == null ? "No value" : reading.value().stripTrailingZeros().toPlainString(),
                                 reading.unit(), quality < 0 ? reading.quality() : condition.getItemAt(quality),
                                 TIME.format(reading.observedAt()),
-                                ManualFarmReading.SOURCE.equals(reading.sourceId()) ? "Entered on this farm" : reading.sourceId()});
+                                ManualFarmReading.SOURCE.equals(reading.sourceId()) ? "Entered on this farm"
+                                        : EquipmentSpreadsheet.SOURCE.equals(reading.sourceId()) ? "Equipment spreadsheet" : reading.sourceId()});
                     }
                     nextCursor = page.nextAfterId();
                     hasMore = page.hasMore();
