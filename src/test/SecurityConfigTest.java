@@ -138,8 +138,9 @@ class SecurityConfigTest {
         WriteToken csrf = writeToken(mvc);
         MockMultipartFile photo = new MockMultipartFile("file", "photo.png", "image/png", new byte[]{1});
 
-        mvc.perform(csrf.apply(multipart("/api/test/upload").file(photo)
-                        .with(httpBasic("hand", "harvest"))))
+        mvc.perform(multipart("/api/test/upload").file(photo)
+                        .with(httpBasic("hand", "harvest"))
+                        .cookie(csrf.cookie()).header(csrf.headerName(), csrf.token()))
                 .andExpect(status().isOk());
         mvc.perform(multipart("/api/test/upload").file(photo)
                         .with(httpBasic("hand", "harvest"))
