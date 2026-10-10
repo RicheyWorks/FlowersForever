@@ -64,7 +64,7 @@ public class SyncHistoryService {
                 connectorName, operation, success, message, detail, recordCount);
         SyncHistoryEntry saved = repository.save(entry);
         log.debug("Recorded sync history id={} {} {} success={}",
-                saved.getId(), operation, connectorName, success);
+                saved.getId(), LogValue.escape(operation), LogValue.escape(connectorName), success);
         return saved;
     }
 
@@ -178,25 +178,31 @@ public class SyncHistoryService {
             entries = List.of();
         }
         try (java.io.BufferedWriter bw = new java.io.BufferedWriter(new java.io.FileWriter(filename.trim(), java.nio.charset.StandardCharsets.UTF_8))) {
-            bw.write("Id,When,Connector,Operation,Success,RecordCount,Message,Detail");
-            bw.newLine();
-            for (SyncHistoryEntry e : entries) {
-                String msg = e.getMessage() == null ? "" : e.getMessage().replace("\"", "\"\"");
-                String det = e.getDetail() == null ? "" : e.getDetail().replace("\"", "\"\"");
-                bw.write(String.format("%s,%s,%s,%s,%s,%s,\"%s\",\"%s\"",
-                        e.getId() == null ? "" : e.getId(),
-                        e.getOccurredAt(),
-                        CsvSupport.escape(e.getConnectorName(), ','),
-                        CsvSupport.escape(e.getOperation(), ','),
-                        e.isSuccess(),
-                        e.getRecordCount() == null ? "" : e.getRecordCount(),
-                        msg,
-                        det));
-                bw.newLine();
-            }
-            log.info("Sync history exported to '{}' ({} row(s)).", filename, entries.size());
+            writeCsv(bw, entries);
+            log.info("Sync history exported to '{}' ({} row(s)).", LogValue.escape(filename), entries.size());
         } catch (java.io.IOException ex) {
             throw new IllegalStateException("Sync history export failed: " + ex.getMessage(), ex);
+        }
+    }
+
+    /** Serialize rows to an already opened writer; the caller owns the destination and writer lifetime. */
+    public void writeCsv(java.io.BufferedWriter writer, List<SyncHistoryEntry> entries) throws java.io.IOException {
+        List<SyncHistoryEntry> rows = entries == null ? List.of() : entries;
+        writer.write("Id,When,Connector,Operation,Success,RecordCount,Message,Detail");
+        writer.newLine();
+        for (SyncHistoryEntry e : rows) {
+            String msg = e.getMessage() == null ? "" : e.getMessage().replace("\"", "\"\"");
+            String det = e.getDetail() == null ? "" : e.getDetail().replace("\"", "\"\"");
+            writer.write(String.format("%s,%s,%s,%s,%s,%s,\"%s\",\"%s\"",
+                    e.getId() == null ? "" : e.getId(),
+                    e.getOccurredAt(),
+                    CsvSupport.escape(e.getConnectorName(), ','),
+                    CsvSupport.escape(e.getOperation(), ','),
+                    e.isSuccess(),
+                    e.getRecordCount() == null ? "" : e.getRecordCount(),
+                    msg,
+                    det));
+            writer.newLine();
         }
     }
 

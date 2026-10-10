@@ -3,8 +3,8 @@
 ## Before installation
 
 - Use a supported 64-bit Windows 10/11 workstation at 1366×768 or larger.
-- Obtain the MSI, `bom.json`, `bom.xml`, `THIRD-PARTY.txt`, and checksum file through the approved private RicheyWorks channel.
-- Verify the MSI SHA-256 value with `Get-FileHash` and confirm its valid signature and expected publisher. Private unsigned candidates are for maintainer validation; external pilots require an approved signed release.
+- Obtain the MSI, `bom.json`, `bom.xml`, `THIRD-PARTY.txt`, and checksum file through the approved RicheyWorks channel.
+- Verify the MSI SHA-256 value with `Get-FileHash` and confirm its valid signature and expected publisher. Unsigned candidates are for maintainer validation; supported external pilots require an approved signed release.
 - Record OWNER, HAND, and VIEWER credentials in the farm's password manager. Every LAN-enabled password must be at least 12 characters.
 - Back up an existing installation with `scripts/backup-data.ps1`, verify the checksum, and copy the ZIP and `.sha256` file off the workstation before upgrading.
 

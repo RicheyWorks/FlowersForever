@@ -3,7 +3,7 @@ package com.flowerfarm.integration;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.flowerfarm.controller.InventoryController;
 import com.flowerfarm.model.Item;
-import com.flowerfarm.service.ExportPathResolver;
+import com.flowerfarm.service.ServerCsvExportService;
 import com.flowerfarm.service.InventoryService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -15,7 +15,6 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
-import java.nio.file.Path;
 import java.util.List;
 
 import static org.hamcrest.Matchers.*;
@@ -38,12 +37,10 @@ class InventoryControllerIT {
     @Autowired ObjectMapper objectMapper;
 
     @MockitoBean InventoryService inventoryService;
-    @MockitoBean ExportPathResolver exportPathResolver;
+    @MockitoBean ServerCsvExportService serverCsvExportService;
 
     private static final Item SAMPLE_ROSE =
             new Item("Nootka Rose", "Flowers/Plants", 3.50, "Per Stem", 2.00, 50, "PNW native");
-    private static final Path SAFE_EXPORT = Path.of(
-            "data", "exports", "exported_inventory.csv").toAbsolutePath().normalize();
 
     // ── GET /api/inventory ────────────────────────────────────────────────────
 
@@ -316,28 +313,26 @@ class InventoryControllerIT {
         @Test
         @DisplayName("returns 200 with confirmation message")
         void returns200WithConfirmation() throws Exception {
-            when(exportPathResolver.resolveCsv("exported_inventory.csv", "exported_inventory.csv"))
-                    .thenReturn(SAFE_EXPORT);
-            doNothing().when(inventoryService).exportToCsv(SAFE_EXPORT.toString());
+            doNothing().when(serverCsvExportService).exportCsv(eq("exported_inventory.csv"), any());
 
             mockMvc.perform(post("/api/inventory/export"))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.message", containsString("exported_inventory.csv")));
 
-            verify(inventoryService).exportToCsv(SAFE_EXPORT.toString());
+            verify(serverCsvExportService).exportCsv(eq("exported_inventory.csv"), any());
+            verify(inventoryService, never()).exportToCsv(anyString());
         }
 
         @Test
         @DisplayName("returns 400 for a path traversal filename")
         void returns400ForTraversal() throws Exception {
-            when(exportPathResolver.resolveCsv("../escape.csv", "exported_inventory.csv"))
-                    .thenThrow(new IllegalArgumentException(
-                            "Export filename must be a simple file name without directories."));
+            doThrow(new IllegalArgumentException("Export filename must be a single CSV basename."))
+                    .when(serverCsvExportService).exportCsv(eq("../escape.csv"), any());
 
             mockMvc.perform(post("/api/inventory/export")
                             .param("filename", "../escape.csv"))
                     .andExpect(status().isBadRequest())
-                    .andExpect(jsonPath("$.error", containsString("simple file name")));
+                    .andExpect(jsonPath("$.error", containsString("single CSV basename")));
 
             verify(inventoryService, never()).exportToCsv(anyString());
         }
@@ -345,10 +340,8 @@ class InventoryControllerIT {
         @Test
         @DisplayName("returns 500 when export write fails")
         void returns500OnWriteFailure() throws Exception {
-            when(exportPathResolver.resolveCsv("exported_inventory.csv", "exported_inventory.csv"))
-                    .thenReturn(SAFE_EXPORT);
             doThrow(new IllegalStateException("Export to 'exported_inventory.csv' failed: disk full"))
-                    .when(inventoryService).exportToCsv(SAFE_EXPORT.toString());
+                    .when(serverCsvExportService).exportCsv(eq("exported_inventory.csv"), any());
 
             mockMvc.perform(post("/api/inventory/export"))
                     .andExpect(status().isInternalServerError())

@@ -3,9 +3,9 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, codex/recover-unpushed-work]
   pull_request:
-    branches: [main]
+    branches: [main, codex/recover-unpushed-work]
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
@@ -43,7 +43,7 @@ jobs:
       fail-fast: false
       matrix:
         java: ["17", "21"]
-    # JDK 17 is the supported baseline; 21 is advisory forward-compat (Boot 4.x prep)
+    # JDK 17 is the supported baseline; 21 is advisory forward compatibility
     continue-on-error: ${{ matrix.java == '21' }}
 
     steps:
@@ -118,7 +118,7 @@ jobs:
           cache: maven
 
       - name: SpotBugs + Checkstyle
-        run: mvn -B clean verify -Pquality -DskipTests
+        run: mvn -B -U clean verify -Pquality -DskipTests
 
       - name: Upload analysis reports
         uses: actions/upload-artifact@v7

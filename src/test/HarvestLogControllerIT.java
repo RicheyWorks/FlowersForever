@@ -3,8 +3,8 @@ package com.flowerfarm.integration;
 import com.flowerfarm.controller.HarvestController;
 import com.flowerfarm.model.HarvestEntry;
 import com.flowerfarm.model.HarvestGrade;
-import com.flowerfarm.service.ExportPathResolver;
 import com.flowerfarm.service.HarvestService;
+import com.flowerfarm.service.ServerCsvExportService;
 import com.flowerfarm.service.HarvestService.HarvestLogReport;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -33,7 +33,7 @@ class HarvestLogControllerIT {
     @Autowired MockMvc mockMvc;
 
     @MockitoBean HarvestService harvestService;
-    @MockitoBean ExportPathResolver exportPathResolver;
+    @MockitoBean ServerCsvExportService serverCsvExportService;
 
     private HarvestLogReport sample() {
         Map<String, Double> byCrop = new LinkedHashMap<>();

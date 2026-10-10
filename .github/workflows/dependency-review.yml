@@ -3,16 +3,15 @@ name: Dependency review
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, codex/recover-unpushed-work]
 
 permissions:
   contents: read
 
 jobs:
   dependency-review:
-    # GitHub's dependency-review API requires Advanced Security on private
-    # repositories. Keep the check for public mirrors without enabling a
-    # potentially billable feature on this private repository.
+    # GitHub's dependency-review API is available for public repositories.
+    # Private copies skip this job without enabling a billable security feature.
     if: ${{ github.event.repository.private == false }}
     runs-on: ubuntu-latest
     timeout-minutes: 10

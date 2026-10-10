@@ -1,8 +1,10 @@
 package com.flowerfarm.controller;
 
 import com.flowerfarm.model.HarvestEntry;
-import com.flowerfarm.service.ExportPathResolver;
+import com.flowerfarm.controller.dto.FarmApiDtos.HarvestRequest;
+import com.flowerfarm.controller.dto.FarmApiDtos.HarvestResponse;
 import com.flowerfarm.service.HarvestService;
+import com.flowerfarm.service.ServerCsvExportService;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -10,7 +12,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
-import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 
@@ -39,29 +40,32 @@ import java.util.Map;
 public class HarvestController {
 
     private final HarvestService harvestService;
-    private final ExportPathResolver exportPathResolver;
+    private final ServerCsvExportService serverCsvExportService;
 
-    public HarvestController(HarvestService harvestService,
-                             ExportPathResolver exportPathResolver) {
+    public HarvestController(HarvestService harvestService, ServerCsvExportService serverCsvExportService) {
         this.harvestService = harvestService;
-        this.exportPathResolver = exportPathResolver;
+        this.serverCsvExportService = serverCsvExportService;
     }
 
     @GetMapping
-    public List<HarvestEntry> list() {
-        return harvestService.getAll();
+    public List<HarvestResponse> list() {
+        return harvestService.getAll().stream().map(HarvestResponse::from).toList();
     }
 
     @GetMapping("/range")
     public ResponseEntity<?> range(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
-        return ResponseEntity.ok(harvestService.findBetween(from, to));
+        try {
+            return ResponseEntity.ok(harvestService.findBetween(from, to).stream().map(HarvestResponse::from).toList());
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
     }
 
     @GetMapping("/search")
-    public List<HarvestEntry> search(@RequestParam("crop") String crop) {
-        return harvestService.searchByCrop(crop);
+    public List<HarvestResponse> search(@RequestParam("crop") String crop) {
+        return harvestService.searchByCrop(crop).stream().map(HarvestResponse::from).toList();
     }
 
     /**
@@ -77,10 +81,15 @@ public class HarvestController {
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam(value = "to", required = false)
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
-        if (from != null && to != null && to.isBefore(from)) {
-            throw new IllegalArgumentException("to date must be on or after from date.");
+        try {
+            if (from != null && to != null && to.isBefore(from)) {
+                return ResponseEntity.badRequest()
+                        .body(Map.of("error", "to date must be on or after from date."));
+            }
+            return ResponseEntity.ok(harvestService.filter(crop, bed, notes, from, to).stream().map(HarvestResponse::from).toList());
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
-        return ResponseEntity.ok(harvestService.filter(crop, bed, notes, from, to));
     }
 
     @GetMapping("/totals")
@@ -190,10 +199,10 @@ public class HarvestController {
 
     @GetMapping("/{id}")
     public ResponseEntity<?> get(@PathVariable Long id) {
-        HarvestEntry entry = harvestService.findById(id)
-                .orElseThrow(() -> new IndexOutOfBoundsException(
-                        "No harvest entry with id=" + id));
-        return ResponseEntity.ok(entry);
+        return harvestService.findById(id)
+                .<ResponseEntity<?>>map(entry -> ResponseEntity.ok(HarvestResponse.from(entry)))
+                .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(Map.of("error", "No harvest entry with id=" + id)));
     }
 
     @GetMapping("/lots/{lotCode}")
@@ -201,7 +210,7 @@ public class HarvestController {
         HarvestEntry entry = harvestService.findByLotCode(lotCode)
                 .orElseThrow(() -> new IndexOutOfBoundsException(
                         "No harvest lot with code=" + lotCode));
-        return ResponseEntity.ok(entry);
+        return ResponseEntity.ok(HarvestResponse.from(entry));
     }
 
     @GetMapping("/lot")
@@ -224,9 +233,13 @@ public class HarvestController {
     }
 
     @PostMapping
-    public ResponseEntity<?> add(@RequestBody HarvestEntry entry) {
-        HarvestEntry saved = harvestService.add(entry);
-        return ResponseEntity.status(HttpStatus.CREATED).body(saved);
+    public ResponseEntity<?> add(@RequestBody HarvestRequest body) {
+        try {
+            HarvestEntry saved = harvestService.add(body.toHarvestEntry());
+            return ResponseEntity.status(HttpStatus.CREATED).body(HarvestResponse.from(saved));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
     }
 
     /**
@@ -234,14 +247,25 @@ public class HarvestController {
      * one {@code HARVEST_BATCH} audit row is recorded for the group.
      */
     @PostMapping("/batch")
-    public ResponseEntity<?> addBatch(@RequestBody List<HarvestEntry> entries) {
-        List<HarvestEntry> saved = harvestService.addBatch(entries);
-        return ResponseEntity.status(HttpStatus.CREATED).body(saved);
+    public ResponseEntity<?> addBatch(@RequestBody List<HarvestRequest> entries) {
+        try {
+            List<HarvestEntry> saved = harvestService.addBatch(entries.stream()
+                    .map(entry -> entry == null ? null : entry.toHarvestEntry()).toList());
+            return ResponseEntity.status(HttpStatus.CREATED).body(saved.stream().map(HarvestResponse::from).toList());
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<?> update(@PathVariable Long id, @RequestBody HarvestEntry entry) {
-        return ResponseEntity.ok(harvestService.update(id, entry));
+    public ResponseEntity<?> update(@PathVariable Long id, @RequestBody HarvestRequest body) {
+        try {
+            return ResponseEntity.ok(HarvestResponse.from(harvestService.update(id, body.toHarvestEntry())));
+        } catch (IndexOutOfBoundsException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", e.getMessage()));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
     }
 
     @DeleteMapping("/{id}")
@@ -264,19 +288,26 @@ public class HarvestController {
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam(value = "to", required = false)
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
-        Path exportPath = exportPathResolver.resolveCsv(filename, "harvest_log.csv");
-        boolean anyFilter = (crop != null && !crop.isBlank())
-                || (bed != null && !bed.isBlank())
-                || (notes != null && !notes.isBlank())
-                || from != null || to != null;
-        if (anyFilter) {
-            List<HarvestEntry> filtered = harvestService.filter(crop, bed, notes, from, to);
-            harvestService.exportToCsv(exportPath.toString(), filtered);
-            return ResponseEntity.ok(Map.of(
-                    "message", "Exported " + filtered.size() + " filtered harvest row(s) to " + filename,
-                    "rows", String.valueOf(filtered.size())));
+        try {
+            boolean anyFilter = (crop != null && !crop.isBlank())
+                    || (bed != null && !bed.isBlank())
+                    || (notes != null && !notes.isBlank())
+                    || from != null || to != null;
+            if (anyFilter) {
+                List<HarvestEntry> filtered = harvestService.filter(crop, bed, notes, from, to);
+                serverCsvExportService.exportCsv(filename, writer -> harvestService.writeCsv(writer, filtered));
+                return ResponseEntity.ok(Map.of(
+                        "message", "Exported " + filtered.size() + " filtered harvest row(s) to " + filename,
+                        "rows", String.valueOf(filtered.size())));
+            }
+            List<HarvestEntry> rows = harvestService.getAll();
+            serverCsvExportService.exportCsv(filename, writer -> harvestService.writeCsv(writer, rows));
+            return ResponseEntity.ok(Map.of("message", "Exported harvest log to " + filename));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", e.getMessage()));
         }
-        harvestService.exportToCsv(exportPath.toString());
-        return ResponseEntity.ok(Map.of("message", "Exported harvest log to " + filename));
     }
 }

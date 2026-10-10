@@ -28,6 +28,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Random;
+import java.security.SecureRandom;
 
 /**
  * Generative L-System rose visualizer — grow, animate, mutate, save rulesets,
@@ -40,7 +41,7 @@ public class RoseVisualizerTab implements FlowerFarmTab {
     private final FarmDialogs dialogs;
     private final FarmFileChooser files;
     private final LSystemLibrary library = new LSystemLibrary();
-    private final Random rng = new Random();
+    private final Random rng = new SecureRandom();
 
     private JPanel panel;
     private LSystemCanvas canvas;
