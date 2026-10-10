@@ -187,6 +187,7 @@
   "unit:com.flowerfarm.safety.FailedSaveDataSafetyTest": 5,
   "unit:com.flowerfarm.safety.ForcedCloseDataSafetyTest": 3,
   "unit:com.flowerfarm.safety.PowerCutDataSafetyTest": 7,
+  "unit:com.flowerfarm.safety.ScoutingLogDataSafetyTest": 4,
   "unit:com.flowerfarm.security.SecretRedactorTest": 2,
   "unit:com.flowerfarm.service.CustomerServiceTest": 7,
   "unit:com.flowerfarm.service.CustomerStatementServiceTest": 2,

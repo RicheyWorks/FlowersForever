@@ -41,9 +41,55 @@ class ScoutingLogDataSafetyTest {
         assertThat(log.findings().size()).as("every confirmed save is there").isBetween(saved, saved + 1);
         try (var files = Files.list(store.file().getParent())) {
             assertThat(files.map(path -> path.getFileName().toString()))
-                    .allMatch(name -> name.startsWith("scouting-log.json"))
+                    .allMatch(ScoutingLogDataSafetyTest::isScoutingRecordOrInterruptedStagingFile)
                     .contains("scouting-log.json");
         }
+    }
+
+    private static boolean isScoutingRecordOrInterruptedStagingFile(String name) {
+        // A forced process kill cannot run the writer's finally block. Only the named
+        // committed log/backup count as records; unique .part files may remain inert.
+        return name.equals("scouting-log.json") || name.equals("scouting-log.json.bak")
+                || name.matches("\\.scouting-log\\.json(?:\\.bak)?-[A-Za-z0-9_-]+\\.part");
+    }
+
+    @Test
+    @DisplayName("Interrupted staging files cannot replace confirmed scouting records")
+    void interruptedStagingFilesAreIgnoredWhenConfirmedLogIsReadable() throws Exception {
+        ScoutingStore store = new ScoutingStore(temp.resolve("data"), Clock.systemUTC());
+        store.save(CrashChild.scoutingLog(4));
+        byte[] confirmed = Files.readAllBytes(store.file());
+        Path partial = store.file().resolveSibling(".scouting-log.json-123.part");
+        Files.writeString(partial, "{\"version\":1,\"findings\":[");
+        ScoutingStore newer = new ScoutingStore(temp.resolve("uncommitted-fixture"), Clock.systemUTC());
+        newer.save(CrashChild.scoutingLog(9));
+        Path stagedBackup = store.file().resolveSibling(".scouting-log.json.bak-456.part");
+        Files.copy(newer.file(), stagedBackup);
+
+        ScoutingStore reopened = new ScoutingStore(temp.resolve("data"), Clock.systemUTC());
+        assertThat(reopened.load().findings()).hasSize(4);
+        assertThat(reopened.takeNotice()).isEmpty();
+        assertThat(Files.readAllBytes(store.file())).isEqualTo(confirmed);
+        assertThat(Files.readAllBytes(stagedBackup)).isEqualTo(Files.readAllBytes(newer.file()));
+        assertThat(partial).exists();
+    }
+
+    @Test
+    @DisplayName("Damaged scouting records recover only from the committed backup, never staging")
+    void recoveryIgnoresNewerUncommittedStagingFile() throws Exception {
+        ScoutingStore store = new ScoutingStore(temp.resolve("data"), Clock.systemUTC());
+        store.save(CrashChild.scoutingLog(4));
+        store.save(CrashChild.scoutingLog(6));
+        ScoutingStore newer = new ScoutingStore(temp.resolve("uncommitted-fixture"), Clock.systemUTC());
+        newer.save(CrashChild.scoutingLog(9));
+        Path staged = store.file().resolveSibling(".scouting-log.json-789.part");
+        Files.copy(newer.file(), staged);
+        Files.writeString(store.file(), "{torn");
+
+        ScoutingStore reopened = new ScoutingStore(temp.resolve("data"), Clock.systemUTC());
+        assertThat(reopened.load().findings()).hasSize(4);
+        assertThat(reopened.takeNotice()).contains("last good copy");
+        assertThat(Files.readAllBytes(staged)).isEqualTo(Files.readAllBytes(newer.file()));
     }
 
     @Test
