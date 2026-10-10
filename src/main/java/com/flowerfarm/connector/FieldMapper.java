@@ -1,5 +1,7 @@
 package com.flowerfarm.connector;
 
+import com.flowerfarm.util.InventoryQuantity;
+
 import com.flowerfarm.model.Item;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -100,6 +102,9 @@ public final class FieldMapper {
                 result.put(field, fn.apply(raw));
             } catch (Exception e) {
                 log.warn("[FieldMapper] Inbound mapping failed for field '{}': {}", field, e.getMessage());
+                if ("quantity".equals(field)) {
+                    throw new IllegalArgumentException("Quantity mapping failed; no stock value was substituted.", e);
+                }
                 result.put(field, null);
             }
         });
@@ -118,7 +123,7 @@ public final class FieldMapper {
                 safeDouble(fields, "price",    0.0),
                 safeString(fields, "unit",     "Per Unit"),
                 safeDouble(fields, "cost",     0.0),
-                safeInt   (fields, "quantity", 0),
+                InventoryQuantity.parse(fields.get("quantity")),
                 safeString(fields, "notes",    "")
         );
     }
@@ -142,10 +147,4 @@ public final class FieldMapper {
         catch (NumberFormatException e) { return def; }
     }
 
-    private int safeInt(Map<String, Object> m, String key, int def) {
-        Object v = m.get(key);
-        if (v == null) return def;
-        try { return (int) Double.parseDouble(v.toString()); }
-        catch (NumberFormatException e) { return def; }
-    }
 }

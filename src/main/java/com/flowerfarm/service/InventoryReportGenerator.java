@@ -1,5 +1,7 @@
 package com.flowerfarm.service;
 
+import com.flowerfarm.util.InventoryQuantity;
+
 import com.flowerfarm.model.FarmProfile;
 import com.flowerfarm.service.InventoryService.LowStockReport;
 import com.flowerfarm.service.InventoryService.LowStockLine;
@@ -106,7 +108,7 @@ public class InventoryReportGenerator {
                     Color rowBg = line.quantity() == 0 ? new Color(255, 235, 230) : Color.WHITE;
                     t.addCell(cell(line.name(), body, rowBg));
                     t.addCell(cell(line.category(), body, rowBg));
-                    t.addCell(cell(String.valueOf(line.quantity()), body, rowBg));
+                    t.addCell(cell(InventoryQuantity.format(line.quantity()), body, rowBg));
                     t.addCell(cell(line.unit(), body, rowBg));
                     t.addCell(cell(String.valueOf(line.suggestedOrderQty()), body, rowBg));
                     t.addCell(cell(String.format(Locale.US, "%,.2f", line.suggestedOrderCost()), body, rowBg));
@@ -179,8 +181,8 @@ public class InventoryReportGenerator {
             summary.addCell(summaryCell("SKUs", String.valueOf(report.skuCount()), brandSoft));
             summary.addCell(summaryCell("Sell value $",
                     String.format(Locale.US, "%,.0f", report.sellValue()), brandSoft));
-            summary.addCell(summaryCell("Units on hand",
-                    String.valueOf(report.totalUnits()), brandSoft));
+            summary.addCell(summaryCell("Stock by unit",
+                    report.quantitySummary(), brandSoft));
             doc.add(summary);
             doc.add(Chunk.NEWLINE);
 
@@ -207,7 +209,7 @@ public class InventoryReportGenerator {
                     t.addCell(cell(line.category(), body, bg));
                     t.addCell(cell(String.format(Locale.US, "%,.2f", line.unitPrice()), body, bg));
                     t.addCell(cell(line.unit(), body, bg));
-                    t.addCell(cell(String.valueOf(line.quantity()), body, bg));
+                    t.addCell(cell(InventoryQuantity.format(line.quantity()), body, bg));
                     t.addCell(cell(String.format(Locale.US, "%,.2f", line.lineSellValue()), body, bg));
                 }
                 doc.add(t);

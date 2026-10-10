@@ -70,7 +70,7 @@ public class MorningBriefingService {
         this.farmProfile = farmProfile;
     }
 
-    public record LowStockLine(String name, int quantity, String unit) {}
+    public record LowStockLine(String name, double quantity, String unit) {}
 
     public record MorningBriefing(
             LocalDate date,
@@ -117,7 +117,7 @@ public class MorningBriefingService {
      */
     @Transactional(readOnly = true)
     public MorningBriefing build(boolean preferLiveWeather) {
-        LocalDate today = LocalDate.now(farmProfile.zoneId());
+        LocalDate today = farmProfile.today();
         String when = LocalTime.now(farmProfile.zoneId()).format(TIME);
 
         MarketDayPlan pack = marketDayPackingService.planForDay(today);
@@ -135,7 +135,7 @@ public class MorningBriefingService {
                         item.getUnit() == null ? "" : item.getUnit()));
             }
         }
-        low.sort(Comparator.comparingInt(LowStockLine::quantity));
+        low.sort(Comparator.comparingDouble(LowStockLine::quantity));
 
         List<String> actions = buildActions(pack, beds, water, low, weekHarvest);
         String text = formatPlainText(today, when, pack, beds, water, low, weekHarvest, rev, actions);
@@ -417,7 +417,7 @@ public class MorningBriefingService {
                             p.productName(), p.unit(), p.inventoryUnit()));
                 } else {
                     sb.append(String.format(Locale.US,
-                            "  SHORT %-24s need %.1f stock %d%n",
+                            "  SHORT %-24s need %.1f stock %s%n",
                             p.productName(), p.neededQty(), p.stockOnHand()));
                 }
             }
@@ -453,7 +453,7 @@ public class MorningBriefingService {
             sb.append("  (healthy)\n");
         } else {
             for (LowStockLine l : low) {
-                sb.append(String.format(Locale.US, "  %-24s %4d %s%n",
+                sb.append(String.format(Locale.US, "  %-24s %4s %s%n",
                         l.name(), l.quantity(), l.unit()));
             }
         }

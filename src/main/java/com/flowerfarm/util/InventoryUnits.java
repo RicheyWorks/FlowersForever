@@ -12,6 +12,15 @@ public final class InventoryUnits {
         return canonical(left).equals(canonical(right));
     }
 
+    /** Fractions are meaningful for these measures; packaged items remain whole counts. */
+    public static boolean measured(String unit) {
+        return switch (canonical(unit)) {
+            case "gram", "kilogram", "ounce", "pound", "hundredweight", "ton", "bushel",
+                    "gallon", "liter", "milliliter", "milligram", "foot", "inch", "hour" -> true;
+            default -> false;
+        };
+    }
+
     public static String canonical(String value) {
         String unit = value == null ? "" : value.trim().toLowerCase(Locale.ROOT)
                 .replace('_', ' ')
@@ -26,6 +35,14 @@ public final class InventoryUnits {
             case "bouquet", "bouquets" -> "bouquet";
             case "tray", "trays" -> "tray";
             case "plant", "plants" -> "plant";
+            case "clone", "clones" -> "clone";
+            case "head", "heads" -> "head";
+            case "egg", "eggs" -> "egg";
+            case "bird", "birds" -> "bird";
+            case "tree", "trees" -> "tree";
+            case "jar", "jars" -> "jar";
+            case "colony", "colonies" -> "colony";
+            case "bottle", "bottles" -> "bottle";
             case "bulb", "bulbs" -> "bulb";
             case "pot", "pots" -> "pot";
             case "packet", "packets" -> "packet";
@@ -33,9 +50,12 @@ public final class InventoryUnits {
             case "crate", "crates" -> "crate";
             case "each", "ea", "item", "items", "unit", "units" -> "each";
             case "dozen", "dozens" -> "dozen";
-            case "pound", "pounds", "lb", "lbs" -> "pound";
+            case "weight (lb)", "pound", "pounds", "lb", "lbs" -> "pound";
             case "ounce", "ounces", "oz" -> "ounce";
             case "gram", "grams", "g" -> "gram";
+            case "milligram", "milligrams", "mg" -> "milligram";
+            case "milliliter", "milliliters", "millilitre", "millilitres", "ml" -> "milliliter";
+            case "hour", "hours", "hr" -> "hour";
             case "kilogram", "kilograms", "kg" -> "kilogram";
             case "hundredweight", "hundredweights", "cwt" -> "hundredweight";
             case "ton", "tons" -> "ton";

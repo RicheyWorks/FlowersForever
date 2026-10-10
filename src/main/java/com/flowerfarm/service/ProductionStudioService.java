@@ -14,6 +14,7 @@ import com.flowerfarm.model.ProductionTaskType;
 import com.flowerfarm.model.SeasonPlanEntry;
 import com.flowerfarm.model.SeasonPlanStatus;
 import com.flowerfarm.repository.ProductionRepository;
+import com.flowerfarm.util.InventoryQuantity;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -745,7 +746,8 @@ public class ProductionStudioService {
         double baseStems = ingredient.getStemsPerDesign() * count;
         int required = (int) Math.ceil(baseStems * (1 + recipe.getWastePercent() / 100d));
         Item liveItem = inventoryByName.get(normalize(ingredient.getItemName()));
-        int live = liveItem == null ? 0 : liveItem.getQuantity();
+        int live = liveItem == null || !StemDemand.isStockCountedInStems(liveItem.getUnit())
+                ? 0 : InventoryQuantity.whole(liveItem.getQuantity());
         int planned = (int) Math.floor(plans.stream()
                 .filter(plan -> plan.getStatus() != SeasonPlanStatus.COMPLETE)
                 .filter(plan -> cropMatches(plan, ingredient.getItemName()))

@@ -91,7 +91,7 @@ public class FarmDataHarnessPlugin implements HarnessPlugin {
                     entry("price", numberField("Selling price; defaults to 0.")),
                     entry("unit", textField("Selling or stock unit; defaults to Per Unit.")),
                     entry("cost", numberField("Unit cost; defaults to 0.")),
-                    entry("quantity", integerField("Current quantity; defaults to 0.")),
+                    entry("quantity", numberField("Current quantity; decimals allowed for measured units; defaults to 0.")),
                     entry("notes", textField("Farm notes."))));
 
     private static final Map<String, Object> CUSTOMER_SCHEMA = objectSchema(
@@ -308,9 +308,9 @@ public class FarmDataHarnessPlugin implements HarnessPlugin {
                                     operationKeyArgument(),
                                     argument("item-id", HarnessValueType.INTEGER,
                                             "Inventory id returned by list-records.", true),
-                                    argument("reviewed-quantity", HarnessValueType.INTEGER,
+                                    argument("reviewed-quantity", HarnessValueType.NUMBER,
                                             "Non-negative quantity read before counting.", true),
-                                    argument("counted-quantity", HarnessValueType.INTEGER,
+                                    argument("counted-quantity", HarnessValueType.NUMBER,
                                             "Non-negative physical quantity counted.", true))),
                     action("complete-order-handoff",
                             "Fulfill an exactly reviewed order and deduct stock with a durable retry key.",
@@ -1004,8 +1004,8 @@ public class FarmDataHarnessPlugin implements HarnessPlugin {
         return workerOperationResult(workerWorkflowService.countInventory(
                 requiredId(command, "item-id"),
                 new WorkerWorkflowService.WorkerInventoryCountRequest(
-                        command.text("operation-key"), command.integer("reviewed-quantity"),
-                        command.integer("counted-quantity"))));
+                        command.text("operation-key"), optionalNumber(command, "reviewed-quantity"),
+                        optionalNumber(command, "counted-quantity"))));
     }
 
     private HarnessExecution completeOrderHandoff(HarnessCommand command) {
@@ -2138,7 +2138,7 @@ public class FarmDataHarnessPlugin implements HarnessPlugin {
     }
 
     private record InventoryRow(String sourceKey, String name, String category,
-                                Double price, String unit, Double cost, Integer quantity,
+                                Double price, String unit, Double cost, Double quantity,
                                 String notes) implements SourceRow {
         Item toItem() {
             return new Item(name, category, value(price, 0), unit,

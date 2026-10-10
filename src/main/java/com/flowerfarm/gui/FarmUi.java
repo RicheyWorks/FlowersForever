@@ -1078,7 +1078,7 @@ public final class FarmUi {
     }
 
     /** Theme-aware stock tint used by tables without hard-coding light-only colors. */
-    public static Color stockBackground(int quantity, Color normalBackground) {
+    public static Color stockBackground(double quantity, Color normalBackground) {
         if (quantity <= 5) {
             return blend(normalBackground, toneBackgroundColor(Tone.DANGER), 0.72);
         }

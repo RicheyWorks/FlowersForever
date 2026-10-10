@@ -5,6 +5,7 @@ import com.flowerfarm.model.Item;
 import com.flowerfarm.repository.InventoryRepository;
 import com.flowerfarm.util.CsvSupport;
 import com.flowerfarm.util.InventoryUnits;
+import com.flowerfarm.util.InventoryQuantity;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -26,9 +27,9 @@ import java.util.Optional;
  * Flower-farm inventory operations backed by {@link InventoryRepository}.
  *
  * <p>Default production store is JPA + file H2. On first launch (empty DB) the
- * service seeds from {@code flowerfarm.inventory.seed-csv} when present, otherwise
- * from a small PNW sample set. CSV export remains available for backups and
- * spreadsheet workflows; the CSV connector is unchanged.
+ * service seeds from {@code flowerfarm.inventory.seed-csv} when present. A small
+ * PNW sample set requires explicit {@code flowerfarm.inventory.sample-enabled} opt-in.
+ * CSV export remains available for backups and spreadsheet workflows.
  *
  * <p>Index-based edit/delete are preserved for the Swing GUI; id-based methods
  * are preferred for REST and new code.
@@ -47,6 +48,7 @@ public class InventoryService {
     private final InventoryReportGenerator reportGenerator;
     private final InventoryCsvExporter csvExporter;
     private final FarmProfile farmProfile;
+    private final boolean sampleInventoryEnabled;
 
     public InventoryService(
             InventoryRepository repository,
@@ -54,10 +56,20 @@ public class InventoryService {
             InventoryReportGenerator reportGenerator,
             InventoryCsvExporter csvExporter,
             FarmProfile farmProfile) {
+        this(repository, seedCsvPath, reportGenerator, csvExporter, farmProfile, false);
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public InventoryService(InventoryRepository repository,
+            @Value("${flowerfarm.inventory.seed-csv:farm_inventory.csv}") String seedCsvPath,
+            InventoryReportGenerator reportGenerator, InventoryCsvExporter csvExporter,
+            FarmProfile farmProfile,
+            @Value("${flowerfarm.inventory.sample-enabled:false}") boolean sampleInventoryEnabled) {
         this.repository = repository;
         this.reportGenerator = reportGenerator;
         this.csvExporter = csvExporter;
         this.farmProfile = farmProfile;
+        this.sampleInventoryEnabled = sampleInventoryEnabled;
         this.seedCsvPath = seedCsvPath == null || seedCsvPath.isBlank()
                 ? "farm_inventory.csv"
                 : seedCsvPath.trim();
@@ -75,11 +87,11 @@ public class InventoryService {
         }
 
         List<Item> seed = loadSeedFromCsv();
-        if (seed.isEmpty()) {
+        if (seed.isEmpty() && sampleInventoryEnabled) {
             seed = buildSampleInventory();
             log.info("No seed CSV at '{}' — loading {} sample PNW inventory item(s).",
                     seedCsvPath, seed.size());
-        } else {
+        } else if (!seed.isEmpty()) {
             log.info("Seeding database from '{}' ({} item(s)).", seedCsvPath, seed.size());
         }
         repository.saveAll(seed);
@@ -197,19 +209,30 @@ public class InventoryService {
      */
     @Transactional
     public synchronized Item recordPhysicalCount(
-            Long id, int reviewedQuantity, int countedQuantity) {
+            Long id, double reviewedQuantity, double countedQuantity) {
+        return recordPhysicalCount(id, reviewedQuantity, countedQuantity, null);
+    }
+
+    @Transactional
+    public synchronized Item recordPhysicalCount(
+            Long id, double reviewedQuantity, double countedQuantity, String reviewedUnit) {
         if (id == null || id <= 0) {
             throw new IllegalArgumentException("Inventory item id must be positive.");
         }
-        if (reviewedQuantity < 0) {
+        if (!Double.isFinite(reviewedQuantity) || reviewedQuantity < 0) {
             throw new IllegalArgumentException("Reviewed quantity cannot be negative.");
         }
-        if (countedQuantity < 0) {
+        if (!Double.isFinite(countedQuantity) || countedQuantity < 0) {
             throw new IllegalArgumentException("Counted quantity cannot be negative.");
         }
         Item item = repository.findByIdForUpdate(id)
                 .orElseThrow(() -> new IndexOutOfBoundsException(
                         "No inventory item with id=" + id));
+        if (reviewedUnit != null && !reviewedUnit.isBlank()
+                && !InventoryUnits.equivalent(reviewedUnit, item.getUnit())) {
+            throw new IllegalArgumentException("Inventory unit changed from " + reviewedUnit
+                    + " to " + item.getUnit() + ". Review the product and count again.");
+        }
         if (item.getQuantity() != reviewedQuantity) {
             throw new InventoryCountConflictException(item.getName(), item.getQuantity());
         }
@@ -268,7 +291,7 @@ public class InventoryService {
      * no matching inventory row exists.
      */
     @Transactional
-    public synchronized Optional<Item> decrementQuantityByName(String name, int amount) {
+    public synchronized Optional<Item> decrementQuantityByName(String name, double amount) {
         if (amount < 0) {
             throw new IllegalArgumentException("Decrement amount cannot be negative.");
         }
@@ -277,7 +300,9 @@ public class InventoryService {
             return Optional.empty();
         }
         Item item = found.get();
-        int next = Math.max(0, item.getQuantity() - amount);
+        InventoryQuantity.requireForUnit(amount, item.getUnit());
+        double next = item.getQuantity() < amount ? 0
+                : InventoryQuantity.subtract(item.getQuantity(), amount);
         item.setQuantity(next);
         Item saved = repository.save(item);
         log.info("Inventory '{}' qty → {} (decremented by {})", saved.getName(), next, amount);
@@ -290,7 +315,7 @@ public class InventoryService {
      * enclosing transaction instead of producing a partially deducted order.
      */
     @Transactional
-    public synchronized Item decrementQuantityByNameStrict(String name, int amount) {
+    public synchronized Item decrementQuantityByNameStrict(String name, double amount) {
         return decrementQuantityByNameStrict(name, amount, null);
     }
 
@@ -299,7 +324,7 @@ public class InventoryService {
      */
     @Transactional
     public synchronized Item decrementQuantityByNameStrict(
-            String name, int amount, String expectedUnit) {
+            String name, double amount, String expectedUnit) {
         if (name == null || name.isBlank()) {
             throw new IllegalArgumentException("Inventory item name is required.");
         }
@@ -316,13 +341,14 @@ public class InventoryService {
                             + expectedUnit.trim() + " does not match inventory unit "
                             + item.getUnit() + ".");
         }
+        InventoryQuantity.requireForUnit(amount, item.getUnit());
         if (item.getQuantity() < amount) {
             throw new IllegalArgumentException(
-                    "Cannot fulfill '" + item.getName() + "': requires " + amount
-                            + " " + item.getUnit() + " but only " + item.getQuantity()
+                    "Cannot fulfill '" + item.getName() + "': requires " + InventoryQuantity.format(amount)
+                            + " " + item.getUnit() + " but only " + InventoryQuantity.format(item.getQuantity())
                             + " available.");
         }
-        item.setQuantity(item.getQuantity() - amount);
+        item.setQuantity(InventoryQuantity.subtract(item.getQuantity(), amount));
         Item saved = repository.save(item);
         log.info("Inventory '{}' qty → {} (strict decrement by {})",
                 saved.getName(), saved.getQuantity(), amount);
@@ -335,14 +361,15 @@ public class InventoryService {
      * Existing SKU categories are retained.
      */
     @Transactional
-    public synchronized Item incrementQuantityByName(String name, int amount, String unit, String notesHint) {
+    public synchronized Item incrementQuantityByName(String name, double amount, String unit, String notesHint) {
         if (name == null || name.isBlank()) {
             throw new IllegalArgumentException("Item name is required.");
         }
         if (amount < 0) {
             throw new IllegalArgumentException("Increment amount cannot be negative.");
         }
-        String harvestUnit = (unit == null || unit.isBlank()) ? "stems" : unit.trim();
+        String harvestUnit = (unit == null || unit.isBlank()) ? "each" : unit.trim();
+        InventoryQuantity.requireForUnit(amount, harvestUnit);
         Optional<Item> found = repository.findAllByNameIgnoreCaseForUpdate(name).stream().findFirst();
         if (found.isPresent()) {
             Item item = found.get();
@@ -352,10 +379,10 @@ public class InventoryService {
                                 + harvestUnit + " does not match inventory unit "
                                 + item.getUnit() + ".");
             }
-            final int next;
+            final double next;
             try {
-                next = Math.addExact(item.getQuantity(), amount);
-            } catch (ArithmeticException exception) {
+                next = InventoryQuantity.add(item.getQuantity(), amount);
+            } catch (IllegalArgumentException exception) {
                 throw new IllegalArgumentException(
                         "Inventory quantity would exceed the supported maximum.", exception);
             }
@@ -389,7 +416,7 @@ public class InventoryService {
         double sellValue = 0;
         double costBasis = 0;
         int lowStock = 0;
-        long totalUnits = 0;
+        double totalUnits = 0;
         for (Item i : items) {
             sellValue += i.getPrice() * i.getQuantity();
             costBasis += i.getCost() * i.getQuantity();
@@ -406,7 +433,7 @@ public class InventoryService {
             double sellValue,
             double costBasis,
             int lowStockCount,
-            long totalUnits,
+            double totalUnits,
             int lowStockThreshold
     ) {}
 
@@ -418,12 +445,12 @@ public class InventoryService {
             Long id,
             String name,
             String category,
-            int quantity,
+            double quantity,
             String unit,
             double unitPrice,
             double unitCost,
             int threshold,
-            int suggestedOrderQty,
+            double suggestedOrderQty,
             double suggestedOrderCost
     ) {
         public Map<String, Object> toMap() {
@@ -470,7 +497,7 @@ public class InventoryService {
         int t = normalizeLowStockThreshold(threshold);
         return getAllItems().stream()
                 .filter(i -> i.getQuantity() <= t)
-                .sorted(Comparator.comparingInt(Item::getQuantity)
+                .sorted(Comparator.comparingDouble(Item::getQuantity)
                         .thenComparing(Item::getName, String.CASE_INSENSITIVE_ORDER))
                 .toList();
     }
@@ -487,7 +514,7 @@ public class InventoryService {
         double costTotal = 0;
         for (Item i : findLowStock(t)) {
             int target = Math.max(t * 2, t + 1);
-            int suggest = Math.max(0, target - i.getQuantity());
+            double suggest = InventoryQuantity.shortage(target, i.getQuantity());
             double lineCost = suggest * i.getCost();
             costTotal += lineCost;
             lines.add(new LowStockLine(
@@ -505,7 +532,7 @@ public class InventoryService {
         }
         String text = formatLowStockText(t, all.size(), lines, costTotal);
         return new LowStockReport(
-                LocalDate.now(farmProfile.zoneId()),
+                farmProfile.today(),
                 t,
                 all.size(),
                 lines.size(),
@@ -528,7 +555,7 @@ public class InventoryService {
             String category,
             double unitPrice,
             String unit,
-            int quantity,
+            double quantity,
             double lineSellValue,
             double unitCost,
             double lineCostBasis
@@ -551,18 +578,23 @@ public class InventoryService {
     public record PriceListReport(
             LocalDate date,
             int skuCount,
-            int totalUnits,
+            double totalUnits,
             double sellValue,
             double costBasis,
             boolean inStockOnly,
             List<PriceListLine> lines,
             String plainText
     ) {
+        public String quantitySummary() {
+            return InventoryQuantity.summary(lines, PriceListLine::quantity, PriceListLine::unit);
+        }
+
         public Map<String, Object> toMap() {
             Map<String, Object> m = new LinkedHashMap<>();
             m.put("date", date.toString());
             m.put("skuCount", skuCount);
             m.put("totalUnits", totalUnits);
+            m.put("quantitySummary", quantitySummary());
             m.put("sellValue", sellValue);
             m.put("costBasis", costBasis);
             m.put("inStockOnly", inStockOnly);
@@ -588,7 +620,7 @@ public class InventoryService {
         List<PriceListLine> lines = new ArrayList<>();
         double sell = 0;
         double cost = 0;
-        int units = 0;
+        double units = 0;
         for (Item i : items) {
             double lineSell = i.getPrice() * i.getQuantity();
             double lineCost = i.getCost() * i.getQuantity();
@@ -609,7 +641,7 @@ public class InventoryService {
         }
         String text = formatPriceListText(inStockOnly, lines, sell, cost, units);
         return new PriceListReport(
-                LocalDate.now(farmProfile.zoneId()),
+                farmProfile.today(),
                 lines.size(),
                 units,
                 sell,
@@ -625,30 +657,31 @@ public class InventoryService {
     }
 
     private String formatPriceListText(boolean inStockOnly, List<PriceListLine> lines,
-                                       double sell, double cost, int units) {
+                                       double sell, double cost, double units) {
         StringBuilder sb = new StringBuilder();
         sb.append(farmProfile.documentBanner("Price List").toUpperCase(Locale.ROOT))
                 .append('\n');
         sb.append("═══════════════════════════════════════\n");
-        sb.append("Date: ").append(LocalDate.now(farmProfile.zoneId()))
+        sb.append("Date: ").append(farmProfile.today())
                 .append(inStockOnly ? "  ·  In-stock only" : "  ·  All SKUs")
                 .append('\n');
         sb.append(String.format(Locale.US,
-                "SKUs: %d  ·  Units: %d  ·  Sell $%,.2f  ·  Cost $%,.2f%n",
-                lines.size(), units, sell, cost));
+                "SKUs: %d  ·  Stock: %s  ·  Sell $%,.2f  ·  Cost $%,.2f%n",
+                lines.size(), InventoryQuantity.summary(lines, PriceListLine::quantity, PriceListLine::unit), sell, cost));
         sb.append('\n');
         if (lines.isEmpty()) {
             sb.append("  (empty)\n");
         } else {
-            sb.append(String.format(Locale.US, "%-22s %-14s %8s %6s %8s%n",
-                    "SKU", "Category", "Unit $", "Qty", "Ext. $"));
+            sb.append(String.format(Locale.US, "%-22s %-14s %8s %12s %-10s %8s%n",
+                    "SKU", "Category", "Unit $", "Qty", "Unit", "Ext. $"));
             sb.append("-".repeat(64)).append('\n');
             for (PriceListLine l : lines) {
-                sb.append(String.format(Locale.US, "%-22s %-14s %8.2f %6d %8.2f%n",
+                sb.append(String.format(Locale.US, "%-22s %-14s %8.2f %12s %-10s %8.2f%n",
                         truncate(l.name(), 22),
                         truncate(l.category(), 14),
                         l.unitPrice(),
-                        l.quantity(),
+                        InventoryQuantity.format(l.quantity()),
+                        l.unit(),
                         l.lineSellValue()));
             }
             sb.append("-".repeat(64)).append('\n');
@@ -664,7 +697,7 @@ public class InventoryService {
         sb.append(farmProfile.documentBanner("Low-Stock Reorder").toUpperCase(Locale.ROOT))
                 .append('\n');
         sb.append("═══════════════════════════════════════════════\n");
-        sb.append("Date: ").append(LocalDate.now(farmProfile.zoneId()))
+        sb.append("Date: ").append(farmProfile.today())
                 .append("  ·  Threshold: ≤ ").append(threshold)
                 .append("  ·  SKUs total: ").append(skuCount).append('\n');
         sb.append(String.format(Locale.US,
@@ -678,10 +711,10 @@ public class InventoryService {
                     "SKU", "OnHand", "Order", "Unit", "Est.Cost"));
             sb.append("-".repeat(64)).append('\n');
             for (LowStockLine l : lines) {
-                sb.append(String.format(Locale.US, "%-24s %6d %8d %10s %10.2f%n",
+                sb.append(String.format(Locale.US, "%-24s %6s %8s %10s %10.2f%n",
                         truncate(l.name(), 24),
-                        l.quantity(),
-                        l.suggestedOrderQty(),
+                        InventoryQuantity.format(l.quantity()),
+                        InventoryQuantity.format(l.suggestedOrderQty()),
                         truncate(l.unit(), 10),
                         l.suggestedOrderCost()));
             }
@@ -750,7 +783,7 @@ public class InventoryService {
                                 Double.parseDouble(parts[2]),
                                 parts[3],
                                 Double.parseDouble(parts[4]),
-                                Integer.parseInt(parts[5]),
+                                Double.parseDouble(parts[5]),
                                 parts[6]
                         ));
                     } catch (Exception e) {

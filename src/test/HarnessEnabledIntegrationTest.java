@@ -136,7 +136,7 @@ class HarnessEnabledIntegrationTest {
         assertThat(inventory.path("allowed").asBoolean()).isFalse();
         assertThat(inventory.path("inputSchema").path("properties").path("records")
                 .path("items").path("properties").path("quantity").path("type").asText())
-                .isEqualTo("integer");
+                .isEqualTo("number");
 
         ResponseEntity<JsonNode> observation = rest.exchange(
                 url("/api/harness/swing-desktop/observe"), HttpMethod.GET,

@@ -1,11 +1,13 @@
 package com.flowerfarm.model;
 
 import com.flowerfarm.util.CsvSupport;
+import com.flowerfarm.util.InventoryQuantity;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.persistence.*;
 
 import java.util.Locale;
+import java.math.BigDecimal;
 
 /**
  * Represents a single inventory item in the flower farm.
@@ -38,8 +40,8 @@ public class Item {
     @Column(nullable = false)
     private double cost;
 
-    @Column(nullable = false)
-    private int quantity;
+    @Column(nullable = false, precision = 16, scale = 6)
+    private BigDecimal quantity;
 
     @Column(length = 2000)
     private String notes;
@@ -52,7 +54,7 @@ public class Item {
      * Convenience constructor used throughout the app and tests (no id yet).
      */
     public Item(String name, String category, double price, String unit,
-                double cost, int quantity, String notes) {
+                double cost, double quantity, String notes) {
         this(null, name, category, price, unit, cost, quantity, notes);
     }
 
@@ -67,7 +69,7 @@ public class Item {
             @JsonProperty("price")    double price,
             @JsonProperty("unit")     String unit,
             @JsonProperty("cost")     double cost,
-            @JsonProperty("quantity") int quantity,
+            @JsonProperty("quantity") double quantity,
             @JsonProperty("notes")    String notes) {
 
         this.id       = id;
@@ -76,7 +78,7 @@ public class Item {
         this.price    = requireNonNegative(price, "Price");
         this.unit     = normalizeUnit(unit);
         this.cost     = requireNonNegative(cost, "Cost");
-        this.quantity = requireNonNegativeQuantity(quantity);
+        this.quantity = InventoryQuantity.decimal(InventoryQuantity.requireForUnit(quantity, this.unit));
         this.notes    = normalizeNotes(notes);
     }
 
@@ -88,7 +90,7 @@ public class Item {
     public double getPrice()    { return price; }
     public String getUnit()     { return unit; }
     public double getCost()     { return cost; }
-    public int    getQuantity() { return quantity; }
+    public double getQuantity() { return quantity.doubleValue(); }
     public String getNotes()    { return notes; }
 
     // ── Setters ────────────────────────────────────────────────────────────────
@@ -97,9 +99,15 @@ public class Item {
     public void setName(String name)             { this.name = requireName(name); }
     public void setCategory(String category)     { this.category = normalizeCategory(category); }
     public void setPrice(double price)           { this.price = requireNonNegative(price, "Price"); }
-    public void setUnit(String unit)             { this.unit = normalizeUnit(unit); }
+    public void setUnit(String unit) {
+        String normalized = normalizeUnit(unit);
+        InventoryQuantity.requireForUnit(getQuantity(), normalized);
+        this.unit = normalized;
+    }
     public void setCost(double cost)             { this.cost = requireNonNegative(cost, "Cost"); }
-    public void setQuantity(int quantity)        { this.quantity = requireNonNegativeQuantity(quantity); }
+    public void setQuantity(double quantity) {
+        this.quantity = InventoryQuantity.decimal(InventoryQuantity.requireForUnit(quantity, unit));
+    }
     public void setNotes(String notes)           { this.notes = normalizeNotes(notes); }
 
     /**
@@ -112,7 +120,10 @@ public class Item {
         setName(source.getName());
         setCategory(source.getCategory());
         setPrice(source.getPrice());
-        setUnit(source.getUnit());
+        // Validate the replacement pair together; changing a weighed SKU to a
+        // counted SKU must not validate the old quantity against the new unit.
+        InventoryQuantity.requireForUnit(source.getQuantity(), source.getUnit());
+        this.unit = normalizeUnit(source.getUnit());
         setCost(source.getCost());
         setQuantity(source.getQuantity());
         setNotes(source.getNotes());
@@ -158,13 +169,6 @@ public class Item {
         return value;
     }
 
-    private static int requireNonNegativeQuantity(int quantity) {
-        if (quantity < 0) {
-            throw new IllegalArgumentException("Quantity cannot be negative.");
-        }
-        return quantity;
-    }
-
     // ── CSV ────────────────────────────────────────────────────────────────────
 
     public String toCsv() {
@@ -174,14 +178,14 @@ public class Item {
                 String.format(Locale.ROOT, "%.2f", price),
                 unit,
                 String.format(Locale.ROOT, "%.2f", cost),
-                quantity,
+                InventoryQuantity.format(getQuantity()),
                 notes);
     }
 
     @Override
     public String toString() {
         return String.format(
-                "Item{id=%s, name='%s', category='%s', price=%.2f, unit='%s', cost=%.2f, quantity=%d, notes='%s'}",
-                id, name, category, price, unit, cost, quantity, notes);
+                "Item{id=%s, name='%s', category='%s', price=%.2f, unit='%s', cost=%.2f, quantity=%s, notes='%s'}",
+                id, name, category, price, unit, cost, InventoryQuantity.format(getQuantity()), notes);
     }
 }

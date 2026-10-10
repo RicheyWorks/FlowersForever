@@ -10,7 +10,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.DriverManager;
-import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.time.Clock;
@@ -70,27 +69,8 @@ public final class DatabaseIntegrityGuard {
         String password = System.getProperty("spring.datasource.password", System.getenv().getOrDefault(
                 "SPRING_DATASOURCE_PASSWORD", ""));
         try (Connection connection = DriverManager.getConnection(url, user, password)) {
-            try (Statement statement = connection.createStatement()) {
-                List<String> tables = new ArrayList<>();
-                try (ResultSet rows = statement.executeQuery("SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES "
-                        + "WHERE TABLE_SCHEMA = 'PUBLIC' AND TABLE_TYPE = 'BASE TABLE'")) {
-                    while (rows.next()) {
-                        tables.add(rows.getString(1));
-                    }
-                }
-                for (String table : tables) {
-                    // The identifier comes only from H2's PUBLIC base-table metadata, never a request.
-                    // Quote the entire identifier and double every embedded quote: even SQL-looking
-                    // names remain one table name. Keep direct row reads for non-admin accounts.
-                    try (ResultSet rows = statement.executeQuery("SELECT * FROM \"" + table.replace("\"", "\"\"")
-                            + "\"")) {
-                        while (rows.next()) {
-                            for (int column = 1; column <= rows.getMetaData().getColumnCount(); column++) {
-                                rows.getObject(column);
-                            }
-                        }
-                    }
-                }
+            try {
+                RecordsReadProbe.readAll(connection);
                 return Health.HEALTHY;
             } finally {
                 // A failed table scan must release DB_CLOSE_DELAY=-1 too, or this

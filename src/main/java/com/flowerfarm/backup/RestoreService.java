@@ -98,10 +98,13 @@ public final class RestoreService {
             if (!flyway.validateWithResult().validationSuccessful) {
                 throw new BackupException(BackupMessages.DAMAGED_RECORDS);
             }
+            try (Connection connection = DriverManager.getConnection(url, user, password)) {
+                RecordsReadProbe.readAll(connection);
+            }
             MigrationInfo current = info.current();
             MigrationVersion version = current == null ? null : current.getVersion();
             return new RecordsVersion(version == null ? "1" : version.getVersion(), info.pending().length > 0);
-        } catch (FlywayException unreadable) {
+        } catch (FlywayException | SQLException unreadable) {
             throw new BackupException(BackupMessages.notRestorable(firstLine(unreadable.getMessage())), unreadable);
         } finally {
             shutdown(url);

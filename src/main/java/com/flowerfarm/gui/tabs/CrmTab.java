@@ -1,5 +1,7 @@
 package com.flowerfarm.gui.tabs;
 
+import com.flowerfarm.util.InventoryQuantity;
+
 import com.flowerfarm.gui.FarmDialogs;
 import com.flowerfarm.gui.FarmFileChooser;
 import com.flowerfarm.gui.FarmUi;
@@ -3739,16 +3741,16 @@ public class CrmTab implements FlowerFarmTab {
         if (order == null || inventory == null) {
             return OrderStockAssessment.unavailable();
         }
-        Map<String, Integer> requiredByProduct = new LinkedHashMap<>();
+        Map<String, Double> requiredByProduct = new LinkedHashMap<>();
         Map<String, String> displayNames = new LinkedHashMap<>();
         Map<String, String> orderUnits = new LinkedHashMap<>();
         Map<String, Boolean> invalidQuantities = new LinkedHashMap<>();
         order.getLines().forEach(line -> {
             String name = line.getProductName() == null ? "" : line.getProductName().trim();
             String key = name.toLowerCase(Locale.ROOT);
-            int required = Math.max(0, (int) Math.round(line.getQuantity()));
-            requiredByProduct.merge(key, required, Integer::sum);
-            invalidQuantities.merge(key, required <= 0, Boolean::logicalOr);
+            double required = line.getQuantity();
+            requiredByProduct.merge(key, required, com.flowerfarm.util.InventoryQuantity::add);
+            invalidQuantities.merge(key, !InventoryQuantity.validPositive(required, line.getUnit()), Boolean::logicalOr);
             displayNames.putIfAbsent(key, name);
             String lineUnit = line.getUnit() == null ? "" : line.getUnit().trim();
             orderUnits.merge(key, lineUnit, (current, next) ->
@@ -3760,7 +3762,7 @@ public class CrmTab implements FlowerFarmTab {
         List<OrderStockGap> gaps = requiredByProduct.entrySet().stream()
                 .map(entry -> {
                     CrmPresenter.InventoryChoice choice = availableByProduct.get(entry.getKey());
-                    int available = choice == null ? 0 : choice.available();
+                    double available = choice == null ? 0 : choice.available();
                     String orderUnit = orderUnits.getOrDefault(entry.getKey(), "");
                     String inventoryUnit = choice == null ? "" : choice.unit();
                     boolean unitMismatch = choice != null
@@ -3818,7 +3820,7 @@ public class CrmTab implements FlowerFarmTab {
                         .thenComparing(CustomerOrder::getId,
                                 Comparator.nullsLast(Comparator.naturalOrder())))
                 .toList();
-        Map<String, Integer> remainingByProduct = new LinkedHashMap<>();
+        Map<String, Double> remainingByProduct = new LinkedHashMap<>();
         if (inventory != null) {
             inventory.forEach(choice -> remainingByProduct.putIfAbsent(
                     inventoryKey(choice.name()), choice.available()));
@@ -3886,7 +3888,7 @@ public class CrmTab implements FlowerFarmTab {
 
     private static List<CrmPresenter.InventoryChoice> inventoryWithRemaining(
             List<CrmPresenter.InventoryChoice> inventory,
-            Map<String, Integer> remainingByProduct) {
+            Map<String, Double> remainingByProduct) {
         if (inventory == null) {
             return null;
         }
@@ -3899,11 +3901,10 @@ public class CrmTab implements FlowerFarmTab {
     }
 
     private static void reserveOrderStock(
-            CustomerOrder order, Map<String, Integer> remainingByProduct) {
+            CustomerOrder order, Map<String, Double> remainingByProduct) {
         order.getLines().forEach(line -> remainingByProduct.computeIfPresent(
                 inventoryKey(line.getProductName()),
-                (key, available) -> available - Math.max(
-                        0, (int) Math.round(line.getQuantity()))));
+                (key, available) -> InventoryQuantity.subtract(available, line.getQuantity())));
     }
 
     private void updateSelectedOrderStockContext(Long orderId,
@@ -3962,13 +3963,13 @@ public class CrmTab implements FlowerFarmTab {
         }
         String details = assessment.gaps().stream().limit(2)
                 .map(gap -> gap.productName() + (gap.quantityInvalid()
-                        ? " quantity must round to at least 1 inventory unit"
+                        ? " quantity is invalid; counted products require whole quantities"
                         : gap.noInventoryMatch()
                         ? " has no inventory match"
                         : gap.unitMismatch()
                                 ? " unit mismatch: order " + gap.orderUnit()
                                         + ", inventory " + gap.inventoryUnit()
-                                : " short " + gap.missing()
+                                : " short " + InventoryQuantity.format(gap.missing())
                                         + (reservationLimitedOrderIds.contains(orderId)
                                         ? " after earlier orders" : "")))
                 .reduce((left, right) -> left + " · " + right).orElse("");
@@ -3989,7 +3990,7 @@ public class CrmTab implements FlowerFarmTab {
                         + (assessment.gaps().size() == 1 ? " blocks" : "s block")
                         + " completion for order " + orderId
                         + (selectedOrderQuantityIssue
-                        ? ". Choose Correct saved quantity, enter at least one rounded inventory "
+                        ? ". Choose Correct saved quantity, enter a valid positive quantity for its "
                                 + "unit, and save the product before completion."
                         : selectedOrderUnitIssue
                                 ? ". Choose Correct order unit to load the first mismatched saved "
@@ -4006,7 +4007,7 @@ public class CrmTab implements FlowerFarmTab {
                                         + String.join(", ", selectedOrderStockProducts)
                                         + ", then refresh Customers and Orders."));
         resolveOrderStockBtn.setToolTipText(selectedOrderQuantityIssue
-                ? "Load the first saved line below one rounded inventory unit for correction."
+                ? "Load the first saved line invalid for its unit; counted products require whole quantities for correction."
                 : selectedOrderUnitIssue
                         ? "Load the first saved line whose unit does not match Inventory."
                 : "Open Inventory with only products blocking the selected order.");
@@ -4020,7 +4021,7 @@ public class CrmTab implements FlowerFarmTab {
         OrderLine invalid = orderId == null ? null : lastOrderView.stream()
                 .filter(order -> orderId.equals(order.getId()))
                 .flatMap(order -> order.getLines().stream())
-                .filter(line -> Math.round(line.getQuantity()) <= 0)
+                .filter(line -> !InventoryQuantity.validPositive(line.getQuantity(), line.getUnit()))
                 .findFirst()
                 .orElse(null);
         if (invalid == null || invalid.getId() == null) {
@@ -4034,7 +4035,7 @@ public class CrmTab implements FlowerFarmTab {
                 selectedOrderLine.setSelectedIndex(index);
                 editSelectedOrderLine();
                 status("Correct “" + invalid.getProductName() + "” on order #" + orderId
-                        + ": quantity must round to at least one inventory unit.");
+                        + ": enter a valid positive quantity; counted products require whole quantities.");
                 return;
             }
         }
@@ -4330,12 +4331,12 @@ public class CrmTab implements FlowerFarmTab {
                 currentOrderLineDraft(),
                 previewInventory,
                 savedLines, excludedLineId);
-        int confirmedReservation = confirmedReservationForCurrentProduct(previewInventory);
+        double confirmedReservation = confirmedReservationForCurrentProduct(previewInventory);
         if (preview.valid() && preview.inventoryMatched() && confirmedReservation > 0) {
             boolean selectedConfirmed = orderId != null && lastOrderView.stream()
                     .anyMatch(order -> orderId.equals(order.getId())
                             && "CONFIRMED".equalsIgnoreCase(order.getStatus()));
-            String reservation = confirmedReservation + " inventory unit"
+            String reservation = InventoryQuantity.format(confirmedReservation) + " inventory unit"
                     + (confirmedReservation == 1 ? "" : "s") + " counted toward "
                     + (selectedConfirmed ? "earlier " : "")
                     + "confirmed orders in this preview";
@@ -4359,7 +4360,7 @@ public class CrmTab implements FlowerFarmTab {
     }
 
     private List<CrmPresenter.InventoryChoice> inventoryForProductPreview(Long orderId) {
-        Map<String, Integer> remainingByProduct = new LinkedHashMap<>();
+        Map<String, Double> remainingByProduct = new LinkedHashMap<>();
         inventoryChoiceSnapshot.forEach(choice -> remainingByProduct.putIfAbsent(
                 inventoryKey(choice.name()), choice.available()));
         List<CustomerOrder> confirmed = confirmedCompletionQueueSnapshot.stream()
@@ -4386,19 +4387,19 @@ public class CrmTab implements FlowerFarmTab {
         return inventoryWithRemaining(inventoryChoiceSnapshot, remainingByProduct);
     }
 
-    private int confirmedReservationForCurrentProduct(
+    private double confirmedReservationForCurrentProduct(
             List<CrmPresenter.InventoryChoice> previewInventory) {
         if (previewInventory == null || orderProduct == null) {
             return 0;
         }
         String key = inventoryKey(orderProduct.getText());
-        int onHand = inventoryChoiceSnapshot.stream()
+        double onHand = inventoryChoiceSnapshot.stream()
                 .filter(choice -> inventoryKey(choice.name()).equals(key))
-                .mapToInt(CrmPresenter.InventoryChoice::available)
+                .mapToDouble(CrmPresenter.InventoryChoice::available)
                 .findFirst().orElse(0);
-        int afterReservations = previewInventory.stream()
+        double afterReservations = previewInventory.stream()
                 .filter(choice -> inventoryKey(choice.name()).equals(key))
-                .mapToInt(CrmPresenter.InventoryChoice::available)
+                .mapToDouble(CrmPresenter.InventoryChoice::available)
                 .findFirst().orElse(onHand);
         return Math.max(0, onHand - afterReservations);
     }
@@ -7320,13 +7321,13 @@ public class CrmTab implements FlowerFarmTab {
         List<String> productLines = new ArrayList<>();
         for (int index = 0; index < order.getLines().size(); index++) {
             OrderLine line = order.getLines().get(index);
-            int inventoryUnits = Math.max(0, (int) Math.round(line.getQuantity()));
+            double inventoryUnits = line.getQuantity();
             productLines.add((index + 1) + ". " + editableNumber(line.getQuantity()) + " "
                     + line.getUnit() + " " + line.getProductName() + " · $"
                     + String.format(Locale.ROOT, "%,.2f", line.getUnitPrice())
                     + " each · $"
                     + String.format(Locale.ROOT, "%,.2f", line.lineTotal())
-                    + " · deduct " + inventoryUnits + " inventory unit"
+                    + " · deduct " + InventoryQuantity.format(inventoryUnits) + " " + line.getUnit() + " inventory unit"
                     + (inventoryUnits == 1 ? "" : "s"));
         }
         String stock;
@@ -9051,11 +9052,11 @@ public class CrmTab implements FlowerFarmTab {
         }
     }
 
-    record OrderStockGap(String productName, int required, int available,
-                         int missing, boolean noInventoryMatch, boolean unitMismatch,
+    record OrderStockGap(String productName, double required, double available,
+                         double missing, boolean noInventoryMatch, boolean unitMismatch,
                          String orderUnit, String inventoryUnit, boolean quantityInvalid) {
-        OrderStockGap(String productName, int required, int available,
-                      int missing, boolean noInventoryMatch, boolean unitMismatch,
+        OrderStockGap(String productName, double required, double available,
+                      double missing, boolean noInventoryMatch, boolean unitMismatch,
                       String orderUnit, String inventoryUnit) {
             this(productName, required, available, missing, noInventoryMatch,
                     unitMismatch, orderUnit, inventoryUnit, false);

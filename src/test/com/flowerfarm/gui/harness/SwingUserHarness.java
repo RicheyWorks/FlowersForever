@@ -480,8 +480,9 @@ public final class SwingUserHarness {
     /** Reads the current displayed choice of one user-addressable selector. */
     public String selectedOption(String accessibleName) {
         JComboBox<?> combo = uniqueAccessible(accessibleName, JComboBox.class);
-        return onEdt(() -> combo.getSelectedIndex() < 0 ? ""
-                : comboItemText(combo, combo.getSelectedIndex()));
+        return onEdt(() -> combo.isEditable()
+                ? String.valueOf(combo.getEditor().getItem())
+                : combo.getSelectedIndex() < 0 ? "" : comboItemText(combo, combo.getSelectedIndex()));
     }
 
     /** Reports whether a visible checkbox or toggle is selected. */

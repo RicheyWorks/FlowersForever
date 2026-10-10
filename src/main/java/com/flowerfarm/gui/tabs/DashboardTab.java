@@ -1,5 +1,7 @@
 package com.flowerfarm.gui.tabs;
 
+import com.flowerfarm.util.InventoryQuantity;
+
 import com.flowerfarm.gui.FarmDialogs;
 import com.flowerfarm.gui.FarmFileChooser;
 import com.flowerfarm.gui.FarmUi;
@@ -290,8 +292,8 @@ public class DashboardTab implements FlowerFarmTab {
         OrderService.WeekRevenueSummary rev = snapshot.revenue();
         double priorRev = snapshot.priorRevenue();
 
-        totalItemsLabel.setText(String.format("%d products · %,d units · cost $%,.0f",
-                inv.skuCount(), inv.totalUnits(), inv.costBasis()));
+        totalItemsLabel.setText(String.format("%d products · cost $%,.0f",
+                inv.skuCount(), inv.costBasis()));
         totalValueLabel.setText(String.format("$%,.2f", inv.sellValue()));
         lowStockLabel.setText(String.valueOf(inv.lowStockCount()));
         weekHarvestLabel.setText(String.format("%,.0f", weekHarvest));
@@ -590,16 +592,16 @@ public class DashboardTab implements FlowerFarmTab {
         }
         List<Item> lowItems = items.stream()
                 .filter(i -> i.getQuantity() <= LOW_STOCK_THRESHOLD)
-                .sorted((a, b) -> Integer.compare(a.getQuantity(), b.getQuantity()))
+                .sorted((a, b) -> Double.compare(a.getQuantity(), b.getQuantity()))
                 .toList();
         for (Item item : lowItems) {
             alerts.append("• Low stock: ").append(item.getName())
-                    .append(" — only ").append(item.getQuantity()).append(" left\n");
+                    .append(" — only ").append(InventoryQuantity.format(item.getQuantity())).append(" left\n");
         }
         if (!lowItems.isEmpty()) {
             Item lowest = lowItems.get(0);
             priorities.add(new DashboardPriority(30,
-                    "Restock " + lowest.getName() + " · " + lowest.getQuantity() + " left",
+                    "Restock " + lowest.getName() + " · " + InventoryQuantity.format(lowest.getQuantity()) + " left",
                     "Inventory",
                     "Opened inventory for the lowest-stock products.",
                     lowItems.stream().map(Item::getName).distinct().toList(), null));
@@ -778,7 +780,7 @@ public class DashboardTab implements FlowerFarmTab {
 
     private void rebuildQuantityByItem(List<Item> items) {
         List<Item> sorted = new ArrayList<>(items);
-        sorted.sort((a, b) -> Integer.compare(b.getQuantity(), a.getQuantity()));
+        sorted.sort((a, b) -> Double.compare(b.getQuantity(), a.getQuantity()));
 
         barDataset.clear();
         Map<String, Integer> seen = new LinkedHashMap<>();

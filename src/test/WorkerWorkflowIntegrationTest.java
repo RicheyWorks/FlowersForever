@@ -69,6 +69,7 @@ import static org.mockito.Mockito.mock;
                 "spring.datasource.url=jdbc:h2:mem:worker-workflow;DB_CLOSE_DELAY=-1",
                 "spring.jpa.hibernate.ddl-auto=validate",
                 "flowerfarm.inventory.seed-csv=target/no-worker-workflow-seed.csv",
+                "flowerfarm.inventory.sample-enabled=true",
                 "flowerfarm.irrigation.live-weather=false",
                 "flowerfarm.harness.enabled=true",
                 "flowerfarm.harness.token=worker-workflow-harness-token-123456",
@@ -762,7 +763,7 @@ class WorkerWorkflowIntegrationTest {
                 "min-height: 44px", ".order-summary", ".handoff-actions",
                 ".attachment-fields", "@media (max-width: 639px)");
         assertThat(serviceWorker.getBody()).contains(
-                "flowersforever-worker-v10", "/worker/worker.js");
+                "flowersforever-worker-v11", "/worker/worker.js");
     }
 
     private ResponseEntity<JsonNode> post(String path, String body) {

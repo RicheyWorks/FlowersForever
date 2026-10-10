@@ -85,6 +85,10 @@ public class ReportsTab implements FlowerFarmTab {
                 || workspace == FarmWorkspace.WILDFLOWER_FARM;
     }
 
+    private LocalDate reportToday() {
+        return java.util.Objects.requireNonNullElseGet(reportService.today(), LocalDate::now);
+    }
+
     @Override public String getTabTitle() { return "Reports"; }
 
     @Override
@@ -119,12 +123,12 @@ public class ReportsTab implements FlowerFarmTab {
                 FarmUi.toolbar(reportStatus, weeklyButton)), BorderLayout.NORTH);
 
         fromField = FarmUi.entryControl(
-                new JTextField(LocalDate.now().minusDays(6).toString(), 12),
+                new JTextField(reportToday().minusDays(6).toString(), 12),
                 "YYYY-MM-DD", "First included report date, using YYYY-MM-DD.");
         FarmUi.initialFocus(fromField);
         fromField.getAccessibleContext().setAccessibleName("Report start date");
         toField = FarmUi.entryControl(
-                new JTextField(LocalDate.now().toString(), 12),
+                new JTextField(reportToday().toString(), 12),
                 "YYYY-MM-DD", "Last included report date, using YYYY-MM-DD.");
         toField.getAccessibleContext().setAccessibleName("Report end date");
         JLabel fromLabel = new JLabel("Start date:");
@@ -141,13 +145,13 @@ public class ReportsTab implements FlowerFarmTab {
                 "Load headline activity and revenue before creating the PDF.");
         previewButton.addActionListener(event -> previewRange());
         JButton today = FarmUi.secondaryButton("Today");
-        today.addActionListener(event -> applyRange(LocalDate.now(), LocalDate.now()));
+        today.addActionListener(event -> applyRange(reportToday(), reportToday()));
         JButton lastWeek = FarmUi.secondaryButton("Last 7 days");
         lastWeek.addActionListener(event -> applyRange(
-                LocalDate.now().minusDays(6), LocalDate.now()));
+                reportToday().minusDays(6), reportToday()));
         JButton thisMonth = FarmUi.secondaryButton("This month");
         thisMonth.addActionListener(event -> applyRange(
-                LocalDate.now().withDayOfMonth(1), LocalDate.now()));
+                reportToday().withDayOfMonth(1), reportToday()));
         fromField.addActionListener(event -> generateRange());
         toField.addActionListener(event -> generateRange());
         JPanel rangeFields = FarmUi.toolbar(
@@ -446,7 +450,7 @@ public class ReportsTab implements FlowerFarmTab {
     }
 
     private void generateWeekly() {
-        LocalDate today = LocalDate.now();
+        LocalDate today = reportToday();
         startGeneration(
                 "Creating 7-day report…",
                 flowerProductionWorkspace()
@@ -685,7 +689,7 @@ public class ReportsTab implements FlowerFarmTab {
         } catch (RuntimeException exception) {
             if (markErrors) {
                 FarmUi.markFieldError(
-                        field, label + " must use YYYY-MM-DD, such as " + LocalDate.now() + ".");
+                        field, label + " must use YYYY-MM-DD, such as " + reportToday() + ".");
             }
             throw new IllegalArgumentException(label + " must use YYYY-MM-DD.");
         }

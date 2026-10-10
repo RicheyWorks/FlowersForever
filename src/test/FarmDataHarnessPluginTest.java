@@ -239,7 +239,7 @@ class FarmDataHarnessPluginTest {
                 preview.output().get("records")).get(0);
         assertThat(mapped)
                 .containsEntry("name", "Mapped Dahlia")
-                .containsEntry("quantity", 1_250L)
+                .containsEntry("quantity", 1_250d)
                 .containsEntry("price", 2.75);
 
         when(inventoryService.findByNameIgnoreCase("Mapped Dahlia"))

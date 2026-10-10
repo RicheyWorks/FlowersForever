@@ -1,5 +1,7 @@
 package com.flowerfarm.connector.impl;
 
+import com.flowerfarm.util.InventoryQuantity;
+
 import com.flowerfarm.connector.*;
 import com.flowerfarm.model.Item;
 import com.flowerfarm.util.CsvSupport;
@@ -84,7 +86,7 @@ public class CsvInventoryConnector implements ExternalConnector<String[]> {
                 .registerOutbound(colPrice,    item -> String.format(Locale.ROOT, "%.2f", item.getPrice()))
                 .registerOutbound(colUnit,     Item::getUnit)
                 .registerOutbound(colCost,     item -> String.format(Locale.ROOT, "%.2f", item.getCost()))
-                .registerOutbound(colQuantity, Item::getQuantity)
+                .registerOutbound(colQuantity, item -> InventoryQuantity.format(item.getQuantity()))
                 .registerOutbound(colNotes,    Item::getNotes);
         // Inbound mappings are handled by header-index lookup in mapToItem()
     }
@@ -268,7 +270,7 @@ public class CsvInventoryConnector implements ExternalConnector<String[]> {
                 parseDouble(raw[2]),
                 raw[3].trim(),
                 parseDouble(raw[4]),
-                parseInt(raw[5]),
+                InventoryQuantity.parse(raw[5]),
                 raw.length > 6 ? raw[6].trim() : ""
         );
     }
@@ -291,7 +293,7 @@ public class CsvInventoryConnector implements ExternalConnector<String[]> {
                 colDouble(row, idx, colPrice,    0.0),
                 col(row, idx, colUnit,     "Per Unit"),
                 colDouble(row, idx, colCost,     0.0),
-                colInt   (row, idx, colQuantity, 0),
+                InventoryQuantity.parse(col(row, idx, colQuantity, "0")),
                 col(row, idx, colNotes,    "")
         );
     }
@@ -313,11 +315,6 @@ public class CsvInventoryConnector implements ExternalConnector<String[]> {
 
     private double colDouble(String[] row, Map<String, Integer> idx, String col, double def) {
         try { return Double.parseDouble(col(row, idx, col, String.valueOf(def))); }
-        catch (NumberFormatException e) { return def; }
-    }
-
-    private int colInt(String[] row, Map<String, Integer> idx, String col, int def) {
-        try { return Integer.parseInt(col(row, idx, col, String.valueOf(def))); }
         catch (NumberFormatException e) { return def; }
     }
 

@@ -35,12 +35,12 @@ class AddItemWorkspaceTest {
             assertThat(options(starters)).contains("Nootka rose stem", "Wedding flower bucket");
             assertThat(combo(root, "Item category").getSelectedItem())
                     .isEqualTo("Flowers/Plants");
-            assertThat(combo(root, "Selling unit").getSelectedItem()).isEqualTo("Per Stem");
+            assertThat(combo(root, "Selling unit").getSelectedItem()).isEqualTo(root == shopRoot ? "bouquets" : "Per Stem");
         }
     }
 
     @Test
-    void generalFarmTypesUseNeutralDefaultsAfterOpeningAndReset() throws Exception {
+    void farmTypesUseTheirOwnNamedProductsAndUnitsAfterOpeningAndReset() throws Exception {
         for (FarmWorkspace workspace : List.of(
                 FarmWorkspace.CANNABIS_FARM, FarmWorkspace.POTATO_FARM,
                 FarmWorkspace.APPLE_ORCHARD, FarmWorkspace.BERRY_FARM,
@@ -66,19 +66,20 @@ class AddItemWorkspaceTest {
             JComboBox<?> category = combo(root, "Item category");
             JComboBox<?> unit = combo(root, "Selling unit");
 
-            assertThat(options(starters)).containsExactly("Farm supply", "Tool or equipment");
-            assertThat(category.getSelectedItem()).isEqualTo("Other");
-            assertThat(unit.getSelectedItem()).isEqualTo("Per Unit");
+            com.flowerfarm.model.FarmProductProfile profile = com.flowerfarm.model.FarmProductProfile.forWorkspace(workspace);
+            assertThat(options(starters)).containsAll(profile.examples()).contains("Farm supply", "Tool or equipment");
+            assertThat(category.getSelectedItem()).isEqualTo(profile.category());
+            assertThat(unit.getSelectedItem()).isEqualTo(profile.defaultUnit());
             assertThat(label(root, "Rose variety · optional").getParent().isVisible()).isFalse();
             assertThat(textField(root, "Item name").getClientProperty(
-                    "JTextField.placeholderText")).isEqualTo("e.g. Product or farm supply");
+                    "JTextField.placeholderText")).isEqualTo(profile.nameHint());
 
             onEdt(() -> {
                 category.setSelectedItem("Flowers/Plants");
                 button(root, "Reset form").doClick();
             });
-            assertThat(category.getSelectedItem()).isEqualTo("Other");
-            assertThat(unit.getSelectedItem()).isEqualTo("Per Unit");
+            assertThat(category.getSelectedItem()).isEqualTo(profile.category());
+            assertThat(unit.getSelectedItem()).isEqualTo(profile.defaultUnit());
         }
     }
 
@@ -89,8 +90,8 @@ class AddItemWorkspaceTest {
         assertThat(options(starters)).containsExactly(
                 "Potted plant", "Seedling tray", "Bare-root plant",
                 "Farm supply", "Tool or equipment");
-        assertThat(combo(root, "Item category").getSelectedItem()).isEqualTo("Other");
-        assertThat(combo(root, "Selling unit").getSelectedItem()).isEqualTo("Per Unit");
+        assertThat(combo(root, "Item category").getSelectedItem()).isEqualTo("Live plants");
+        assertThat(combo(root, "Selling unit").getSelectedItem()).isEqualTo("plants");
         assertThat(label(root, "Rose variety · optional").getParent().isVisible()).isFalse();
 
         onEdt(() -> {
@@ -98,8 +99,8 @@ class AddItemWorkspaceTest {
             button(root, "Use starter").doClick();
         });
         assertThat(combo(root, "Item category").getSelectedItem())
-                .isEqualTo("Flowers/Plants");
-        assertThat(combo(root, "Selling unit").getSelectedItem()).isEqualTo("Per Unit");
+                .isEqualTo("Live plants");
+        assertThat(combo(root, "Selling unit").getSelectedItem()).isEqualTo("pots");
         assertThat(textField(root, "Item name").getText()).isEqualTo("Potted Plant");
     }
 
@@ -126,7 +127,7 @@ class AddItemWorkspaceTest {
         assertThat(label(root, "Rose variety · optional").getParent().isVisible())
                 .isTrue();
         assertThat(combo(root, "Item category").getSelectedItem())
-                .isEqualTo("Other");
+                .isEqualTo("Potatoes");
     }
 
     @Test

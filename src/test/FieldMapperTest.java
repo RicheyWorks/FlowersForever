@@ -48,7 +48,7 @@ class FieldMapperTest {
             assertThat(ext).containsEntry("title",  "Nootka Rose")
                            .containsEntry("vendor", "Flowers/Plants")
                            .containsEntry("price",  "3.50")
-                           .containsEntry("qty",     50);
+                           .containsEntry("qty",     50d);
         }
 
         @Test

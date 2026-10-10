@@ -389,7 +389,7 @@ class InventoryPerProductDraftTest {
         private void expectCount(String name, int quantity) throws Exception {
             dialogs.scripts.choose("Count “" + name + "”", "Cancel");
             dialogs.inspect = content ->
-                    assertThat(find(content, JSpinner.class).getValue()).isEqualTo(quantity);
+                    assertThat(((Number) find(content, JSpinner.class).getValue()).doubleValue()).isEqualTo(quantity);
             SwingUtilities.invokeAndWait(() -> selectProduct(root, name));
             user.click("Record stock count…");
             dialogs.reset();

@@ -1,5 +1,7 @@
 package com.flowerfarm.gui.presenter;
 
+import com.flowerfarm.util.InventoryQuantity;
+
 import com.flowerfarm.model.Customer;
 import com.flowerfarm.model.CustomerOrder;
 import com.flowerfarm.model.OrderLine;
@@ -303,11 +305,11 @@ public final class CrmPresenter {
                     .filter(choice -> choice.name().equalsIgnoreCase(line.getProductName()))
                     .findFirst()
                     .map(choice -> {
-                        int required = (int) Math.round(line.getQuantity());
-                        if (required <= 0) {
+                        double required = line.getQuantity();
+                        if (!InventoryQuantity.validPositive(required, line.getUnit())) {
                             return new LinePreview(false, true, false, duplicateSavedLines, total,
                                     "quantity",
-                                    "Quantity must round to at least 1 inventory unit");
+                                    "Use a positive quantity; counted products require whole quantities");
                         }
                         if (!InventoryUnits.equivalent(choice.unit(), line.getUnit())) {
                             return new LinePreview(false, true, false, duplicateSavedLines, total,
@@ -315,7 +317,7 @@ public final class CrmPresenter {
                                     "Unit must match Inventory: use " + choice.unit()
                                             + " for " + choice.name());
                         }
-                        int alreadyRequired = savedLines == null ? 0 : savedLines.stream()
+                        double alreadyRequired = savedLines == null ? 0 : savedLines.stream()
                                 .filter(saved -> excludedLineId == null
                                         || !excludedLineId.equals(saved.getId()))
                                 .filter(saved -> saved.getProductName() != null
@@ -323,24 +325,23 @@ public final class CrmPresenter {
                                                 line.getProductName()))
                                 .filter(saved -> InventoryUnits.equivalent(
                                         saved.getUnit(), line.getUnit()))
-                                .mapToInt(saved -> Math.max(
-                                        0, (int) Math.round(saved.getQuantity())))
-                                .sum();
-                        int postSaveRequired = alreadyRequired + required;
+                                .map(OrderLine::getQuantity)
+                                .reduce(0d, com.flowerfarm.util.InventoryQuantity::add);
+                        double postSaveRequired = InventoryQuantity.add(alreadyRequired, required);
                         boolean enough = required > 0
                                 && choice.available() >= postSaveRequired;
                         String stock;
                         if (enough) {
-                            stock = choice.available() + " on hand"
+                            stock = InventoryQuantity.format(choice.available()) + " on hand"
                                     + (alreadyRequired == 0 ? ""
-                                    : " · " + postSaveRequired + " required after save ("
-                                            + alreadyRequired + " already saved)");
+                                    : " · " + InventoryQuantity.format(postSaveRequired) + " required after save ("
+                                            + InventoryQuantity.format(alreadyRequired) + " already saved)");
                         } else {
-                            stock = "Short by " + (postSaveRequired - choice.available())
+                            stock = "Short by " + InventoryQuantity.format(InventoryQuantity.shortage(postSaveRequired, choice.available()))
                                     + " at completion"
                                     + (alreadyRequired == 0 ? ""
-                                    : " · " + alreadyRequired + " already saved + " + required
-                                            + " entered = " + postSaveRequired + " required");
+                                    : " · " + InventoryQuantity.format(alreadyRequired) + " already saved + " + InventoryQuantity.format(required)
+                                            + " entered = " + InventoryQuantity.format(postSaveRequired) + " required");
                         }
                         return new LinePreview(true, true, enough, duplicateSavedLines, total, null,
                                 duplicateWarning + String.format(java.util.Locale.ROOT,
@@ -612,9 +613,9 @@ public final class CrmPresenter {
         }
     }
 
-    public record InventoryChoice(String name, String unit, double unitPrice, int available) {
+    public record InventoryChoice(String name, String unit, double unitPrice, double available) {
         @Override public String toString() {
-            return name + " — " + available + " on hand";
+            return name + " — " + InventoryQuantity.format(available) + " on hand";
         }
     }
 

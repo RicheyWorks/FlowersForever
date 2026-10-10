@@ -26,13 +26,17 @@ import static org.mockito.Mockito.*;
 class HarvestServiceTest {
 
     @Test
-    @DisplayName("inventory quantity conversion matches the harvest rounding contract")
+    @DisplayName("inventory quantities preserve weights and reject fractional counted products")
     void inventoryQuantityConversion() {
-        assertThat(HarvestService.inventoryQuantityFor(1.49)).isEqualTo(1);
-        assertThat(HarvestService.inventoryQuantityFor(1.5)).isEqualTo(2);
+        assertThat(HarvestService.inventoryQuantityFor(1.49, "grams")).isEqualTo(1.49);
+        assertThat(HarvestService.inventoryQuantityFor(0.001, "kg")).isEqualTo(0.001);
+        assertThat(HarvestService.inventoryQuantityFor(2, "stems")).isEqualTo(2);
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> HarvestService.inventoryQuantityFor(1.49, "stems"))
+                .withMessageContaining("whole number");
         assertThatIllegalArgumentException()
                 .isThrownBy(() -> HarvestService.inventoryQuantityFor(0.49))
-                .withMessageContaining("0.5 or more");
+                .withMessageContaining("whole number");
     }
 
     @Mock HarvestRepository repository;
@@ -57,7 +61,7 @@ class HarvestServiceTest {
             e.setId(7L);
             return e;
         });
-        when(inventoryService.incrementQuantityByName(eq("Nootka Rose"), eq(120), eq("stems"), anyString()))
+        when(inventoryService.incrementQuantityByName(eq("Nootka Rose"), eq(120d), eq("stems"), anyString()))
                 .thenReturn(new Item("Nootka Rose", "Flowers/Plants", 0, "stems", 0, 170, ""));
 
         HarvestEntry saved = service.add(new HarvestEntry(
@@ -65,8 +69,8 @@ class HarvestServiceTest {
 
         assertThat(saved.getId()).isEqualTo(7L);
         assertThat(saved.getLotCode()).matches("FFH-20260710-[A-F0-9]{12}");
-        verify(inventoryService).incrementQuantityByName(eq("Nootka Rose"), eq(120), eq("stems"), anyString());
-        verify(syncHistoryService).record(eq("harvest"), eq("HARVEST_LOG"), eq(true), any(), any(), eq(120));
+        verify(inventoryService).incrementQuantityByName(eq("Nootka Rose"), eq(120d), eq("stems"), anyString());
+        verify(syncHistoryService).record(eq("harvest"), eq("HARVEST_LOG"), eq(true), any(), any(), eq(1));
     }
 
     @Test
@@ -78,7 +82,7 @@ class HarvestServiceTest {
             return entry;
         });
         when(inventoryService.incrementQuantityByName(
-                eq("Dahlia"), eq(20), eq("stems"), anyString()))
+                eq("Dahlia"), eq(20d), eq("stems"), anyString()))
                 .thenReturn(new Item("Dahlia", "Flowers/Plants", 0, "stems", 0, 20, ""));
 
         HarvestEntry saved = service.add(new HarvestEntry(
@@ -91,9 +95,9 @@ class HarvestServiceTest {
         assertThat(saved.getGrossQuantity()).isEqualTo(24);
         assertThat(saved.getStorageLocation()).isEqualTo("Cooler 1 / Rack B");
         verify(inventoryService).incrementQuantityByName(
-                eq("Dahlia"), eq(20), eq("stems"), anyString());
+                eq("Dahlia"), eq(20d), eq("stems"), anyString());
         verify(syncHistoryService).record(eq("harvest"), eq("HARVEST_LOG"), eq(true),
-                any(), contains("lot=LOT-C-17"), eq(20));
+                any(), contains("lot=LOT-C-17"), eq(1));
     }
 
     @Test
@@ -194,7 +198,7 @@ class HarvestServiceTest {
 
         verify(inventoryService).decrementQuantityByName("Nootka Rose", 40);
         verify(repository).deleteById(5L);
-        verify(syncHistoryService).record(eq("harvest"), eq("HARVEST_UNDO"), eq(true), any(), any(), eq(40));
+        verify(syncHistoryService).record(eq("harvest"), eq("HARVEST_UNDO"), eq(true), any(), any(), eq(1));
     }
 
     @Test
@@ -237,7 +241,7 @@ class HarvestServiceTest {
         existing.setId(3L);
         when(repository.findByIdForUpdate(3L)).thenReturn(Optional.of(existing));
         when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-        when(inventoryService.incrementQuantityByName(eq("Nootka Rose"), eq(20), eq("stems"), anyString()))
+        when(inventoryService.incrementQuantityByName(eq("Nootka Rose"), eq(20d), eq("stems"), anyString()))
                 .thenReturn(new Item("Nootka Rose", "Flowers/Plants", 0, "stems", 0, 60, ""));
 
         HarvestEntry incoming = new HarvestEntry(
@@ -246,8 +250,8 @@ class HarvestServiceTest {
 
         assertThat(saved.getQuantity()).isEqualTo(60.0);
         assertThat(saved.getNotes()).isEqualTo("corrected count");
-        verify(inventoryService).incrementQuantityByName(eq("Nootka Rose"), eq(20), eq("stems"), anyString());
-        verify(syncHistoryService).record(eq("harvest"), eq("HARVEST_EDIT"), eq(true), any(), any(), eq(20));
+        verify(inventoryService).incrementQuantityByName(eq("Nootka Rose"), eq(20d), eq("stems"), anyString());
+        verify(syncHistoryService).record(eq("harvest"), eq("HARVEST_EDIT"), eq(true), any(), any(), eq(1));
     }
 
     @Test
@@ -300,7 +304,7 @@ class HarvestServiceTest {
         when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(inventoryService.decrementQuantityByName("Nootka Rose", 30))
                 .thenReturn(Optional.of(new Item("Nootka Rose", "Flowers/Plants", 0, "stems", 0, 0, "")));
-        when(inventoryService.incrementQuantityByName(eq("Damask Rose"), eq(30), eq("stems"), anyString()))
+        when(inventoryService.incrementQuantityByName(eq("Damask Rose"), eq(30d), eq("stems"), anyString()))
                 .thenReturn(new Item("Damask Rose", "Flowers/Plants", 0, "stems", 0, 30, ""));
 
         HarvestEntry incoming = new HarvestEntry(
@@ -308,8 +312,8 @@ class HarvestServiceTest {
         service.update(4L, incoming);
 
         verify(inventoryService).decrementQuantityByName("Nootka Rose", 30);
-        verify(inventoryService).incrementQuantityByName(eq("Damask Rose"), eq(30), eq("stems"), anyString());
-        verify(syncHistoryService).record(eq("harvest"), eq("HARVEST_EDIT"), eq(true), any(), any(), eq(0));
+        verify(inventoryService).incrementQuantityByName(eq("Damask Rose"), eq(30d), eq("stems"), anyString());
+        verify(syncHistoryService).record(eq("harvest"), eq("HARVEST_EDIT"), eq(true), any(), any(), eq(1));
     }
 
     @Test
@@ -358,7 +362,7 @@ class HarvestServiceTest {
             e.setId(e.getCropName().hashCode() & 0xFFFFL);
             return e;
         });
-        when(inventoryService.incrementQuantityByName(anyString(), anyInt(), anyString(), anyString()))
+        when(inventoryService.incrementQuantityByName(anyString(), anyDouble(), anyString(), anyString()))
                 .thenReturn(new Item("x", "Flowers/Plants", 0, "stems", 0, 1, ""));
 
         List<HarvestEntry> saved = service.addBatch(List.of(
@@ -368,7 +372,7 @@ class HarvestServiceTest {
 
         assertThat(saved).hasSize(2);
         verify(inventoryService, times(2))
-                .incrementQuantityByName(anyString(), anyInt(), anyString(), anyString());
+                .incrementQuantityByName(anyString(), anyDouble(), anyString(), anyString());
         verify(syncHistoryService).record(eq("harvest"), eq("HARVEST_BATCH"), eq(true), any(), any(), eq(2));
         verify(syncHistoryService, times(2))
                 .record(eq("harvest"), eq("HARVEST_LOG"), eq(true), any(), any(), anyInt());

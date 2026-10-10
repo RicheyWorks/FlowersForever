@@ -1,5 +1,7 @@
 package com.flowerfarm.gui.view;
 
+import com.flowerfarm.util.InventoryQuantity;
+
 import com.flowerfarm.gui.FarmUi;
 import com.flowerfarm.model.Item;
 
@@ -7,7 +9,14 @@ import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JSpinner;
 import javax.swing.SpinnerNumberModel;
+import javax.swing.JFormattedTextField;
+import javax.swing.text.DefaultFormatterFactory;
+import javax.swing.text.NumberFormatter;
 import java.awt.BorderLayout;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.text.ParseException;
+import java.text.ParsePosition;
 
 /** Focused physical-count input with a live adjustment preview. */
 public final class StockCountView extends JPanel {
@@ -26,8 +35,38 @@ public final class StockCountView extends JPanel {
         setOpaque(false);
         getAccessibleContext().setAccessibleName("Physical count for " + item.getName());
 
-        countInput = FarmUi.initialFocus(new JSpinner(new SpinnerNumberModel(
-                item.getQuantity(), 0, 1_000_000, 1)));
+        countInput = FarmUi.initialFocus(new JSpinner(com.flowerfarm.util.InventoryUnits.measured(item.getUnit())
+                ? new SpinnerNumberModel(item.getQuantity(), 0d, (double) Integer.MAX_VALUE, 0.001d)
+                : new SpinnerNumberModel(InventoryQuantity.whole(item.getQuantity()),
+                        0, Integer.MAX_VALUE, 1)));
+        JSpinner.NumberEditor editor = new JSpinner.NumberEditor(countInput, "0.######");
+        editor.getFormat().setParseBigDecimal(true);
+        NumberFormatter formatter = new NumberFormatter(editor.getFormat()) {
+            @Override
+            public Object stringToValue(String text) throws ParseException {
+                String input = text.trim();
+                ParsePosition position = new ParsePosition(0);
+                Number parsed = editor.getFormat().parse(input, position);
+                if (!(parsed instanceof BigDecimal amount) || position.getIndex() != input.length()) {
+                    throw new ParseException("Enter a complete numeric quantity.", position.getIndex());
+                }
+                try {
+                    amount.setScale(InventoryQuantity.SCALE, RoundingMode.UNNECESSARY);
+                    double quantity = InventoryQuantity.requireForUnit(amount.doubleValue(), item.getUnit());
+                    if (com.flowerfarm.util.InventoryUnits.measured(item.getUnit())) {
+                        return Double.valueOf(quantity);
+                    }
+                    return Integer.valueOf(amount.intValueExact());
+                } catch (IllegalArgumentException | ArithmeticException invalid) {
+                    ParseException rejected = new ParseException(invalid.getMessage(), 0);
+                    rejected.initCause(invalid);
+                    throw rejected;
+                }
+            }
+        };
+        editor.getTextField().setFormatterFactory(new DefaultFormatterFactory(formatter));
+        editor.getTextField().setFocusLostBehavior(JFormattedTextField.PERSIST);
+        countInput.setEditor(editor);
         countInput.setName("inventory.physicalCount");
         countInput.getAccessibleContext().setAccessibleName(
                 "Counted quantity for " + item.getName());
@@ -48,16 +87,28 @@ public final class StockCountView extends JPanel {
         updateVariance();
     }
 
-    public int countedQuantity() {
-        return ((Number) countInput.getValue()).intValue();
+    public double countedQuantity() {
+        return ((Number) countInput.getValue()).doubleValue();
     }
 
-    public int variance() {
-        return countedQuantity() - item.getQuantity();
+    /** Validate the actual typed text before saving, including an unfocused draft. */
+    public double commitCountedQuantity() {
+        try {
+            countInput.commitEdit();
+            return countedQuantity();
+        } catch (ParseException invalid) {
+            throw new IllegalArgumentException(invalid.getMessage(), invalid);
+        }
     }
 
-    public void setCountedQuantity(int quantity) {
-        countInput.setValue(quantity);
+    public double variance() {
+        return java.math.BigDecimal.valueOf(countedQuantity())
+                .subtract(java.math.BigDecimal.valueOf(item.getQuantity())).doubleValue();
+    }
+
+    public void setCountedQuantity(double quantity) {
+        if (com.flowerfarm.util.InventoryUnits.measured(item.getUnit())) countInput.setValue(quantity);
+        else countInput.setValue(InventoryQuantity.whole(quantity));
     }
 
     public JSpinner countInput() {
@@ -69,21 +120,21 @@ public final class StockCountView extends JPanel {
     }
 
     private void updateVariance() {
-        int difference = variance();
+        double difference = variance();
         String message;
         FarmUi.Tone tone;
         if (difference == 0) {
             message = "Count matches system quantity";
             tone = FarmUi.Tone.NEUTRAL;
         } else if (difference > 0) {
-            message = "Inventory will increase by " + difference;
+            message = "Inventory will increase by " + InventoryQuantity.format(difference);
             tone = FarmUi.Tone.WARNING;
         } else {
-            message = "Inventory will decrease by " + Math.abs(difference);
+            message = "Inventory will decrease by " + InventoryQuantity.format(Math.abs(difference));
             tone = FarmUi.Tone.WARNING;
         }
         FarmUi.updateStatusBadge(varianceLabel, message, tone);
         varianceLabel.getAccessibleContext().setAccessibleDescription(
-                message + "; new quantity " + countedQuantity() + " " + item.getUnit());
+                message + "; new quantity " + InventoryQuantity.format(countedQuantity()) + " " + item.getUnit());
     }
 }

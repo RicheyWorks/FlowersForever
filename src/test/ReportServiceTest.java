@@ -39,7 +39,6 @@ class ReportServiceTest {
         when(harvestService.findBetween(any(), any())).thenReturn(List.of(
                 new HarvestEntry(LocalDate.now(), "Nootka Rose", 100, "stems", "A", "")
         ));
-        when(harvestService.totalsByCrop()).thenReturn(Map.of("Nootka Rose", 100.0));
         when(harvestService.productionByBed(any(), any())).thenReturn(
                 new HarvestService.BedProductionReport(
                         LocalDate.now().minusDays(6).toString(),

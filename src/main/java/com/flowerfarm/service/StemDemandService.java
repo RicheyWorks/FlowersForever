@@ -9,6 +9,7 @@ import com.flowerfarm.model.OrderLine;
 import com.flowerfarm.model.SeasonPlanEntry;
 import com.flowerfarm.model.SeasonPlanStatus;
 import com.flowerfarm.repository.CustomerOrderRepository;
+import com.flowerfarm.util.InventoryQuantity;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -59,7 +60,7 @@ public class StemDemandService {
     }
 
     public LocalDate today() {
-        return LocalDate.now(farmProfile.zoneId());
+        return farmProfile.today();
     }
 
     public String farmName() {
@@ -104,7 +105,7 @@ public class StemDemandService {
                 continue;
             }
             if (StemDemand.isStockCountedInStems(item.getUnit())) {
-                stock.add(new StemDemand.Stock(item.getName(), item.getQuantity()));
+                stock.add(new StemDemand.Stock(item.getName(), InventoryQuantity.whole(item.getQuantity())));
             } else if (demanded.contains(StemDemand.normalize(item.getName()))) {
                 notes.add("Cooler stock of " + item.getName() + " is recorded in " + item.getUnit()
                         + ", not stems, so it was not counted.");

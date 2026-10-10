@@ -311,7 +311,8 @@ public class FarmDataMappingService {
     }
 
     private static double numberValue(Object raw, String field) {
-        BigDecimal number = decimal(raw, field, true);
+        boolean quantityField = "quantity".equals(field) || "lossQuantity".equals(field);
+        BigDecimal number = decimal(raw, field, !quantityField);
         double value = number.doubleValue();
         if (!Double.isFinite(value)) {
             throw new IllegalArgumentException("Field '" + field + "' must be finite");

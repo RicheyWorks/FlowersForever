@@ -464,7 +464,7 @@ class OrderServiceTest {
         when(orderRepository.findByIdForUpdate(13L)).thenReturn(Optional.of(order));
 
         assertThatIllegalArgumentException().isThrownBy(() -> service.fulfill(13L))
-                .withMessageContaining("round to at least one inventory unit");
+                .withMessageContaining("whole number");
         assertThat(order.getStatus()).isEqualTo("CONFIRMED");
         verify(orderRepository, never()).save(any());
         verifyNoInteractions(inventoryService);

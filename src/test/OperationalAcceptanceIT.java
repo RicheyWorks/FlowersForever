@@ -72,7 +72,7 @@ class OperationalAcceptanceIT {
             workers.shutdown();
             assertThat(workers.awaitTermination(20, TimeUnit.SECONDS)).isTrue();
             assertThat(inventory.findById(concurrent.getId())).get()
-                    .extracting(Item::getQuantity).isEqualTo(120);
+                    .extracting(Item::getQuantity).isEqualTo(120d);
 
             farmDay = LocalDate.now(context.getBean(FarmProfile.class).zoneId());
             harvest.add(new HarvestEntry(farmDay.minusDays(2),
@@ -106,7 +106,7 @@ class OperationalAcceptanceIT {
             CustomerService customers = restarted.getBean(CustomerService.class);
             OrderService orders = restarted.getBean(OrderService.class);
 
-            assertThat(inventory.findById(persistentItemId)).isPresent();
+            assertThat(inventory.findById(persistentItemId)).get().extracting(Item::getQuantity).isEqualTo(150d);
             assertThat(harvest.filter("", "Bed RC-1", null, null)).hasSize(2);
             assertThat(customers.findById(customerId)).isPresent();
             assertThat(orders.findBetween(farmDay, farmDay))

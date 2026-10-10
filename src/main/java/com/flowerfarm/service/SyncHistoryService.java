@@ -248,7 +248,7 @@ public class SyncHistoryService {
         HistoryStats s = stats(rows);
         String scope = scopeLabel == null || scopeLabel.isBlank() ? "Current view" : scopeLabel.trim();
         String text = formatAuditText(scope, s, rows);
-        return new AuditReport(LocalDate.now(farmProfile.zoneId()), scope,
+        return new AuditReport(farmProfile.today(), scope,
                 s.total(), s.ok(), s.fail(), rows, text);
     }
 
@@ -373,7 +373,7 @@ public class SyncHistoryService {
         sb.append(farmProfile.documentBanner("Ops Audit History").toUpperCase(Locale.ROOT))
                 .append('\n');
         sb.append("═══════════════════════════════════════════════\n");
-        sb.append("Generated: ").append(LocalDate.now(farmProfile.zoneId())).append('\n');
+        sb.append("Generated: ").append(farmProfile.today()).append('\n');
         sb.append("Scope: ").append(scope).append('\n');
         sb.append(String.format(Locale.US, "Total: %d  ·  OK: %d  ·  FAIL: %d%n",
                 s.total(), s.ok(), s.fail()));

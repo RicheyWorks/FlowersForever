@@ -1,5 +1,7 @@
 package com.flowerfarm.service;
 
+import com.flowerfarm.util.InventoryQuantity;
+
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -83,7 +85,7 @@ public class WorkerWorkflowService {
     }
 
     public WorkerToday today(LocalDate date) {
-        LocalDate requested = date == null ? LocalDate.now(farmProfile.zoneId()) : date;
+        LocalDate requested = date == null ? farmProfile.today() : date;
         List<ProductionTask> tasks = productionService.listOpenTasksDueThrough(
                 requested, MAX_TODAY_TASKS);
         long total = productionService.countOpenTasksDueThrough(requested);
@@ -92,7 +94,7 @@ public class WorkerWorkflowService {
     }
 
     public WorkerFieldNotes fieldNotes(LocalDate date, int limit) {
-        LocalDate through = date == null ? LocalDate.now(farmProfile.zoneId()) : date;
+        LocalDate through = date == null ? farmProfile.today() : date;
         return new WorkerFieldNotes(through, knowledgeService.recentThrough(through, limit));
     }
 
@@ -132,7 +134,7 @@ public class WorkerWorkflowService {
 
     /** Returns confirmed pickup, delivery, and market handoffs due through the work date. */
     public WorkerOrders orders(LocalDate date, int limit) {
-        LocalDate requested = date == null ? LocalDate.now(farmProfile.zoneId()) : date;
+        LocalDate requested = date == null ? farmProfile.today() : date;
         int requestedLimit = requireDueOrderLimit(limit);
         List<WorkerOrder> visible = orderService.confirmedDueThrough(requested, requestedLimit)
                 .stream()
@@ -225,11 +227,17 @@ public class WorkerWorkflowService {
         }
         Map<String, Object> canonical = new LinkedHashMap<>();
         canonical.put("itemId", itemId);
-        canonical.put("reviewedQuantity", request.reviewedQuantity());
-        canonical.put("countedQuantity", request.countedQuantity());
+        canonical.put("reviewedQuantity", InventoryQuantity.wireNumber(request.reviewedQuantity()));
+        canonical.put("countedQuantity", InventoryQuantity.wireNumber(request.countedQuantity()));
+        String reviewedUnit = request.reviewedUnit();
+        if (reviewedUnit != null && !reviewedUnit.isBlank()) {
+            canonical.put("reviewedUnit", com.flowerfarm.util.InventoryUnits.canonical(reviewedUnit));
+        }
         return transact(request.operationKey(), COUNT_INVENTORY, canonical, () -> {
-            Item saved = inventoryService.recordPhysicalCount(
-                    itemId, request.reviewedQuantity(), request.countedQuantity());
+            Item saved = reviewedUnit == null || reviewedUnit.isBlank()
+                    ? inventoryService.recordPhysicalCount(itemId, request.reviewedQuantity(), request.countedQuantity())
+                    : inventoryService.recordPhysicalCount(itemId, request.reviewedQuantity(), request.countedQuantity(),
+                            reviewedUnit);
             return WorkerInventoryItem.from(saved);
         });
     }
@@ -458,8 +466,12 @@ public class WorkerWorkflowService {
 
     public record WorkerInventoryCountRequest(
             String operationKey,
-            int reviewedQuantity,
-            int countedQuantity) {
+            double reviewedQuantity,
+            double countedQuantity,
+            String reviewedUnit) {
+        public WorkerInventoryCountRequest(String operationKey, double reviewedQuantity, double countedQuantity) {
+            this(operationKey, reviewedQuantity, countedQuantity, null);
+        }
     }
 
     public record WorkerOrderCompletionRequest(
@@ -546,7 +558,7 @@ public class WorkerWorkflowService {
             Long id,
             String name,
             String category,
-            int quantity,
+            double quantity,
             String unit) {
         static WorkerInventoryItem from(Item item) {
             return new WorkerInventoryItem(

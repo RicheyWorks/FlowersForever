@@ -62,7 +62,7 @@ public class DayCloseoutService {
 
     public record FulfilledLine(long orderId, String customer, double total, int lineCount) {}
 
-    public record LowStockLine(String name, int quantity, String unit) {}
+    public record LowStockLine(String name, double quantity, String unit) {}
 
     public record DayCloseout(
             LocalDate date,
@@ -125,7 +125,7 @@ public class DayCloseoutService {
 
     @Transactional(readOnly = true)
     public DayCloseout build() {
-        LocalDate today = LocalDate.now(farmProfile.zoneId());
+        LocalDate today = farmProfile.today();
         String when = LocalTime.now(farmProfile.zoneId()).format(TIME);
 
         List<CustomerOrder> dayOrders = orderService.findBetween(today, today);
@@ -174,7 +174,7 @@ public class DayCloseoutService {
                         item.getUnit() == null ? "" : item.getUnit()));
             }
         }
-        low.sort(Comparator.comparingInt(LowStockLine::quantity));
+        low.sort(Comparator.comparingDouble(LowStockLine::quantity));
 
         List<String> next = buildNextSteps(
                 fulfilled.size(), fulfilledRev, remainingConfirmed, remainingPipe,
@@ -466,7 +466,7 @@ public class DayCloseoutService {
             sb.append("  Low stock: (healthy)\n");
         } else {
             for (LowStockLine l : low) {
-                sb.append(String.format(Locale.US, "  LOW %-24s %4d %s%n",
+                sb.append(String.format(Locale.US, "  LOW %-24s %4s %s%n",
                         l.name(), l.quantity(), l.unit()));
             }
         }

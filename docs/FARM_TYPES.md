@@ -341,9 +341,20 @@ undifferentiated crop label.
 | **Pumpkin patch grower** | Choose Pumpkin patch to plan named patches, planting and picking dates, pick-your-own, farm stand, wholesale, or mixed sales mode, visitor-area notes, and stage. Draft the next season or combine with another type. | No tickets, bookings, visitor compliance checks, actual pumpkin harvest, stock, or sales linkage. |
 | **Beekeeper or apiary operator** | Choose Apiary farm to save dated checks by apiary/site and hive label, with optional purpose, beekeeper-entered status, next check date, observations, and actions. Start the next check from a saved entry or combine Apiary farm with an orchard or berry farm. | No diagnosis, treatment or registration verification, pollination contracts, honey extraction, or Hive checks to stock or order link. |
 
-Custom categories and units help a farm name its own products. The current
-inventory ledger keeps whole-number quantities and does not convert pounds,
-bags, bins, or other packs. The existing Season Planner and floral recipe
+Custom categories and units help a farm name its own products. All 25 farm
+types supply product examples, categories, and suitable default units in shared
+entry screens. Cannabis uses named varieties and grams, dairy uses gallons,
+nursery uses plants, and livestock uses head counts. Combined farms retain the
+appropriate units for starters from each selected type.
+
+The inventory ledger preserves measured quantities to six decimal places.
+Harvest edits, losses, sales deductions, stock counts, CSV exports, and spreadsheet
+imports retain those quantities. Counted products such as stems, plants, clones,
+and packaged items require whole quantities. Units must match a product's saved
+unit; the app does not convert pounds to kilograms or bags to individual items.
+New installations begin with empty inventory; flower samples require the demo
+profile or an explicit sample setting. Existing farm records are preserved.
+The existing Season Planner and floral recipe
 calculations still assume a stem-based workflow; the potato, apple, berry,
 vineyard, hay, hops, grains, seed, nut, vegetable, nursery, aquaculture,
 Christmas tree, mushroom, cranberry, pumpkin, and livestock notebooks are separate local plans; the poultry,
@@ -366,7 +377,8 @@ products and counts before fulfilling bouquet orders.
 
 A first cannabis workspace records **cultivation plans** by batch, area, stage,
 and plant count. It gives the operator a separate starting point and access to
-the existing generic inventory and customer-order tools. The batch notebook
+inventory and customer-order tools for named varieties, measured weights, and
+whole plant or clone counts. The batch notebook
 lets an operator drag a saved batch onto a planning stage, or select the batch
 and click the stage. This saves the stage change immediately after an open draft
 has been saved or discarded. The stage is only a local planning label. It

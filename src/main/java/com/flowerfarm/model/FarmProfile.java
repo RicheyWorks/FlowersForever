@@ -13,6 +13,13 @@ import java.util.List;
  */
 public class FarmProfile {
 
+    private final java.time.Clock clock;
+
+    public FarmProfile() { this(java.time.Clock.systemUTC()); }
+    public FarmProfile(java.time.Clock clock) { this.clock = java.util.Objects.requireNonNull(clock); }
+    public java.time.LocalDate today() { return java.time.LocalDate.now(clock.withZone(zoneId())); }
+    public java.time.LocalDateTime now() { return java.time.LocalDateTime.now(clock.withZone(zoneId())); }
+
     private String name = "Your Farm";
     private String location = "";
     private String tagline = "Your farm, your records";

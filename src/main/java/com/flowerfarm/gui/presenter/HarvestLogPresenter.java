@@ -1,5 +1,7 @@
 package com.flowerfarm.gui.presenter;
 
+import com.flowerfarm.util.InventoryQuantity;
+
 import com.flowerfarm.model.HarvestEntry;
 import com.flowerfarm.model.HarvestGrade;
 import com.flowerfarm.service.HarvestService;
@@ -53,11 +55,18 @@ public final class HarvestLogPresenter {
             throw new InputValidationException("unit", "Enter how this harvest is measured.");
         }
         try {
+            try {
+                HarvestService.inventoryQuantityFor(quantity, unit);
+            } catch (IllegalArgumentException failure) {
+                throw new InputValidationException("quantity", failure.getMessage());
+            }
             return new HarvestEntry(date, crop, quantity, unit,
                     trim(draft.bed()), trim(draft.notes()), trim(draft.lotCode()),
                     parseGrade(draft.grade()), parseNonNegativeQuantity(
                             draft.lossQuantity(), "lossQuantity", "Loss / culls"),
                     trim(draft.storageLocation()));
+        } catch (InputValidationException exception) {
+            throw exception;
         } catch (IllegalArgumentException exception) {
             throw new InputValidationException("form", exception.getMessage());
         }
@@ -110,7 +119,7 @@ public final class HarvestLogPresenter {
                         "Line " + lineNumber + ": quantity must be greater than zero.");
             }
             try {
-                HarvestService.inventoryQuantityFor(quantity);
+                HarvestService.inventoryQuantityFor(quantity, unit);
             } catch (IllegalArgumentException exception) {
                 throw new IllegalArgumentException(
                         "Line " + lineNumber + ": " + lowerFirst(exception.getMessage()),
@@ -134,27 +143,16 @@ public final class HarvestLogPresenter {
         try {
             List<HarvestEntry> entries = parseBatch(draft);
             Map<String, Double> totalsByUnit = new LinkedHashMap<>();
-            Map<String, Integer> inventoryByUnit = new LinkedHashMap<>();
-            boolean rounded = false;
             for (HarvestEntry entry : entries) {
                 totalsByUnit.merge(entry.getUnit(), entry.getQuantity(), Double::sum);
-                int inventoryQuantity = HarvestService.inventoryQuantityFor(entry.getQuantity());
-                inventoryByUnit.merge(entry.getUnit(), inventoryQuantity, Integer::sum);
-                rounded |= inventoryQuantity != entry.getQuantity();
             }
             String totals = totalsByUnit.entrySet().stream()
                     .map(entry -> formatQuantity(entry.getValue()) + " " + entry.getKey())
                     .reduce((left, right) -> left + " · " + right)
                     .orElse("");
-            String inventoryImpact = inventoryByUnit.entrySet().stream()
-                    .map(entry -> "+" + entry.getValue() + " " + entry.getKey())
-                    .reduce((left, right) -> left + " · " + right)
-                    .orElse("");
             return new BatchPreview(true, entries.size(),
                     entries.size() + (entries.size() == 1 ? " row" : " rows")
-                            + " ready" + (totals.isEmpty() ? "" : " · " + totals)
-                            + (rounded ? " · inventory " + inventoryImpact
-                                    + " (rounded by row)" : ""));
+                            + " ready" + (totals.isEmpty() ? "" : " · " + totals));
         } catch (RuntimeException exception) {
             String message = exception instanceof java.time.format.DateTimeParseException
                     ? "Batch date must be YYYY-MM-DD."
@@ -192,11 +190,11 @@ public final class HarvestLogPresenter {
     }
 
     public Map<String, Double> totalsByCrop() {
-        return harvestService.totalsByCrop();
+        return harvestService.totalsByProductUnit();
     }
 
     public Map<String, Double> totalsFor(List<HarvestEntry> entries) {
-        return harvestService.totalsByCrop(entries);
+        return harvestService.totalsByProductUnit(entries);
     }
 
     public void exportAll(String path) {
@@ -296,7 +294,7 @@ public final class HarvestLogPresenter {
                             + Integer.MAX_VALUE + ".");
         }
         try {
-            HarvestService.inventoryQuantityFor(quantity);
+            InventoryQuantity.decimal(quantity);
         } catch (IllegalArgumentException exception) {
             throw new InputValidationException("quantity", exception.getMessage());
         }

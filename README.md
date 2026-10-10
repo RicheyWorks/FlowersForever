@@ -34,6 +34,12 @@ Grow roses for weddings and sell stems or bouquets. Run a flower shop alongside 
 
 The farm menu offers **25 starting points**, including Rose & events, Wildflower farm, Flower shop, Cannabis farm, Potato farm, Apple orchard, Poultry & eggs, Dairy farm, Aquaculture farm, and Custom farm. The [farm-type guide](docs/FARM_TYPES.md) shows every choice and what its tools do today.
 
+Each type supplies named product starters and suitable units. Cannabis starts with
+named flower varieties and grams; dairy uses gallons, nursery uses plants, and
+livestock uses head counts. Measured stock keeps up to six decimal places through
+harvests, orders, physical counts, and exports. Counted products still use whole
+quantities. Mixed farms keep the starter units for each selected type.
+
 <p align="center">
   <a href="docs/images/app-combined-farm-launcher.png"><img src="docs/images/app-combined-farm-launcher.png" width="100%" alt="Farm menu showing potato, cannabis, and apple in one saved operation, with other types ready to add"></a><br>
   <strong>Potato + cannabis + apple, in one farm workspace.</strong>

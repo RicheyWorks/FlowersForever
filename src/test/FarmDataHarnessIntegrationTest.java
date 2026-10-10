@@ -43,6 +43,7 @@ import static org.assertj.core.api.Assertions.assertThat;
                 "spring.datasource.url=jdbc:h2:mem:farm-data-harness;DB_CLOSE_DELAY=-1",
                 "spring.jpa.hibernate.ddl-auto=validate",
                 "flowerfarm.inventory.seed-csv=target/no-farm-data-harness-seed.csv",
+                "flowerfarm.inventory.sample-enabled=true",
                 "flowerfarm.irrigation.live-weather=false",
                 "flowerfarm.harness.enabled=true",
                 "flowerfarm.harness.token=farm-data-harness-token-123456",
@@ -653,7 +654,7 @@ class FarmDataHarnessIntegrationTest {
         assertThat(preview.path("invalidCount").asInt()).isEqualTo(1);
         assertThat(preview.path("issues")).anySatisfy(issue -> {
             assertThat(issue.path("row").asInt()).isEqualTo(1);
-            assertThat(issue.path("message").asText()).contains("Quantity must round to at least one inventory unit");
+            assertThat(issue.path("message").asText()).contains("whole number");
         });
     }
 
@@ -667,7 +668,7 @@ class FarmDataHarnessIntegrationTest {
                 """);
 
         assertThat(rejected.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
-        assertThat(rejected.getBody().path("message").asText()).contains("quantity");
+        assertThat(rejected.getBody().path("message").asText()).containsIgnoringCase("quantity");
         assertThat(inventoryService.findByNameIgnoreCase("Schema Batch First")).isEmpty();
         assertThat(inventoryService.findByNameIgnoreCase("Schema Fractional Count")).isEmpty();
     }

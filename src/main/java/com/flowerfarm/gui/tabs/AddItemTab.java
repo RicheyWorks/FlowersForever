@@ -155,6 +155,7 @@ public class AddItemTab implements FlowerFarmTab {
 
         formView = new InventoryItemFormView();
         configureWorkspaceForm();
+        formView.setProductProfile(com.flowerfarm.model.FarmProductProfile.combined(workspace, enabledWorkspaces));
         presetBox = new JComboBox<>(starterOptions());
         presetBox.setName("inventory.itemPreset");
         presetBox.getAccessibleContext().setAccessibleName(
@@ -311,7 +312,11 @@ public class AddItemTab implements FlowerFarmTab {
                     "Farm supply", "Tool or equipment"};
         }
         if (isGeneralWorkspace(workspace)) {
-            return new String[]{"Farm supply", "Tool or equipment"};
+            java.util.List<String> starters = new java.util.ArrayList<>(
+                    com.flowerfarm.model.FarmProductProfile.forWorkspace(workspace).examples());
+            starters.add("Farm supply");
+            starters.add("Tool or equipment");
+            return starters.toArray(String[]::new);
         }
         if (workspace == FarmWorkspace.WILDFLOWER_FARM) {
             return new String[]{"Cut flower / stem", "Market bouquet",
@@ -379,8 +384,9 @@ public class AddItemTab implements FlowerFarmTab {
             return;
         }
         InventoryItemPresenter.ItemDraft draft = formView.draft();
+        com.flowerfarm.model.FarmProductProfile profile = com.flowerfarm.model.FarmProductProfile.forWorkspace(workspace);
         formView.setDraft(new InventoryItemPresenter.ItemDraft(
-                draft.name(), "Other", "", draft.price(), "Per Unit",
+                draft.name(), profile.category(), "", draft.price(), profile.defaultUnit(),
                 draft.cost(), draft.quantity(), draft.notes()));
     }
 
@@ -522,7 +528,7 @@ public class AddItemTab implements FlowerFarmTab {
         InventoryItemPresenter.ItemDraft draft = formView.draft();
         Double price = parseNonNegative(draft.price());
         Double cost = parseNonNegative(draft.cost());
-        Integer quantity = parseNonNegativeWholeNumber(draft.quantity());
+        Double quantity = parseNonNegative(draft.quantity());
         if (price == null || cost == null || quantity == null) {
             setEconomicsValue(unitProfitLabel, "Check values");
             setEconomicsValue(marginRateLabel, "—");
@@ -555,15 +561,6 @@ public class AddItemTab implements FlowerFarmTab {
         try {
             double value = Double.parseDouble(text.trim());
             return Double.isFinite(value) && value >= 0 ? value : null;
-        } catch (RuntimeException exception) {
-            return null;
-        }
-    }
-
-    private static Integer parseNonNegativeWholeNumber(String text) {
-        try {
-            int value = Integer.parseInt(text.trim());
-            return value >= 0 ? value : null;
         } catch (RuntimeException exception) {
             return null;
         }

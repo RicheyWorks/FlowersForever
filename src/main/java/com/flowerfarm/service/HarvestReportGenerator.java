@@ -1,5 +1,7 @@
 package com.flowerfarm.service;
 
+import com.flowerfarm.util.InventoryQuantity;
+
 import com.flowerfarm.model.FarmProfile;
 import com.flowerfarm.model.HarvestEntry;
 import com.flowerfarm.service.HarvestService.BedProduction;
@@ -33,7 +35,6 @@ import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.time.LocalDate;
 import java.util.LinkedHashMap;
-import java.util.Locale;
 import java.util.Map;
 import javax.imageio.ImageIO;
 
@@ -52,7 +53,7 @@ public class HarvestReportGenerator {
         StringBuilder sb = new StringBuilder();
         sb.append("bed,totalQuantity,entryCount,firstDate,lastDate,crop,cropQuantity\n");
         for (BedProduction b : report.beds()) {
-            if (b.byCrop().isEmpty()) {
+            if (b.byProductUnit().isEmpty()) {
                 sb.append(csv(b.bed())).append(',')
                         .append(b.totalQuantity()).append(',')
                         .append(b.entryCount()).append(',')
@@ -60,7 +61,7 @@ public class HarvestReportGenerator {
                         .append(b.lastDate()).append(",,\n");
                 continue;
             }
-            for (Map.Entry<String, Double> crop : b.byCrop().entrySet()) {
+            for (Map.Entry<String, Double> crop : b.byProductUnit().entrySet()) {
                 sb.append(csv(b.bed())).append(',')
                         .append(b.totalQuantity()).append(',')
                         .append(b.entryCount()).append(',')
@@ -116,7 +117,7 @@ public class HarvestReportGenerator {
             summary.addCell(summaryCell("Beds", String.valueOf(report.bedCount()), brandSoft));
             summary.addCell(summaryCell("Harvest logs", String.valueOf(report.entryCount()), brandSoft));
             summary.addCell(summaryCell("Total qty",
-                    String.format(Locale.US, "%,.1f", report.grandTotal()), brandSoft));
+                    "See quantities by bed", brandSoft));
             doc.add(summary);
             doc.add(Chunk.NEWLINE);
 
@@ -137,17 +138,17 @@ public class HarvestReportGenerator {
                 int rank = 1;
                 for (BedProduction b : report.beds()) {
                     String topCrop = "—";
-                    if (!b.byCrop().isEmpty()) {
-                        Map.Entry<String, Double> first = b.byCrop().entrySet().iterator().next();
+                    if (!b.byProductUnit().isEmpty()) {
+                        Map.Entry<String, Double> first = b.byProductUnit().entrySet().iterator().next();
                         topCrop = first.getKey() + " ("
-                                + String.format(Locale.US, "%.0f", first.getValue()) + ")";
+                                + InventoryQuantity.format(first.getValue()) + ")";
                     }
                     String dates = (b.firstDate().isEmpty() ? "?" : b.firstDate())
                             + " → "
                             + (b.lastDate().isEmpty() ? "?" : b.lastDate());
                     bedTable.addCell(cell(String.valueOf(rank++), body));
                     bedTable.addCell(cell(b.bed(), body));
-                    bedTable.addCell(cell(String.format(Locale.US, "%.1f", b.totalQuantity()), body));
+                    bedTable.addCell(cell(b.quantitySummary(), body));
                     bedTable.addCell(cell(String.valueOf(b.entryCount()), body));
                     bedTable.addCell(cell(topCrop, body));
                     bedTable.addCell(cell(dates, body));
@@ -161,18 +162,18 @@ public class HarvestReportGenerator {
                 doc.add(Chunk.NEWLINE);
                 for (BedProduction b : report.beds()) {
                     doc.add(new Paragraph(
-                            b.bed() + "  ·  qty " + String.format(Locale.US, "%,.1f", b.totalQuantity()),
+                            b.bed() + "  ·  qty " + b.quantitySummary(),
                             FontFactory.getFont(FontFactory.HELVETICA_BOLD, 10, brandGreen)));
-                    if (b.byCrop().isEmpty()) {
+                    if (b.byProductUnit().isEmpty()) {
                         doc.add(new Paragraph("  (no crop detail)", small));
                     } else {
                         PdfPTable crops = new PdfPTable(new float[]{3, 1.5f});
                         crops.setWidthPercentage(60);
                         headerCell(crops, "Crop");
                         headerCell(crops, "Qty");
-                        for (Map.Entry<String, Double> c : b.byCrop().entrySet()) {
+                        for (Map.Entry<String, Double> c : b.byProductUnit().entrySet()) {
                             crops.addCell(cell(c.getKey(), body));
-                            crops.addCell(cell(String.format(Locale.US, "%.1f", c.getValue()), body));
+                            crops.addCell(cell(InventoryQuantity.format(c.getValue()), body));
                         }
                         doc.add(crops);
                     }
@@ -233,17 +234,15 @@ public class HarvestReportGenerator {
                     small));
             doc.add(Chunk.NEWLINE);
 
-            double totalLoss = report.entries().stream()
-                    .mapToDouble(HarvestEntry::getLossQuantity).sum();
             PdfPTable summary = new PdfPTable(new float[]{1, 1, 1, 1});
             summary.setWidthPercentage(100);
             summary.addCell(summaryCell("Entries", String.valueOf(report.entryCount()), brandSoft));
             summary.addCell(summaryCell("Total qty",
-                    String.format(Locale.US, "%,.1f", report.totalQuantity()), brandSoft));
+                    InventoryQuantity.summary(report.entries(), HarvestEntry::getQuantity, HarvestEntry::getUnit), brandSoft));
             summary.addCell(summaryCell("Crops",
                     String.valueOf(report.byCrop().size()), brandSoft));
             summary.addCell(summaryCell("Loss / culls",
-                    String.format(Locale.US, "%,.1f", totalLoss), brandSoft));
+                    InventoryQuantity.summary(report.entries(), HarvestEntry::getLossQuantity, HarvestEntry::getUnit), brandSoft));
             doc.add(summary);
             doc.add(Chunk.NEWLINE);
 
@@ -256,9 +255,9 @@ public class HarvestReportGenerator {
                 crops.setWidthPercentage(55);
                 headerCell(crops, "Crop");
                 headerCell(crops, "Qty");
-                for (Map.Entry<String, Double> c : report.byCrop().entrySet()) {
+                for (Map.Entry<String, Double> c : HarvestService.groupByProductUnit(report.entries()).entrySet()) {
                     crops.addCell(cell(c.getKey(), body));
-                    crops.addCell(cell(String.format(Locale.US, "%,.1f", c.getValue()), body));
+                    crops.addCell(cell(InventoryQuantity.format(c.getValue()), body));
                 }
                 doc.add(crops);
             }
@@ -283,11 +282,11 @@ public class HarvestReportGenerator {
                 for (HarvestEntry e : report.entries()) {
                     t.addCell(cell(e.getHarvestDate() == null ? "" : e.getHarvestDate().toString(), body));
                     t.addCell(cell(e.getCropName(), body));
-                    t.addCell(cell(String.format(Locale.US, "%,.1f", e.getQuantity()), body));
+                    t.addCell(cell(InventoryQuantity.format(e.getQuantity()), body));
                     t.addCell(cell(e.getUnit() == null ? "" : e.getUnit(), body));
                     t.addCell(cell(String.valueOf(e.getGrade()), body));
                     t.addCell(cell(e.getLotCode(), body));
-                    t.addCell(cell(String.format(Locale.US, "%,.1f", e.getLossQuantity()), body));
+                    t.addCell(cell(InventoryQuantity.format(e.getLossQuantity()), body));
                     t.addCell(cell(e.getStorageLocation() == null
                             || e.getStorageLocation().isBlank()
                             ? "—" : e.getStorageLocation(), body));
@@ -345,8 +344,8 @@ public class HarvestReportGenerator {
             document.add(new Paragraph("Date: " + entry.getHarvestDate()
                     + "    Grade: " + entry.getGrade(), detail));
             document.add(new Paragraph("Marketable: "
-                    + String.format(Locale.US, "%,.1f %s", entry.getQuantity(), entry.getUnit())
-                    + "    Loss: " + String.format(Locale.US, "%,.1f", entry.getLossQuantity()),
+                    + InventoryQuantity.format(entry.getQuantity()) + " " + entry.getUnit()
+                    + "    Loss: " + InventoryQuantity.format(entry.getLossQuantity()),
                     detail));
             document.add(new Paragraph("Source: " + display(entry.getBedOrField())
                     + "    Storage: " + display(entry.getStorageLocation()), detail));

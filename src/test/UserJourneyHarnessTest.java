@@ -234,7 +234,7 @@ class UserJourneyHarnessTest {
                 .extracting(Item::getName, Item::getCategory, Item::getUnit,
                         Item::getPrice, Item::getCost, Item::getQuantity)
                 .containsExactly("Wedding Flower Bucket", "Flowers/Plants", "Per Unit",
-                        85.0, 31.25, 6);
+                        85.0, 31.25, 6d);
         assertThat(savedItem.getValue().getNotes())
                 .isEqualTo("Designer pickup · white and blush palette")
                 .doesNotContain("Type:");
@@ -329,7 +329,7 @@ class UserJourneyHarnessTest {
         assertThat(saved.getValue())
                 .extracting(Item::getName, Item::getPrice, Item::getCost,
                         Item::getQuantity, Item::getNotes)
-                .containsExactly("Café Dahlia – Bride’s Mix", 32.75, 12.0, 9,
+                .containsExactly("Café Dahlia – Bride’s Mix", 32.75, 12.0, 9d,
                         "Saturday pickup · 10:30 AM — cooler #2");
         assertThat(user.transcript()).containsSubsequence(
                 "CASE blank name", "CASE non-finite price", "CASE text cost",
@@ -390,8 +390,8 @@ class UserJourneyHarnessTest {
         HarnessHost host = new HarnessHost();
         when(harvest.filter(anyString(), anyString(), anyString(),
                 nullable(LocalDate.class), nullable(LocalDate.class))).thenReturn(List.of());
-        when(harvest.totalsByCrop()).thenReturn(Map.of());
-        when(harvest.totalsByCrop(anyList())).thenReturn(Map.of());
+        when(harvest.totalsByProductUnit()).thenReturn(Map.of());
+        when(harvest.totalsByProductUnit(anyList())).thenReturn(Map.of());
         when(harvest.missingInventoryProducts(anyList())).thenReturn(List.of());
         when(harvest.add(any(HarvestEntry.class))).thenAnswer(invocation -> {
             HarvestEntry entered = invocation.getArgument(0);
@@ -1529,7 +1529,7 @@ class UserJourneyHarnessTest {
         verify(inventory, times(2)).updateById(anyLong(), attempts.capture());
         assertThat(attempts.getAllValues().get(1))
                 .extracting(Item::getName, Item::getPrice, Item::getQuantity, Item::getNotes)
-                .containsExactly("Nootka Rose Premium", 5.0, 7, "Keep this full draft");
+                .containsExactly("Nootka Rose Premium", 5.0, 7d, "Keep this full draft");
         dialogs.assertComplete();
     }
 
@@ -2151,7 +2151,7 @@ class UserJourneyHarnessTest {
         SwingDialogHarness dialogs = new SwingDialogHarness()
                 .confirmForm("Complete order", false, form -> form
                         .expectText("Complete order #43 · Kitsap Blooms · $42.00?")
-                        .expectText("deduct 12 inventory units")
+                        .expectText("deduct 12 stems inventory units")
                         .expectText("Continue only after the physical"))
                 .confirmForm("Complete order", true, form -> form
                         .expectText("Loaded at west dock")
@@ -3078,10 +3078,10 @@ class UserJourneyHarnessTest {
                 .thenReturn(List.of(initial))
                 .thenThrow(new IllegalStateException("harvest database unavailable"))
                 .thenReturn(List.of(recovered));
-        when(harvest.totalsByCrop()).thenReturn(
+        when(harvest.totalsByProductUnit()).thenReturn(
                 Map.of("Nootka Rose", 24.0),
                 Map.of("Nootka Rose · current", 31.0));
-        when(harvest.totalsByCrop(anyList())).thenAnswer(invocation ->
+        when(harvest.totalsByProductUnit(anyList())).thenAnswer(invocation ->
                 harvestTotals(invocation.getArgument(0)));
         HarvestLogTab tab = new HarvestLogTab(harvest, new HarnessHost());
         SwingUserHarness user = SwingUserHarness.on(build(tab));
@@ -3865,9 +3865,9 @@ class UserJourneyHarnessTest {
                                     || !entry.getHarvestDate().isAfter(to))
                             .toList();
                 });
-        when(harvest.totalsByCrop()).thenAnswer(
+        when(harvest.totalsByProductUnit()).thenAnswer(
                 invocation -> harvestTotals(history));
-        when(harvest.totalsByCrop(anyList())).thenAnswer(
+        when(harvest.totalsByProductUnit(anyList())).thenAnswer(
                 invocation -> harvestTotals(invocation.getArgument(0)));
     }
 

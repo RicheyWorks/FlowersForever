@@ -1,5 +1,7 @@
 package com.flowerfarm.connector.impl;
 
+import com.flowerfarm.util.InventoryQuantity;
+
 import com.flowerfarm.connector.ConnectorHttpClient;
 import com.flowerfarm.connector.*;
 import com.flowerfarm.model.Item;
@@ -389,7 +391,7 @@ public class GoogleSheetsConnector implements ExternalConnector<List<Object>>, D
                 parseDouble(String.valueOf(row.getOrDefault(colPrice, "0")), 0.0),
                 strMap(row, colUnit, "Per Unit"),
                 parseDouble(String.valueOf(row.getOrDefault(colCost, "0")), 0.0),
-                parseInt(String.valueOf(row.getOrDefault(colQuantity, "0")), 0),
+                InventoryQuantity.parse(strMap(row, colQuantity, "0")),
                 strMap(row, colNotes, "")
         );
     }
@@ -423,7 +425,7 @@ public class GoogleSheetsConnector implements ExternalConnector<List<Object>>, D
         double price = parseDouble(cell(raw, 2, "0"), 0.0);
         String unit = cell(raw, 3, "Per Unit");
         double cost = parseDouble(cell(raw, 4, "0"), 0.0);
-        int qty = parseInt(cell(raw, 5, "0"), 0);
+        double qty = InventoryQuantity.parse(cell(raw, 5, "0"));
         String notes = cell(raw, 6, "");
         return new Item(name, category, price, unit, cost, qty, notes);
     }
@@ -435,7 +437,7 @@ public class GoogleSheetsConnector implements ExternalConnector<List<Object>>, D
                 parseDouble(col(row, idx, colPrice, "0"), 0.0),
                 col(row, idx, colUnit, "Per Unit"),
                 parseDouble(col(row, idx, colCost, "0"), 0.0),
-                parseInt(col(row, idx, colQuantity, "0"), 0),
+                InventoryQuantity.parse(col(row, idx, colQuantity, "0")),
                 col(row, idx, colNotes, "")
         );
     }
@@ -500,14 +502,6 @@ public class GoogleSheetsConnector implements ExternalConnector<List<Object>>, D
     private static double parseDouble(String s, double def) {
         try {
             return Double.parseDouble(s.replaceAll("[^\\d.\\-]", ""));
-        } catch (Exception e) {
-            return def;
-        }
-    }
-
-    private static int parseInt(String s, int def) {
-        try {
-            return (int) Math.round(Double.parseDouble(s.replaceAll("[^\\d.\\-]", "")));
         } catch (Exception e) {
             return def;
         }

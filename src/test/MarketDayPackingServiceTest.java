@@ -378,29 +378,29 @@ class MarketDayPackingServiceTest {
     }
 
     @Test
-    @DisplayName("packing demand aggregates each line using fulfillment rounding")
+    @DisplayName("packing demand preserves each measured line without rounding")
     void packingDemandMatchesPerLineInventoryDeductions() {
         LocalDate day = LocalDate.of(2026, 7, 12);
         Customer customer = new Customer("Buyer", "", "", "", "MARKET", "");
         CustomerOrder order = new CustomerOrder(customer, day, "CONFIRMED", "");
         order.setId(9L);
-        order.addLine(new OrderLine("Dahlia Mix", 0.6, "bunches", 12));
-        order.addLine(new OrderLine("dahlia mix", 0.6, "bunches", 12));
+        order.addLine(new OrderLine("Blue Dream flower", 0.6, "grams", 12));
+        order.addLine(new OrderLine("blue dream flower", 0.6, "grams", 12));
         when(orderService.findBetween(day, day)).thenReturn(List.of(order));
         when(inventoryService.getAllItems()).thenReturn(List.of(
-                new Item("Dahlia Mix", "Flowers/Plants", 12, "bunches", 5, 1, "")));
+                new Item("Blue Dream flower", "Flowers/Plants", 12, "grams", 5, 1, "")));
 
         MarketDayPlan plan = service.planForDay(day);
 
         assertThat(plan.pickList()).singleElement().satisfies(need -> {
-            assertThat(need.neededQty()).isEqualTo(2);
+            assertThat(need.neededQty()).isEqualTo(1.2);
             assertThat(need.stockOnHand()).isEqualTo(1);
-            assertThat(need.shortfallQty()).isEqualTo(1);
+            assertThat(need.shortfallQty()).isEqualTo(0.2);
         });
     }
 
     @Test
-    @DisplayName("packing blocks a saved line below one rounded inventory unit")
+    @DisplayName("packing blocks a saved line an invalid quantity for its unit")
     void packingBlocksSubUnitQuantity() {
         LocalDate day = LocalDate.of(2026, 7, 12);
         Customer customer = new Customer("Buyer", "", "", "", "MARKET", "");
@@ -422,7 +422,7 @@ class MarketDayPackingServiceTest {
         assertThat(plan.plainText()).contains("INVALID QTY");
         when(orderService.findById(11L)).thenReturn(Optional.of(order));
         assertThatThrownBy(() -> service.fulfillConfirmedOrders(plan))
-                .hasMessageContaining("below one rounded inventory unit")
+                .hasMessageContaining("an invalid quantity for its unit")
                 .hasMessageContaining("rebuild the packing list");
         verify(orderService, never()).fulfill(any());
     }
@@ -693,7 +693,7 @@ class MarketDayPackingServiceTest {
         assertThatThrownBy(() -> service.fulfillConfirmedOrders(plan))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Current inventory no longer covers")
-                .hasMessageContaining("Nootka Rose short 5.0 stems")
+                .hasMessageContaining("Nootka Rose short 5 stems")
                 .hasMessageContaining("rebuild the packing list");
         verify(orderService, never()).fulfill(any());
     }

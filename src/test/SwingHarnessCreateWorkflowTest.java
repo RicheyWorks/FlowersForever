@@ -86,7 +86,7 @@ class SwingHarnessCreateWorkflowTest {
         assertThat(service.findById(71L)).get().extracting(Item::getName, Item::getCategory, Item::getUnit,
                 Item::getPrice, Item::getCost, Item::getQuantity, Item::getNotes)
                 .containsExactly("Community bouquet workshop", "Farm workshops", "Per workshop place",
-                        45.0, 12.5, 8, "Hands-on flowers · September");
+                        45.0, 12.5, 8d, "Hands-on flowers · September");
         assertThat(gateway.execute(TOKEN, SwingHarnessPlugin.ID, save).replayed()).isTrue();
         verify(repository, times(1)).save(any(Item.class));
 

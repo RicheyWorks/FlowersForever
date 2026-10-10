@@ -1,5 +1,7 @@
 package com.flowerfarm.service;
 
+import com.flowerfarm.util.InventoryQuantity;
+
 import com.flowerfarm.model.Customer;
 import com.flowerfarm.model.CustomerOrder;
 import com.flowerfarm.model.OrderLine;
@@ -881,10 +883,11 @@ public class OrderService {
         int matched = 0;
         StringBuilder detail = new StringBuilder();
         for (OrderLine line : order.getLines()) {
-            int qty = (int) Math.round(line.getQuantity());
+            double qty = InventoryQuantity.requireForUnit(
+                    line.getQuantity(), line.getUnit());
             if (qty <= 0) {
                 throw new IllegalArgumentException(
-                        "Order line quantity must round to at least one inventory unit.");
+                        "Order line quantity must be greater than zero.");
             }
             inventoryService.decrementQuantityByNameStrict(
                     line.getProductName(), qty, line.getUnit());
