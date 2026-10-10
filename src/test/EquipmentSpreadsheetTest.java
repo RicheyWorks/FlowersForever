@@ -117,7 +117,7 @@ class EquipmentSpreadsheetTest {
         Path file = directory.resolve("big.csv");
         Files.write(file, new byte[EquipmentSpreadsheet.MAX_BYTES + 1]);
         assertThatThrownBy(() -> EquipmentSpreadsheet.read(file, validator)).hasMessageContaining("1 MB");
-        for (Path bad : List.of(directory, directory.resolve("missing.csv"), directory.resolve("sheet.xlsx"))) {
+        for (Path bad : List.of(directory.getRoot(), directory, directory.resolve("missing.csv"), directory.resolve("sheet.xlsx"))) {
             assertThatThrownBy(() -> EquipmentSpreadsheet.read(bad, validator)).isInstanceOf(IllegalArgumentException.class);
         }
     }

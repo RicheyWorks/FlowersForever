@@ -36,7 +36,8 @@ public final class EquipmentSpreadsheet {
 
     /** Only the file explicitly selected by the local farmer is read; links and directories are rejected. */
     public static List<Map<String, Object>> read(Path selected, FarmReadingService service) throws IOException {
-        if (!selected.getFileName().toString().toLowerCase(Locale.ROOT).endsWith(".csv")
+        Path filename = selected.getFileName();
+        if (filename == null || !filename.toString().toLowerCase(Locale.ROOT).endsWith(".csv")
                 || !Files.isRegularFile(selected, LinkOption.NOFOLLOW_LINKS)) {
             throw new IllegalArgumentException("Choose a spreadsheet saved as a CSV file, rather than a folder or shortcut.");
         }
