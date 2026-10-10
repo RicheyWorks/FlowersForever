@@ -218,23 +218,24 @@ class SecurityConfigTest {
         MvcResult result = mvc.perform(get("/api/auth/csrf").secure(secure))
                 .andExpect(status().isOk()).andReturn();
         assertThat(result.getResponse().getHeader("Cache-Control")).contains("no-store");
-        String cookieHeader = result.getResponse().getHeaders("Set-Cookie").stream()
-                .filter(header -> header.startsWith("XSRF-TOKEN="))
-                .findFirst().orElseThrow();
-        assertThat(cookieHeader).contains("HttpOnly", "SameSite=Strict", "Path=/")
-                .doesNotContain("Domain=");
-        if (secure) {
-            assertThat(cookieHeader).contains("Secure");
-        }
-        String cookieValue = cookieHeader.substring("XSRF-TOKEN=".length(), cookieHeader.indexOf(';'));
+        // Servlet 6.1 stores SameSite on Cookie attributes. Spring's mock response
+        // only renders SameSite for MockCookie, so inspect the emitted servlet
+        // cookie here; RestCsrfSupport also checks the native HTTP header.
+        Cookie cookie = result.getResponse().getCookie("XSRF-TOKEN");
+        assertThat(cookie).isNotNull();
+        assertThat(cookie.isHttpOnly()).isTrue();
+        assertThat(cookie.getAttribute("SameSite")).isEqualTo("Strict");
+        assertThat(cookie.getPath()).isEqualTo("/");
+        assertThat(cookie.getDomain()).isNull();
+        assertThat(cookie.getSecure()).isEqualTo(secure);
+        String cookieValue = cookie.getValue();
+        assertThat(cookieValue).isNotBlank();
         JsonNode body = new ObjectMapper().readTree(result.getResponse().getContentAsString());
         String headerName = body.path("headerName").asText();
         String token = body.path("token").asText();
         assertThat(headerName).isEqualTo("X-XSRF-TOKEN");
         assertThat(token).isNotBlank().isNotEqualTo(cookieValue);
         assertThat(result.getRequest().getSession(false)).isNull();
-        Cookie cookie = new Cookie("XSRF-TOKEN", cookieValue);
-        cookie.setSecure(secure);
         return new WriteToken(headerName, token, cookie);
     }
 

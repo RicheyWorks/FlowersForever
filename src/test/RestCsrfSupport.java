@@ -9,6 +9,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 
 import java.net.HttpCookie;
+import java.net.URI;
 import java.util.List;
 import java.util.Map;
 
@@ -36,9 +37,22 @@ public final class RestCsrfSupport {
         if (cookies.size() != 1 || cookies.get(0).getValue().isBlank()) {
             throw new AssertionError("The CSRF handshake must set exactly one XSRF-TOKEN cookie");
         }
+        HttpCookie cookie = cookies.get(0);
+        List<String> csrfHeaders = (setCookies == null ? List.<String>of() : setCookies).stream()
+                .filter(value -> value.startsWith("XSRF-TOKEN="))
+                .toList();
+        boolean strictSameSite = csrfHeaders.size() == 1 && List.of(csrfHeaders.get(0).split(";")).stream()
+                .map(String::trim).anyMatch("SameSite=Strict"::equalsIgnoreCase);
+        URI endpointUri = URI.create(endpoint);
+        URI requestUri = endpointUri.isAbsolute() ? endpointUri : URI.create(client.getRootUri()).resolve(endpointUri);
+        boolean secureRequest = "https".equalsIgnoreCase(requestUri.getScheme());
+        if (!cookie.isHttpOnly() || !strictSameSite || !"/".equals(cookie.getPath())
+                || cookie.getDomain() != null || cookie.getSecure() != secureRequest) {
+            throw new AssertionError("The native CSRF cookie must be HttpOnly, SameSite=Strict, host-only, "
+                    + "Path=/, and Secure exactly for HTTPS requests");
+        }
         HttpHeaders headers = new HttpHeaders();
         headers.set(body.get("headerName"), body.get("token"));
-        HttpCookie cookie = cookies.get(0);
         headers.set(HttpHeaders.COOKIE, cookie.getName() + "=" + cookie.getValue());
         return headers;
     }
